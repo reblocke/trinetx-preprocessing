@@ -1,0 +1,106 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fswiss\fcharset0 Helvetica-Bold;\f2\froman\fcharset0 TimesNewRomanPSMT;
+\f3\ftech\fcharset77 Symbol;\f4\fmodern\fcharset0 CourierNewPSMT;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs32 \cf0 \expnd0\expndtw0\kerning0
+README\
+\'a0\
+Originally written by Wayne Richards (2023)\
+Modified by Brian Locke (last Apr 2024)\
+\'a0\
+TODO: this all could run much faster using a relational database rather than CSVs\
+\'a0\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf0 Step 1:
+\f0\b0  Download data request from TriNetX and unzip to folder.\
+\'a0\
+
+\f1\b Step 2:
+\f0\b0  Place the original files in subfolders \'93Encounter\'94 \'93Diagnosis\'94 \'93Lab Results\'94 \'93Medications\'94 \'93Vital Signs\'94 \'93Procedure\'94 \'93RFS\'94 \'93Final Datasets\'94 \'93Patient\'94 and \'93Master Dataset\'94\
+\'a0\
+\pard\pardeftab720\li960\fi-960\partightenfactor0
+\cf0 -
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 \'93Medication Ingredients\'94 contains the needed information (RxNorm codes) on medications\
+-
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 \'93Prior Diagnosis\'94 and \'93Current Diagnosis\'94 -> consolidated down to just diagnosis. (to avoid requiring duplication of the diagnosis dataset)\
+-
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 Chemo_lines, genomic, medication_drug, oncology_treatment, standardized_terminology, tumor, and tumor_properties are not used. Cohort_details, datadictionary, dataset_details, manifest, and patient_cohort contain descriptions of the cohort and are also not directly used.\
+\pard\pardeftab720\partightenfactor0
+\cf0 \'a0\
+\'a0\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf0 Step 3:
+\f0\b0  To split each dataset to be small enough for handling (1 million per CSV) \'96\
+\'a0\
+Run the following bash script: split_db.sh\
+\pard\pardeftab720\li960\fi-960\partightenfactor0
+
+\f3 \cf0 \'e1
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 change \'93mnt/d/TriNetX/\'85\'94 to wherever you have your data stored for each split command\
+\pard\pardeftab720\partightenfactor0
+\cf0 \'a0\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf0 Step 4:
+\f0\b0  Run Jupyter notebooks for each of the chunked *.csv files to pre-process (into lists of .csv files for each data element that will go into the final dataset) and discard unneeded data: \'a0\'93Hypercapnia NEW DATA \'85\'94\
+\pard\pardeftab720\li960\fi-960\partightenfactor0
+
+\f3 \cf0 \'e1
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 For each jupyter notebook, you must manually specify how many chunks from step 3 split each database into this (this behavior is to help troubleshoot in smaller chunks if you need to).\
+\pard\pardeftab720\li1920\fi-1920\partightenfactor0
+
+\f4 \cf0 o
+\f2\fs18\fsmilli9333 \'a0\'a0 
+\f0\fs32 Note: my computer has 8gb of RAM and can barely process these all.\
+\pard\pardeftab720\partightenfactor0
+\cf0 Note: If you\'92ve got everything configured and want to run all the processing notebooks, there is a \'93Master\'94 notebook that just runs each sub-notebook in succession.\
+\'a0\
+\'a0\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf0 Step 5:
+\f0\b0  Run Jupyter notebooks \'93Hypercapnia RFS\'85\'94\'92 to identify each encounter that meets one of the criteria for inclusion into the data-set.\
+\pard\pardeftab720\li960\fi-960\partightenfactor0
+
+\f3 \cf0 \'e1
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 You additionally have to manually set the number of chunks in of each data type.\
+\pard\pardeftab720\partightenfactor0
+\cf0 \'a0\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b \cf0 Step 6:
+\f0\b0  Run Jupyter notebooks to merge the datasets into separate data sets for each reason for suspicion x setting permutation\
+\'a0\
+\pard\pardeftab720\li960\fi-960\partightenfactor0
+
+\f3 \cf0 \'e1
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 There is a Jupyter notebook \'93Hypercapnia Final Dataset Generation - Master.ipynb\'94 where the specification for each setting and RFS can be edited at the top, or it can be passed through via an external call from the \'93Hypercapnia Master.ipynb\'94 notebook.\
+
+\f3 \'e1
+\f2\fs18\fsmilli9333 \'a0\'a0\'a0\'a0\'a0 
+\f0\fs32 The number of chunks for each data-type also needs to be set for this manually for the pre-post processing.\
+\pard\pardeftab720\partightenfactor0
+\cf0 \'a0\
+The last step excludes encounters that do not meet the criteria of submitting at least 1 diagnosis or lab value (and thus, it needs to be pointed toward to csv files to accomplish this.\
+\'a0\
+\'a0\
+The result is output to a folder \'93Output\'94 in the working directory \'96 with separate folders for AMBULATORY, EMERGENCY, and INPATIENT\
+\'a0\
+In each, there is a before and after data-quality check CSV for each reason for suspicion (ABG, VBG, OBESITY, PREDISPOSITION, RESPFAIL, VENTSUPPORT)\
+\'a0\
+\'a0\
+}
