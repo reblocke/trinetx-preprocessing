@@ -6,3 +6,19 @@ Video Handoff.mp4
 .DS_Store
 .DS_Store
 .DS_Store
+
+# Local data (TriNetX exports, PHI)
+/data/
+
+# Python
+__pycache__/
+*.pyc
+
+.pytest_cache/
+
+.ruff_cache/
+
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
