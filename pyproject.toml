@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.24.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trinetx_preprocessing"
+version = "0.1.0"
+description = "TriNetX preprocessing utilities and pipeline scaffolding."
+readme = "README.txt"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyyaml",
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+trinetx-preprocessing = "trinetx_preprocessing.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+    "*.ipynb",
+    "Executed Notebooks/",
+    "Notebooks/",
+    "data/",
+    ".uv_cache/",
+    ".venv/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.10",
+]

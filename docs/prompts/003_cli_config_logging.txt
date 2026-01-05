@@ -1,0 +1,79 @@
+    # Milestone 003 — CLI + config + logging skeleton
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-003
+    Objective: Create a stable, user-facing CLI and configuration loader with validation, without implementing full ETL yet.
+
+    Scope
+    - Add: config schema, loader, validation, logging, CLI subcommands.
+- Keep ETL logic as placeholders that fail fast with actionable messages.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Implement config loading:
+   - File: `config.yaml` (YAML).
+   - Module: `src/trinetx_preprocessing/config.py`
+   - Provide `load_config(path: Path) -> Config` and `validate_config(cfg)`.
+   - Validate required directories, glob patterns, and output dir.
+   - Fail fast with clear error messages.
+3. Implement logging configuration:
+   - Module: `src/trinetx_preprocessing/logging_utils.py`
+   - Add `configure_logging(verbose: bool)`; never log patient identifiers.
+4. Implement CLI:
+   - Module: `src/trinetx_preprocessing/cli.py`
+   - Use `argparse` (stdlib) unless repo already uses another approach.
+   - Subcommands:
+     - `validate-config --config path`
+     - `validate-inputs --config path` (checks input paths exist and minimal schema checks on headers only)
+     - `run --config path` (placeholder; prints “not implemented” and exits non-zero for now)
+5. Add `config.example.yaml` at repo root or under `docs/`.
+6. Add tests:
+   - Config parsing + validation with temp dirs and dummy files.
+   - CLI help + validate-config exit 0.
+7. Update docs:
+   - `docs/CONFIG.md` and `docs/ONBOARDING.md` with CLI usage.
+8. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    ```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing validate-config --config config.example.yaml
+python -m trinetx_preprocessing --help
+```
+
+
+    Definition of done
+    - CLI exists with the listed subcommands.
+- Config loader validates paths and patterns with clear errors.
+- Tests cover config and CLI entrypoints.
+
+
+    Suggested commit message
+    - feat: add CLI + config loader + logging skeleton
+
+    Next prompt to run
+    - docs/prompts/004_splitter_and_discovery.txt

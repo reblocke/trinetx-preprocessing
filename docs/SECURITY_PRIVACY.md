@@ -4,6 +4,7 @@
 - Do not commit raw TriNetX exports, row-level patient data, or derived row-level outputs.
 - Store real data under `data/` (git-ignored).
 - Use only synthetic or de-identified fixtures in `tests/fixtures/`.
+- Keep regression artifacts from real data local only (hash manifests in `artifacts/` must not be committed).
 
 ## Logging
 - Logs must not print patient identifiers.

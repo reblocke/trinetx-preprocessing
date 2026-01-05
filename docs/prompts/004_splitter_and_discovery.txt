@@ -1,0 +1,76 @@
+    # Milestone 004 — Splitter tool + domain discovery
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-004
+    Objective: Replace the hard-coded split shell script with a portable Python splitter and robust domain file discovery.
+
+    Scope
+    - Implement splitting in Python, exposed via CLI `split`.
+- Implement domain file discovery that can handle both chunked and unchunked inputs.
+- Do not implement domain-specific filtering logic yet.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Implement a CSV splitter:
+   - Module: `src/trinetx_preprocessing/tools/split_csv.py`
+   - Function: `split_csv(in_path, out_dir, lines_per_chunk, prefix=None) -> list[Path]`
+   - Preserve header in every chunk.
+   - Use deterministic zero-padded chunk numbering.
+   - Avoid loading the whole file into memory.
+3. Implement discovery utilities:
+   - Module: `src/trinetx_preprocessing/discovery.py`
+   - Functions:
+     - `discover_domain_files(domain_dir: Path, pattern: str) -> list[Path]`
+     - `detect_chunked(files: list[Path]) -> bool`
+4. Wire into CLI:
+   - `python -m trinetx_preprocessing split --input <csv> --out <dir> --lines-per-chunk 10000000`
+5. Tests:
+   - Split a tiny synthetic CSV; assert chunk count, headers, total row count.
+   - Discovery returns sorted paths.
+6. Docs:
+   - Update `docs/ONBOARDING.md` to deprecate `split_db.sh` (keep it as legacy reference).
+   - Add an entry in `docs/DECISIONS.md` explaining the replacement and compatibility.
+7. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    ```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing split --help
+```
+
+
+    Definition of done
+    - Python splitter works on a synthetic CSV and is covered by tests.
+- Discovery utilities exist and are tested.
+- Docs reflect new recommended splitting approach.
+
+
+    Suggested commit message
+    - feat: add portable CSV splitter + discovery utilities
+
+    Next prompt to run
+    - docs/prompts/005_chunked_io_layer.txt

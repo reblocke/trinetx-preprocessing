@@ -1,4 +1,6 @@
-README
+README (legacy notebook workflow)
+
+For the CLI-based pipeline and synthetic quickstart, see README.md.
 
 Originally written by Wayne Richards (2023)
 Modified by Brian Locke (last Apr 2024)

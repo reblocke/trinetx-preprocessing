@@ -1,0 +1,8 @@
+encounter_id,patient_id,start_date,end_date,type,start_date_derived_by_TriNetX,end_date_derived_by_TriNetX,derived_by_TriNetX,source_id
+E1,P1,2022-01-01,2022-01-03,AMB,,,,
+E1,P1,2022-01-02,2022-01-04,AMB,,,,
+E2,P2,2021-12-31,2022-01-01,AMB,,,,
+E3,P3,2022-02-01,,EMER,,,,
+E4,P4,2022-03-01,2022-02-28,IMP,,,,
+E5,P5,2022-03-05,2022-03-05,IMP,,,,
+E6,P6,2022-04-01,2022-04-03,OTHER,,,,

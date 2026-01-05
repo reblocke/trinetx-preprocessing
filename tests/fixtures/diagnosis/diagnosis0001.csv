@@ -1,0 +1,10 @@
+patient_id,encounter_id,code_system,code,principal_diagnosis_indicator,admitting_diagnosis,reason_for_visit,date,derived_by_TriNetX,source_id
+P1,E1,ICD-10,J96.12,Unknown,Unknown,Unknown,2022-01-05,N,site1
+P2,E2,ICD-10,I50.33,S,F,F,2022-02-10,Y,site2
+P3,E3,ICD-10,G47.34,P,F,F,2022-03-15,N,site3
+P4,E4,ICD-10,G47.30,S,F,F,2022-03-16,N,site4
+P5,E5,ICD-10,J44.1,S,F,F,2022-04-20,N,site5
+P6,E6,ICD-10,E11.9,S,F,F,2022-05-01,N,site6
+P7,E7,ICD-10,R06.02,S,F,F,2022-06-01,N,site7
+P8,E8,ICD-10,Z79.891,S,F,F,2022-07-01,N,site8
+P9,E9,ICD-10,ABC,S,F,F,2022-08-01,N,site9

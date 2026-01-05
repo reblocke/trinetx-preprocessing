@@ -15,6 +15,7 @@
 ruff format
 ruff check
 pytest -q
+python -m trinetx_preprocessing --help
 ```
 
 ## Fixtures

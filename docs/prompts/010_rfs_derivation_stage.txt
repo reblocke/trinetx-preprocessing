@@ -1,0 +1,84 @@
+    # Milestone 010 — RFS derivation stage (reasons-for-suspicion)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-010
+    Objective: Implement RFS derivation using processed domain outputs, mirroring legacy logic, with strong tests.
+
+    Scope
+    - Implement RFS derivation only.
+- Inputs are the processed outputs from prior stages (encounter, labs, diagnosis, meds, procedure, vitals).
+- Preserve semantics; record code lists/thresholds and their legacy sources.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Identify canonical legacy RFS logic notebook(s); document source in `docs/DECISIONS.md`.
+3. Implement pure RFS logic:
+   - Module: `src/trinetx_preprocessing/transform/rfs.py`
+   - Functions should accept DataFrames (or dictionaries of DataFrames) and return:
+     - encounter-level flags per RFS category, or
+     - sets of encounter_ids per category.
+   - Keep thresholds/code lists explicit constants with citations to legacy code.
+4. Stage runner:
+   - Module: `src/trinetx_preprocessing/pipeline/rfs_stage.py`
+   - Reads processed domain outputs from work dir.
+   - Writes RFS outputs (e.g., a parquet/csv table of encounter_id × flags).
+5. CLI:
+   - Add `run-rfs --config path`.
+6. Tests:
+   - Synthetic mini-cohort across domains that triggers each RFS category.
+   - Assert exact flags/encounter_ids.
+   - Integration test that runs the stage end-to-end.
+7. Docs:
+   - Update `docs/DATA_CONTRACT.md` with RFS output contract.
+   - Update `docs/VALIDATION.md` with RFS test coverage.
+8. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing run-rfs --help
+```
+
+
+
+    Definition of done
+    - RFS transform is pure, explicit, and tested.
+- Stage runner and CLI exist and work on synthetic inputs.
+
+
+    Suggested commit message
+    - feat: implement RFS derivation stage + tests
+
+    Next prompt to run
+    - docs/prompts/011_final_dataset_assembly_stage.txt

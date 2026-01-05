@@ -16,5 +16,16 @@ For each pipeline run, record:
 - package versions (from lockfile)
 - start/end timestamps
 - row counts per stage
+- stage wall times
 
 Store provenance in an output-sidecar file (e.g. `Output/provenance.json`).
+
+## Profiling
+Use the profiling harness to capture performance data without changing outputs:
+```bash
+./.venv/bin/python -m trinetx_preprocessing profile --config config.yaml \
+  --out artifacts/profile
+```
+The command writes:
+- `profile.pstats` and `profile.txt` for cProfile output
+- `provenance.json` with stage timings and run timestamps

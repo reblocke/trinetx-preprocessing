@@ -1,0 +1,5 @@
+patient_id,encounter_id,code,principal_diagnosis_indicator,admitting_diagnosis,reason_for_visit,date
+P3,E3,J96.12,P,F,F,2022-03-01
+P4,E4,E66.01,S,F,F,2022-04-01
+P6,E6,I27.11,S,F,F,2022-06-01
+P7,E7,B00.1,S,F,F,2022-07-01

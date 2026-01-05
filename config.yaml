@@ -1,0 +1,27 @@
+# Example configuration using synthetic fixtures. Update for real runs.
+data_dir: tests/fixtures/example_data
+work_dir: tests/fixtures/work
+output_dir: tests/fixtures/output
+
+chunking:
+  enabled: false
+  lines_per_chunk: 10000000
+
+domains:
+  encounter:
+    pattern: "Encounter/encounter*.csv"
+  diagnosis:
+    pattern: "Diagnosis/diagnosis*.csv"
+  labs:
+    pattern: "Lab Results/lab_results*.csv"
+  meds:
+    pattern: "Medications/medication*.csv"
+  procedure:
+    pattern: "Procedure/procedure*.csv"
+  vitals:
+    pattern: "Vital Signs/vital_signs*.csv"
+  patient:
+    pattern: "Patient/patient*.csv"
+
+rfs:
+  enabled: false

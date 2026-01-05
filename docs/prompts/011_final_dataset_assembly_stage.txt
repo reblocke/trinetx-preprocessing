@@ -1,0 +1,80 @@
+    # Milestone 011 — Final dataset assembly (end-to-end synthetic run)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-011
+    Objective: Implement final dataset generation (merges + outputs) and a full `run` command that executes all stages on synthetic fixtures.
+
+    Scope
+    - Implement final assembly only; do not change earlier transforms except as needed for integration.
+- Preserve output structure conventions from legacy pipeline where possible.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Identify canonical legacy “final dataset generation” notebook(s) and document sources.
+3. Implement final assembly:
+   - Module: `src/trinetx_preprocessing/pipeline/final_assembly.py`
+   - Inputs: processed stage outputs + RFS outputs
+   - Outputs: final analytic tables per setting and RFS category, mirroring legacy naming.
+   - Enforce row-grain and guard against join explosions (assertions + logging).
+4. CLI:
+   - Implement `run --config path` to execute all stages in correct order.
+   - Add `run-all` alias if helpful; keep `run` as primary.
+5. Tests:
+   - Build an end-to-end synthetic fixture dataset (in code, not committed under `data/`).
+   - Run `run` into a temp output dir; assert expected outputs exist and schemas match.
+   - Add invariants: non-empty outputs for triggered categories, deterministic file contents.
+6. Docs:
+   - Update `docs/ONBOARDING.md` with the new CLI first-class flow.
+   - Update `docs/DATA_CONTRACT.md` to define final outputs and their grain.
+7. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing run --help
+```
+
+
+
+    Definition of done
+    - `run` executes all stages (on synthetic fixtures in tests).
+- Output tables are generated and validated by tests.
+- Pipeline guards against join explosions and missing IDs.
+
+
+    Suggested commit message
+    - feat: implement final assembly + end-to-end synthetic run
+
+    Next prompt to run
+    - docs/prompts/012_regression_harness_optional.txt

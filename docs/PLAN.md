@@ -8,15 +8,15 @@ This is a living plan for the `refactor-pipeline` branch.
 - Keep milestones small and testable.
 
 ## Milestones (suggested)
-0. Scaffold: docs + tests + packaging
-1. Baseline: fixture dataset + snapshot outputs from legacy pipeline
-2. Extract: move shared logic from notebooks into `src/` functions
-3. CLI: single entrypoint with config
-4. Validation: regression suite + provenance
-5. Performance: profile + optimize bottlenecks
-6. Clean-up: simplify notebooks, improve docs
+0. Inventory + runbook docs (Milestone 001)
+1. Baseline: synthetic fixture + snapshot outputs
+2. Extract: domain preprocessing into `src/`
+3. Implement RFS derivation + data checks
+4. Assemble final dataset pipeline + config
+5. CLI: single entrypoint + reproducibility hooks
+6. Validation + performance + notebook cleanup
 
 ## Current status
 - Done:
-- In progress:
-- Next:
+- In progress: Milestone 0 (docs inventory/runbook)
+- Next: Milestone 1 (synthetic fixture + baseline outputs)

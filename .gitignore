@@ -22,3 +22,6 @@ __pycache__/
 
 # Virtual envs
 .venv/
+
+# uv cache
+.uv_cache/

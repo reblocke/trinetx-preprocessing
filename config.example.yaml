@@ -1,0 +1,32 @@
+# Example configuration using synthetic fixtures. Update for real runs.
+# Paths are resolved relative to this file unless absolute.
+data_dir: tests/fixtures/example_data
+work_dir: artifacts/synthetic_example/work
+output_dir: artifacts/synthetic_example/output
+
+chunking:
+  enabled: false
+  lines_per_chunk: 10000000
+
+guardrails:
+  max_join_multiplier: 1.0
+
+domains:
+  encounter:
+    pattern: "Encounter/encounter*.csv"
+  diagnosis:
+    pattern: "Diagnosis/diagnosis*.csv"
+  labs:
+    pattern: "Lab Results/lab_results*.csv"
+  meds:
+    pattern: "Medications/medication*.csv"
+  procedure:
+    pattern: "Procedure/procedure*.csv"
+  vitals:
+    pattern: "Vital Signs/vital_signs*.csv"
+  patient:
+    pattern: "Patient/patient*.csv"
+
+rfs:
+  # Currently informational; the pipeline always runs the RFS stage.
+  enabled: true
