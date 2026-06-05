@@ -4,6 +4,26 @@ Python code to process TriNetX database exports to tabular format
 
 ## Repository Notes
 
+### Description
+
+Python code to process TriNetX database exports to tabular format
+
+### Repository Layout
+
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_AMB2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_EMER2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_INPAT2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_EMER.ipynb`
+
 ### Project Status
 
 No manuscript version is expected. This is a code-only repository and should not include publisher text.
