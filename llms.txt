@@ -1,0 +1,44 @@
+# TriNetX Preprocessing
+
+Repository: https://github.com/reblocke/trinetx-preprocessing
+Purpose: Python code to process TriNetX database exports to tabular format
+Status: No manuscript version is expected. This is a code-only repository and should not include publisher text.
+
+## Human-Readable Entry Points
+- `README.md` is the primary human-facing overview.
+- `llms.txt` is a compact machine-readable index and should not replace the README.
+
+## Repository Layout
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_AMB2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_EMER2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_INPAT2.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_EMER.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_INPAT.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_AMB.ipynb`
+- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_EMER.ipynb`
+
+## Data and Reuse Boundaries
+May describe restricted export schemas; verify no data rows
+
+## Workflow
+Review notebook workflow
+
+## Dependencies
+Jupyter requirements if present
+
+## Citation
+No publication DOI is assigned to this repository. Cite the GitHub repository URL and the commit or release used.
+
+## License
+MIT License for repository code; see `LICENSE`. Third-party and publisher materials remain under their original terms.
+
+## Agent Cautions
+- Do not re-add a README appendix aimed primarily at LLMs; integrate user-facing details into normal README sections.
+- Keep restricted clinical data, private drafts, publisher PDFs, local paths, and generated outputs out of public documentation unless explicitly reviewed.
+- Prefer concise summaries plus links to citable records over copied manuscript or publisher text.
