@@ -39,6 +39,12 @@ uv sync
   aggregate row-parity evidence.
 - Parquet intermediates are supported; final analytic outputs remain CSV.
 
+## Citation and License
+- Cite the GitHub repository URL and the commit or release used.
+- No publication DOI is assigned to this repository.
+- Code is MIT licensed; see `LICENSE`. Third-party and publisher materials
+  remain under their original terms.
+
 ## Agent Cautions
 - Do not replace the richer `AGENTS.md` project instructions with this compact
   index.
