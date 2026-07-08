@@ -6,16 +6,12 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 
 ## [Unreleased]
 ### Added
-- 
 
 ### Changed
-- 
 
 ### Fixed
-- 
 
 ### Removed
-- 
 
 ## [refactor-milestone-1] - 2026-07-08
 ### Added
