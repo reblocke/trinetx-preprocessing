@@ -445,9 +445,23 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
                 },
                 {
                     "patient_id": "P1",
+                    "encounter_id": "E_future_1",
+                    "code": "29463-7",
+                    "date": "2022-06-20",
+                    "value": 999.9,
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E_equal_1",
+                    "code": "29463-7",
+                    "date": "2022-06-10",
+                    "value": 888.9,
+                },
+                {
+                    "patient_id": "P1",
                     "encounter_id": "E_prev_9",
                     "code": "29463-7",
-                    "date": "2022-05-01",
+                    "date": "2022-05-20",
                     "value": 159.9,
                 },
                 {
@@ -485,6 +499,13 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
                     "code": "8302-2",
                     "date": "2022-06-02",
                     "value": 70.9,
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E_height_prev",
+                    "code": "8302-2",
+                    "date": "2022-05-15",
+                    "value": 69.9,
                 }
             ]
         ),
@@ -517,15 +538,124 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
     )
 
     p1, p2 = result.sort_values("patient_id").to_dict("records")
-    assert p1["value_Prev_Weight"] == 220
-    assert p1["date_Prev_Weight"] == "2022-06-01"
-    assert p1["value_Prev_Height"] == 70
-    assert p1["date_Prev_Height"] == "2022-06-02"
-    assert p1["value_Prev_BMI"] == 27
-    assert p1["date_Prev_BMI"] == "2022-06-03"
+    assert p1["value_Prev_Weight"] == 159
+    assert p1["date_Prev_Weight"] == "2022-05-20"
+    assert p1["value_Prev_Height"] == 69
+    assert p1["date_Prev_Height"] == "2022-05-15"
+    assert p1["value_Prev_BMI"] == 0
+    assert pd.isna(p1["date_Prev_BMI"])
     assert p2["value_Prev_Weight"] == 0
     assert pd.isna(p2["date_Prev_Weight"])
     assert not list(config.work_dir.glob(".trinetx-final-prev-vitals-*"))
+
+
+def test_prior_diagnosis_last_date_uses_latest_patient_row(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    current = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P2"],
+            "encounter_id": ["E1", "E2"],
+            "qualify_date": pd.to_datetime(["2022-06-01", "2022-06-01"]),
+        }
+    )
+    base = {
+        "code": "G473",
+        "principal_diagnosis_indicator": "Unknown",
+        "admitting_diagnosis": "Unknown",
+        "reason_for_visit": "Unknown",
+    }
+    write_work_table(
+        config,
+        "HAS_G473.csv",
+        pd.DataFrame(
+            [
+                {
+                    **base,
+                    "patient_id": "P1",
+                    "encounter_id": "P1_old",
+                    "date": "2022-01-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P1",
+                    "encounter_id": "P1_future",
+                    "date": "2022-12-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P2",
+                    "encounter_id": "P2_old",
+                    "date": "2022-01-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P2",
+                    "encounter_id": "P2_latest",
+                    "date": "2022-05-15",
+                },
+            ]
+        ),
+    )
+
+    enriched = final_assembly._merge_prior_diagnosis_features(
+        current,
+        config=config,
+        patient_ids={"P1", "P2"},
+        encounter_ids={"E1", "E2"},
+        chunksize=1,
+    )
+
+    p1, p2 = enriched.sort_values("patient_id").to_dict("records")
+    assert p1["HAS_G473"] == 1
+    assert p1["first_date_G473"] == pd.Timestamp("2022-01-01")
+    assert pd.isna(p1["last_date_G473"])
+    assert p2["HAS_G473"] == 1
+    assert p2["first_date_G473"] == pd.Timestamp("2022-01-01")
+    assert p2["last_date_G473"] == pd.Timestamp("2022-05-15")
+
+
+def test_encounter_first_last_features_use_latest_current_date(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    current = pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]})
+    write_work_table(
+        config,
+        "HAS_94660.csv",
+        pd.DataFrame(
+            [
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E1",
+                    "code": "94660",
+                    "date": "2022-01-01",
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E1",
+                    "code": "94660",
+                    "date": "2022-05-15",
+                },
+            ]
+        ),
+    )
+
+    enriched = final_assembly._merge_encounter_first_last_features(
+        current,
+        config=config,
+        groups=final_assembly.PROCEDURE_CODE_GROUPS,
+        source_columns=final_assembly.PROCEDURE_COLUMNS,
+        patient_ids={"P1"},
+        encounter_ids={"E1"},
+        chunksize=1,
+    )
+
+    row = enriched.iloc[0]
+    assert row["HAS_94660"] == 1
+    assert row["first_date_94660"] == pd.Timestamp("2022-01-01")
+    assert row["last_date_94660"] == pd.Timestamp("2022-05-15")
 
 
 def _write_patient_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -791,7 +921,7 @@ def test_outpatient_medication_last_date_validated_independently(
                 },
                 {
                     "patient_id": "P1",
-                    "encounter_id": "E0",
+                    "encounter_id": "E2",
                     "code": "1808",
                     "start_date": "2022-12-01",
                 },

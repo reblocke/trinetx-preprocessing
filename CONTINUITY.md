@@ -4,8 +4,8 @@ This file is the compaction-safe continuity ledger for the refactor work.
 Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 
 ## Goal (incl. success criteria)
-- Complete Refactor Milestone 1 bookkeeping.
-- Success: replication phase is documented as complete under `99.998708%` aggregate row parity, notebook noise is excluded from the milestone commit, the branch is reviewed against `main`, and durable fallback tags/releases are created for `legacy-pre-refactor` and `refactor-milestone-1`.
+- Complete post-Milestone 1 semantic bug fixes on `codex/refactor-post-milestone-1`.
+- Success: `refactor-milestone-1` remains unchanged as the replication fallback, review-confirmed final-assembly "last date" selectors are corrected, previous-vitals prior-value behavior is corrected, focused tests and local gates pass, GitHub Codex review threads are answered, and a fresh Codex review is requested for the post-milestone branch.
 
 ## Constraints/Assumptions
 - TriNetX exports are sensitive. Do not commit raw data, row-level extracts, real-data manifests, logs, or profile outputs.
@@ -13,6 +13,7 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 - Main drive is space constrained; real-data work/output/tmp/profile/log/manifest artifacts must stay on external validation roots, currently `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation` for renewed full legacy/refactor evidence.
 - Dependency management is `uv`; Ruff is the only formatter/linter.
 - Refactor Milestone 1 accepts near-exact row parity as the replication gate; exact hash parity remains diagnostic.
+- Post-Milestone 1 work may intentionally diverge from legacy quirks when the corrected analytic behavior is documented and tested.
 - Current full-evidence artifacts are under `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`; private row-level outputs, manifests, logs, and profile artifacts remain external and untracked.
 - On `2026-06-27T10:56:15Z`, the resumed BOOK full-legacy runner is active under PID `3320` after the prior data-check cluster-close timeout. It is in the generated-split header sanity pass before re-entering data checks, with open-file progress from `lab_results_NEW_7114.csv` to `lab_results_NEW_17443.csv`; `amb_enc_screen.csv` exists, `inp_enc_screen.csv` and final outputs are still absent, and BOOK has about `8574.26 GiB` free.
 - On `2026-06-27T11:02:57Z`, the generated-split header sanity pass finished and the patched copied data-check notebook started under nbconvert PID `9191` / kernel PID `9192`; `legacy_data_checks.log` is active.
@@ -85,9 +86,10 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 - Hashing and input inspection must be memory/space bounded for slow external volumes.
 - Code-group fan-out classifies unique codes first, then duplicates rows to all matching groups, preserving overlapping legacy inclusion logic.
 - Full legacy recovery uses run-private chunked preprocessing for monolithic restored CSVs. Canonical notebooks and refactor `src/` stay unchanged; copied preprocessing notebooks skip raw-ingest cells after bounded `*_NEW_####.csv` work splits are generated externally.
+- `refactor-milestone-1` must not be retagged or rewritten; semantic improvements now happen on `codex/refactor-post-milestone-1`.
 
 ## State
-- Branch: `refactor-pipeline`.
+- Branch: `codex/refactor-post-milestone-1`, starting at the `refactor-milestone-1` tag commit.
 - External validation config: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/config.yaml`.
 - Staged parity root: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs`.
 - On `2026-06-26T19:48:09Z`, full-evidence execution is being offloaded to `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation` because transient I/O probes showed BOOK is materially faster and it has about `8663.4 GiB` free. Raw equivalence checks passed for Encounter, Diagnosis, Lab Results, Medications, Procedure, Vital Signs, and Patient by size, mtime, header hash, and sample hash.
@@ -970,18 +972,21 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 - On `2026-07-07T12:15:22-0600`, final BOOK scratch dry-run completed with `0` scratch artifacts and `0` bytes. `git diff --check` passed. Exact content-hash comparison still had mismatches, later accepted as a documented near-exact row-parity delta for Refactor Milestone 1.
 - On `2026-07-08T07:31-0600`, a PHI-safe aggregate row-level audit of the `25` hash-mismatched BOOK final CSV pairs completed. It found `4,412,875 / 4,412,932` rows matching exactly (`99.998708%` overall), with `57` mismatched shared-key rows, `0` legacy-only keys, `0` refactor-only keys, and `0` duplicate-key-mode tables. Mismatches concentrate in `date_Weight`, `value_Weight`, and occasional previous-weight fields. Reports: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/diagnostics/current_row_parity_audit.json` and `.md`.
 - On `2026-07-08`, the user accepted the replication phase as complete for Refactor Milestone 1 using the aggregate row-parity audit. Current bookkeeping task: clean commit scope, document the acceptance decision, commit/push, open holistic review PR, tag/release `legacy-pre-refactor` and `refactor-milestone-1`, and create `codex/refactor-post-milestone-1` for future improvements.
+- On `2026-07-08`, post-Milestone 1 semantic fixes started on `codex/refactor-post-milestone-1`. GitHub Codex review comments identified prior-diagnosis and outpatient-medication `last_date_*` selectors that kept earliest rows. This work intentionally preserves the `refactor-milestone-1` tag as-is and treats these as corrected post-milestone behaviors.
+- On `2026-07-08`, post-Milestone 1 semantic fixes were implemented locally: prior diagnosis, procedure-style current encounter features, and outpatient medication `last_date_*` selectors now keep latest rows; previous Weight/Height/BMI excludes current encounters and requires dates strictly before `qualify_date`. Focused final-assembly tests passed (`33 passed`), full local gates passed (`git diff --check`, Ruff, `203 passed`), and the synthetic pipeline smoke wrote `36` final CSV outputs under `/tmp/trinetx-post-milestone-synthetic/output`.
 
 ## Next
-- Save and restore unintended notebook diffs, then stage only intended source/docs/tests and hygiene deletions.
-- Run local gates, commit `feat: complete refactor milestone 1`, merge `origin/main`, rerun gates, push, open draft PR, review, tag/release, and create the future-work branch.
-- Before merge/commit/release, confirm no raw data, row-level extracts, real-data manifests, logs, profile outputs, cache files, `.DS_Store`, `config.yaml`, or generated zips are tracked.
+- Commit and push `codex/refactor-post-milestone-1`, reply to the two GitHub Codex review threads, and request a fresh Codex review for the post-milestone branch/PR.
+- Before commit/push, confirm no raw data, row-level extracts, real-data manifests, logs, profile outputs, cache files, `.DS_Store`, `config.yaml`, or generated validation artifacts are tracked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: whether historical approved legacy runs used headerless split CSV files, despite current restored raw files being headered.
 - No open milestone-acceptance question remains: the user accepted near-exact row parity for Refactor Milestone 1, with exact hash mismatches retained as documented residual diagnostics.
+- UNCONFIRMED: whether post-Milestone 1 fixes should be opened as a stacked PR against `refactor-pipeline` or as a replacement PR against `main`; default is to keep branch evidence on `codex/refactor-post-milestone-1` and avoid retagging Milestone 1.
 
 ## Working set (files/ids/commands)
 - Row parity audit script/report: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/diagnostics/current_row_parity_audit.py`, `.json`, and `.md`.
+- GitHub Codex review comments to answer after fix commit: `3544668455` (prior diagnosis latest date) and `3544668463` (outpatient medication latest date).
 - I/O probe script: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/tools/probe_refactor_io.py`.
 - I/O probe scan run: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/io_probe_20260626-110148`.
 - I/O probe smoke run: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/io_probe_20260626-110158`.

@@ -796,8 +796,7 @@ def _merge_previous_vital_features(
         selected = _load_previous_vital_candidates(
             config,
             name,
-            patient_ids=patient_ids,
-            encounter_ids=encounter_ids,
+            final_rows=enriched.loc[:, ["patient_id", "encounter_id", "qualify_date"]],
             chunksize=chunksize,
         )
         if selected.empty:
@@ -818,14 +817,29 @@ def _load_previous_vital_candidates(
     config: Config,
     name: str,
     *,
-    patient_ids: set[str],
-    encounter_ids: set[str],
+    final_rows: pd.DataFrame,
     chunksize: int,
 ) -> pd.DataFrame:
     path = resolve_work_table(config, f"value_{name}.csv")
     output_columns = ["patient_id", f"value_Prev_{name}", f"date_Prev_{name}"]
     if not path.exists():
         return pd.DataFrame(columns=output_columns)
+
+    cohort = final_rows.loc[:, ["patient_id", "encounter_id", "qualify_date"]].copy()
+    cohort["patient_id"] = cohort["patient_id"].astype("string")
+    cohort["encounter_id"] = cohort["encounter_id"].astype("string")
+    cohort["qualify_date"] = pd.to_datetime(cohort["qualify_date"], errors="coerce")
+    cohort = cohort.dropna(subset=["patient_id", "qualify_date"])
+    if cohort.empty:
+        return pd.DataFrame(columns=output_columns)
+
+    patient_ids = _string_id_set(cohort["patient_id"])
+    encounter_ids = _string_id_set(cohort["encounter_id"])
+    qualify_dates_by_patient = (
+        cohort.drop_duplicates(subset=["patient_id"], keep="first")
+        .set_index("patient_id")["qualify_date"]
+        .to_dict()
+    )
 
     with _FinalPreviousVitalCandidateStore(config.work_dir) as store:
         for chunk in iter_work_tables(
@@ -839,12 +853,20 @@ def _load_previous_vital_candidates(
                 chunk,
                 patient_ids=patient_ids,
                 encounter_ids=encounter_ids,
-                encounter_filter="include",
+                encounter_filter="exclude",
             )
             if filtered.empty:
                 continue
             filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
             filtered["value"] = _legacy_csv_visible_numeric_series(filtered["value"])
+            filtered["_qualify_date"] = filtered["patient_id"].astype("string").map(
+                qualify_dates_by_patient
+            )
+            filtered = filtered.loc[
+                filtered["date"] < filtered["_qualify_date"]
+            ].copy()
+            if filtered.empty:
+                continue
             store.add_frame(name, filtered.loc[:, VITALS_COLUMNS])
 
         selected = store.reduce().get(name)
@@ -1479,7 +1501,7 @@ def _select_last_encounter_patient_date(
     selected = _sort_first_date(rows.copy())
     selected = selected.drop_duplicates(subset=["encounter_id"], keep="last")
     selected = _sort_first_date(selected, id_column="patient_id")
-    selected = selected.drop_duplicates(subset=["patient_id"], keep="first")
+    selected = selected.drop_duplicates(subset=["patient_id"], keep="last")
     selected = selected.rename(columns={"date": date_column})
     return selected.loc[:, ["encounter_id", date_column]]
 
@@ -1496,7 +1518,7 @@ def _select_last_patient_date(rows: pd.DataFrame, *, date_column: str) -> pd.Dat
     selected = _sort_first_date(rows.copy())
     selected = selected.drop_duplicates(subset=["encounter_id"], keep="last")
     selected = _sort_first_date(selected, id_column="patient_id")
-    selected = selected.drop_duplicates(subset=["patient_id"], keep="first")
+    selected = selected.drop_duplicates(subset=["patient_id"], keep="last")
     return selected.loc[:, ["patient_id", date_column]]
 
 
@@ -1554,7 +1576,7 @@ def _select_op_medication(rows: pd.DataFrame, *, med_index: str) -> pd.DataFrame
         ascending=[True, False],
         kind="mergesort",
     )
-    last = last.drop_duplicates(subset=["patient_id"], keep="first")
+    last = last.drop_duplicates(subset=["patient_id"], keep="last")
     last = last.rename(columns={"start_date": f"last_date_OP_Med_{med_index}"})
 
     return first.loc[:, ["patient_id", f"first_date_OP_Med_{med_index}"]].merge(

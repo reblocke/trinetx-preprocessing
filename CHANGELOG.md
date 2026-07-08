@@ -8,8 +8,16 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 ### Added
 
 ### Changed
+- Post-Milestone 1 final assembly now treats selected legacy quirks as bugs
+  rather than replication targets when computing prior/latest analytic dates.
 
 ### Fixed
+- Corrected final analytic `last_date_*` selection for prior diagnosis,
+  procedure-style encounter features, and outpatient medications so "last"
+  dates use the latest qualifying row instead of the earliest row.
+- Corrected previous Weight/Height/BMI assembly to exclude current encounters
+  and choose the latest strictly prior value before each final row's
+  `qualify_date`.
 
 ### Removed
 

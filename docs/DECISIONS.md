@@ -760,3 +760,27 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: external audit reports under
   `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/diagnostics/`;
   reports are private validation artifacts and are not committed.
+
+### 2026-07-08 — Correct post-milestone "last date" and prior-vital semantics
+- Date: 2026-07-08
+- Decision: After the frozen `refactor-milestone-1` fallback tag, final
+  assembly should use corrected analytic semantics for several legacy-compatible
+  quirks: `last_date_*` columns select the latest qualifying row, outpatient
+  medication last dates are validated independently of first dates, and previous
+  Weight/Height/BMI exclude current encounters and select the latest value
+  strictly before `qualify_date`.
+- Context: Local and GitHub Codex review identified that helper functions named
+  for "last" dates could sort ascending and keep the first patient row, causing
+  `last_date_*` columns to record earliest rows. The Milestone 1 parity audit
+  also showed the remaining accepted residual differences concentrated in
+  Weight/previous-Weight columns.
+- Rationale: Exact historical mimicry is no longer the active goal after
+  Milestone 1. These behaviors are more plausibly legacy bugs than intended
+  analytic definitions, and fixing them is preferable before broader
+  optimization or maintainability work.
+- Consequences: Outputs produced after this decision are post-Milestone 1
+  corrected outputs and should not be used to redefine the
+  `refactor-milestone-1` replication evidence. Any full real-data evidence
+  rerun after this point must be labeled post-milestone.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_final_assembly.py`.
