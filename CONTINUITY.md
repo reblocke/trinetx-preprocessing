@@ -974,10 +974,11 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 - On `2026-07-08`, the user accepted the replication phase as complete for Refactor Milestone 1 using the aggregate row-parity audit. Current bookkeeping task: clean commit scope, document the acceptance decision, commit/push, open holistic review PR, tag/release `legacy-pre-refactor` and `refactor-milestone-1`, and create `codex/refactor-post-milestone-1` for future improvements.
 - On `2026-07-08`, post-Milestone 1 semantic fixes started on `codex/refactor-post-milestone-1`. GitHub Codex review comments identified prior-diagnosis and outpatient-medication `last_date_*` selectors that kept earliest rows. This work intentionally preserves the `refactor-milestone-1` tag as-is and treats these as corrected post-milestone behaviors.
 - On `2026-07-08`, post-Milestone 1 semantic fixes were implemented locally: prior diagnosis, procedure-style current encounter features, and outpatient medication `last_date_*` selectors now keep latest rows; previous Weight/Height/BMI excludes current encounters and requires dates strictly before `qualify_date`. Focused final-assembly tests passed (`33 passed`), full local gates passed (`git diff --check`, Ruff, `203 passed`), and the synthetic pipeline smoke wrote `36` final CSV outputs under `/tmp/trinetx-post-milestone-synthetic/output`.
+- On `2026-07-08`, post-Milestone 1 fixes were committed and pushed on `codex/refactor-post-milestone-1` (`d6a1265`). Stacked draft PR #5 targets `refactor-pipeline`; the two GitHub Codex review threads on PR #4 were answered, and `@codex review` was requested on PR #5. As of the last check, PR #5 had an eyes reaction and no posted Codex review yet.
 
 ## Next
-- Commit and push `codex/refactor-post-milestone-1`, reply to the two GitHub Codex review threads, and request a fresh Codex review for the post-milestone branch/PR.
-- Before commit/push, confirm no raw data, row-level extracts, real-data manifests, logs, profile outputs, cache files, `.DS_Store`, `config.yaml`, or generated validation artifacts are tracked.
+- Wait for PR #5 Codex review results and address only actionable post-milestone findings.
+- Keep `refactor-milestone-1` unchanged; do not retag or rewrite milestone evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: whether historical approved legacy runs used headerless split CSV files, despite current restored raw files being headered.
