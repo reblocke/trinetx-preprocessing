@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from ..validation import require_columns
+from .code_groups import split_rows_by_code_groups
 
 RAW_MEDICATION_COLUMNS = [
     "patient_id",
@@ -155,4 +156,9 @@ def split_medications_by_code(
     """
 
     groups = code_groups or MEDICATION_CODE_GROUPS
-    return {group.name: filter_medications_by_code(df, group.regex) for group in groups}
+    return split_rows_by_code_groups(
+        df,
+        columns=MEDICATION_COLUMNS,
+        code_groups=groups,
+        context="Medications normalized input",
+    )

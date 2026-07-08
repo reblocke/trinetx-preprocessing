@@ -8,6 +8,11 @@ chunking:
   enabled: false
   lines_per_chunk: 10000000
 
+storage:
+  intermediate_format: parquet
+  emit_legacy_csv_intermediates: false
+  parquet_row_group_size: 250000
+
 guardrails:
   max_join_multiplier: 1.0
 
@@ -17,13 +22,15 @@ domains:
   diagnosis:
     pattern: "Diagnosis/diagnosis*.csv"
   labs:
-    pattern: "Lab Results/lab_results*.csv"
+    pattern: "Lab Results/lab_result*.csv"
   meds:
-    pattern: "Medications/medication*.csv"
+    patterns:
+      - "Medications/medication[0-9]*.csv"
+      - "Medications/medication_ingredient*.csv"
   procedure:
     pattern: "Procedure/procedure*.csv"
   vitals:
-    pattern: "Vital Signs/vital_signs*.csv"
+    pattern: "Vital Signs/vital*_signs*.csv"
   patient:
     pattern: "Patient/patient*.csv"
 

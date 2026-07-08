@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import numpy as np
 import pandas as pd
 
 from ..validation import require_columns
@@ -183,6 +184,64 @@ def derive_rfs_event_frames(
     }
 
 
+def derive_lab_rfs_event_frames(labs: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Derive RFS event rows that depend only on lab results."""
+
+    return {
+        "ABG": _select_event_columns(
+            _filter_lab_results(labs, ABG_CODE_REGEX, ABG_VALUE_MIN, ABG_VALUE_MAX)
+        ),
+        "VBG": _select_event_columns(
+            _filter_lab_results(labs, VBG_CODE_REGEX, VBG_VALUE_MIN, VBG_VALUE_MAX)
+        ),
+    }
+
+
+def derive_diagnosis_rfs_event_frames(
+    diagnosis: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """Derive RFS event rows that depend only on diagnosis rows."""
+
+    return {
+        "RESPFAIL": _select_event_columns(
+            _filter_diagnosis(diagnosis, RESPFAIL_CODE_REGEX)
+        ),
+        "OBESITY": _select_event_columns(
+            _filter_diagnosis(diagnosis, OBESITY_DIAGNOSIS_REGEX)
+        ),
+        "PREDISPOSITION": _select_event_columns(
+            _filter_diagnosis(diagnosis, PREDISPOSITION_CODE_REGEX)
+        ),
+    }
+
+
+def derive_procedure_rfs_event_frames(
+    procedure: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """Derive RFS event rows that depend only on procedure rows."""
+
+    return {
+        "VENTSUPPORT": _select_event_columns(
+            _filter_procedure(procedure, VENTSUPPORT_CODE_REGEX)
+        )
+    }
+
+
+def derive_vitals_rfs_event_frames(vitals: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Derive RFS event rows that depend only on vital-sign rows."""
+
+    return {
+        "OBESITY": _select_event_columns(
+            _filter_vitals(
+                vitals,
+                OBESITY_BMI_CODE_REGEX,
+                OBESITY_BMI_MIN,
+                OBESITY_BMI_MAX,
+            )
+        )
+    }
+
+
 def build_rfs_flags(
     encounters: pd.DataFrame,
     rfs_sets: Mapping[str, set[str]],
@@ -278,10 +337,21 @@ def _filter_vitals(
     filtered = vitals.loc[mask, VITALS_COLUMNS].copy()
     if filtered.empty:
         return filtered
-    values = pd.to_numeric(filtered["value"], errors="coerce")
+    values = _legacy_float16_values(filtered["value"])
     mask = (values >= min_value) & (values < max_value)
     filtered["value"] = values
     return filtered.loc[mask].reset_index(drop=True)
+
+
+def _legacy_float16_values(series: pd.Series) -> pd.Series:
+    values = pd.to_numeric(series, errors="coerce").astype("float64")
+    info = np.finfo(np.float16)
+    finite = np.isfinite(values)
+    safe = finite & (values >= info.min) & (values <= info.max)
+    rounded = pd.Series(np.nan, index=values.index, dtype="float64")
+    if safe.any():
+        rounded.loc[safe] = values.loc[safe].astype("float16").astype("float64")
+    return rounded
 
 
 def _encounter_ids(df: pd.DataFrame) -> set[str]:

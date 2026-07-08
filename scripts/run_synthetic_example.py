@@ -53,13 +53,15 @@ def write_config(
         "  diagnosis:\n"
         '    pattern: "Diagnosis/diagnosis*.csv"\n'
         "  labs:\n"
-        '    pattern: "Lab Results/lab_results*.csv"\n'
+        '    pattern: "Lab Results/lab_result*.csv"\n'
         "  meds:\n"
-        '    pattern: "Medications/medication*.csv"\n'
+        "    patterns:\n"
+        '      - "Medications/medication[0-9]*.csv"\n'
+        '      - "Medications/medication_ingredient*.csv"\n'
         "  procedure:\n"
         '    pattern: "Procedure/procedure*.csv"\n'
         "  vitals:\n"
-        '    pattern: "Vital Signs/vital_signs*.csv"\n'
+        '    pattern: "Vital Signs/vital*_signs*.csv"\n'
         "  patient:\n"
         '    pattern: "Patient/patient*.csv"\n'
         "\n"

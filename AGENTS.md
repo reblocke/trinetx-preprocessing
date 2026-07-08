@@ -13,6 +13,11 @@
   - Never commit raw data or row-level extracts.
   - Keep all real inputs under `data/` (git-ignored).
   - Tests must use **synthetic** or de-identified fixtures under `tests/fixtures/`.
+- Treat this repository as public. Do not add PHI, restricted datasets,
+  credentials, private drafts, publisher-formatted article text, local
+  row-level output, or generated validation artifacts unless explicitly
+  reviewed.
+- No manuscript version is expected in this repository.
 - Primary refactor goal: preserve **outputs and inclusion logic** while improving:
   - onboarding and ease-of-use (first)
   - reproducibility (second)
@@ -194,6 +199,10 @@ General modeling expectations:
 - Use `pytest` for unit tests under `tests/`.
 - When creating/modifying functions, add or update tests and state how to run them (e.g., `pytest -q`).
 - Use small, de-identified fixtures (or synthetic data) under `tests/fixtures/`.
+- Before publishing changes, run `git diff --check`.
+- Validate `CITATION.cff` as YAML after citation edits if that file exists.
+- Confirm no row-level restricted data or identifiers are included in tracked
+  changes.
 
 ## Milestone discipline and definition of done (recommended)
 Every milestone should end with:

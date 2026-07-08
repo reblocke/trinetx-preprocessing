@@ -1,11 +1,21 @@
+# macOS/local metadata
+.DS_Store
+._*
 
+# Local handoff/media
 Video Handoff.mp4
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
+trinetx_codex_prompts.zip
+trinetx_codex_prompts_009plus_updated.zip
+trinetx_preprocessing_scaffold_md.zip
+
+# Local config and generated validation artifacts
+/config.yaml
+/artifacts/
+/logs/
+/profile/
+/manifests/
+/work/
+/output/
 
 # Local data (TriNetX exports, PHI)
 /data/
@@ -25,3 +35,4 @@ __pycache__/
 
 # uv cache
 .uv_cache/
+.uv-cache/

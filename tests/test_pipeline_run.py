@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -9,27 +10,48 @@ from trinetx_preprocessing.pipeline.final_assembly import (
     FINAL_OUTPUT_COLUMNS,
     SETTING_OUTPUT_DIRS,
 )
+from trinetx_preprocessing.profiling import current_git_code_state_sha256
 from trinetx_preprocessing.transform.rfs import RFS_CATEGORIES
 
 
-def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) -> None:
+def _write_config(
+    path: Path,
+    data_dir: Path,
+    work_dir: Path,
+    output_dir: Path,
+    *,
+    intermediate_format: str = "csv",
+    emit_legacy_csv_intermediates: bool = True,
+    chunking_enabled: bool = False,
+    lines_per_chunk: int = 10,
+) -> None:
     content = (
         f'data_dir: "{data_dir}"\n'
         f'work_dir: "{work_dir}"\n'
         f'output_dir: "{output_dir}"\n'
+        "storage:\n"
+        f"  intermediate_format: {intermediate_format}\n"
+        f"  emit_legacy_csv_intermediates: "
+        f"{str(emit_legacy_csv_intermediates).lower()}\n"
+        "  parquet_row_group_size: 10\n"
+        "chunking:\n"
+        f"  enabled: {str(chunking_enabled).lower()}\n"
+        f"  lines_per_chunk: {lines_per_chunk}\n"
         "domains:\n"
         "  encounter:\n"
         '    pattern: "Encounter/encounter*.csv"\n'
         "  diagnosis:\n"
         '    pattern: "Diagnosis/diagnosis*.csv"\n'
         "  labs:\n"
-        '    pattern: "Lab Results/lab_results*.csv"\n'
+        '    pattern: "Lab Results/lab_result*.csv"\n'
         "  meds:\n"
-        '    pattern: "Medications/medication*.csv"\n'
+        "    patterns:\n"
+        '      - "Medications/medication[0-9]*.csv"\n'
+        '      - "Medications/medication_ingredient*.csv"\n'
         "  procedure:\n"
         '    pattern: "Procedure/procedure*.csv"\n'
         "  vitals:\n"
-        '    pattern: "Vital Signs/vital_signs*.csv"\n'
+        '    pattern: "Vital Signs/vital*_signs*.csv"\n'
         "  patient:\n"
         '    pattern: "Patient/patient*.csv"\n'
         "\n"
@@ -289,3 +311,132 @@ def test_run_pipeline_end_to_end(tmp_path: Path) -> None:
     assert rerun_result == 0
     second_bytes = sample_path.read_bytes()
     assert first_bytes == second_bytes
+
+
+def test_run_pipeline_end_to_end_with_parquet_intermediates(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    work_dir = tmp_path / "work"
+    output_dir = tmp_path / "output"
+    data_dir.mkdir()
+    work_dir.mkdir()
+    output_dir.mkdir()
+
+    _write_synthetic_inputs(data_dir)
+
+    config_path = tmp_path / "config.yaml"
+    _write_config(
+        config_path,
+        data_dir,
+        work_dir,
+        output_dir,
+        intermediate_format="parquet",
+        emit_legacy_csv_intermediates=False,
+        chunking_enabled=True,
+        lines_per_chunk=1,
+    )
+
+    result = cli_main(["run", "--config", str(config_path)])
+    assert result == 0
+
+    assert (work_dir / "encounter_NEW_0001.parquet").exists()
+    assert not (work_dir / "encounter_NEW_0001.csv").exists()
+    assert (work_dir / "RFS_ABG.parquet").exists()
+
+    sample_path = output_dir / SETTING_OUTPUT_DIRS["AMB"] / "RFS_ABG_ENC_AMB_AFTER.csv"
+    assert sample_path.exists()
+    sample = pd.read_csv(sample_path)
+    assert list(sample.columns) == FINAL_OUTPUT_COLUMNS
+    assert not sample.empty
+
+
+def test_baseline_compare_profile_end_to_end_with_parquet_intermediates(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    work_dir = tmp_path / "work"
+    output_dir = tmp_path / "output"
+    baseline_dir = tmp_path / "baseline"
+    profile_dir = tmp_path / "profile"
+    data_dir.mkdir()
+    work_dir.mkdir()
+    output_dir.mkdir()
+
+    _write_synthetic_inputs(data_dir)
+
+    config_path = tmp_path / "config.yaml"
+    _write_config(
+        config_path,
+        data_dir,
+        work_dir,
+        output_dir,
+        intermediate_format="parquet",
+        emit_legacy_csv_intermediates=False,
+        chunking_enabled=True,
+        lines_per_chunk=1,
+    )
+
+    baseline_result = cli_main(
+        [
+            "baseline",
+            "--config",
+            str(config_path),
+            "--out",
+            str(baseline_dir),
+            "--strict",
+        ]
+    )
+    assert baseline_result == 0
+
+    baseline_manifest = json.loads((baseline_dir / "hashes.json").read_text())
+    assert baseline_manifest["schema_version"] == 2
+    assert baseline_manifest["tables"]
+    assert any(
+        entry["key"] == "output_dir/AMBULATORY/RFS_ABG_ENC_AMB_AFTER.csv"
+        for entry in baseline_manifest["tables"]
+    )
+
+    compare_result = cli_main(
+        [
+            "compare",
+            "--config",
+            str(config_path),
+            "--baseline",
+            str(baseline_dir),
+            "--strict",
+        ]
+    )
+    assert compare_result == 0
+
+    profile_result = cli_main(
+        [
+            "profile",
+            "--config",
+            str(config_path),
+            "--out",
+            str(profile_dir),
+            "--strict",
+        ]
+    )
+    assert profile_result == 0
+
+    provenance = json.loads((profile_dir / "provenance.json").read_text())
+    assert provenance["schema_version"] == 2
+    assert provenance["config_path"] == str(config_path.resolve())
+    assert provenance["config_sha256"]
+    assert provenance["git_code_state_sha256"] == current_git_code_state_sha256()
+    assert provenance["strict"] is True
+    assert provenance["output_file_count"] == len(provenance["output_files"])
+    assert (
+        provenance["output_file_count"]
+        == len(SETTING_OUTPUT_DIRS) * len(RFS_CATEGORIES) * 2
+    )
+    assert provenance["generated_file_count"] > provenance["output_file_count"]
+    output_root = output_dir.resolve()
+    assert all(
+        Path(item["path"]).suffix == ".csv"
+        and Path(item["path"]).is_relative_to(output_root)
+        for item in provenance["output_files"]
+    )
+    assert provenance["stage_timings_seconds"]["final_assembly"] >= 0
+    assert provenance["disk_footprint_bytes"]["work_dir"] > 0
+    assert provenance["disk_footprint_bytes"]["output_dir"] > 0

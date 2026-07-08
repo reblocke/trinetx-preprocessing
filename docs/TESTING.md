@@ -8,7 +8,9 @@
 ## Test tiers
 1. Unit tests: pure transforms
 2. Regression tests: fixture-based output equivalence
-3. (Optional) Integration tests: end-to-end on synthetic mini-cohort
+3. Integration tests: end-to-end on synthetic mini-cohort in default CSV mode
+   and chunked Parquet intermediate mode, including `run`, `baseline`,
+   `compare`, and `profile` command paths
 
 ## Commands
 ```bash
@@ -25,3 +27,9 @@ python -m trinetx_preprocessing --help
 ## Regression strategy (recommended)
 - Snapshot key outputs (or hashes) from the legacy pipeline on a fixture dataset.
 - In CI/local runs, regenerate outputs from the refactored pipeline and compare.
+- For real-data golden-master validation, hash approved local legacy outputs with
+  `hash-outputs --scope final --hash-chunk-rows 100000`, hash refactor outputs
+  the same way, and compare with `compare-manifests --report`. Summarize the
+  gate with `validation-status` and save JSON/Markdown reports under the
+  private external validation root. Do not commit row-level outputs or
+  unreviewed manifests.

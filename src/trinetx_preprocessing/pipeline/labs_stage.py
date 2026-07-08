@@ -6,11 +6,11 @@ import logging
 import re
 from pathlib import Path
 
-import pandas as pd
-
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
-from ..transform.labs import normalize_lab_results_chunk
+from ..io.csv import iter_csv
+from ..storage import WorkTableWriter
+from ..transform.labs import RAW_LAB_COLUMNS, normalize_lab_results_chunk
 
 RAW_DTYPE = {
     "patient_id": "string",
@@ -43,20 +43,29 @@ def run_labs_stage(config: Config) -> list[Path]:
     config.work_dir.mkdir(parents=True, exist_ok=True)
 
     output_paths: list[Path] = []
+    chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
     for index, path in enumerate(labs_paths, start=1):
         logger.info("Reading lab-results export: %s", path.name)
-        chunk = pd.read_csv(
-            path,
-            dtype=RAW_DTYPE,
-            parse_dates=["date"],
-        )
-        log_row_count(logger, f"labs read {path.name}", len(chunk))
-        normalized = normalize_lab_results_chunk(chunk)
-        log_row_count(logger, f"labs normalized {path.name}", len(normalized))
-        output_path = config.work_dir / _normalized_filename(path, index)
-        normalized.to_csv(output_path, index=False)
-        output_paths.append(output_path)
-        logger.info("Wrote %s rows to %s", len(normalized), output_path.name)
+        rows_read = 0
+        rows_written = 0
+        with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            for chunk in iter_csv(
+                path,
+                chunksize=chunksize,
+                usecols=RAW_LAB_COLUMNS,
+                dtype=RAW_DTYPE,
+                parse_dates=["date"],
+            ):
+                rows_read += len(chunk)
+                normalized = normalize_lab_results_chunk(chunk)
+                rows_written += len(normalized)
+                writer.write(normalized)
+            output_paths.extend(writer.written_paths)
+            log_row_count(logger, f"labs read {path.name}", rows_read)
+            log_row_count(logger, f"labs normalized {path.name}", rows_written)
+            logger.info(
+                "Wrote %s rows to %s", rows_written, writer.written_paths[0].name
+            )
 
     return output_paths
 

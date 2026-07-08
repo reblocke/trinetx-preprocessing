@@ -48,3 +48,13 @@ def test_split_diagnosis_by_code_groups() -> None:
     assert groups["HAS_R0602"]["code"].tolist() == ["R06.02"]
     assert groups["HAS_Z79891"]["code"].tolist() == ["Z79.891"]
     assert groups["HAS_headache"].empty
+
+
+def test_split_diagnosis_preserves_duplicate_overlapping_rows() -> None:
+    df = normalize_diagnosis_chunk(_load_fixture())
+    duplicated = pd.concat([df, df.loc[[2]]], ignore_index=True)
+
+    groups = split_diagnosis_by_code(duplicated)
+
+    assert groups["HAS_G473"]["code"].tolist().count("G47.34") == 2
+    assert groups["HAS_G4734"]["code"].tolist() == ["G47.34", "G47.34"]

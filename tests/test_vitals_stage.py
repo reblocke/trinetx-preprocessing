@@ -22,7 +22,7 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         f'output_dir: "{output_dir}"\n'
         "domains:\n"
         "  vitals:\n"
-        '    pattern: "Vital Signs/vital_signs*.csv"\n'
+        '    pattern: "Vital Signs/vital*_signs*.csv"\n'
     )
     path.write_text(content)
 
@@ -37,7 +37,7 @@ def test_run_vitals_stage_outputs(tmp_path: Path) -> None:
 
     vitals_dir = data_dir / "Vital Signs"
     vitals_dir.mkdir()
-    shutil.copy(FIXTURE_PATH, vitals_dir / "vital_signs0001.csv")
+    shutil.copy(FIXTURE_PATH, vitals_dir / "vitals_signs.csv")
 
     config_path = tmp_path / "config.yaml"
     _write_config(config_path, data_dir, work_dir, output_dir)

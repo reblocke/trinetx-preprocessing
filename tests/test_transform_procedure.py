@@ -40,3 +40,12 @@ def test_split_procedure_by_code_groups() -> None:
     assert groups["HAS_99291"]["code"].tolist() == ["99292"]
     assert groups["HAS_CT_ABDM"]["code"].tolist() == ["74150"]
     assert groups["HAS_61911006"]["code"].tolist() == ["61911006"]
+
+
+def test_split_procedure_preserves_duplicate_overlapping_rows() -> None:
+    df = normalize_procedure_chunk(_load_fixture())
+    duplicated = pd.concat([df, df.loc[[1]]], ignore_index=True)
+
+    groups = split_procedure_by_code(duplicated)
+
+    assert groups["HAS_TTE"]["code"].tolist() == ["93306", "93306"]

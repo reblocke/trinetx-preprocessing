@@ -1,43 +1,40 @@
 # Repo Inventory
 
 ## Top-level layout
-- `AGENTS.md` — contributor instructions and guardrails.
-- `CONTINUITY.md` — continuity ledger for the workspace.
-- `README.txt` — legacy pipeline run steps.
-- `split_db.sh` — chunking script for raw CSV exports (referenced in `README.txt`).
-- `Hypercapnia*.ipynb` — legacy pipeline notebooks at repo root.
-- `Executed Notebooks/` — executed copies of parameterized final dataset notebooks.
-- `docs/` — documentation and prompts.
-- `data/` — sensitive TriNetX exports (git-ignored).
-- `artifacts/` — analysis artifacts (currently empty).
-- `notebooks/` — notebook home (`notebooks/legacy/` empty).
-- `scripts/` — helper scripts (currently empty).
-- `src/` — future package code (currently empty).
-- `tests/` — pytest suite (currently empty).
-- `trinetx_codex_prompts.zip`, `trinetx_preprocessing_scaffold_md.zip` — archived prompts/templates.
-- `CHANGELOG.md`, `CONTRIBUTING.md`, `LICENSE`, `SECURITY.md` — repo metadata.
+- `README.md` - primary user-facing quickstart, validation, and testing guide.
+- `AGENTS.md` - contributor and agent guardrails for public, clinical-data-safe work.
+- `CONTINUITY.md` - compaction-safe ledger for the current refactor effort.
+- `llms.txt` - compact public index for LLM/code-agent readers; reviewed as documentation, not as a replacement for `AGENTS.md`.
+- `config.example.yaml` - synthetic/example config; local `config.yaml` is ignored.
+- `pyproject.toml` and `uv.lock` - Python package metadata and locked dependencies.
+- `README.txt` and `split_db.sh` - legacy pipeline notes and raw CSV splitter reference.
+- `Hypercapnia*.ipynb` and `Executed Notebooks/` - historical notebooks retained as canonical references.
 
-## Legacy pipeline notebooks (root)
-### Orchestration
-- `Hypercapnia Master.ipynb` — runs preprocessing, RFS, data checks, and final dataset generation.
+## Refactor implementation
+- `src/trinetx_preprocessing/cli.py` - CLI entrypoint for validation, stage runs, profiling, hashing, comparison, and cleanup.
+- `src/trinetx_preprocessing/config.py` - YAML config loading, validation, and input-domain inspection.
+- `src/trinetx_preprocessing/storage.py` - CSV/Parquet work-table read/write helpers.
+- `src/trinetx_preprocessing/regression.py` - normalized hashing, manifests, and manifest comparison.
+- `src/trinetx_preprocessing/profiling.py` - strict profile runner and provenance writer.
+- `src/trinetx_preprocessing/pipeline/` - stage orchestration for raw domains, RFS, final assembly, and full pipeline runs.
+- `src/trinetx_preprocessing/transform/` - pure transform logic and shared code-group splitting.
+- `src/trinetx_preprocessing/io/`, `tools/`, `filesystem.py`, `guardrails.py`, and `validation.py` - bounded I/O, utility commands, strict cleanup, join guardrails, and schema checks.
 
-### Preprocessing (chunked CSV → `*_NEW_####.csv`)
-- `Hypercapnia NEW DATA - Encounter (CSV Processing).ipynb` — encounter cleaning; outputs `encounter_NEW_####.csv` and `AMB/EMER/INPAT_encounters.csv`.
-- `Hypercapnia NEW DATA - Prior Diagnosis (CSV Processing).ipynb`
-- `Hypercapnia NEW DATA - Current Diagnosis (CSV Processing).ipynb`
-- `Hypercapnia NEW DATA - Lab Results (CSV Processing).ipynb`
-- `Hypercapnia NEW DATA - Medication (CSV Processing).ipynb`
-- `Hypercapnia NEW DATA - Procedure (CSV Processing).ipynb`
-- `Hypercapnia NEW DATA - Vital Signs (CSV Processing).ipynb`
+## Tests and fixtures
+- `tests/test_*.py` - pytest coverage for config, CLI workflows, transforms, stages, storage, hashing, profiling, and guardrails.
+- `tests/fixtures/` - synthetic/de-identified fixtures only.
+- Full local gate: `git diff --check`, `./.venv/bin/ruff check .`, and `./.venv/bin/python -m pytest -q`.
 
-### RFS derivation
-- `Hypercapnia NEW DATA - RFS Processing.ipynb` — builds `RFS_ABG.csv`, `RFS_VBG.csv`, `RFS_RESPFAIL.csv`, `RFS_OBESITY.csv`, `RFS_VENTSUPPORT.csv`, `RFS_PREDISPOSITION.csv`.
+## Documentation
+- `docs/PLAN.md` - final refactor completion plan.
+- `docs/VALIDATION.md` - golden-master parity workflow and current validation status.
+- `docs/DATA_CONTRACT.md` - configured inputs, intermediate contracts, and final output layout.
+- `docs/REPRODUCIBILITY.md` - environment, profile, manifest, and evidence requirements.
+- `docs/DECISIONS.md` - historical and refactor implementation decisions.
+- `docs/CONFIG.md`, `docs/ONBOARDING.md`, `docs/TESTING.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY_PRIVACY.md`, `docs/TROUBLESHOOTING.md`, and `docs/GLOSSARY.md` - supporting operational docs.
+- `docs/prompts/` - historical Codex prompt scaffolding; not runtime implementation.
 
-### Data checks + final datasets
-- `Hypercapnia Data Checks.ipynb` — writes `data_checks/*.csv`.
-- `Hypercapnia Data Checks - Executed.ipynb` — executed output from the data checks notebook.
-- `Hypercapnia Final Dataset Generation - Master.ipynb` — parameterized final dataset builder (`rfs`, `setting`, `output_dir`).
-- `Hypercapnia Final Data Checks only.ipynb` — additional checks.
-
-## Executed notebooks
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_*_ENC_*.ipynb` — executed outputs for each RFS/setting permutation.
+## Private and generated data boundaries
+- Raw TriNetX exports, real-data work/output trees, logs, manifests, profile outputs, and row-level extracts must remain untracked.
+- Real-data validation currently belongs under `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation`, not the repository.
+- Known local/generated artifacts are ignored, including `.DS_Store`, AppleDouble sidecars, `config.yaml`, `artifacts/`, `logs/`, `profile/`, `manifests/`, `work/`, `output/`, and generated zip archives.

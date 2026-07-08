@@ -40,3 +40,13 @@ def test_split_medications_by_code_groups() -> None:
     assert groups["OPmed_list5"]["code"].tolist() == ["7213"]
     assert groups["OPmed_list6"]["code"].tolist() == ["21949"]
     assert groups["OPmed_list3"]["code"].tolist() == ["6813"]
+
+
+def test_split_medications_preserves_duplicate_overlapping_rows() -> None:
+    df = normalize_medications_chunk(_load_fixture())
+    duplicated = pd.concat([df, df.loc[[2]]], ignore_index=True)
+
+    groups = split_medications_by_code(duplicated)
+
+    assert groups["IPmed_list3"]["code"].tolist() == ["7213", "7213"]
+    assert groups["OPmed_list5"]["code"].tolist() == ["7213", "7213"]

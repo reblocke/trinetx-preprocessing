@@ -53,6 +53,10 @@ fixtures:
    ```
 `run-all` is an alias for the same full pipeline.
 
+The recommended finalization config uses Parquet work tables. Final analytic
+outputs remain CSV, but intermediates under `work_dir` may have `.parquet`
+suffixes unless `storage.emit_legacy_csv_intermediates` is enabled.
+
 ## Legacy notebook workflow (reference)
 1. Download + unzip the TriNetX export.
 2. Organize raw files into the domain folders above (see `README.txt`).
@@ -81,5 +85,7 @@ fixtures:
 ## First-success checklist
 - [ ] Raw exports stay under `data/`.
 - [ ] All `*_NEW_####.csv` intermediates exist in `work_dir`.
+- [ ] Or, when Parquet storage is enabled, matching `*_NEW_####.parquet`
+      intermediates exist in `work_dir`.
 - [ ] `RFS_*.csv` exist in `work_dir`.
 - [ ] Final outputs appear under `output/AMBULATORY`, `output/EMERGENCY`, `output/INPATIENT`.

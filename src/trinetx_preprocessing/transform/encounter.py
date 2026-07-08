@@ -106,6 +106,41 @@ def filter_encounters_by_type(
     return filtered.reset_index(drop=True)
 
 
+def filter_encounters_for_types(
+    df: pd.DataFrame,
+    encounter_types: tuple[str, ...] = ENCOUNTER_TYPES,
+    start_date_min: pd.Timestamp = DEFAULT_START_DATE,
+    end_date_fill: pd.Timestamp = DEFAULT_END_DATE_FILL,
+) -> pd.DataFrame:
+    """Filter normalized encounters for all requested care settings at once.
+
+    Args:
+        df: Normalized encounter DataFrame.
+        encounter_types: Encounter types to retain.
+        start_date_min: Minimum start date to include.
+        end_date_fill: Date to use when end dates are missing.
+
+    Returns:
+        Filtered DataFrame with required encounter columns.
+    """
+
+    unexpected = set(encounter_types) - ALLOWED_ENCOUNTER_TYPES
+    if unexpected:
+        raise ValueError(f"Unexpected encounter type(s): {sorted(unexpected)}")
+
+    require_columns(df, ENCOUNTER_COLUMNS, context="Encounter normalized input")
+
+    filtered = df.loc[:, ENCOUNTER_COLUMNS].copy()
+    filtered["type"] = filtered["type"].astype("string")
+    filtered["start_date"] = pd.to_datetime(filtered["start_date"])
+    filtered["end_date"] = pd.to_datetime(filtered["end_date"])
+    filtered = filtered.loc[filtered["start_date"] >= start_date_min]
+    filtered = filtered.loc[filtered["type"].isin(encounter_types)]
+    filtered["end_date"] = filtered["end_date"].fillna(end_date_fill)
+    filtered["end_date"] = pd.to_datetime(filtered["end_date"])
+    return filtered.reset_index(drop=True)
+
+
 def finalize_encounters(df: pd.DataFrame) -> pd.DataFrame:
     """Finalize encounter data by deduping and computing LOS.
 

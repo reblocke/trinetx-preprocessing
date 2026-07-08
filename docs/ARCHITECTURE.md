@@ -5,6 +5,7 @@
 - Provide a single, documented entrypoint (CLI).
 - Keep the computational core pure and testable.
 - Isolate I/O, configuration, and orchestration.
+- Support low-overhead intermediates without changing final CSV outputs.
 
 ## Legacy components (today)
 - `split_db.sh` — splits raw exports into chunked CSVs.
@@ -34,3 +35,7 @@
 3. Normalize labs, diagnosis, medications, procedures, and vital-sign domains.
 4. Derive RFS flags/events from normalized work files.
 5. Assemble final datasets per RFS/setting and apply optional data checks.
+
+Work tables are addressed by legacy logical CSV names, but
+`storage.intermediate_format` controls whether physical intermediates are CSV or
+Parquet. Final analytic outputs remain CSV for historical compatibility.

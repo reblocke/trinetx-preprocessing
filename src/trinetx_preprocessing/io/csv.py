@@ -30,6 +30,7 @@ def iter_csv(
     chunksize: int | None = None,
     usecols: Sequence[str] | None = None,
     dtype: dict[str, str] | str | None = None,
+    parse_dates: Sequence[str] | None = None,
 ) -> Iterator[pd.DataFrame]:
     """Iterate over CSV rows in streaming chunks.
 
@@ -38,6 +39,7 @@ def iter_csv(
         chunksize: Number of rows per chunk. If ``None``, yields one DataFrame.
         usecols: Optional subset of columns to read.
         dtype: Optional dtype mapping or single dtype.
+        parse_dates: Optional date columns to parse.
 
     Yields:
         DataFrames containing the requested rows.
@@ -45,7 +47,12 @@ def iter_csv(
 
     csv_path = Path(path)
     if chunksize is None:
-        yield pd.read_csv(csv_path, usecols=usecols, dtype=dtype)
+        yield pd.read_csv(
+            csv_path,
+            usecols=usecols,
+            dtype=dtype,
+            parse_dates=parse_dates,
+        )
         return
     if chunksize <= 0:
         raise ValueError("chunksize must be a positive integer.")
@@ -54,6 +61,7 @@ def iter_csv(
         chunksize=chunksize,
         usecols=usecols,
         dtype=dtype,
+        parse_dates=parse_dates,
     )
     yield from reader
 
@@ -63,6 +71,7 @@ def iter_many_csv(
     chunksize: int | None = None,
     usecols: Sequence[str] | None = None,
     dtype: dict[str, str] | str | None = None,
+    parse_dates: Sequence[str] | None = None,
 ) -> Iterator[pd.DataFrame]:
     """Iterate over multiple CSV files in sequence.
 
@@ -71,6 +80,7 @@ def iter_many_csv(
         chunksize: Number of rows per chunk. If ``None``, yields one DataFrame per file.
         usecols: Optional subset of columns to read.
         dtype: Optional dtype mapping or single dtype.
+        parse_dates: Optional date columns to parse.
 
     Yields:
         DataFrames from each CSV file in order.
@@ -82,4 +92,5 @@ def iter_many_csv(
             chunksize=chunksize,
             usecols=usecols,
             dtype=dtype,
+            parse_dates=parse_dates,
         )

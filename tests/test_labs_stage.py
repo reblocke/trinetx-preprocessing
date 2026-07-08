@@ -21,7 +21,7 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         f'output_dir: "{output_dir}"\n'
         "domains:\n"
         "  labs:\n"
-        '    pattern: "Lab Results/lab_results*.csv"\n'
+        '    pattern: "Lab Results/lab_result*.csv"\n'
     )
     path.write_text(content)
 

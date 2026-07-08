@@ -25,14 +25,17 @@ data/
 The default `config.example.yaml` patterns expect:
 - `Encounter/encounter*.csv`
 - `Diagnosis/diagnosis*.csv`
-- `Lab Results/lab_results*.csv`
-- `Medications/medication*.csv`
+- `Lab Results/lab_result*.csv`
+- `Medications/medication[0-9]*.csv` or
+  `Medications/medication_ingredient*.csv`
 - `Procedure/procedure*.csv`
-- `Vital Signs/vital_signs*.csv`
+- `Vital Signs/vital*_signs*.csv` (matches both `vital_signs...` and
+  `vitals_signs...` exports)
 - `Patient/patient*.csv`
 
-If your export uses singular filenames (for example `lab_result.csv` or
-`medication_ingredient.csv`), update the `domains` patterns in `config.yaml`.
+If your export uses another filename family, update the `domains` patterns in
+`config.yaml`. Avoid broad medication globs that also match generated
+`medication_NEW_*` intermediates.
 
 ### Input validation behavior
 - `trinetx_preprocessing validate-inputs` reads CSV headers (no full-file scan) and
@@ -113,6 +116,12 @@ If your export uses singular filenames (for example `lab_result.csv` or
 - `patient_regional_location`, `month_year_death`
 
 ### Intermediate outputs (`work_dir`)
+Logical intermediate names preserve the historical CSV filenames below. The
+physical files may be CSV or Parquet depending on
+`storage.intermediate_format`. When Parquet is enabled, `encounter_NEW_0001.csv`
+is written as `encounter_NEW_0001.parquet` unless
+`storage.emit_legacy_csv_intermediates` is also enabled.
+
 - `encounter_NEW_####.csv`: `patient_id`, `encounter_id`, `start_date`, `end_date`, `type`
 - `diagnosis_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `principal_diagnosis_indicator`, `admitting_diagnosis`, `reason_for_visit`, `date`
 - `lab_results_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `date`, `lab_result_num_val`
@@ -130,6 +139,8 @@ If your export uses singular filenames (for example `lab_result.csv` or
 ### Data checks outputs (`work_dir/data_checks`)
 - `amb_enc_screen.csv` and `inp_enc_screen.csv` are optional filters applied during
   final assembly. If they are missing, `*_AFTER.csv` matches `*_BEFORE.csv`.
+- Data-check files remain CSV inputs for compatibility with the historical
+  notebook workflow.
 
 ## Outputs
 
@@ -143,6 +154,8 @@ output/
 
 ### Output tables
 - Files: `RFS_<RFS>_ENC_<SETTING>_BEFORE.csv`, `RFS_<RFS>_ENC_<SETTING>_AFTER.csv`
+- Final analytic outputs are always CSV, even when internal intermediates are
+  Parquet.
 - Row grain: de-duplicated to one encounter per patient per RFS/setting.
 - Required columns: `patient_id`, `encounter_id`, `qualify_date`, `RFS`,
   `encounter_type`, `age_at_encounter`, `sex`, `race`, `ethnicity`,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from ..validation import require_columns
@@ -51,6 +52,7 @@ class VitalSignRule:
     min_value: float | None = None
     max_value: float | None = None
     conversion: str | None = None
+    conversion_input_dtype: str | None = None
     dropna: bool = False
 
 
@@ -62,6 +64,7 @@ VITAL_SIGN_RULES = [
         min_value=20,
         max_value=43,
         conversion=FAHRENHEIT_TO_CELSIUS,
+        conversion_input_dtype="float32",
     ),
     VitalSignRule(
         "value_608356",
@@ -70,6 +73,7 @@ VITAL_SIGN_RULES = [
         min_value=20,
         max_value=43.3,
         conversion=FAHRENHEIT_TO_CELSIUS,
+        conversion_input_dtype="float32",
     ),
     VitalSignRule(
         "value_27110",
@@ -102,10 +106,11 @@ VITAL_SIGN_RULES = [
     VitalSignRule(
         "value_New_Temp",
         r"^8310-5$|^8331-1$|^75539-7$|^8333-7$",
-        "float16",
+        "float32",
         min_value=43.3,
         max_value=110,
         conversion=CELSIUS_TO_FAHRENHEIT,
+        conversion_input_dtype="float16",
     ),
     VitalSignRule(
         "value_BMI",
@@ -207,7 +212,9 @@ def apply_vital_sign_rule(df: pd.DataFrame, rule: VitalSignRule) -> pd.DataFrame
     if filtered.empty:
         return filtered
 
-    values = pd.to_numeric(filtered["value"], errors="coerce").astype(rule.dtype)
+    values = pd.to_numeric(filtered["value"], errors="coerce").astype("float64")
+    if rule.conversion_input_dtype is not None:
+        values = _downcast_values_without_overflow(values, rule.conversion_input_dtype)
     values = _apply_temperature_conversion(values, rule.conversion)
 
     mask = pd.Series(True, index=values.index)
@@ -216,8 +223,8 @@ def apply_vital_sign_rule(df: pd.DataFrame, rule: VitalSignRule) -> pd.DataFrame
     if rule.min_value is not None:
         mask &= values >= rule.min_value
 
-    filtered["value"] = values
-    filtered = filtered.loc[mask]
+    filtered = filtered.loc[mask].copy()
+    filtered["value"] = values.loc[mask].astype(rule.dtype)
     if rule.dropna:
         filtered = filtered.dropna()
     return filtered.reset_index(drop=True)
@@ -242,3 +249,20 @@ def _apply_temperature_conversion(
     if conversion == CELSIUS_TO_FAHRENHEIT:
         return values.where(values >= 43.3, values * (9 / 5) + 32)
     return values
+
+
+def _downcast_values_without_overflow(values: pd.Series, dtype: str) -> pd.Series:
+    target_dtype = np.dtype(dtype)
+    if not np.issubdtype(target_dtype, np.floating):
+        return values.astype(target_dtype).astype("float64")
+
+    limits = np.finfo(target_dtype)
+    finite = pd.Series(
+        np.isfinite(values.to_numpy(dtype="float64", copy=False)),
+        index=values.index,
+    )
+    safe = finite & values.ge(limits.min) & values.le(limits.max)
+    downcasted = pd.Series(np.nan, index=values.index, dtype="float64")
+    if safe.any():
+        downcasted.loc[safe] = values.loc[safe].astype(target_dtype).astype("float64")
+    return downcasted
