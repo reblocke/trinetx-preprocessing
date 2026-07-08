@@ -555,9 +555,11 @@ def test_prior_diagnosis_last_date_uses_latest_patient_row(
     config = _config(tmp_path)
     current = pd.DataFrame(
         {
-            "patient_id": ["P1", "P2"],
-            "encounter_id": ["E1", "E2"],
-            "qualify_date": pd.to_datetime(["2022-06-01", "2022-06-01"]),
+            "patient_id": ["P1", "P2", "P3"],
+            "encounter_id": ["E1", "E2", "E3"],
+            "qualify_date": pd.to_datetime(
+                ["2022-06-01", "2022-06-01", "2022-06-01"]
+            ),
         }
     )
     base = {
@@ -595,6 +597,12 @@ def test_prior_diagnosis_last_date_uses_latest_patient_row(
                     "encounter_id": "P2_latest",
                     "date": "2022-05-15",
                 },
+                {
+                    **base,
+                    "patient_id": "P3",
+                    "encounter_id": "P3_future",
+                    "date": "2022-12-01",
+                },
             ]
         ),
     )
@@ -602,18 +610,21 @@ def test_prior_diagnosis_last_date_uses_latest_patient_row(
     enriched = final_assembly._merge_prior_diagnosis_features(
         current,
         config=config,
-        patient_ids={"P1", "P2"},
-        encounter_ids={"E1", "E2"},
+        patient_ids={"P1", "P2", "P3"},
+        encounter_ids={"E1", "E2", "E3"},
         chunksize=1,
     )
 
-    p1, p2 = enriched.sort_values("patient_id").to_dict("records")
+    p1, p2, p3 = enriched.sort_values("patient_id").to_dict("records")
     assert p1["HAS_G473"] == 1
     assert p1["first_date_G473"] == pd.Timestamp("2022-01-01")
-    assert pd.isna(p1["last_date_G473"])
+    assert p1["last_date_G473"] == pd.Timestamp("2022-01-01")
     assert p2["HAS_G473"] == 1
     assert p2["first_date_G473"] == pd.Timestamp("2022-01-01")
     assert p2["last_date_G473"] == pd.Timestamp("2022-05-15")
+    assert p3["HAS_G473"] == 0
+    assert pd.isna(p3["first_date_G473"])
+    assert pd.isna(p3["last_date_G473"])
 
 
 def test_encounter_first_last_features_use_latest_current_date(
@@ -903,9 +914,9 @@ def test_outpatient_medication_last_date_validated_independently(
     config = _config(tmp_path)
     current = pd.DataFrame(
         {
-            "patient_id": ["P1"],
-            "encounter_id": ["E1"],
-            "qualify_date": pd.to_datetime(["2022-06-01"]),
+            "patient_id": ["P1", "P2"],
+            "encounter_id": ["E1", "E2"],
+            "qualify_date": pd.to_datetime(["2022-06-01", "2022-06-01"]),
         }
     )
     write_work_table(
@@ -925,6 +936,12 @@ def test_outpatient_medication_last_date_validated_independently(
                     "code": "1808",
                     "start_date": "2022-12-01",
                 },
+                {
+                    "patient_id": "P2",
+                    "encounter_id": "E3",
+                    "code": "1808",
+                    "start_date": "2022-12-01",
+                },
             ]
         ),
     )
@@ -932,15 +949,18 @@ def test_outpatient_medication_last_date_validated_independently(
     enriched = final_assembly._merge_medication_features(
         current,
         config=config,
-        patient_ids={"P1"},
-        encounter_ids={"E1"},
+        patient_ids={"P1", "P2"},
+        encounter_ids={"E1", "E2"},
         chunksize=1,
     )
 
-    row = enriched.iloc[0]
-    assert row["OP_Med_1"] == 1
-    assert row["first_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
-    assert pd.isna(row["last_date_OP_Med_1"])
+    p1, p2 = enriched.sort_values("patient_id").to_dict("records")
+    assert p1["OP_Med_1"] == 1
+    assert p1["first_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
+    assert p1["last_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
+    assert p2["OP_Med_1"] == 0
+    assert pd.isna(p2["first_date_OP_Med_1"])
+    assert pd.isna(p2["last_date_OP_Med_1"])
 
 
 def test_build_final_dataset_matches_encounter_lookup(

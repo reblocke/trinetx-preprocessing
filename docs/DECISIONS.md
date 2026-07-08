@@ -765,8 +765,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Date: 2026-07-08
 - Decision: After the frozen `refactor-milestone-1` fallback tag, final
   assembly should use corrected analytic semantics for several legacy-compatible
-  quirks: `last_date_*` columns select the latest qualifying row, outpatient
-  medication last dates are validated independently of first dates, and previous
+  quirks: prior diagnosis and outpatient medication first/last dates are
+  selected only from rows on or before each final row's `qualify_date`,
+  `last_date_*` columns select the latest qualifying row, outpatient medication
+  last dates are validated independently of first dates, and previous
   Weight/Height/BMI exclude current encounters and select the latest value
   strictly before `qualify_date`.
 - Context: Local and GitHub Codex review identified that helper functions named

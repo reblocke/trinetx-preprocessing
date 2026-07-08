@@ -975,9 +975,10 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 - On `2026-07-08`, post-Milestone 1 semantic fixes started on `codex/refactor-post-milestone-1`. GitHub Codex review comments identified prior-diagnosis and outpatient-medication `last_date_*` selectors that kept earliest rows. This work intentionally preserves the `refactor-milestone-1` tag as-is and treats these as corrected post-milestone behaviors.
 - On `2026-07-08`, post-Milestone 1 semantic fixes were implemented locally: prior diagnosis, procedure-style current encounter features, and outpatient medication `last_date_*` selectors now keep latest rows; previous Weight/Height/BMI excludes current encounters and requires dates strictly before `qualify_date`. Focused final-assembly tests passed (`33 passed`), full local gates passed (`git diff --check`, Ruff, `203 passed`), and the synthetic pipeline smoke wrote `36` final CSV outputs under `/tmp/trinetx-post-milestone-synthetic/output`.
 - On `2026-07-08`, post-Milestone 1 fixes were committed and pushed on `codex/refactor-post-milestone-1` (`d6a1265`). Stacked draft PR #5 targets `refactor-pipeline`; the two GitHub Codex review threads on PR #4 were answered, and `@codex review` was requested on PR #5. As of the last check, PR #5 had an eyes reaction and no posted Codex review yet.
+- On `2026-07-08`, PR #5 Codex review returned two P1 findings: prior diagnosis (`3545024183`) and outpatient medication (`3545024193`) reductions must filter candidate rows to each final row's `qualify_date` before selecting first/last dates, so future rows do not mask earlier qualifying history. The narrow fix is implemented locally and verified: focused final-assembly tests passed (`33 passed`), `git diff --check` passed, Ruff passed, full pytest passed (`203 passed`), and the synthetic smoke wrote `36` final CSVs under `/tmp/trinetx-post-milestone-synthetic/output`.
 
 ## Next
-- Wait for PR #5 Codex review results and address only actionable post-milestone findings.
+- Commit/push the PR #5 qualify-date prefilter fix, answer review comments `3545024183` and `3545024193`, and request a fresh `@codex review`.
 - Keep `refactor-milestone-1` unchanged; do not retag or rewrite milestone evidence.
 
 ## Open questions (UNCONFIRMED if needed)
@@ -987,7 +988,7 @@ Keep it short. Facts only. Mark uncertainty as `UNCONFIRMED`.
 
 ## Working set (files/ids/commands)
 - Row parity audit script/report: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/diagnostics/current_row_parity_audit.py`, `.json`, and `.md`.
-- GitHub Codex review comments to answer after fix commit: `3544668455` (prior diagnosis latest date) and `3544668463` (outpatient medication latest date).
+- GitHub Codex review comments to answer after fix commit: `3545024183` (prior diagnosis pre-reduction qualify-date filtering) and `3545024193` (outpatient medication pre-reduction qualify-date filtering).
 - I/O probe script: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/tools/probe_refactor_io.py`.
 - I/O probe scan run: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/io_probe_20260626-110148`.
 - I/O probe smoke run: `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/parity_runs/io_probe_20260626-110158`.

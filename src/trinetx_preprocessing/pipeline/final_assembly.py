@@ -1267,6 +1267,13 @@ def _merge_prior_diagnosis_features(
         if rows.empty:
             continue
         rows["date"] = pd.to_datetime(rows["date"], errors="coerce")
+        rows = _filter_patient_rows_on_or_before_qualify(
+            rows,
+            final_rows=enriched.loc[:, ["patient_id", "qualify_date"]],
+            date_column="date",
+        )
+        if rows.empty:
+            continue
         first = _select_first_patient_date(rows, date_column="date")
         last = _select_last_patient_date(rows, date_column="date")
         feature = enriched.loc[:, ["patient_id", "qualify_date"]].merge(
@@ -1325,6 +1332,11 @@ def _merge_medication_features(
             enriched = _left_merge_new_columns(enriched, selected, on="encounter_id")
         else:
             med_index = group.name.removeprefix("OPmed_list")
+            rows = _filter_patient_rows_on_or_before_qualify(
+                rows,
+                final_rows=enriched.loc[:, ["patient_id", "qualify_date"]],
+                date_column="start_date",
+            )
             selected = _select_op_medication(rows, med_index=med_index)
             if selected.empty:
                 continue
@@ -1402,6 +1414,34 @@ def _filter_ids(
     else:
         raise ValueError(f"Unknown encounter filter: {encounter_filter}")
     return frame.loc[mask].copy()
+
+
+def _filter_patient_rows_on_or_before_qualify(
+    rows: pd.DataFrame,
+    *,
+    final_rows: pd.DataFrame,
+    date_column: str,
+) -> pd.DataFrame:
+    if rows.empty:
+        return rows.copy()
+    cohort = final_rows.loc[:, ["patient_id", "qualify_date"]].copy()
+    cohort["patient_id"] = cohort["patient_id"].astype("string")
+    cohort["qualify_date"] = pd.to_datetime(cohort["qualify_date"], errors="coerce")
+    cohort = cohort.dropna(subset=["patient_id", "qualify_date"])
+    if cohort.empty:
+        return rows.iloc[0:0].copy()
+    qualify_dates_by_patient = (
+        cohort.drop_duplicates(subset=["patient_id"], keep="first")
+        .set_index("patient_id")["qualify_date"]
+        .to_dict()
+    )
+    filtered = rows.copy()
+    filtered[date_column] = pd.to_datetime(filtered[date_column], errors="coerce")
+    filtered["_qualify_date"] = filtered["patient_id"].astype("string").map(
+        qualify_dates_by_patient,
+    )
+    filtered = filtered.loc[filtered[date_column] <= filtered["_qualify_date"]].copy()
+    return filtered.drop(columns=["_qualify_date"])
 
 
 def _select_first_encounter_patient_value(

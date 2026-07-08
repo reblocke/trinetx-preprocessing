@@ -15,6 +15,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Corrected final analytic `last_date_*` selection for prior diagnosis,
   procedure-style encounter features, and outpatient medications so "last"
   dates use the latest qualifying row instead of the earliest row.
+- Corrected prior diagnosis and outpatient medication first/last date assembly
+  to filter rows to each final row's `qualify_date` before reducing, so future
+  rows cannot hide earlier qualifying history.
 - Corrected previous Weight/Height/BMI assembly to exclude current encounters
   and choose the latest strictly prior value before each final row's
   `qualify_date`.
