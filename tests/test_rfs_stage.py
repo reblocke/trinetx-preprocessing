@@ -215,7 +215,7 @@ def test_rfs_membership_store_cleanup_raises_on_delete_error(
         raise PermissionError(f"denied: {context}")
 
     monkeypatch.setattr(
-        "trinetx_preprocessing.pipeline.rfs_stage.remove_tree_strict",
+        "trinetx_preprocessing.storage.remove_tree_strict",
         fail_remove_tree,
     )
 
@@ -232,7 +232,7 @@ def test_rfs_encounter_store_cleanup_raises_on_delete_error(
         raise PermissionError(f"denied: {context}")
 
     monkeypatch.setattr(
-        "trinetx_preprocessing.pipeline.rfs_stage.remove_tree_strict",
+        "trinetx_preprocessing.storage.remove_tree_strict",
         fail_remove_tree,
     )
 
@@ -265,9 +265,11 @@ def test_run_rfs_stage_preserves_duplicate_events_and_first_encounter(
         {
             "patient_id": ["P1", "P1", "P3"],
             "encounter_id": ["E1", "E1", "E2"],
-            "code": ["2019-8", "2026-3", "11557-6"],
+            "code_system": ["LOINC", "LOINC", "LOINC"],
+            "code": ["2019-8", "32771-8", "2021-4"],
             "date": ["2022-01-01", "2022-01-01", "2022-01-02"],
-            "lab_result_num_val": [50, 60, 45],
+            "lab_result_num_val": [50, 60, 50],
+            "units_of_measure": ["mmHg", "mmHg", "mmHg"],
         }
     ).to_csv(work_dir / "lab_results_NEW_0001.csv", index=False)
     for filename, columns in {

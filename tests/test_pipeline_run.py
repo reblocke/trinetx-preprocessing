@@ -116,7 +116,7 @@ def _write_synthetic_inputs(data_dir: Path) -> None:
                 "date": "2022-06-01",
                 "lab_result_num_val": 55.0,
                 "lab_result_text_val": "",
-                "units_of_measure": "",
+                "units_of_measure": "mmHg",
                 "derived_by_TriNetX": "N",
                 "source_id": "L1",
             },
@@ -128,7 +128,7 @@ def _write_synthetic_inputs(data_dir: Path) -> None:
                 "date": "2022-03-10",
                 "lab_result_num_val": 60.0,
                 "lab_result_text_val": "",
-                "units_of_measure": "",
+                "units_of_measure": "mmHg",
                 "derived_by_TriNetX": "N",
                 "source_id": "L2",
             },
@@ -341,12 +341,48 @@ def test_run_pipeline_end_to_end_with_parquet_intermediates(tmp_path: Path) -> N
     assert (work_dir / "encounter_NEW_0001.parquet").exists()
     assert not (work_dir / "encounter_NEW_0001.csv").exists()
     assert (work_dir / "RFS_ABG.parquet").exists()
+    expected_analysis_indexes = {
+        "analysis_diagnosis_features.parquet",
+        "analysis_diagnosis_availability.parquet",
+        "analysis_lab_availability.parquet",
+        "analysis_lab_features.parquet",
+        "analysis_medication_features.parquet",
+        "analysis_procedure_features.parquet",
+        "analysis_vital_features.parquet",
+        "analysis_rfs_labs.parquet",
+        "analysis_rfs_diagnosis.parquet",
+        "analysis_rfs_procedure.parquet",
+        "analysis_rfs_vitals.parquet",
+    }
+    assert expected_analysis_indexes <= {path.name for path in work_dir.iterdir()}
+    assert not list(work_dir.glob("HAS_*.parquet"))
+    assert not list(work_dir.glob("IPmed_list*.parquet"))
+    assert not list(work_dir.glob("OPmed_list*.parquet"))
+    assert not list(work_dir.glob("value_*.parquet"))
 
     sample_path = output_dir / SETTING_OUTPUT_DIRS["AMB"] / "RFS_ABG_ENC_AMB_AFTER.csv"
     assert sample_path.exists()
     sample = pd.read_csv(sample_path)
     assert list(sample.columns) == FINAL_OUTPUT_COLUMNS
     assert not sample.empty
+    metrics = json.loads((work_dir / "final_assembly_metrics.json").read_text())
+    assert metrics["buckets_processed"] >= 1
+    assert metrics["feature_source_files_scanned"] >= 1
+    assert set(metrics["feature_source_file_names"]) == {
+        "analysis_diagnosis_features.parquet",
+        "analysis_lab_features.parquet",
+        "analysis_medication_features.parquet",
+        "analysis_procedure_features.parquet",
+        "analysis_vital_features.parquet",
+    }
+    rfs_metrics = json.loads((work_dir / "rfs_stage_metrics.json").read_text())
+    assert rfs_metrics["used_analysis_index"] is True
+    assert set(rfs_metrics["source_files"]) == {
+        "analysis_rfs_diagnosis.parquet",
+        "analysis_rfs_labs.parquet",
+        "analysis_rfs_procedure.parquet",
+        "analysis_rfs_vitals.parquet",
+    }
 
 
 def test_baseline_compare_profile_end_to_end_with_parquet_intermediates(
@@ -440,3 +476,5 @@ def test_baseline_compare_profile_end_to_end_with_parquet_intermediates(
     assert provenance["stage_timings_seconds"]["final_assembly"] >= 0
     assert provenance["disk_footprint_bytes"]["work_dir"] > 0
     assert provenance["disk_footprint_bytes"]["output_dir"] > 0
+    assert provenance["rfs_rule_audit"]["ruleset"] == "corrected_v1"
+    assert provenance["rfs_stage_metrics"]["used_analysis_index"] is True

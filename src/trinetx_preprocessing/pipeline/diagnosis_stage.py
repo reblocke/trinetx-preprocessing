@@ -20,6 +20,13 @@ from ..transform.diagnosis import (
     normalize_diagnosis_chunk,
     split_diagnosis_by_code,
 )
+from ..transform.rfs import RFS_EVENT_COLUMNS, derive_diagnosis_rfs_event_frames
+from .analysis_index import (
+    FEATURE_NAME_COLUMN,
+    RFS_CATEGORY_COLUMN,
+    stack_grouped_frames,
+    stack_rfs_events,
+)
 
 RAW_DTYPE = {
     "patient_id": "string",
@@ -57,6 +64,18 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        analysis_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_diagnosis_features.csv")
+        )
+        analysis_rows = 0
+        rfs_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_rfs_diagnosis.csv")
+        )
+        rfs_rows = 0
+        availability_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_diagnosis_availability.csv")
+        )
+        availability_rows = 0
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(diagnosis_paths, start=1):
             logger.info("Reading diagnosis export: %s", path.name)
@@ -74,10 +93,32 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
                     normalized = normalize_diagnosis_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
+                    availability = normalized.loc[:, ["encounter_id"]].dropna()
+                    availability = availability.drop_duplicates(keep="first")
+                    if not availability.empty:
+                        availability_writer.write(availability)
+                        availability_rows += len(availability)
+                    rfs_index = stack_rfs_events(
+                        derive_diagnosis_rfs_event_frames(normalized),
+                        event_columns=RFS_EVENT_COLUMNS,
+                    )
+                    if not rfs_index.empty:
+                        rfs_writer.write(rfs_index)
+                        rfs_rows += len(rfs_index)
 
                     grouped = split_diagnosis_by_code(normalized)
+                    analysis = stack_grouped_frames(
+                        grouped,
+                        columns=DIAGNOSIS_COLUMNS,
+                    )
+                    if not analysis.empty:
+                        analysis_writer.write(analysis)
+                        analysis_rows += len(analysis)
                     for name, frame in grouped.items():
                         if frame.empty:
+                            continue
+                        grouped_counts[name] += len(frame)
+                        if not config.storage.emit_legacy_group_tables:
                             continue
                         group_writer = grouped_writers.get(name)
                         if group_writer is None:
@@ -86,7 +127,6 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
                             )
                             grouped_writers[name] = group_writer
                         group_writer.write(frame)
-                        grouped_counts[name] += len(frame)
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"diagnosis read {path.name}", rows_read)
                 log_row_count(
@@ -95,27 +135,39 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
                     rows_normalized,
                 )
 
-        for group in DIAGNOSIS_CODE_GROUPS:
-            writer = grouped_writers.get(group.name)
-            if writer is None:
-                with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
-                    empty_writer.write(pd.DataFrame(columns=DIAGNOSIS_COLUMNS))
-                    output_paths.extend(empty_writer.written_paths)
-                    logger.info(
-                        "Wrote 0 rows to %s", empty_writer.written_paths[0].name
-                    )
-            else:
-                output_paths.extend(writer.written_paths)
-                logger.info(
-                    "Wrote %s rows to %s",
-                    grouped_counts[group.name],
-                    writer.written_paths[0].name,
-                )
-            log_row_count(
-                logger,
-                f"diagnosis post-filter {group.name}",
-                grouped_counts[group.name],
+        if analysis_rows == 0:
+            analysis_writer.write(
+                pd.DataFrame(columns=[FEATURE_NAME_COLUMN, *DIAGNOSIS_COLUMNS])
             )
+        if rfs_rows == 0:
+            rfs_writer.write(
+                pd.DataFrame(columns=[RFS_CATEGORY_COLUMN, *RFS_EVENT_COLUMNS])
+            )
+        if availability_rows == 0:
+            availability_writer.write(pd.DataFrame(columns=["encounter_id"]))
+
+        if config.storage.emit_legacy_group_tables:
+            for group in DIAGNOSIS_CODE_GROUPS:
+                writer = grouped_writers.get(group.name)
+                if writer is None:
+                    with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
+                        empty_writer.write(pd.DataFrame(columns=DIAGNOSIS_COLUMNS))
+                        output_paths.extend(empty_writer.written_paths)
+                        logger.info(
+                            "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        )
+                else:
+                    output_paths.extend(writer.written_paths)
+                    logger.info(
+                        "Wrote %s rows to %s",
+                        grouped_counts[group.name],
+                        writer.written_paths[0].name,
+                    )
+                log_row_count(
+                    logger,
+                    f"diagnosis post-filter {group.name}",
+                    grouped_counts[group.name],
+                )
 
     return output_paths
 

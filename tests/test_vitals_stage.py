@@ -8,7 +8,7 @@ import pytest
 
 from trinetx_preprocessing.config import load_config, validate_config
 from trinetx_preprocessing.pipeline.vitals_stage import run_vitals_stage
-from trinetx_preprocessing.transform.vitals import VITALS_COLUMNS
+from trinetx_preprocessing.transform.vitals import NORMALIZED_VITALS_COLUMNS
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "vitals" / "vital_signs0001.csv"
@@ -23,6 +23,8 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "domains:\n"
         "  vitals:\n"
         '    pattern: "Vital Signs/vital*_signs*.csv"\n'
+        "storage:\n"
+        "  emit_legacy_group_tables: true\n"
     )
     path.write_text(content)
 
@@ -50,7 +52,7 @@ def test_run_vitals_stage_outputs(tmp_path: Path) -> None:
     assert normalized_path in outputs
 
     normalized = pd.read_csv(normalized_path, parse_dates=["date"])
-    assert list(normalized.columns) == VITALS_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_VITALS_COLUMNS
     assert len(normalized) == 18
 
     temp = pd.read_csv(work_dir / "value_759878.csv")

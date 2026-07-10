@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pandas as pd
 
 from trinetx_preprocessing.config import load_config, validate_config
 from trinetx_preprocessing.pipeline.labs_stage import run_labs_stage
-from trinetx_preprocessing.transform.labs import LAB_COLUMNS
+from trinetx_preprocessing.transform.labs import NORMALIZED_LAB_COLUMNS
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "labs" / "lab_results0001.csv"
@@ -49,5 +50,19 @@ def test_run_labs_stage_outputs(tmp_path: Path) -> None:
     assert outputs == [expected_output]
 
     normalized = pd.read_csv(expected_output, parse_dates=["date"])
-    assert list(normalized.columns) == LAB_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_LAB_COLUMNS
     assert len(normalized) == 3
+
+    feature_index = pd.read_csv(work_dir / "analysis_lab_features.csv")
+    assert feature_index["source_name"].tolist() == [
+        "value_potassium",
+        "value_potassium",
+    ]
+    availability = pd.read_csv(work_dir / "analysis_lab_availability.csv")
+    assert availability["encounter_id"].tolist() == ["E1", "E2", "E3"]
+
+    audit = json.loads((work_dir / "rfs_rule_audit.json").read_text())
+    assert audit["ruleset"] == "corrected_v1"
+    assert audit["categories"]["ABG"]["considered"] == 1
+    assert audit["categories"]["ABG"]["rejected_unit"] == 1
+    assert "patient_id" not in json.dumps(audit)

@@ -2,33 +2,49 @@
 
 from __future__ import annotations
 
-import hashlib
+import json
 import logging
-import re
-import sqlite3
-import tempfile
 from collections.abc import Collection
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from ..config import Config, ConfigError, collect_domain_paths
-from ..filesystem import remove_tree_strict
+from ..filesystem import write_text_atomic
 from ..guardrails import (
     GuardrailConfig,
     check_join_multiplier,
     check_required_ids,
     log_row_count,
 )
-from ..storage import find_work_tables, iter_work_tables, resolve_work_table
+from ..storage import (
+    PartitionedKeyLookup,
+    PartitionedParquetStore,
+    find_work_tables,
+    iter_work_tables,
+    resolve_work_table,
+)
 from ..transform.diagnosis import (
     CURRENT_DIAGNOSIS_CODE_GROUPS,
     DIAGNOSIS_COLUMNS,
     INDICATOR_COLUMNS,
     PRIOR_DIAGNOSIS_CODE_GROUPS,
+)
+from ..transform.lab_features import (
+    LAB_VALUE_RULES,
+    classify_lab_feature_rows,
+    legacy_lab_feature_values,
+)
+from ..transform.lab_features import (
+    LabFeatureRule as _LabValueRule,
+)
+from ..transform.lab_features import (
+    lab_code_priority as _lab_code_priority,
+)
+from ..transform.lab_features import (
+    legacy_csv_visible_numeric_series as _legacy_csv_visible_numeric_series,
 )
 from ..transform.labs import LAB_COLUMNS
 from ..transform.medications import MEDICATION_CODE_GROUPS, MEDICATION_COLUMNS
@@ -36,10 +52,22 @@ from ..transform.procedure import PROCEDURE_CODE_GROUPS, PROCEDURE_COLUMNS
 from ..transform.rfs import RFS_CATEGORIES, RFS_EVENT_COLUMNS
 from ..transform.vitals import VITAL_SIGN_RULES, VITALS_COLUMNS
 from ..validation import require_columns
+from .cohort import (
+    BASE_FINAL_OUTPUT_COLUMNS,
+    DEMOGRAPHIC_OUTPUT_COLUMNS,
+    ENCOUNTER_COLUMNS,
+    FINAL_EVENT_CANDIDATE_COLUMNS,
+    QUALIFY_DATE_MAX,
+    QUALIFY_DATE_MIN,
+    prepare_event_candidates,
+    select_setting_cohort,
+)
+from .final_feature_sources import (
+    LAB_SOURCE_NAME,
+    FinalFeatureBucket,
+    FinalFeatureSourceStore,
+)
 from .final_output_schema import FINAL_OUTPUT_COLUMNS
-
-QUALIFY_DATE_MIN = pd.Timestamp("2022-01-01")
-QUALIFY_DATE_MAX = pd.Timestamp("2022-12-31")
 
 SETTINGS = ("AMB", "EMER", "INPAT")
 
@@ -69,33 +97,6 @@ DEMOGRAPHIC_COLUMNS = [
     "year_of_birth",
     "patient_regional_location",
     "month_year_death",
-]
-
-DEMOGRAPHIC_OUTPUT_COLUMNS = [
-    "patient_id",
-    "sex",
-    "race",
-    "ethnicity",
-    "patient_regional_location",
-    "birth_year",
-    "death_year_month",
-]
-
-ENCOUNTER_COLUMNS = ["encounter_id", "start_date", "end_date", "LOS"]
-
-BASE_FINAL_OUTPUT_COLUMNS = [
-    "patient_id",
-    "encounter_id",
-    "qualify_date",
-    "RFS",
-    "encounter_type",
-    "age_at_encounter",
-    "sex",
-    "race",
-    "ethnicity",
-    "patient_regional_location",
-    "death_year_month",
-    "LOS",
 ]
 
 LEGACY_BASE_OUTPUT_COLUMNS = [
@@ -134,20 +135,15 @@ LEGACY_LOCATION_CODES = {"South": 0, "Northeast": 1, "Midwest": 2, "West": 3}
 
 FINAL_ENCOUNTER_BUCKET_COUNT = 256
 FINAL_ENCOUNTER_BUCKET_COLUMNS = ["encounter_id_key", *ENCOUNTER_COLUMNS]
+FINAL_DEMOGRAPHICS_BUCKET_COUNT = 256
+FINAL_DEMOGRAPHICS_BUCKET_COLUMNS = [
+    "patient_id_key",
+    *DEMOGRAPHIC_OUTPUT_COLUMNS,
+]
+FINAL_DATA_SCREEN_BUCKET_COUNT = 256
+FINAL_DATA_SCREEN_BUCKET_COLUMNS = ["encounter_id_key", "encounter_id"]
 FINAL_EVENT_BUCKET_COUNT = 256
 FINAL_EVENT_DEFAULT_CHUNK_ROWS = 500_000
-FINAL_EVENT_CANDIDATE_COLUMNS = [
-    "patient_id",
-    "encounter_id",
-    "qualify_date",
-    "RFS",
-    "sex",
-    "race",
-    "ethnicity",
-    "patient_regional_location",
-    "birth_year",
-    "death_year_month",
-]
 FINAL_EVENT_BUCKET_COLUMNS = [*FINAL_EVENT_CANDIDATE_COLUMNS, "_row_order"]
 FINAL_LAB_BUCKET_COUNT = 256
 FINAL_LAB_FEATURE_FIRST = "first"
@@ -161,99 +157,6 @@ FINAL_LAB_BUCKET_COLUMNS = [
 ]
 FINAL_PREVIOUS_VITAL_BUCKET_COUNT = 256
 FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS = ["vital_name", *VITALS_COLUMNS]
-
-
-@dataclass(frozen=True)
-class _LabValueRule:
-    name: str
-    regex: str
-    min_value: float
-    max_value: float
-    include_highest: bool = False
-    min_inclusive: bool = False
-    value_dtype: str = "float16"
-    value_divisors_by_code: dict[str, float] | None = None
-    code_priority_by_code: dict[str, int] | None = None
-
-
-LAB_VALUE_RULES = [
-    _LabValueRule("value_20198", r"^2019-8$", 5, 200, include_highest=True),
-    _LabValueRule("value_115576", r"^11557-6$", 2, 250, include_highest=True),
-    _LabValueRule("value_327718", r"^32771-8$", 2, 250, include_highest=True),
-    _LabValueRule(
-        "value_VBG_CO2",
-        r"^2021-4$|^40619-9$",
-        10,
-        250,
-        include_highest=True,
-    ),
-    _LabValueRule(
-        "value_PCO2_Unspec_blood",
-        r"^34705-4$|^11557-6$",
-        10,
-        250,
-        include_highest=True,
-    ),
-    _LabValueRule("value_27441", r"^2744-1$", 6.5, 7.8),
-    _LabValueRule("value_27466", r"^2746-6$", 6.4, 7.7),
-    _LabValueRule("value_19604_20263", r"^1960-4$|^2026-3$", 0.5, 60),
-    _LabValueRule("value_146274", r"^14627-4$", 0.5, 60),
-    _LabValueRule("value_29512", r"^2951-2$|^2947-0$|^77139-4$", 80, 190),
-    _LabValueRule("value_21600", r"^2160-0$|^38483-4$", 0.1, 20),
-    _LabValueRule("value_7187", r"^718-7$", 3, 25),
-    _LabValueRule(
-        "value_serum_bicarb",
-        r"^20565-8$|^1963-8$|^1959-6$|^1962-0$|^2028-9$",
-        0.5,
-        60,
-    ),
-    _LabValueRule("value_serum_chloride", r"^77138-6$|^2069-3$|^2075-0$", 50, 150),
-    _LabValueRule("value_serum_lactate", r"^32693-4$|^2524-7$", 0.1, 50),
-    _LabValueRule(
-        "value_potassium",
-        r"^6298-4$|^2823-3$|^77142-8$",
-        1.8,
-        12,
-        min_inclusive=True,
-    ),
-    _LabValueRule("value_192583", r"^19258-3$", 10, 300),
-    _LabValueRule("value_394866", r"^39486-6$", 6.4, 7.7),
-    _LabValueRule("value_27052", r"^2705-2$", 10, 300),
-    _LabValueRule(
-        "value_Lactate_Venous_Blood",
-        r"^30241-4$|^2519-7$",
-        0.1,
-        50,
-        value_divisors_by_code={"30241-4": 9.008},
-        code_priority_by_code={"30241-4": 0, "2519-7": 1},
-    ),
-    _LabValueRule("value_483917", r"^48391-7$", 2, 60),
-    _LabValueRule("value_27037", r"^2703-7$", 20, 500),
-    _LabValueRule("value_192559", r"^19255-9$", 20, 500),
-    _LabValueRule("value_332544", r"^33254-4$", 6.5, 7.8),
-    _LabValueRule("value_25189", r"^2518-9$", 0.1, 50),
-    _LabValueRule("value_115584", r"^11558-4$", 6.5, 7.8),
-    _LabValueRule("value_115568", r"^11556-8$", 5, 500),
-    _LabValueRule(
-        "value_264648",
-        r"^26464-8$|^49498-9$|^6690-2$|^804-5$",
-        0,
-        500000,
-        value_dtype="float64",
-    ),
-    _LabValueRule("value_265157", r"^26515-7$|^778-1$|^777-3$|^49497-1$", 0, 5000),
-    _LabValueRule(
-        "value_bnp",
-        r"^42637-9$|^30934-4$",
-        0,
-        500000,
-        value_dtype="float64",
-    ),
-    _LabValueRule("value_phos", r"^2774-8$|^2777-1$", 0, 30),
-    _LabValueRule("value_ca", r"^49765-1$|^17861-6$", 4, 30),
-    _LabValueRule("value_albumin", r"^2862-1$|^1751-7$|^61152-5$|^61151-7$", 0.5, 6),
-    _LabValueRule("value_tprot", r"^2885-2$", 2, 12),
-]
 
 
 @dataclass(frozen=True)
@@ -295,9 +198,21 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
             logger,
             chunksize=chunksize,
             stack=stack,
+            strict=strict,
         )
 
-        output_paths: dict[tuple[str, str, str], Path] = {}
+        output_paths = _initialize_final_output_files(config)
+        cohort_store = stack.enter_context(
+            PartitionedParquetStore(
+                config.work_dir,
+                prefix=".trinetx-final-cohorts-",
+                key_columns=["patient_id"],
+                bucket_count=config.storage.analysis_bucket_count,
+                row_group_size=config.storage.parquet_row_group_size,
+                cleanup_context="Final cohort index scratch",
+            )
+        )
+        cohort_rows_indexed = 0
         for category in RFS_CATEGORIES:
             event_candidates = _load_final_event_candidates(
                 config,
@@ -310,45 +225,117 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
             )
             for setting in SETTINGS:
                 inputs = setting_inputs[setting]
-                before = build_final_dataset_from_candidates(
+                base = build_final_dataset_from_candidates(
                     event_candidates,
                     inputs.encounters,
-                    config=config,
+                    config=None,
                     rfs_category=category,
                     setting=setting,
                     guardrails=config.guardrails,
                     strict=strict,
                     logger=logger,
+                    enrich_features=False,
+                    finalize_output=False,
                 )
-                before_path = (
-                    inputs.output_dir / f"RFS_{category}_ENC_{setting}_BEFORE.csv"
-                )
-                before.to_csv(before_path, index=False)
-                output_paths[(setting, category, "BEFORE")] = before_path
+                if base.empty:
+                    continue
+                base.insert(0, "_setting", setting)
+                base.insert(0, "_category", category)
+                cohort_store.add_frame(base)
+                cohort_rows_indexed += len(base)
 
+        feature_sources = stack.enter_context(
+            FinalFeatureSourceStore(config, chunksize=chunksize)
+        )
+        logger.info(
+            "Indexed %s final feature rows from %s work tables",
+            feature_sources.rows_indexed,
+            feature_sources.files_scanned,
+        )
+        rows_written = {key: 0 for key in output_paths}
+        buckets_processed = 0
+        for bucket, cohort_rows in cohort_store.iter_frames():
+            buckets_processed += 1
+            source_bucket = feature_sources.bucket(bucket)
+            for (category, setting), group in cohort_rows.groupby(
+                ["_category", "_setting"], sort=False
+            ):
+                base = group.drop(columns=["_category", "_setting"])
+                enriched = _enrich_legacy_final_features(
+                    base,
+                    config=config,
+                    chunksize=chunksize,
+                    logger=logger,
+                    source_bucket=source_bucket,
+                )
+                before = _finalize_output(enriched)
+                _append_final_rows(
+                    output_paths[(str(setting), str(category), "BEFORE")],
+                    before,
+                )
+                rows_written[(str(setting), str(category), "BEFORE")] += len(before)
+
+                inputs = setting_inputs[str(setting)]
                 after = apply_data_checks(
                     before,
                     inputs.data_checks_path,
                     allowed_encounter_ids=inputs.allowed_encounter_ids,
                     data_checks_preloaded=True,
+                    finalize_output=False,
                     context=f"{category}/{setting}",
                     logger=logger,
                 )
-                after_path = (
-                    inputs.output_dir / f"RFS_{category}_ENC_{setting}_AFTER.csv"
+                _append_final_rows(
+                    output_paths[(str(setting), str(category), "AFTER")],
+                    after,
                 )
-                after.to_csv(after_path, index=False)
-                output_paths[(setting, category, "AFTER")] = after_path
+                rows_written[(str(setting), str(category), "AFTER")] += len(after)
 
-                logger.info(
-                    "Wrote %s rows for %s/%s to %s",
-                    len(after),
-                    category,
-                    setting,
-                    after_path.name,
-                )
+        for key, count in rows_written.items():
+            logger.info("Wrote %s rows for %s/%s/%s", count, *key)
+        metrics = {
+            "schema_version": 1,
+            "ruleset": config.rfs.ruleset,
+            "bucket_count": config.storage.analysis_bucket_count,
+            "buckets_processed": buckets_processed,
+            "cohort_rows_indexed": cohort_rows_indexed,
+            "feature_source_files_scanned": feature_sources.files_scanned,
+            "feature_source_file_names": sorted(feature_sources.source_files_scanned),
+            "feature_source_rows_indexed": feature_sources.rows_indexed,
+            "cohort_index_bytes": cohort_store.disk_size_bytes(),
+            "feature_source_index_bytes": feature_sources.disk_size_bytes(),
+            "rows_written": {
+                "/".join(key): count for key, count in sorted(rows_written.items())
+            },
+        }
+        write_text_atomic(
+            config.work_dir / "final_assembly_metrics.json",
+            json.dumps(metrics, indent=2, sort_keys=True),
+        )
 
     return _ordered_final_output_paths(output_paths)
+
+
+def _initialize_final_output_files(
+    config: Config,
+) -> dict[tuple[str, str, str], Path]:
+    output_paths: dict[tuple[str, str, str], Path] = {}
+    empty = pd.DataFrame(columns=FINAL_OUTPUT_COLUMNS)
+    for setting in SETTINGS:
+        output_dir = config.output_dir / SETTING_OUTPUT_DIRS[setting]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for category in RFS_CATEGORIES:
+            for suffix in ("BEFORE", "AFTER"):
+                path = output_dir / f"RFS_{category}_ENC_{setting}_{suffix}.csv"
+                empty.to_csv(path, index=False)
+                output_paths[(setting, category, suffix)] = path
+    return output_paths
+
+
+def _append_final_rows(path: Path, frame: pd.DataFrame) -> None:
+    if frame.empty:
+        return
+    frame.to_csv(path, index=False, mode="a", header=False)
 
 
 def _load_setting_inputs(
@@ -357,9 +344,20 @@ def _load_setting_inputs(
     *,
     chunksize: int | None,
     stack: ExitStack,
+    strict: bool,
 ) -> dict[str, _SettingInputs]:
     setting_inputs: dict[str, _SettingInputs] = {}
     data_check_cache: dict[Path, _EncounterIdLookup | None] = {}
+    derived_allowed = None
+    if config.data_screen.source == "derived":
+        derived_allowed = _load_derived_data_screen_lookup(
+            config,
+            work_dir=config.work_dir,
+            stack=stack,
+            logger=logger,
+            chunksize=chunksize,
+            strict=strict,
+        )
     for setting in SETTINGS:
         encounters = _load_encounter_lookup(
             config,
@@ -370,15 +368,18 @@ def _load_setting_inputs(
         )
         output_dir = config.output_dir / SETTING_OUTPUT_DIRS[setting]
         output_dir.mkdir(parents=True, exist_ok=True)
-        data_checks_path = _data_checks_path(config.work_dir, setting)
-        allowed_encounter_ids = _cached_data_check_lookup(
-            data_check_cache,
-            data_checks_path,
-            work_dir=config.work_dir,
-            stack=stack,
-            logger=logger,
-            chunksize=chunksize,
-        )
+        data_checks_path = None
+        allowed_encounter_ids = derived_allowed
+        if config.data_screen.source == "legacy_files":
+            data_checks_path = _data_checks_path(config.work_dir, setting)
+            allowed_encounter_ids = _cached_data_check_lookup(
+                data_check_cache,
+                data_checks_path,
+                work_dir=config.work_dir,
+                stack=stack,
+                logger=logger,
+                chunksize=chunksize,
+            )
         setting_inputs[setting] = _SettingInputs(
             encounters=encounters,
             output_dir=output_dir,
@@ -450,74 +451,21 @@ def build_final_event_candidates(
     """Build setting-independent final-event candidates for one RFS category."""
 
     logger = logger or logging.getLogger(__name__)
-
     if events.empty:
         return pd.DataFrame(columns=FINAL_EVENT_CANDIDATE_COLUMNS)
-
-    require_columns(events, RFS_EVENT_COLUMNS, context="RFS events")
-    if not isinstance(demographics, _DemographicsLookup):
-        require_columns(
-            demographics, DEMOGRAPHIC_OUTPUT_COLUMNS, context="Demographics"
-        )
-
-    assembled = events.loc[:, RFS_EVENT_COLUMNS].copy()
-    assembled["patient_id"] = assembled["patient_id"].astype("string")
-    assembled["encounter_id"] = assembled["encounter_id"].astype("string")
-    assembled = assembled.rename(columns={"date": "qualify_date"})
-    assembled["qualify_date"] = pd.to_datetime(
-        assembled["qualify_date"], errors="coerce"
-    )
-    assembled = assembled.loc[
-        assembled["qualify_date"].between(QUALIFY_DATE_MIN, QUALIFY_DATE_MAX)
-    ]
-    assembled = assembled.dropna(subset=["patient_id", "encounter_id", "qualify_date"])
-    log_row_count(
-        logger,
-        f"final {context} post-filter dates",
-        len(assembled),
-    )
-    if strict:
-        check_required_ids(
-            assembled,
-            ["patient_id", "encounter_id"],
-            context=f"final {context} events",
-        )
-
     demographics_frame = _demographics_frame_for_merge(
         demographics,
-        assembled["patient_id"],
+        events["patient_id"],
     )
-    assembled = _merge_with_guardrails(
-        assembled,
+    return prepare_event_candidates(
+        events,
         demographics_frame,
-        on="patient_id",
-        validate="many_to_one",
-        context=f"final {context} demographics",
+        rfs_category=rfs_category,
+        context=context,
         guardrails=guardrails,
         strict=strict,
         logger=logger,
     )
-
-    assembled.insert(loc=2, column="RFS", value=rfs_category)
-
-    assembled = assembled.loc[
-        ~assembled["patient_regional_location"].isin(["Ex-US", "Unknown"])
-    ]
-    assembled = assembled.dropna().reset_index(drop=True)
-    log_row_count(
-        logger,
-        f"final {context} post-filter location",
-        len(assembled),
-    )
-
-    assembled = assembled.sort_values(
-        by=["qualify_date", "encounter_id"],
-        ascending=[True, False],
-        kind="mergesort",
-    )
-    assembled = assembled.drop_duplicates(subset=["encounter_id"], keep="first")
-    assembled = assembled.drop_duplicates(subset=["patient_id"], keep="first")
-    return assembled.loc[:, FINAL_EVENT_CANDIDATE_COLUMNS].reset_index(drop=True)
 
 
 def build_final_dataset_from_candidates(
@@ -530,69 +478,32 @@ def build_final_dataset_from_candidates(
     guardrails: GuardrailConfig,
     strict: bool,
     logger: logging.Logger | None = None,
+    enrich_features: bool = True,
+    finalize_output: bool = True,
 ) -> pd.DataFrame:
     """Merge reduced final-event candidates with one setting encounter lookup."""
 
     logger = logger or logging.getLogger(__name__)
 
     if event_candidates.empty:
-        return pd.DataFrame(columns=FINAL_OUTPUT_COLUMNS)
-
-    require_columns(
-        event_candidates,
-        FINAL_EVENT_CANDIDATE_COLUMNS,
-        context=f"final {rfs_category}/{setting} event candidates",
-    )
-    if not isinstance(encounters, _EncounterLookup):
-        require_columns(encounters, ENCOUNTER_COLUMNS, context="Encounter subset")
-
-    assembled = event_candidates.loc[:, FINAL_EVENT_CANDIDATE_COLUMNS].copy()
+        if finalize_output:
+            return pd.DataFrame(columns=FINAL_OUTPUT_COLUMNS)
+        return pd.DataFrame(columns=BASE_FINAL_OUTPUT_COLUMNS)
 
     encounters_frame = _encounters_frame_for_merge(
         encounters,
-        assembled["encounter_id"],
+        event_candidates["encounter_id"],
     )
-    assembled = _merge_with_guardrails(
-        assembled,
+    assembled = select_setting_cohort(
+        event_candidates,
         encounters_frame,
-        on="encounter_id",
-        validate="many_to_one",
-        context=f"final {rfs_category}/{setting} encounters",
+        rfs_category=rfs_category,
+        setting=setting,
         guardrails=guardrails,
         strict=strict,
         logger=logger,
     )
-
-    assembled["start_date"] = pd.to_datetime(assembled["start_date"], errors="coerce")
-    assembled["end_date"] = pd.to_datetime(assembled["end_date"], errors="coerce")
-    assembled = assembled.loc[
-        (assembled["qualify_date"] >= assembled["start_date"])
-        & (assembled["qualify_date"] <= assembled["end_date"])
-    ]
-    log_row_count(
-        logger,
-        f"final {rfs_category}/{setting} post-filter encounter dates",
-        len(assembled),
-    )
-    assembled = assembled.drop(columns=["start_date", "end_date"])
-
-    assembled.insert(loc=2, column="encounter_type", value=setting)
-
-    assembled["age_at_encounter"] = (
-        assembled["qualify_date"].dt.year - assembled["birth_year"]
-    )
-    assembled = assembled.loc[
-        (assembled["age_at_encounter"] >= 18) & (assembled["age_at_encounter"] < 110)
-    ]
-    log_row_count(
-        logger,
-        f"final {rfs_category}/{setting} post-filter age",
-        len(assembled),
-    )
-    assembled = assembled.drop(columns=["birth_year"])
-
-    assembled = _ensure_identifiers(assembled)
-    if config is not None:
+    if enrich_features and config is not None:
         assembled = _enrich_legacy_final_features(
             assembled,
             config=config,
@@ -601,6 +512,8 @@ def build_final_dataset_from_candidates(
             else None,
             logger=logger,
         )
+    if not finalize_output:
+        return assembled.reset_index(drop=True)
     assembled = _finalize_output(assembled)
     return assembled.loc[:, FINAL_OUTPUT_COLUMNS]
 
@@ -611,6 +524,7 @@ def apply_data_checks(
     *,
     allowed_encounter_ids: Collection[str] | "_EncounterIdLookup" | None = None,
     data_checks_preloaded: bool = False,
+    finalize_output: bool = True,
     chunksize: int | None = None,
     context: str,
     logger: logging.Logger | None = None,
@@ -619,12 +533,17 @@ def apply_data_checks(
 
     logger = logger or logging.getLogger(__name__)
 
+    def finish(frame: pd.DataFrame) -> pd.DataFrame:
+        if finalize_output:
+            return _finalize_output(frame)
+        return frame.reset_index(drop=True)
+
     if df.empty:
-        return _finalize_output(df)
+        return finish(df)
 
     allowed = allowed_encounter_ids
     if allowed is None and data_checks_preloaded:
-        return _finalize_output(df)
+        return finish(df)
     if allowed is None:
         allowed = _load_data_check_encounter_ids(
             data_checks_path,
@@ -632,14 +551,14 @@ def apply_data_checks(
             chunksize=chunksize,
         )
     if allowed is None:
-        return _finalize_output(df)
+        return finish(df)
 
     if isinstance(allowed, _EncounterIdLookup):
         filtered = allowed.filter_frame(df)
     else:
         filtered = df.loc[df["encounter_id"].astype("string").isin(allowed)].copy()
     log_row_count(logger, f"final {context} post-filter data checks", len(filtered))
-    return _finalize_output(filtered)
+    return finish(filtered)
 
 
 def _enrich_legacy_final_features(
@@ -648,6 +567,7 @@ def _enrich_legacy_final_features(
     config: Config,
     chunksize: int | None,
     logger: logging.Logger,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     """Add historical analytic final-output columns from work-table extracts."""
 
@@ -665,6 +585,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_previous_vital_features(
         enriched,
@@ -672,6 +593,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_lab_value_features(
         enriched,
@@ -679,6 +601,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_current_diagnosis_features(
         enriched,
@@ -686,6 +609,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_encounter_first_last_features(
         enriched,
@@ -695,6 +619,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_prior_diagnosis_features(
         enriched,
@@ -702,6 +627,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     enriched = _merge_medication_features(
         enriched,
@@ -709,6 +635,7 @@ def _enrich_legacy_final_features(
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
+        source_bucket=source_bucket,
     )
     log_row_count(logger, "final analytic feature rows", len(enriched))
     return enriched
@@ -750,6 +677,7 @@ def _merge_vital_value_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for rule in VITAL_SIGN_RULES:
@@ -770,6 +698,7 @@ def _merge_vital_value_features(
             encounter_ids=encounter_ids,
             encounter_filter="include",
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if not rows.empty:
             rows["value"] = _legacy_csv_visible_numeric_series(rows["value"])
@@ -790,6 +719,7 @@ def _merge_previous_vital_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for name in ("Weight", "Height", "BMI"):
@@ -798,6 +728,7 @@ def _merge_previous_vital_features(
             name,
             final_rows=enriched.loc[:, ["patient_id", "encounter_id", "qualify_date"]],
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if selected.empty:
             continue
@@ -819,10 +750,12 @@ def _load_previous_vital_candidates(
     *,
     final_rows: pd.DataFrame,
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
-    path = resolve_work_table(config, f"value_{name}.csv")
+    logical_name = f"value_{name}.csv"
+    path = resolve_work_table(config, logical_name)
     output_columns = ["patient_id", f"value_Prev_{name}", f"date_Prev_{name}"]
-    if not path.exists():
+    if source_bucket is None and not path.exists():
         return pd.DataFrame(columns=output_columns)
 
     cohort = final_rows.loc[:, ["patient_id", "encounter_id", "qualify_date"]].copy()
@@ -841,13 +774,10 @@ def _load_previous_vital_candidates(
         .to_dict()
     )
 
-    with _FinalPreviousVitalCandidateStore(config.work_dir) as store:
-        for chunk in iter_work_tables(
-            [path],
-            chunksize=chunksize,
-            usecols=VITALS_COLUMNS,
-            dtype={"patient_id": "string", "encounter_id": "string", "code": "string"},
-        ):
+    if source_bucket is not None:
+        chunks = [source_bucket.frame(logical_name, VITALS_COLUMNS)]
+        filtered_frames: list[pd.DataFrame] = []
+        for chunk in chunks:
             require_columns(chunk, VITALS_COLUMNS, context=str(path))
             filtered = _filter_ids(
                 chunk,
@@ -859,16 +789,52 @@ def _load_previous_vital_candidates(
                 continue
             filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
             filtered["value"] = _legacy_csv_visible_numeric_series(filtered["value"])
-            filtered["_qualify_date"] = filtered["patient_id"].astype("string").map(
-                qualify_dates_by_patient
+            filtered["_qualify_date"] = (
+                filtered["patient_id"].astype("string").map(qualify_dates_by_patient)
             )
-            filtered = filtered.loc[
-                filtered["date"] < filtered["_qualify_date"]
-            ].copy()
+            filtered = filtered.loc[filtered["date"] < filtered["_qualify_date"]].copy()
             if filtered.empty:
                 continue
-            store.add_frame(name, filtered.loc[:, VITALS_COLUMNS])
+            filtered_frames.append(filtered.loc[:, VITALS_COLUMNS])
+        if not filtered_frames:
+            return pd.DataFrame(columns=output_columns)
+        rows = pd.concat(filtered_frames, ignore_index=True)
+        return _select_previous_patient_value(
+            rows,
+            value_column="value",
+            output_value_column=f"value_Prev_{name}",
+            output_date_column=f"date_Prev_{name}",
+        )
 
+    with _FinalPreviousVitalCandidateStore(config.work_dir) as store:
+        chunks = iter_work_tables(
+            [path],
+            chunksize=chunksize,
+            usecols=VITALS_COLUMNS,
+            dtype={
+                "patient_id": "string",
+                "encounter_id": "string",
+                "code": "string",
+            },
+        )
+        for chunk in chunks:
+            require_columns(chunk, VITALS_COLUMNS, context=str(path))
+            filtered = _filter_ids(
+                chunk,
+                patient_ids=patient_ids,
+                encounter_ids=encounter_ids,
+                encounter_filter="exclude",
+            )
+            if filtered.empty:
+                continue
+            filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
+            filtered["value"] = _legacy_csv_visible_numeric_series(filtered["value"])
+            filtered["_qualify_date"] = (
+                filtered["patient_id"].astype("string").map(qualify_dates_by_patient)
+            )
+            filtered = filtered.loc[filtered["date"] < filtered["_qualify_date"]].copy()
+            if not filtered.empty:
+                store.add_frame(name, filtered.loc[:, VITALS_COLUMNS])
         selected = store.reduce().get(name)
     if selected is None:
         return pd.DataFrame(columns=output_columns)
@@ -882,12 +848,14 @@ def _merge_lab_value_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     lab_rows_by_name = _load_lab_rows_by_rule(
         config,
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=chunksize,
+        source_bucket=source_bucket,
     )
     enriched = df
     for rule in LAB_VALUE_RULES:
@@ -923,50 +891,69 @@ def _load_lab_rows_by_rule(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> dict[str, dict[str, pd.DataFrame]]:
     paths = find_work_tables(config, "lab_results_NEW_*.csv")
-    if not paths:
+    if source_bucket is None and not paths:
         return {}
-    compiled_rules = [
-        (rule, re.compile(rule.regex))
-        for rule in LAB_VALUE_RULES
-        if _lab_rule_outputs_requested(rule)
-    ]
+    rules_by_name = {
+        rule.name: rule for rule in LAB_VALUE_RULES if _lab_rule_outputs_requested(rule)
+    }
+    if source_bucket is not None:
+        normalized = source_bucket.frame(LAB_SOURCE_NAME, LAB_COLUMNS)
+        if normalized.empty:
+            grouped = {
+                name: source_bucket.frame(name, LAB_COLUMNS)
+                for name in rules_by_name
+                if source_bucket.has_source(name)
+            }
+        else:
+            grouped = classify_lab_feature_rows(normalized)
+        return _reduce_lab_candidates(
+            grouped,
+            rules_by_name=rules_by_name,
+            patient_ids=patient_ids,
+            encounter_ids=encounter_ids,
+        )
+
     with _FinalLabCandidateStore(config.work_dir) as store:
-        for chunk in iter_work_tables(
+        chunks = iter_work_tables(
             paths,
             chunksize=chunksize,
             usecols=LAB_COLUMNS,
-            dtype={"patient_id": "string", "encounter_id": "string", "code": "string"},
-        ):
-            require_columns(chunk, LAB_COLUMNS, context="Lab results work table")
-            filtered = _filter_ids(
-                chunk,
-                patient_ids=patient_ids,
-                encounter_ids=encounter_ids,
-                encounter_filter="include",
+            dtype={
+                "patient_id": "string",
+                "encounter_id": "string",
+                "code": "string",
+            },
+        )
+        grouped_chunks = (
+            classify_lab_feature_rows(
+                _filter_ids(
+                    chunk,
+                    patient_ids=patient_ids,
+                    encounter_ids=encounter_ids,
+                    encounter_filter="include",
+                )
             )
-            if filtered.empty:
-                continue
-            filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
-            values = pd.to_numeric(filtered["lab_result_num_val"], errors="coerce")
-            codes = filtered["code"].astype("string")
-            for rule, pattern in compiled_rules:
-                converted_values = _legacy_lab_feature_values(rule, codes, values)
-                visible_values = _legacy_csv_visible_numeric_series(converted_values)
-                mask = codes.str.match(pattern, na=False)
-                mask &= visible_values < rule.max_value
-                if rule.min_inclusive:
-                    mask &= visible_values >= rule.min_value
-                else:
-                    mask &= visible_values > rule.min_value
-                rows = filtered.loc[mask, LAB_COLUMNS].copy()
+            for chunk in chunks
+        )
+        for grouped in grouped_chunks:
+            for name, candidate_rows in grouped.items():
+                rule = rules_by_name.get(name)
+                if rule is None or candidate_rows.empty:
+                    continue
+                rows = _filter_ids(
+                    candidate_rows,
+                    patient_ids=patient_ids,
+                    encounter_ids=encounter_ids,
+                    encounter_filter="include",
+                )
                 if rows.empty:
                     continue
-                rows["lab_result_num_val"] = _float32_series(visible_values.loc[mask])
+                rows["date"] = pd.to_datetime(rows["date"], errors="coerce")
                 rows[FINAL_LAB_CODE_PRIORITY_COLUMN] = _lab_code_priority(
-                    rule,
-                    rows["code"],
+                    rule, rows["code"]
                 )
                 store.add_frame(
                     rule.name,
@@ -982,6 +969,37 @@ def _load_lab_rows_by_rule(
         return store.reduce()
 
 
+def _reduce_lab_candidates(
+    grouped: dict[str, pd.DataFrame],
+    *,
+    rules_by_name: dict[str, _LabValueRule],
+    patient_ids: set[str],
+    encounter_ids: set[str],
+) -> dict[str, dict[str, pd.DataFrame]]:
+    reduced: dict[str, dict[str, pd.DataFrame]] = {}
+    for name, candidate_rows in grouped.items():
+        rule = rules_by_name.get(name)
+        if rule is None or candidate_rows.empty:
+            continue
+        rows = _filter_ids(
+            candidate_rows,
+            patient_ids=patient_ids,
+            encounter_ids=encounter_ids,
+            encounter_filter="include",
+        )
+        if rows.empty:
+            continue
+        rows["date"] = pd.to_datetime(rows["date"], errors="coerce")
+        rows[FINAL_LAB_CODE_PRIORITY_COLUMN] = _lab_code_priority(rule, rows["code"])
+        features = {FINAL_LAB_FEATURE_FIRST: _reduce_first_lab_candidate_rows(rows)}
+        if rule.include_highest:
+            features[FINAL_LAB_FEATURE_HIGHEST] = _reduce_highest_lab_candidate_rows(
+                rows
+            )
+        reduced[name] = features
+    return reduced
+
+
 def _lab_rule_outputs_requested(rule: _LabValueRule) -> bool:
     columns = _lab_output_value_columns()
     value_name = rule.name.removeprefix("value_")
@@ -993,49 +1011,9 @@ def _legacy_lab_feature_values(
     codes: pd.Series,
     values: pd.Series,
 ) -> pd.Series:
-    converted = _legacy_lab_dtype_series(values, dtype=rule.value_dtype)
-    if not rule.value_divisors_by_code:
-        return converted
-    for code, divisor in rule.value_divisors_by_code.items():
-        converted.loc[codes.eq(code)] = converted.loc[codes.eq(code)] / divisor
-    return converted
+    """Compatibility wrapper for focused feature-precision tests."""
 
-
-def _legacy_lab_dtype_series(series: pd.Series, *, dtype: str) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce").astype("float64")
-    if dtype != "float16":
-        return values.astype(dtype)
-
-    info = np.finfo(np.float16)
-    finite = np.isfinite(values)
-    safe = finite & (values >= info.min) & (values <= info.max)
-    rounded = pd.Series(np.nan, index=values.index, dtype="float16")
-    if safe.any():
-        rounded.loc[safe] = values.loc[safe].astype("float16")
-    return rounded
-
-
-def _lab_code_priority(rule: _LabValueRule, codes: pd.Series) -> pd.Series:
-    if not rule.code_priority_by_code:
-        return pd.Series(0, index=codes.index, dtype="int16")
-    return (
-        codes.astype("string")
-        .map(rule.code_priority_by_code)
-        .fillna(len(rule.code_priority_by_code))
-        .astype("int16")
-    )
-
-
-def _float32_series(series: pd.Series) -> pd.Series:
-    return pd.Series(
-        np.asarray(series, dtype=np.float32),
-        index=series.index,
-        dtype="float32",
-    )
-
-
-def _legacy_csv_visible_numeric_series(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.astype("string"), errors="coerce")
+    return legacy_lab_feature_values(rule, codes, values)
 
 
 def _reduce_first_lab_candidate_rows(rows: pd.DataFrame) -> pd.DataFrame:
@@ -1101,6 +1079,7 @@ def _merge_current_diagnosis_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for group in CURRENT_DIAGNOSIS_CODE_GROUPS:
@@ -1120,6 +1099,7 @@ def _merge_current_diagnosis_features(
             encounter_ids=encounter_ids,
             encounter_filter="include",
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if rows.empty:
             continue
@@ -1127,10 +1107,7 @@ def _merge_current_diagnosis_features(
         rows = rows.loc[rows["date"] >= QUALIFY_DATE_MIN].copy()
         if rows.empty:
             continue
-        selected = rows.drop_duplicates(
-            subset=["encounter_id", "patient_id"],
-            keep="first",
-        ).copy()
+        selected = _select_current_diagnosis(rows)
         suffix = group.name.removeprefix("HAS_")
         if group.name in {
             "HAS_J9612",
@@ -1191,6 +1168,7 @@ def _merge_encounter_first_last_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for group in groups:
@@ -1205,6 +1183,7 @@ def _merge_encounter_first_last_features(
             encounter_ids=encounter_ids,
             encounter_filter="include",
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if rows.empty:
             continue
@@ -1243,6 +1222,7 @@ def _merge_prior_diagnosis_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for group in PRIOR_DIAGNOSIS_CODE_GROUPS:
@@ -1263,6 +1243,7 @@ def _merge_prior_diagnosis_features(
             encounter_ids=encounter_ids,
             encounter_filter="exclude",
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if rows.empty:
             continue
@@ -1310,6 +1291,7 @@ def _merge_medication_features(
     patient_ids: set[str],
     encounter_ids: set[str],
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
     enriched = df
     for group in MEDICATION_CODE_GROUPS:
@@ -1322,6 +1304,7 @@ def _merge_medication_features(
             encounter_ids=encounter_ids,
             encounter_filter="include" if group.name.startswith("IPmed") else "exclude",
             chunksize=chunksize,
+            source_bucket=source_bucket,
         )
         if rows.empty:
             continue
@@ -1348,14 +1331,20 @@ def _merge_medication_features(
             first_column = f"first_date_OP_Med_{med_index}"
             last_column = f"last_date_OP_Med_{med_index}"
             qualify_dates = pd.to_datetime(feature["qualify_date"], errors="coerce")
-            first_valid = pd.to_datetime(
-                feature[first_column],
-                errors="coerce",
-            ) <= qualify_dates
-            last_valid = pd.to_datetime(
-                feature[last_column],
-                errors="coerce",
-            ) <= qualify_dates
+            first_valid = (
+                pd.to_datetime(
+                    feature[first_column],
+                    errors="coerce",
+                )
+                <= qualify_dates
+            )
+            last_valid = (
+                pd.to_datetime(
+                    feature[last_column],
+                    errors="coerce",
+                )
+                <= qualify_dates
+            )
             feature[f"OP_Med_{med_index}"] = first_valid.astype("int32")
             feature.loc[~first_valid, first_column] = pd.NA
             feature.loc[~last_valid, last_column] = pd.NA
@@ -1374,7 +1363,20 @@ def _load_filtered_work_rows(
     encounter_ids: set[str],
     encounter_filter: str,
     chunksize: int,
+    source_bucket: FinalFeatureBucket | None = None,
 ) -> pd.DataFrame:
+    if source_bucket is not None:
+        chunk = source_bucket.frame(logical_name, columns)
+        if chunk.empty:
+            return pd.DataFrame(columns=columns)
+        filtered = _filter_ids(
+            chunk,
+            patient_ids=patient_ids,
+            encounter_ids=encounter_ids,
+            encounter_filter=encounter_filter,
+        )
+        return filtered.loc[:, columns].copy().reset_index(drop=True)
+
     path = resolve_work_table(config, logical_name)
     if not path.exists():
         return pd.DataFrame(columns=columns)
@@ -1437,8 +1439,12 @@ def _filter_patient_rows_on_or_before_qualify(
     )
     filtered = rows.copy()
     filtered[date_column] = pd.to_datetime(filtered[date_column], errors="coerce")
-    filtered["_qualify_date"] = filtered["patient_id"].astype("string").map(
-        qualify_dates_by_patient,
+    filtered["_qualify_date"] = (
+        filtered["patient_id"]
+        .astype("string")
+        .map(
+            qualify_dates_by_patient,
+        )
     )
     filtered = filtered.loc[filtered[date_column] <= filtered["_qualify_date"]].copy()
     return filtered.drop(columns=["_qualify_date"])
@@ -1572,14 +1578,58 @@ def _select_ip_medication(rows: pd.DataFrame, *, med_index: str) -> pd.DataFrame
                 f"date_IP_Med_{med_index}",
             ]
         )
+    selected = selected.sort_values(
+        by=["start_date", "encounter_id"],
+        ascending=[True, False],
+        kind="mergesort",
+    )
     selected = selected.drop_duplicates(subset=["encounter_id"], keep="first")
-    selected = selected.drop_duplicates(subset=["patient_id"], keep="first")
     selected = selected.rename(columns={"start_date": f"date_IP_Med_{med_index}"})
     selected[f"IP_Med_{med_index}"] = 1
     return selected.loc[
         :,
         ["encounter_id", f"IP_Med_{med_index}", f"date_IP_Med_{med_index}"],
     ]
+
+
+def _select_current_diagnosis(rows: pd.DataFrame) -> pd.DataFrame:
+    """Reduce current diagnosis rows deterministically by encounter."""
+
+    if rows.empty:
+        return pd.DataFrame(columns=DIAGNOSIS_COLUMNS)
+    selected = rows.loc[:, DIAGNOSIS_COLUMNS].copy()
+    selected["date"] = pd.to_datetime(selected["date"], errors="coerce")
+    selected["_row_order"] = range(len(selected))
+    earliest = (
+        selected.sort_values(
+            by=["date", "_row_order"],
+            ascending=[True, True],
+            kind="mergesort",
+        )
+        .drop_duplicates(subset=["encounter_id"], keep="first")
+        .copy()
+    )
+    priorities = {
+        "principal_diagnosis_indicator": {"P": 3, "S": 2, "U": 1},
+        "admitting_diagnosis": {"Y": 3, "T": 3, "N": 2, "F": 2, "U": 1},
+        "reason_for_visit": {"Y": 3, "T": 3, "N": 2, "F": 2, "U": 1},
+    }
+    for column, priority in priorities.items():
+        reduced = selected.groupby("encounter_id", sort=False)[column].agg(
+            lambda values: _highest_priority_indicator(values, priority)
+        )
+        earliest[column] = earliest["encounter_id"].map(reduced)
+    return earliest.loc[:, DIAGNOSIS_COLUMNS].reset_index(drop=True)
+
+
+def _highest_priority_indicator(
+    values: pd.Series,
+    priority: dict[str, int],
+) -> str:
+    normalized = values.astype("string").fillna("U").replace({"Unknown": "U"})
+    normalized = normalized.str.strip().str.upper()
+    ranks = normalized.map(priority).fillna(0)
+    return str(normalized.loc[ranks.idxmax()])
 
 
 def _select_op_medication(rows: pd.DataFrame, *, med_index: str) -> pd.DataFrame:
@@ -1702,6 +1752,7 @@ def _load_demographics_lookup(
             lookup.add_frame(transformed)
             rows_read += len(transformed)
 
+    lookup.finalize()
     log_row_count(logger, "demographics read", rows_read)
     return lookup
 
@@ -1781,34 +1832,9 @@ def _patient_id_key(value: object) -> tuple[str, str]:
     return ("value", str(value))
 
 
-def _patient_id_lookup_key(value: object) -> str:
-    if pd.isna(value):
-        return "missing:"
-    return f"value:{value}"
-
-
-def _encounter_id_key(value: object) -> str:
-    if pd.isna(value):
-        return "missing:"
-    return f"value:{value}"
-
-
-def _sqlite_value(value: object) -> object:
-    if pd.isna(value):
-        return None
-    return value
-
-
-def _sqlite_text_value(value: object) -> str | None:
-    if pd.isna(value):
-        return None
-    return str(value)
-
-
-def _sqlite_int_value(value: object) -> int | None:
-    if pd.isna(value):
-        return None
-    return int(value)
+def _lookup_key_series(values: pd.Series) -> pd.Series:
+    strings = values.astype("string")
+    return ("value:" + strings).where(strings.notna(), "missing:").astype("string")
 
 
 def _format_death_year_month(series: pd.Series) -> pd.Series:
@@ -1838,146 +1864,52 @@ def _empty_demographics_frame() -> pd.DataFrame:
 
 
 class _DemographicsLookup:
-    """Disk-backed patient demographics lookup for final assembly joins."""
+    """Patient demographics lookup backed by bounded Parquet partitions."""
 
     def __init__(self, work_dir: Path) -> None:
-        self.work_dir = work_dir
-        self.path: Path | None = None
-        self.connection: sqlite3.Connection | None = None
+        self._lookup = PartitionedKeyLookup(
+            work_dir,
+            prefix=".trinetx-demographics-",
+            key_column="patient_id_key",
+            stored_columns=FINAL_DEMOGRAPHICS_BUCKET_COLUMNS,
+            bucket_count=FINAL_DEMOGRAPHICS_BUCKET_COUNT,
+            require_unique=True,
+            cleanup_context="Final demographics lookup scratch",
+        )
 
     def __enter__(self) -> "_DemographicsLookup":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        handle = tempfile.NamedTemporaryFile(
-            prefix=".trinetx-demographics-",
-            suffix=".sqlite",
-            dir=self.work_dir,
-            delete=False,
-        )
-        handle.close()
-        self.path = Path(handle.name)
-        self.connection = sqlite3.connect(self.path)
-        self.connection.execute("PRAGMA journal_mode=OFF")
-        self.connection.execute("PRAGMA synchronous=OFF")
-        self.connection.execute("PRAGMA temp_store=FILE")
-        self.connection.execute(
-            """
-            CREATE TABLE demographics (
-                patient_id_key TEXT PRIMARY KEY,
-                patient_id TEXT,
-                sex TEXT,
-                race TEXT,
-                ethnicity TEXT,
-                patient_regional_location TEXT,
-                birth_year INTEGER NOT NULL,
-                death_year_month TEXT
-            ) WITHOUT ROWID
-            """
-        )
+        self._lookup.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self.connection is not None:
-            self.connection.close()
-            self.connection = None
-        self._unlink_scratch_files()
+        self._lookup.__exit__(exc_type, exc, tb)
 
     def add_frame(self, frame: pd.DataFrame) -> None:
         if frame.empty:
             return
         require_columns(frame, DEMOGRAPHIC_OUTPUT_COLUMNS, context="Demographics")
-        keys = frame["patient_id"].astype("object").map(_patient_id_lookup_key)
-        if keys.duplicated().any():
+        bucketed = frame.loc[:, DEMOGRAPHIC_OUTPUT_COLUMNS].copy()
+        bucketed.insert(0, "patient_id_key", _lookup_key_series(frame["patient_id"]))
+        try:
+            self._lookup.add_frame(bucketed)
+        except ValueError as exc:
             raise ValueError(
                 "Patient demographics contain duplicate patient_id values."
-            )
-        records = [
-            (
-                key,
-                _sqlite_value(row.patient_id),
-                _sqlite_value(row.sex),
-                _sqlite_value(row.race),
-                _sqlite_value(row.ethnicity),
-                _sqlite_value(row.patient_regional_location),
-                int(row.birth_year),
-                _sqlite_value(row.death_year_month),
-            )
-            for key, row in zip(
-                keys,
-                frame.loc[:, DEMOGRAPHIC_OUTPUT_COLUMNS].itertuples(index=False),
-                strict=True,
-            )
-        ]
+            ) from exc
+
+    def finalize(self) -> None:
         try:
-            self._connection().executemany(
-                """
-                INSERT INTO demographics(
-                    patient_id_key,
-                    patient_id,
-                    sex,
-                    race,
-                    ethnicity,
-                    patient_regional_location,
-                    birth_year,
-                    death_year_month
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                records,
-            )
-        except sqlite3.IntegrityError as exc:
+            self._lookup.finalize()
+        except ValueError as exc:
             raise ValueError(
                 "Patient demographics contain duplicate patient_id values."
             ) from exc
 
     def frame_for_patient_ids(self, patient_ids: pd.Series) -> pd.DataFrame:
-        keys = patient_ids.astype("object").map(_patient_id_lookup_key)
-        unique_keys = list(dict.fromkeys(keys.dropna().tolist()))
-        if not unique_keys:
+        matches = self._lookup.frame_for_keys(_lookup_key_series(patient_ids))
+        if matches.empty:
             return _empty_demographics_frame()
-
-        records: list[tuple[object, ...]] = []
-        for start in range(0, len(unique_keys), 500):
-            batch = unique_keys[start : start + 500]
-            placeholders = ",".join("?" for _ in batch)
-            rows = self._connection().execute(
-                f"""
-                SELECT
-                    patient_id,
-                    sex,
-                    race,
-                    ethnicity,
-                    patient_regional_location,
-                    birth_year,
-                    death_year_month
-                FROM demographics
-                WHERE patient_id_key IN ({placeholders})
-                """,
-                batch,
-            )
-            records.extend(tuple(row) for row in rows)
-
-        if not records:
-            return _empty_demographics_frame()
-        return pd.DataFrame.from_records(records, columns=DEMOGRAPHIC_OUTPUT_COLUMNS)
-
-    def _connection(self) -> sqlite3.Connection:
-        if self.connection is None:
-            raise RuntimeError("Demographics lookup is not open.")
-        return self.connection
-
-    def _unlink_scratch_files(self) -> None:
-        if self.path is None:
-            return
-        for path in [
-            self.path,
-            self.path.with_name(f"{self.path.name}-journal"),
-            self.path.with_name(f"{self.path.name}-wal"),
-            self.path.with_name(f"{self.path.name}-shm"),
-        ]:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
+        return matches.loc[:, DEMOGRAPHIC_OUTPUT_COLUMNS].reset_index(drop=True)
 
 
 def _load_rfs_event(
@@ -2106,28 +2038,27 @@ def _prepare_final_event_candidate_chunk(
 
 
 class _FinalEventCandidateStore:
-    """Bucketed event reducer for final assembly RFS candidates."""
+    """Bucketed event reducer retaining one event per encounter."""
 
     def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
-        self.encounter_path: Path | None = None
-        self.patient_path: Path | None = None
-        self._encounter_written_paths: set[Path] = set()
-        self._patient_written_paths: set[Path] = set()
+        self._store: PartitionedParquetStore | None = None
         self._next_row_order = 0
 
     def __enter__(self) -> "_FinalEventCandidateStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.encounter_path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-final-events-", dir=self.work_dir)
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-final-events-",
+            key_columns=["encounter_id"],
+            bucket_count=FINAL_EVENT_BUCKET_COUNT,
+            cleanup_context="Final event candidate scratch",
         )
-        self.patient_path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-final-patients-", dir=self.work_dir)
-        )
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dirs()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def add_frame(self, frame: pd.DataFrame) -> None:
         if frame.empty:
@@ -2143,32 +2074,21 @@ class _FinalEventCandidateStore:
             self._next_row_order + len(bucketed),
         )
         self._next_row_order += len(bucketed)
-        bucketed["_bucket"] = (
-            bucketed["encounter_id"]
-            .astype("string")
-            .map(
-                lambda value: _encounter_lookup_bucket(
-                    str(value), FINAL_EVENT_BUCKET_COUNT
-                )
-            )
-        )
-        for bucket, bucket_frame in bucketed.groupby("_bucket", sort=False):
-            _append_scratch_csv_frame(
-                self._encounter_bucket_path(int(bucket)),
-                bucket_frame.loc[:, FINAL_EVENT_BUCKET_COLUMNS],
-                written_paths=self._encounter_written_paths,
-            )
+        self._partition_store().add_frame(bucketed.loc[:, FINAL_EVENT_BUCKET_COLUMNS])
 
     def reduce(self) -> pd.DataFrame:
-        self._reduce_encounter_buckets_to_patient_buckets()
         frames: list[pd.DataFrame] = []
-        for path in sorted(self._patient_written_paths):
-            frame = _read_final_event_bucket(path)
+        for _, frame in self._partition_store().iter_frames(
+            columns=FINAL_EVENT_BUCKET_COLUMNS
+        ):
+            frame["qualify_date"] = pd.to_datetime(
+                frame["qualify_date"], errors="coerce"
+            )
             if frame.empty:
                 continue
             unique = (
                 _sort_final_event_candidates(frame)
-                .drop_duplicates(subset=["patient_id"], keep="first")
+                .drop_duplicates(subset=["encounter_id"], keep="first")
                 .loc[:, FINAL_EVENT_CANDIDATE_COLUMNS]
                 .reset_index(drop=True)
             )
@@ -2178,49 +2098,10 @@ class _FinalEventCandidateStore:
             return pd.DataFrame(columns=FINAL_EVENT_CANDIDATE_COLUMNS)
         return pd.concat(frames, ignore_index=True)
 
-    def _reduce_encounter_buckets_to_patient_buckets(self) -> None:
-        for path in sorted(self._encounter_written_paths):
-            frame = _read_final_event_bucket(path)
-            if frame.empty:
-                continue
-            unique = (
-                _sort_final_event_candidates(frame)
-                .drop_duplicates(subset=["encounter_id"], keep="first")
-                .reset_index(drop=True)
-            )
-            if unique.empty:
-                continue
-            unique["_bucket"] = (
-                unique["patient_id"]
-                .astype("string")
-                .map(
-                    lambda value: _encounter_lookup_bucket(
-                        str(value),
-                        FINAL_EVENT_BUCKET_COUNT,
-                    )
-                )
-            )
-            for bucket, bucket_frame in unique.groupby("_bucket", sort=False):
-                _append_scratch_csv_frame(
-                    self._patient_bucket_path(int(bucket)),
-                    bucket_frame.loc[:, FINAL_EVENT_BUCKET_COLUMNS],
-                    written_paths=self._patient_written_paths,
-                )
-
-    def _encounter_bucket_path(self, bucket: int) -> Path:
-        if self.encounter_path is None:
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
             raise RuntimeError("Final event candidate store is not open.")
-        return self.encounter_path / f"encounters_{bucket:03}.csv"
-
-    def _patient_bucket_path(self, bucket: int) -> Path:
-        if self.patient_path is None:
-            raise RuntimeError("Final event candidate store is not open.")
-        return self.patient_path / f"patients_{bucket:03}.csv"
-
-    def _remove_scratch_dirs(self) -> None:
-        for path in [self.encounter_path, self.patient_path]:
-            if path is not None:
-                remove_tree_strict(path, context="Final event candidate scratch")
+        return self._store
 
 
 class _FinalLabCandidateStore:
@@ -2228,18 +2109,22 @@ class _FinalLabCandidateStore:
 
     def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
-        self.path: Path | None = None
-        self._written_paths: set[Path] = set()
+        self._store: PartitionedParquetStore | None = None
 
     def __enter__(self) -> "_FinalLabCandidateStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-final-labs-", dir=self.work_dir)
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-final-labs-",
+            key_columns=["rule_name", "feature_kind", "patient_id"],
+            bucket_count=FINAL_LAB_BUCKET_COUNT,
+            cleanup_context="Final lab feature scratch",
         )
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dir()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def add_frame(
         self,
@@ -2259,23 +2144,14 @@ class _FinalLabCandidateStore:
             bucketed[FINAL_LAB_CODE_PRIORITY_COLUMN] = 0
         bucketed.insert(0, "feature_kind", feature_kind)
         bucketed.insert(0, "rule_name", rule_name)
-        bucketed["_bucket"] = bucketed["patient_id"].astype("string").map(
-            lambda value: _encounter_lookup_bucket(
-                f"{rule_name}|{feature_kind}|{value}",
-                FINAL_LAB_BUCKET_COUNT,
-            )
-        )
-        for bucket, bucket_frame in bucketed.groupby("_bucket", sort=False):
-            _append_scratch_csv_frame(
-                self._bucket_path(int(bucket)),
-                bucket_frame.loc[:, FINAL_LAB_BUCKET_COLUMNS],
-                written_paths=self._written_paths,
-            )
+        self._partition_store().add_frame(bucketed.loc[:, FINAL_LAB_BUCKET_COLUMNS])
 
     def reduce(self) -> dict[str, dict[str, pd.DataFrame]]:
         frames_by_rule: dict[str, dict[str, list[pd.DataFrame]]] = {}
-        for path in sorted(self._written_paths):
-            frame = _read_final_lab_bucket(path)
+        for _, frame in self._partition_store().iter_frames(
+            columns=FINAL_LAB_BUCKET_COLUMNS
+        ):
+            frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
             if frame.empty:
                 continue
             for (rule_name, feature_kind), group in frame.groupby(
@@ -2308,14 +2184,10 @@ class _FinalLabCandidateStore:
             for rule_name, feature_frames in frames_by_rule.items()
         }
 
-    def _bucket_path(self, bucket: int) -> Path:
-        if self.path is None:
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
             raise RuntimeError("Final lab candidate store is not open.")
-        return self.path / f"labs_{bucket:03}.csv"
-
-    def _remove_scratch_dir(self) -> None:
-        if self.path is not None:
-            remove_tree_strict(self.path, context="Final lab feature scratch")
+        return self._store
 
 
 class _FinalPreviousVitalCandidateStore:
@@ -2323,18 +2195,22 @@ class _FinalPreviousVitalCandidateStore:
 
     def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
-        self.path: Path | None = None
-        self._written_paths: set[Path] = set()
+        self._store: PartitionedParquetStore | None = None
 
     def __enter__(self) -> "_FinalPreviousVitalCandidateStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-final-prev-vitals-", dir=self.work_dir)
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-final-prev-vitals-",
+            key_columns=["vital_name", "patient_id"],
+            bucket_count=FINAL_PREVIOUS_VITAL_BUCKET_COUNT,
+            cleanup_context="Final previous vital scratch",
         )
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dir()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def add_frame(self, vital_name: str, frame: pd.DataFrame) -> None:
         if frame.empty:
@@ -2346,23 +2222,16 @@ class _FinalPreviousVitalCandidateStore:
         )
         bucketed = frame.loc[:, VITALS_COLUMNS].copy()
         bucketed.insert(0, "vital_name", vital_name)
-        bucketed["_bucket"] = bucketed["patient_id"].astype("string").map(
-            lambda value: _encounter_lookup_bucket(
-                f"{vital_name}|{value}",
-                FINAL_PREVIOUS_VITAL_BUCKET_COUNT,
-            )
+        self._partition_store().add_frame(
+            bucketed.loc[:, FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS]
         )
-        for bucket, bucket_frame in bucketed.groupby("_bucket", sort=False):
-            _append_scratch_csv_frame(
-                self._bucket_path(int(bucket)),
-                bucket_frame.loc[:, FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS],
-                written_paths=self._written_paths,
-            )
 
     def reduce(self) -> dict[str, pd.DataFrame]:
         frames_by_name: dict[str, list[pd.DataFrame]] = {}
-        for path in sorted(self._written_paths):
-            frame = _read_final_previous_vital_bucket(path)
+        for _, frame in self._partition_store().iter_frames(
+            columns=FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS
+        ):
+            frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
             if frame.empty:
                 continue
             for vital_name, group in frame.groupby("vital_name", sort=False):
@@ -2381,74 +2250,10 @@ class _FinalPreviousVitalCandidateStore:
             if frames
         }
 
-    def _bucket_path(self, bucket: int) -> Path:
-        if self.path is None:
-            raise RuntimeError("Final previous vital candidate store is not open.")
-        return self.path / f"previous_vitals_{bucket:03}.csv"
-
-    def _remove_scratch_dir(self) -> None:
-        if self.path is not None:
-            remove_tree_strict(self.path, context="Final previous vital scratch")
-
-
-def _read_final_event_bucket(path: Path) -> pd.DataFrame:
-    frame = pd.read_csv(
-        path,
-        usecols=FINAL_EVENT_BUCKET_COLUMNS,
-        dtype={
-            "patient_id": "string",
-            "encounter_id": "string",
-            "RFS": "string",
-            "sex": "string",
-            "race": "string",
-            "ethnicity": "string",
-            "patient_regional_location": "string",
-            "death_year_month": "string",
-        },
-    )
-    frame["qualify_date"] = pd.to_datetime(frame["qualify_date"], errors="coerce")
-    frame["_row_order"] = pd.to_numeric(
-        frame["_row_order"],
-        errors="raise",
-    ).astype("int64")
-    return frame
-
-
-def _read_final_lab_bucket(path: Path) -> pd.DataFrame:
-    frame = pd.read_csv(
-        path,
-        usecols=FINAL_LAB_BUCKET_COLUMNS,
-        dtype={
-            "rule_name": "string",
-            "feature_kind": "string",
-            "patient_id": "string",
-            "encounter_id": "string",
-            "code": "string",
-            FINAL_LAB_CODE_PRIORITY_COLUMN: "int16",
-        },
-    )
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
-    frame["lab_result_num_val"] = pd.to_numeric(
-        frame["lab_result_num_val"], errors="coerce"
-    ).astype("float32")
-    return frame
-
-
-def _read_final_previous_vital_bucket(path: Path) -> pd.DataFrame:
-    frame = pd.read_csv(
-        path,
-        usecols=FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS,
-        dtype={
-            "vital_name": "string",
-            "patient_id": "string",
-            "encounter_id": "string",
-            "code": "string",
-        },
-    )
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
-    frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
-    return frame
-
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
+            raise RuntimeError("Final previous vital store is not open.")
+        return self._store
 
 
 def _sort_final_event_candidates(frame: pd.DataFrame) -> pd.DataFrame:
@@ -2513,8 +2318,10 @@ def _encounters_frame_for_merge(
     encounter_ids: pd.Series,
 ) -> pd.DataFrame:
     if isinstance(encounters, _EncounterLookup):
-        return encounters.frame_for_encounter_ids(encounter_ids)
-    return encounters
+        frame = encounters.frame_for_encounter_ids(encounter_ids)
+    else:
+        frame = encounters
+    return frame.loc[:, ["encounter_id", "start_date", "end_date", "LOS"]]
 
 
 def _empty_encounter_frame() -> pd.DataFrame:
@@ -2533,119 +2340,51 @@ class _EncounterLookup:
     """Disk-backed setting encounter lookup for final assembly joins."""
 
     def __init__(self, work_dir: Path) -> None:
-        self.work_dir = work_dir
-        self.path: Path | None = None
-        self._written_paths: set[Path] = set()
-        self._finalized = False
+        self._lookup = PartitionedKeyLookup(
+            work_dir,
+            prefix=".trinetx-final-encounters-",
+            key_column="encounter_id_key",
+            stored_columns=FINAL_ENCOUNTER_BUCKET_COLUMNS,
+            bucket_count=FINAL_ENCOUNTER_BUCKET_COUNT,
+            require_unique=True,
+            cleanup_context="Final encounter lookup scratch",
+        )
 
     def __enter__(self) -> "_EncounterLookup":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-final-encounters-", dir=self.work_dir)
-        )
+        self._lookup.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dir()
+        self._lookup.__exit__(exc_type, exc, tb)
 
     def add_frame(self, frame: pd.DataFrame) -> None:
         if frame.empty:
             return
         require_columns(frame, ENCOUNTER_COLUMNS, context="Encounter subset")
-        keys = frame["encounter_id"].astype("object").map(_encounter_id_key)
-        if keys.duplicated().any():
-            raise ValueError("Encounter subset contains duplicate encounter_id values.")
         bucketed = frame.loc[:, ENCOUNTER_COLUMNS].copy()
-        bucketed.insert(0, "encounter_id_key", keys)
-        bucketed["_bucket"] = bucketed["encounter_id_key"].map(
-            lambda value: _encounter_lookup_bucket(value, FINAL_ENCOUNTER_BUCKET_COUNT)
+        bucketed.insert(
+            0, "encounter_id_key", _lookup_key_series(frame["encounter_id"])
         )
-        for bucket, bucket_frame in bucketed.groupby("_bucket", sort=False):
-            _append_scratch_csv_frame(
-                self._bucket_path(int(bucket)),
-                bucket_frame.loc[:, FINAL_ENCOUNTER_BUCKET_COLUMNS],
-                written_paths=self._written_paths,
-            )
-        self._finalized = False
+        try:
+            self._lookup.add_frame(bucketed)
+        except ValueError as exc:
+            raise ValueError(
+                "Encounter subset contains duplicate encounter_id values."
+            ) from exc
 
     def finalize(self) -> None:
-        for path in sorted(self._written_paths):
-            keys = pd.read_csv(
-                path,
-                usecols=["encounter_id_key"],
-                dtype={"encounter_id_key": "string"},
-            )
-            if keys["encounter_id_key"].duplicated().any():
-                raise ValueError(
-                    "Encounter subset contains duplicate encounter_id values."
-                )
-        self._finalized = True
+        try:
+            self._lookup.finalize()
+        except ValueError as exc:
+            raise ValueError(
+                "Encounter subset contains duplicate encounter_id values."
+            ) from exc
 
     def frame_for_encounter_ids(self, encounter_ids: pd.Series) -> pd.DataFrame:
-        keys = encounter_ids.astype("object").map(_encounter_id_key)
-        unique_keys = list(dict.fromkeys(keys.dropna().tolist()))
-        if not unique_keys:
+        matches = self._lookup.frame_for_keys(_lookup_key_series(encounter_ids))
+        if matches.empty:
             return _empty_encounter_frame()
-
-        keys_by_bucket: dict[int, set[str]] = {}
-        for key in unique_keys:
-            bucket = _encounter_lookup_bucket(key, FINAL_ENCOUNTER_BUCKET_COUNT)
-            keys_by_bucket.setdefault(bucket, set()).add(key)
-
-        frames: list[pd.DataFrame] = []
-        for bucket, bucket_keys in keys_by_bucket.items():
-            path = self._bucket_path(bucket)
-            if not path.exists():
-                continue
-            bucket_frame = pd.read_csv(
-                path,
-                usecols=FINAL_ENCOUNTER_BUCKET_COLUMNS,
-                dtype={"encounter_id_key": "string", "encounter_id": "string"},
-            )
-            if bucket_frame.empty:
-                continue
-            matches = bucket_frame.loc[
-                bucket_frame["encounter_id_key"].isin(bucket_keys),
-                ENCOUNTER_COLUMNS,
-            ]
-            if not matches.empty:
-                frames.append(matches)
-
-        if not frames:
-            return _empty_encounter_frame()
-        return pd.concat(frames, ignore_index=True)
-
-    def _bucket_path(self, bucket: int) -> Path:
-        if self.path is None:
-            raise RuntimeError("Encounter lookup is not open.")
-        return self.path / f"encounters_{bucket:03}.csv"
-
-    def _remove_scratch_dir(self) -> None:
-        if self.path is None:
-            return
-        remove_tree_strict(self.path, context="Final encounter lookup scratch")
-
-
-def _append_scratch_csv_frame(
-    path: Path,
-    frame: pd.DataFrame,
-    *,
-    written_paths: set[Path],
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    is_written = path in written_paths
-    frame.to_csv(
-        path,
-        index=False,
-        mode="a" if is_written else "w",
-        header=not is_written,
-    )
-    written_paths.add(path)
-
-
-def _encounter_lookup_bucket(encounter_id_key: str, bucket_count: int) -> int:
-    digest = hashlib.blake2b(encounter_id_key.encode("utf-8"), digest_size=8).digest()
-    return int.from_bytes(digest, byteorder="big") % bucket_count
+        return matches.loc[:, ENCOUNTER_COLUMNS].reset_index(drop=True)
 
 
 def _load_work_table_frame(
@@ -2693,6 +2432,54 @@ def _load_data_check_encounter_ids(
         allowed.update(checks["encounter_id"].dropna().astype("string"))
     log_row_count(logger, f"data checks read {data_checks_path.name}", len(allowed))
     return allowed
+
+
+def _load_derived_data_screen_lookup(
+    config: Config,
+    *,
+    work_dir: Path,
+    stack: ExitStack,
+    logger: logging.Logger,
+    chunksize: int | None,
+    strict: bool,
+) -> "_EncounterIdLookup" | None:
+    """Build encounter availability from normalized diagnosis and lab tables."""
+
+    analysis_paths = [
+        resolve_work_table(config, "analysis_diagnosis_availability.csv"),
+        resolve_work_table(config, "analysis_lab_availability.csv"),
+    ]
+    if all(path.exists() for path in analysis_paths):
+        paths = analysis_paths
+    elif any(path.exists() for path in analysis_paths):
+        raise FileNotFoundError(
+            "Derived data-screen analysis indexes are incomplete; rerun labs and "
+            "diagnosis stages."
+        )
+    else:
+        paths = []
+        for pattern in ("diagnosis_NEW_*.csv", "lab_results_NEW_*.csv"):
+            paths.extend(find_work_tables(config, pattern))
+    if not paths:
+        message = "Derived data screening requires normalized diagnosis or lab tables."
+        if strict:
+            raise FileNotFoundError(message)
+        logger.warning(message)
+        return None
+
+    lookup = stack.enter_context(_EncounterIdLookup(work_dir))
+    rows_read = 0
+    for frame in iter_work_tables(
+        paths,
+        chunksize=chunksize,
+        usecols=["encounter_id"],
+        dtype={"encounter_id": "string"},
+    ):
+        rows_read += len(frame)
+        lookup.add_values(frame["encounter_id"])
+    log_row_count(logger, "derived diagnosis-or-lab screen rows", rows_read)
+    log_row_count(logger, "derived diagnosis-or-lab screen encounters", lookup.count())
+    return lookup
 
 
 def _cached_data_check_lookup(
@@ -2759,112 +2546,46 @@ class _EncounterIdLookup:
     """Disk-backed encounter-id membership lookup for final data checks."""
 
     def __init__(self, work_dir: Path) -> None:
-        self.work_dir = work_dir
-        self.path: Path | None = None
-        self.connection: sqlite3.Connection | None = None
+        self._lookup = PartitionedKeyLookup(
+            work_dir,
+            prefix=".trinetx-data-check-ids-",
+            key_column="encounter_id_key",
+            stored_columns=FINAL_DATA_SCREEN_BUCKET_COLUMNS,
+            bucket_count=FINAL_DATA_SCREEN_BUCKET_COUNT,
+            cleanup_context="Final data-screen lookup scratch",
+        )
 
     def __enter__(self) -> "_EncounterIdLookup":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        handle = tempfile.NamedTemporaryFile(
-            prefix=".trinetx-data-check-ids-",
-            suffix=".sqlite",
-            dir=self.work_dir,
-            delete=False,
-        )
-        handle.close()
-        self.path = Path(handle.name)
-        self.connection = sqlite3.connect(self.path)
-        self.connection.execute("PRAGMA journal_mode=OFF")
-        self.connection.execute("PRAGMA synchronous=OFF")
-        self.connection.execute("PRAGMA temp_store=FILE")
-        self.connection.execute(
-            """
-            CREATE TABLE allowed_encounter_ids (
-                encounter_id_key TEXT PRIMARY KEY,
-                encounter_id TEXT NOT NULL
-            ) WITHOUT ROWID
-            """
-        )
+        self._lookup.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self.connection is not None:
-            self.connection.close()
-            self.connection = None
-        self._unlink_scratch_files()
+        self._lookup.__exit__(exc_type, exc, tb)
 
     def add_values(self, encounter_ids: pd.Series) -> None:
-        records = [
-            (_encounter_id_key(value), str(value))
-            for value in encounter_ids.astype("object")
-            if not pd.isna(value)
-        ]
-        if not records:
+        values = encounter_ids.dropna().astype("string")
+        if values.empty:
             return
-        self._connection().executemany(
-            """
-            INSERT OR IGNORE INTO allowed_encounter_ids(
-                encounter_id_key,
-                encounter_id
-            )
-            VALUES (?, ?)
-            """,
-            records,
+        frame = pd.DataFrame(
+            {
+                "encounter_id_key": _lookup_key_series(values),
+                "encounter_id": values.to_numpy(),
+            }
         )
+        frame = frame.drop_duplicates(subset=["encounter_id_key"], keep="first")
+        self._lookup.add_frame(frame)
 
     def filter_frame(self, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
             return df.copy()
-        keys = df["encounter_id"].astype("object").map(_encounter_id_key)
-        allowed_keys = self._allowed_keys(keys.dropna().unique().tolist())
+        keys = _lookup_key_series(df["encounter_id"])
+        allowed_keys = self._lookup.matching_keys(keys)
         if not allowed_keys:
             return df.iloc[0:0].copy()
         return df.loc[keys.isin(allowed_keys)].copy()
 
     def count(self) -> int:
-        row = (
-            self._connection()
-            .execute("SELECT COUNT(*) FROM allowed_encounter_ids")
-            .fetchone()
-        )
-        return int(row[0])
-
-    def _allowed_keys(self, keys: list[str]) -> set[str]:
-        if not keys:
-            return set()
-        allowed: set[str] = set()
-        for start in range(0, len(keys), 500):
-            batch = keys[start : start + 500]
-            placeholders = ",".join("?" for _ in batch)
-            rows = self._connection().execute(
-                f"""
-                SELECT encounter_id_key
-                FROM allowed_encounter_ids
-                WHERE encounter_id_key IN ({placeholders})
-                """,
-                batch,
-            )
-            allowed.update(row[0] for row in rows)
-        return allowed
-
-    def _connection(self) -> sqlite3.Connection:
-        if self.connection is None:
-            raise RuntimeError("Encounter-id lookup is not open.")
-        return self.connection
-
-    def _unlink_scratch_files(self) -> None:
-        if self.path is None:
-            return
-        for path in [
-            self.path,
-            self.path.with_name(f"{self.path.name}-journal"),
-            self.path.with_name(f"{self.path.name}-wal"),
-            self.path.with_name(f"{self.path.name}-shm"),
-        ]:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
+        return self._lookup.unique_count()
 
 
 def _merge_validate(

@@ -13,6 +13,18 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 
 ## Entries
 
+### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
+- Date: 2026-07-09
+- Decision: Post-Milestone 1 releases follow `docs/SPEC.md`, including specimen-specific hypercapnia rules, structured code matching, per-setting event selection, derived diagnosis-or-lab screening, and deterministic feature reductions.
+- Context: Milestone 1 established near-exact historical replication and exposed several clinically or analytically incorrect legacy behaviors.
+- Options considered:
+  - Continue preserving all notebook behavior
+  - Patch individual defects without a governing contract
+  - Adopt a versioned corrected specification and typed rules (chosen)
+- Rationale: A written contract makes intentional divergence reviewable and prevents legacy implementation accidents from remaining requirements.
+- Consequences: `refactor-milestone-1` remains the replication fallback; corrected runs require fresh evidence and may change cohort membership while preserving the public final schema.
+- References: `docs/SPEC.md`, `src/trinetx_preprocessing/transform`, `src/trinetx_preprocessing/pipeline`.
+
 ### 2026-06-08 — Real-data golden master is the final parity gate
 - Date: 2026-06-08
 - Decision: The refactor requires approved local legacy notebook outputs and
@@ -786,3 +798,28 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   rerun after this point must be labeled post-milestone.
 - References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_final_assembly.py`.
+
+### 2026-07-09 — Adopt corrected rules and reusable partitioned analysis indexes
+- Date: 2026-07-09
+- Decision: Make `docs/SPEC.md` authoritative after Milestone 1, express
+  clinical inclusion as immutable typed rules, retain code-system/unit metadata,
+  derive diagnosis-or-lab screening, and build compact RFS/feature candidates
+  during one streaming pass per domain. Final assembly consumes bounded
+  patient-partitioned Parquet indexes shared by all 18 cohorts. A versioned work
+  manifest rejects stale or incomplete intermediates.
+- Context: The notebook-compatible implementation preserved several incorrect
+  gas codes, regex overmatching, cross-setting event suppression, and
+  nondeterministic feature reductions. It also repeatedly reread many large
+  group tables, producing a 161,763.975-second final-assembly baseline.
+- Rationale: Correctness is now governed by an explicit reviewable contract.
+  Typed rules make code/system/unit/bound semantics readable, while one-pass
+  classification and bounded partitions reduce external-drive I/O without
+  requiring full-domain memory.
+- Consequences: Existing work tables are incompatible. Legacy group-table
+  emission is opt-in, Milestone 1 remains the historical fallback, and release
+  requires corrected staged tests, a fresh strict BOOK profile, aggregate-only
+  delta evidence, and performance gates.
+- References: `docs/SPEC.md`, `src/trinetx_preprocessing/transform/clinical_rules.py`,
+  `src/trinetx_preprocessing/storage.py`,
+  `src/trinetx_preprocessing/work_manifest.py`,
+  `src/trinetx_preprocessing/pipeline/final_feature_sources.py`.

@@ -23,6 +23,11 @@ from trinetx_preprocessing.profiling import (
 )
 from trinetx_preprocessing.regression import TableHashEntry, write_hash_manifest
 from trinetx_preprocessing.storage import write_work_table
+from trinetx_preprocessing.work_manifest import (
+    FINAL_ASSEMBLY_PREREQUISITES,
+    initialize_work_manifest,
+    mark_stage_complete,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -501,8 +506,11 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
         '  intermediate_format: "parquet"\n'
         "  emit_legacy_csv_intermediates: false\n"
         "  parquet_row_group_size: 1\n"
+        "data_screen:\n"
+        "  source: legacy_files\n"
     )
     config = load_config(config_path)
+    initialize_work_manifest(config)
     for filename in final_assembly.SETTING_ENCOUNTER_FILES.values():
         write_work_table(
             config,
@@ -515,6 +523,51 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
             f"RFS_{category}.csv",
             pd.DataFrame(columns=final_assembly.RFS_EVENT_COLUMNS),
         )
+    analysis_tables = {
+        "analysis_lab_availability.csv": ["encounter_id"],
+        "analysis_diagnosis_availability.csv": ["encounter_id"],
+        "analysis_lab_features.csv": [
+            "source_name",
+            *final_assembly.LAB_COLUMNS,
+        ],
+        "analysis_rfs_labs.csv": ["category", *final_assembly.RFS_EVENT_COLUMNS],
+        "analysis_rfs_diagnosis.csv": [
+            "category",
+            *final_assembly.RFS_EVENT_COLUMNS,
+        ],
+        "analysis_rfs_procedure.csv": [
+            "category",
+            *final_assembly.RFS_EVENT_COLUMNS,
+        ],
+        "analysis_rfs_vitals.csv": ["category", *final_assembly.RFS_EVENT_COLUMNS],
+        "analysis_diagnosis_features.csv": [
+            "source_name",
+            *final_assembly.DIAGNOSIS_COLUMNS,
+        ],
+        "analysis_medication_features.csv": [
+            "source_name",
+            *final_assembly.MEDICATION_COLUMNS,
+        ],
+        "analysis_procedure_features.csv": [
+            "source_name",
+            *final_assembly.PROCEDURE_COLUMNS,
+        ],
+        "analysis_vital_features.csv": [
+            "source_name",
+            *final_assembly.VITALS_COLUMNS,
+        ],
+    }
+    for logical_name, columns in analysis_tables.items():
+        write_work_table(config, logical_name, pd.DataFrame(columns=columns))
+    (work_dir / "rfs_rule_audit.json").write_text(
+        json.dumps({"schema_version": 1, "ruleset": "corrected_v1"})
+    )
+    for stage in FINAL_ASSEMBLY_PREREQUISITES:
+        if stage == "rfs":
+            (work_dir / "rfs_stage_metrics.json").write_text(
+                json.dumps({"schema_version": 1, "used_analysis_index": True})
+            )
+        mark_stage_complete(config, stage, [])
 
     result = subprocess.run(
         [

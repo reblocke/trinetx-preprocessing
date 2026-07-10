@@ -7,13 +7,14 @@
 - `llms.txt` - compact public index for LLM/code-agent readers; reviewed as documentation, not as a replacement for `AGENTS.md`.
 - `config.example.yaml` - synthetic/example config; local `config.yaml` is ignored.
 - `pyproject.toml` and `uv.lock` - Python package metadata and locked dependencies.
-- `README.txt` and `split_db.sh` - legacy pipeline notes and raw CSV splitter reference.
+- `README.txt` - legacy pipeline notes, updated to route splitting through the supported Python CLI.
 - `Hypercapnia*.ipynb` and `Executed Notebooks/` - historical notebooks retained as canonical references.
 
 ## Refactor implementation
 - `src/trinetx_preprocessing/cli.py` - CLI entrypoint for validation, stage runs, profiling, hashing, comparison, and cleanup.
 - `src/trinetx_preprocessing/config.py` - YAML config loading, validation, and input-domain inspection.
-- `src/trinetx_preprocessing/storage.py` - CSV/Parquet work-table read/write helpers.
+- `src/trinetx_preprocessing/storage.py` - CSV/Parquet work-table helpers and bounded partition stores.
+- `src/trinetx_preprocessing/work_manifest.py` - fail-closed intermediate compatibility and stage-completion manifest.
 - `src/trinetx_preprocessing/regression.py` - normalized hashing, manifests, and manifest comparison.
 - `src/trinetx_preprocessing/profiling.py` - strict profile runner and provenance writer.
 - `src/trinetx_preprocessing/pipeline/` - stage orchestration for raw domains, RFS, final assembly, and full pipeline runs.
@@ -36,5 +37,5 @@
 
 ## Private and generated data boundaries
 - Raw TriNetX exports, real-data work/output trees, logs, manifests, profile outputs, and row-level extracts must remain untracked.
-- Real-data validation currently belongs under `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation`, not the repository.
+- Real-data validation currently belongs under `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`, not the repository.
 - Known local/generated artifacts are ignored, including `.DS_Store`, AppleDouble sidecars, `config.yaml`, `artifacts/`, `logs/`, `profile/`, `manifests/`, `work/`, `output/`, and generated zip archives.

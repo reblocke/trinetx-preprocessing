@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 
 from ..validation import require_columns
@@ -30,10 +29,18 @@ VITALS_COLUMNS = [
     "value",
 ]
 
-DROP_COLUMNS = [
+NORMALIZED_VITALS_COLUMNS = [
+    "patient_id",
+    "encounter_id",
     "code_system",
-    "text_value",
+    "code",
+    "date",
+    "value",
     "units_of_measure",
+]
+
+DROP_COLUMNS = [
+    "text_value",
     "derived_by_TriNetX",
     "source_id",
 ]
@@ -47,116 +54,112 @@ class VitalSignRule:
     """Definition of a vital-sign code extract and filter rule."""
 
     name: str
-    regex: str
+    exact_codes: tuple[str, ...]
     dtype: str
     min_value: float | None = None
     max_value: float | None = None
     conversion: str | None = None
-    conversion_input_dtype: str | None = None
     dropna: bool = False
 
 
 VITAL_SIGN_RULES = [
     VitalSignRule(
         "value_759878",
-        r"^75987-8$",
+        ("75987-8",),
         "float32",
         min_value=20,
         max_value=43,
         conversion=FAHRENHEIT_TO_CELSIUS,
-        conversion_input_dtype="float32",
     ),
     VitalSignRule(
         "value_608356",
-        r"^60835-6$",
+        ("60835-6",),
         "float32",
         min_value=20,
         max_value=43.3,
         conversion=FAHRENHEIT_TO_CELSIUS,
-        conversion_input_dtype="float32",
     ),
     VitalSignRule(
         "value_27110",
-        r"^74105-8$|^51731-8$|^19224-5$|^2711-0$",
+        ("74105-8", "51731-8", "19224-5", "2711-0"),
         "float32",
         min_value=0,
         max_value=100,
     ),
     VitalSignRule(
         "value_27086",
-        r"^2708-6$|^51733-4$",
+        ("2708-6", "51733-4"),
         "float32",
         min_value=0,
         max_value=100,
     ),
     VitalSignRule(
         "value_205641",
-        r"^2713-6$|^20564-1$",
+        ("2713-6", "20564-1"),
         "float16",
         min_value=0,
         max_value=100,
     ),
     VitalSignRule(
         "value_Weight",
-        r"^29463-7$|^3141-9$|^3142-7$|^8335-2$",
+        ("29463-7", "3141-9", "3142-7", "8335-2"),
         "float16",
         min_value=10,
         max_value=450,
     ),
     VitalSignRule(
         "value_New_Temp",
-        r"^8310-5$|^8331-1$|^75539-7$|^8333-7$",
+        ("8310-5", "8331-1", "75539-7", "8333-7"),
         "float32",
         min_value=43.3,
         max_value=110,
         conversion=CELSIUS_TO_FAHRENHEIT,
-        conversion_input_dtype="float16",
     ),
     VitalSignRule(
         "value_BMI",
-        r"^39156-5$",
+        ("39156-5",),
         "float16",
         min_value=10,
         max_value=100,
     ),
     VitalSignRule(
         "value_RR",
-        r"^9279-1$",
+        ("9279-1",),
         "float16",
         min_value=2,
         max_value=75,
     ),
     VitalSignRule(
         "value_SysBP",
-        r"^8480-6$",
+        ("8480-6",),
         "float16",
         min_value=30,
         max_value=350,
     ),
     VitalSignRule(
         "value_DiaBP",
-        r"^8462-4$",
+        ("8462-4",),
         "float16",
         min_value=15,
         max_value=250,
     ),
     VitalSignRule(
         "value_SPO2",
-        r"^59408-5$|^20564-1$",
+        ("59408-5", "20564-1"),
         "float16",
         min_value=30,
         max_value=100,
     ),
     VitalSignRule(
         "value_HR",
-        r"^8893-0$|^8867-4$",
+        ("8893-0", "8867-4"),
         "float16",
         min_value=15,
         max_value=300,
     ),
     VitalSignRule(
         "value_Height",
-        r"^8302-2$|^8306-3$|^8301-4$|^3138-5$|^8308-9$|^8305-5$|^3137-7$",
+        ("8302-2", "8306-3", "8301-4", "3138-5", "8308-9", "8305-5", "3137-7"),
         "float16",
         min_value=54,
         max_value=84,
@@ -178,20 +181,24 @@ def normalize_vitals_chunk(df: pd.DataFrame) -> pd.DataFrame:
     require_columns(df, RAW_VITALS_COLUMNS, context="Vital signs raw input")
 
     normalized = df.drop(columns=DROP_COLUMNS).copy()
-    normalized = normalized.loc[:, VITALS_COLUMNS]
+    normalized = normalized.loc[:, NORMALIZED_VITALS_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")
+    normalized["code_system"] = normalized["code_system"].astype("string")
     normalized["code"] = normalized["code"].astype("string")
+    normalized["units_of_measure"] = normalized["units_of_measure"].astype("string")
     normalized["date"] = pd.to_datetime(normalized["date"])
     return normalized.reset_index(drop=True)
 
 
-def filter_vitals_by_code(df: pd.DataFrame, regex: str) -> pd.DataFrame:
-    """Filter vital-sign rows by a code pattern.
+def filter_vitals_by_code(
+    df: pd.DataFrame, exact_codes: tuple[str, ...]
+) -> pd.DataFrame:
+    """Filter vital-sign rows by exact codes.
 
     Args:
         df: Normalized vital-sign DataFrame.
-        regex: Regex pattern matching vital-sign codes to retain.
+        exact_codes: LOINC codes to retain.
 
     Returns:
         Filtered vital-sign DataFrame.
@@ -200,7 +207,7 @@ def filter_vitals_by_code(df: pd.DataFrame, regex: str) -> pd.DataFrame:
     require_columns(df, VITALS_COLUMNS, context="Vital signs normalized input")
 
     codes = df["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
+    mask = codes.isin(exact_codes)
     filtered = df.loc[mask, VITALS_COLUMNS].copy()
     return filtered.reset_index(drop=True)
 
@@ -208,13 +215,11 @@ def filter_vitals_by_code(df: pd.DataFrame, regex: str) -> pd.DataFrame:
 def apply_vital_sign_rule(df: pd.DataFrame, rule: VitalSignRule) -> pd.DataFrame:
     """Apply a vital-sign rule to normalized rows."""
 
-    filtered = filter_vitals_by_code(df, rule.regex)
+    filtered = filter_vitals_by_code(df, rule.exact_codes)
     if filtered.empty:
         return filtered
 
     values = pd.to_numeric(filtered["value"], errors="coerce").astype("float64")
-    if rule.conversion_input_dtype is not None:
-        values = _downcast_values_without_overflow(values, rule.conversion_input_dtype)
     values = _apply_temperature_conversion(values, rule.conversion)
 
     mask = pd.Series(True, index=values.index)
@@ -249,20 +254,3 @@ def _apply_temperature_conversion(
     if conversion == CELSIUS_TO_FAHRENHEIT:
         return values.where(values >= 43.3, values * (9 / 5) + 32)
     return values
-
-
-def _downcast_values_without_overflow(values: pd.Series, dtype: str) -> pd.Series:
-    target_dtype = np.dtype(dtype)
-    if not np.issubdtype(target_dtype, np.floating):
-        return values.astype(target_dtype).astype("float64")
-
-    limits = np.finfo(target_dtype)
-    finite = pd.Series(
-        np.isfinite(values.to_numpy(dtype="float64", copy=False)),
-        index=values.index,
-    )
-    safe = finite & values.ge(limits.min) & values.le(limits.max)
-    downcasted = pd.Series(np.nan, index=values.index, dtype="float64")
-    if safe.any():
-        downcasted.loc[safe] = values.loc[safe].astype(target_dtype).astype("float64")
-    return downcasted

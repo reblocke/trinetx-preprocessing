@@ -13,12 +13,19 @@ from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
 from ..storage import WorkTableWriter
+from ..transform.rfs import RFS_EVENT_COLUMNS, derive_vitals_rfs_event_frames
 from ..transform.vitals import (
     RAW_VITALS_COLUMNS,
     VITAL_SIGN_RULES,
     VITALS_COLUMNS,
     normalize_vitals_chunk,
     split_vitals_by_rule,
+)
+from .analysis_index import (
+    FEATURE_NAME_COLUMN,
+    RFS_CATEGORY_COLUMN,
+    stack_grouped_frames,
+    stack_rfs_events,
 )
 
 RAW_DTYPE = {
@@ -56,6 +63,14 @@ def run_vitals_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        analysis_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_vital_features.csv")
+        )
+        analysis_rows = 0
+        rfs_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_rfs_vitals.csv")
+        )
+        rfs_rows = 0
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(vitals_paths, start=1):
             logger.info("Reading vital-signs export: %s", path.name)
@@ -73,10 +88,24 @@ def run_vitals_stage(config: Config) -> list[Path]:
                     normalized = normalize_vitals_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
+                    rfs_index = stack_rfs_events(
+                        derive_vitals_rfs_event_frames(normalized),
+                        event_columns=RFS_EVENT_COLUMNS,
+                    )
+                    if not rfs_index.empty:
+                        rfs_writer.write(rfs_index)
+                        rfs_rows += len(rfs_index)
 
                     grouped = split_vitals_by_rule(normalized)
+                    analysis = stack_grouped_frames(grouped, columns=VITALS_COLUMNS)
+                    if not analysis.empty:
+                        analysis_writer.write(analysis)
+                        analysis_rows += len(analysis)
                     for name, frame in grouped.items():
                         if frame.empty:
+                            continue
+                        grouped_counts[name] += len(frame)
+                        if not config.storage.emit_legacy_group_tables:
                             continue
                         group_writer = grouped_writers.get(name)
                         if group_writer is None:
@@ -85,7 +114,6 @@ def run_vitals_stage(config: Config) -> list[Path]:
                             )
                             grouped_writers[name] = group_writer
                         group_writer.write(frame)
-                        grouped_counts[name] += len(frame)
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"vitals read {path.name}", rows_read)
                 log_row_count(logger, f"vitals normalized {path.name}", rows_normalized)
@@ -95,22 +123,32 @@ def run_vitals_stage(config: Config) -> list[Path]:
                     writer.written_paths[0].name,
                 )
 
-        for rule in VITAL_SIGN_RULES:
-            writer = grouped_writers.get(rule.name)
-            if writer is None:
-                with WorkTableWriter(config, f"{rule.name}.csv") as empty_writer:
-                    empty_writer.write(pd.DataFrame(columns=VITALS_COLUMNS))
-                    output_paths.extend(empty_writer.written_paths)
+        if analysis_rows == 0:
+            analysis_writer.write(
+                pd.DataFrame(columns=[FEATURE_NAME_COLUMN, *VITALS_COLUMNS])
+            )
+        if rfs_rows == 0:
+            rfs_writer.write(
+                pd.DataFrame(columns=[RFS_CATEGORY_COLUMN, *RFS_EVENT_COLUMNS])
+            )
+
+        if config.storage.emit_legacy_group_tables:
+            for rule in VITAL_SIGN_RULES:
+                writer = grouped_writers.get(rule.name)
+                if writer is None:
+                    with WorkTableWriter(config, f"{rule.name}.csv") as empty_writer:
+                        empty_writer.write(pd.DataFrame(columns=VITALS_COLUMNS))
+                        output_paths.extend(empty_writer.written_paths)
+                        logger.info(
+                            "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        )
+                else:
+                    output_paths.extend(writer.written_paths)
                     logger.info(
-                        "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        "Wrote %s rows to %s",
+                        grouped_counts[rule.name],
+                        writer.written_paths[0].name,
                     )
-            else:
-                output_paths.extend(writer.written_paths)
-                logger.info(
-                    "Wrote %s rows to %s",
-                    grouped_counts[rule.name],
-                    writer.written_paths[0].name,
-                )
 
     return output_paths
 

@@ -1,172 +1,88 @@
 # Data Contract
 
-This file defines the **expected inputs and outputs** of the legacy pipeline.
+This document defines pipeline boundaries and storage grain. Corrected clinical
+semantics live in `docs/SPEC.md`.
 
-## Inputs
+## Private inputs
 
-### Raw export layout (legacy)
-```
-data/
-  Encounter/
-  Diagnosis/
-  Lab Results/
-  Medications/
-  Procedure/
-  Vital Signs/
-  Patient/
-  RFS/
-  Final Datasets/
-  Master Dataset/
-```
+The configured raw root contains Encounter, Diagnosis, Lab Results,
+Medications, Procedure, Vital Signs, and Patient exports. Raw exports and all
+row-level derivatives are confidential and must remain untracked.
 
-**Note:** do not commit anything under `data/`.
+Required identifiers:
 
-### Canonical filenames (default patterns)
-The default `config.example.yaml` patterns expect:
-- `Encounter/encounter*.csv`
-- `Diagnosis/diagnosis*.csv`
-- `Lab Results/lab_result*.csv`
-- `Medications/medication[0-9]*.csv` or
-  `Medications/medication_ingredient*.csv`
-- `Procedure/procedure*.csv`
-- `Vital Signs/vital*_signs*.csv` (matches both `vital_signs...` and
-  `vitals_signs...` exports)
-- `Patient/patient*.csv`
+- Every domain: `patient_id`.
+- Encounter-linked domains: `encounter_id`.
+- Encounter: identifiers, start/end dates, and setting type.
+- Diagnosis: code system, code, date, and diagnosis indicators.
+- Labs: code system, code, date, numeric value, and units.
+- Medications: code system, code, and start date.
+- Procedure: code system, code, and date.
+- Vitals: code system, code, date, numeric value, and units.
+- Patient: sex, race, ethnicity, birth year, regional location, and death month.
 
-If your export uses another filename family, update the `domains` patterns in
-`config.yaml`. Avoid broad medication globs that also match generated
-`medication_NEW_*` intermediates.
+`validate-inputs` checks configured source headers without scanning row data.
 
-### Input validation behavior
-- `trinetx_preprocessing validate-inputs` reads CSV headers (no full-file scan) and
-  confirms required columns exist for each configured domain.
-- All domain CSVs must include `patient_id`. Encounter-linked tables (encounter,
-  diagnosis, labs, meds, procedure, vitals) must also include `encounter_id`.
+## Normalized intermediates
 
-### Required columns per domain
-#### Encounter
-- `encounter_id`, `patient_id`, `start_date`, `end_date`, `type`
-- `start_date_derived_by_TriNetX`, `end_date_derived_by_TriNetX`, `derived_by_TriNetX`, `source_id`
+Logical `*_NEW_####` tables preserve patient/encounter IDs and domain dates.
+Clinical normalized tables also retain `code_system`; lab and vital tables
+retain `units_of_measure`. Numeric rule eligibility is evaluated in `float64`.
 
-### Encounter stage derivations
-- Retain only encounter types `AMB`, `EMER`, `IMP`.
-- Exclude encounters with `start_date` before `2022-01-01`.
-- Fill missing `end_date` with `2022-12-31`.
-- Deduplicate by `encounter_id` after sorting by `start_date` (asc) and `encounter_id` (desc).
-- Compute `LOS` as `(end_date - start_date).days + 1`, dropping rows with `LOS <= 0`.
+Encounter normalization emits AMB, EMER, and INPAT tables with start/end dates,
+type, and length of stay. Cross-setting encounter-ID conflicts fail strict runs
+and produce aggregate-only diagnostics in non-strict runs.
 
-### Lab results stage derivations
-- Retain `patient_id`, `encounter_id`, `code`, `date`, `lab_result_num_val`.
-- Drop `code_system`, `lab_result_text_val`, `units_of_measure`, `derived_by_TriNetX`, `source_id`.
-- Parse `date` as datetime during normalization.
+Physical work tables are CSV or Parquet according to
+`storage.intermediate_format`. Final CSV format is unaffected.
 
-### Diagnosis stage derivations
-- Retain `patient_id`, `encounter_id`, `code`, `principal_diagnosis_indicator`, `admitting_diagnosis`, `reason_for_visit`, `date`.
-- Drop `code_system`, `derived_by_TriNetX`, `source_id`.
-- Replace `Unknown` values in indicator columns with `U`.
-- Parse `date` as datetime during normalization.
-- Generate code-group extracts to `HAS_*.csv` as defined in `src/trinetx_preprocessing/transform/diagnosis.py`.
+## Compact analysis indexes
 
-### Medications stage derivations
-- Retain `patient_id`, `encounter_id`, `code`, `start_date`.
-- Drop `unique_id`, `code_system`, `route`, `brand`, `strength`, `derived_by_TriNetX`, `source_id`.
-- Parse `start_date` as datetime during normalization.
-- Generate `IPmed_list1`–`IPmed_list7` and `OPmed_list1`–`OPmed_list6` extracts per `src/trinetx_preprocessing/transform/medications.py`.
+During each domain's single raw scan, the pipeline writes only rows needed for:
 
-### Procedure stage derivations
-- Retain `patient_id`, `encounter_id`, `code`, `date`.
-- Drop `code_system`, `principal_procedure_indicator`, `derived_by_TriNetX`, `source_id`.
-- Parse `date` as datetime during normalization.
-- Generate `HAS_*.csv` extracts per `src/trinetx_preprocessing/transform/procedure.py`.
+- RFS event candidates;
+- current-encounter analytic features;
+- patient-history features; and
+- diagnosis-or-lab encounter availability.
 
-### Vital signs stage derivations
-- Retain `patient_id`, `encounter_id`, `code`, `date`, `value`.
-- Drop `code_system`, `text_value`, `units_of_measure`, `derived_by_TriNetX`, `source_id`.
-- Parse `date` as datetime during normalization.
-- Generate `value_*.csv` extracts with temperature conversions and range filters per `src/trinetx_preprocessing/transform/vitals.py`.
+Feature candidates carry a logical `source_name`; RFS candidates carry an RFS
+category. Final assembly repartitions candidates by patient, while encounter
+reducers partition by encounter. The default is 256 bounded Parquet buckets
+with Snappy compression and 250,000-row groups.
 
-### RFS stage derivations
-- Use normalized encounter, lab, diagnosis, procedure, and vital-sign outputs from `work_dir`.
-- Derive encounter-level flags for RFS categories: ABG, VBG, RESPFAIL, OBESITY, VENTSUPPORT, PREDISPOSITION.
-- Code lists and thresholds are defined in `src/trinetx_preprocessing/transform/rfs.py`.
-- Emit per-category event extracts `RFS_<RFS>.csv` with `patient_id`, `encounter_id`, and `date`.
+Historical `HAS_*`, `IPmed_*`, `OPmed_*`, and `value_*` group tables are not
+required. They are emitted only when `storage.emit_legacy_group_tables: true`.
 
-#### Diagnosis (current + prior)
-- `patient_id`, `encounter_id`, `code_system`, `code`, `principal_diagnosis_indicator`
-- `admitting_diagnosis`, `reason_for_visit`, `date`, `derived_by_TriNetX`, `source_id`
+`pipeline_work_manifest.json` records the intermediate schema version, ruleset,
+configuration hash, source metadata fingerprints, package versions, row counts,
+and stage completion. Resume commands fail closed when work is incompatible.
 
-#### Lab Results
-- `patient_id`, `encounter_id`, `code_system`, `code`, `date`
-- `lab_result_num_val`, `lab_result_text_val`, `units_of_measure`, `derived_by_TriNetX`, `source_id`
+## RFS and screening tables
 
-#### Medications
-- `patient_id`, `encounter_id`, `unique_id`, `code_system`, `code`, `start_date`
-- `route`, `brand`, `strength`, `derived_by_TriNetX`, `source_id`
+- `RFS_<CATEGORY>` contains event-level `patient_id`, `encounter_id`, and date.
+- `rfs_encounter_flags` contains one encounter row and category flags.
+- Corrected RFS codes, systems, units, conversions, and thresholds are defined
+  in `docs/SPEC.md` and immutable typed rules.
+- `AFTER` eligibility is derived from at least one normalized diagnosis or lab
+  row on the selected encounter.
 
-#### Procedure
-- `patient_id`, `encounter_id`, `code_system`, `code`, `principal_procedure_indicator`
-- `date`, `derived_by_TriNetX`, `source_id`
+## Public final outputs
 
-#### Vital Signs
-- `patient_id`, `encounter_id`, `code_system`, `code`, `date`, `value`
-- `text_value`, `units_of_measure`, `derived_by_TriNetX`, `source_id`
+The pipeline always writes:
 
-#### Patient (demographics)
-- `patient_id`, `sex`, `race`, `ethnicity`, `year_of_birth`
-- `patient_regional_location`, `month_year_death`
-
-### Intermediate outputs (`work_dir`)
-Logical intermediate names preserve the historical CSV filenames below. The
-physical files may be CSV or Parquet depending on
-`storage.intermediate_format`. When Parquet is enabled, `encounter_NEW_0001.csv`
-is written as `encounter_NEW_0001.parquet` unless
-`storage.emit_legacy_csv_intermediates` is also enabled.
-
-- `encounter_NEW_####.csv`: `patient_id`, `encounter_id`, `start_date`, `end_date`, `type`
-- `diagnosis_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `principal_diagnosis_indicator`, `admitting_diagnosis`, `reason_for_visit`, `date`
-- `lab_results_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `date`, `lab_result_num_val`
-- `medication_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `start_date`
-- `procedure_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `date`
-- `vital_signs_NEW_####.csv`: `patient_id`, `encounter_id`, `code`, `date`, `value`
-- `AMB_encounters.csv`, `EMER_encounters.csv`, `INPAT_encounters.csv`: `patient_id`, `encounter_id`, `start_date`, `end_date`, `type`, `LOS`
-- `HAS_*.csv` (diagnosis): `patient_id`, `encounter_id`, `code`, `principal_diagnosis_indicator`, `admitting_diagnosis`, `reason_for_visit`, `date`
-- `HAS_*.csv` (procedure): `patient_id`, `encounter_id`, `code`, `date`
-- `IPmed_list*.csv`, `OPmed_list*.csv`: medication code-group extracts with `patient_id`, `encounter_id`, `code`, `start_date`
-- `value_*.csv`: vital-sign extracts with `patient_id`, `encounter_id`, `code`, `date`, `value`
-- `rfs_encounter_flags.csv`: `patient_id`, `encounter_id`, `rfs_abg`, `rfs_vbg`, `rfs_respfail`, `rfs_obesity`, `rfs_ventsupport`, `rfs_predisposition`
-- `RFS_<RFS>.csv`: event-level RFS extracts with `patient_id`, `encounter_id`, `date`
-
-### Data checks outputs (`work_dir/data_checks`)
-- `amb_enc_screen.csv` and `inp_enc_screen.csv` are optional filters applied during
-  final assembly. If they are missing, `*_AFTER.csv` matches `*_BEFORE.csv`.
-- Data-check files remain CSV inputs for compatibility with the historical
-  notebook workflow.
-
-## Outputs
-
-### Output directories
-```
+```text
 output/
   AMBULATORY/
   EMERGENCY/
   INPATIENT/
 ```
 
-### Output tables
-- Files: `RFS_<RFS>_ENC_<SETTING>_BEFORE.csv`, `RFS_<RFS>_ENC_<SETTING>_AFTER.csv`
-- Final analytic outputs are always CSV, even when internal intermediates are
-  Parquet.
-- Row grain: de-duplicated to one encounter per patient per RFS/setting.
-- Required columns: `patient_id`, `encounter_id`, `qualify_date`, `RFS`,
-  `encounter_type`, `age_at_encounter`, `sex`, `race`, `ethnicity`,
-  `patient_regional_location`, `death_year_month`, `LOS`.
-- Filters: qualifying date within 2022, patient age 18–109 years, encounter
-  `qualify_date` between `start_date` and `end_date`, exclude
-  `patient_regional_location` of `Ex-US` or `Unknown`.
-- Additional derived vitals/labs/medication/procedure features remain in the
-  legacy notebook workflow.
+For six RFS categories and three settings, each directory contains paired
+`RFS_<RFS>_ENC_<SETTING>_BEFORE.csv` and `..._AFTER.csv` files: 36 total.
 
-## Integrity checks
-- No missing `patient_id` or `encounter_id` in intermediate or output files.
-- RFS files must include `patient_id`, `encounter_id`, `date`.
-- Final outputs must include encounters present in `*_encounters.csv` and respect `data_checks` filters.
+- Every file uses the exact ordered 534-column schema in
+  `pipeline/final_output_schema.py`, including empty outputs.
+- Row grain is one selected encounter per `(RFS category, setting, patient)`.
+- Selection, age, location, event-in-encounter, screening, and feature-reducer
+  semantics follow `docs/SPEC.md`.
+- Final names and CSV format are stable public compatibility contracts.

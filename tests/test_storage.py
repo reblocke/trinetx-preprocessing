@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from trinetx_preprocessing.config import (
     ChunkingConfig,
@@ -13,6 +14,8 @@ from trinetx_preprocessing.config import (
     StorageConfig,
 )
 from trinetx_preprocessing.storage import (
+    PartitionedKeyLookup,
+    PartitionedParquetStore,
     WorkTableWriter,
     find_work_tables,
     iter_work_tables,
@@ -149,3 +152,90 @@ def test_logical_output_key_normalizes_parquet_work_suffix(tmp_path: Path) -> No
     path = work_dir / "RFS_ABG.parquet"
 
     assert logical_output_key(path, work_dir, output_dir) == "work_dir/RFS_ABG.csv"
+
+
+def test_partitioned_parquet_store_round_trips_and_cleans(tmp_path: Path) -> None:
+    frame = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P2", "P1"],
+            "encounter_id": ["E1", "E2", "E3"],
+            "value": [1, 2, 3],
+        }
+    )
+
+    with PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-partitions-",
+        key_columns=["patient_id"],
+        bucket_count=4,
+        row_group_size=2,
+    ) as store:
+        store.add_frame(frame.iloc[:2])
+        store.add_frame(frame.iloc[2:])
+        observed = pd.concat(
+            [partition for _, partition in store.iter_frames()],
+            ignore_index=True,
+        )
+
+    assert observed.sort_values("encounter_id").reset_index(drop=True).equals(frame)
+    assert not list(tmp_path.glob(".trinetx-test-partitions-*"))
+
+
+def test_partitioned_parquet_store_rejects_writes_after_read(tmp_path: Path) -> None:
+    frame = pd.DataFrame({"patient_id": ["P1"], "value": [1]})
+
+    with PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-partitions-",
+        key_columns=["patient_id"],
+        bucket_count=2,
+    ) as store:
+        store.add_frame(frame)
+        list(store.iter_frames())
+        with pytest.raises(RuntimeError, match="sealed"):
+            store.add_frame(frame)
+
+
+def test_partitioned_key_lookup_queries_and_deduplicates_membership(
+    tmp_path: Path,
+) -> None:
+    with PartitionedKeyLookup(
+        tmp_path,
+        prefix=".trinetx-test-lookup-",
+        key_column="lookup_key",
+        stored_columns=["lookup_key", "encounter_id"],
+        bucket_count=4,
+    ) as lookup:
+        lookup.add_frame(
+            pd.DataFrame(
+                {
+                    "lookup_key": ["value:E1", "value:E1", "value:E2"],
+                    "encounter_id": ["E1", "E1", "E2"],
+                }
+            )
+        )
+
+        matches = lookup.frame_for_keys(
+            pd.Series(["value:E2", "value:E3"], dtype="string")
+        )
+        assert matches["encounter_id"].tolist() == ["E2"]
+        assert lookup.unique_count() == 2
+
+    assert not list(tmp_path.glob(".trinetx-test-lookup-*"))
+
+
+def test_partitioned_key_lookup_rejects_cross_chunk_duplicate_unique_key(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="Duplicate lookup key"):
+        with PartitionedKeyLookup(
+            tmp_path,
+            prefix=".trinetx-test-lookup-",
+            key_column="lookup_key",
+            stored_columns=["lookup_key", "value"],
+            bucket_count=4,
+            require_unique=True,
+        ) as lookup:
+            lookup.add_frame(pd.DataFrame({"lookup_key": ["P1"], "value": [1]}))
+            lookup.add_frame(pd.DataFrame({"lookup_key": ["P1"], "value": [2]}))
+            lookup.finalize()

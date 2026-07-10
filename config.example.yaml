@@ -12,6 +12,8 @@ storage:
   intermediate_format: parquet
   emit_legacy_csv_intermediates: false
   parquet_row_group_size: 250000
+  analysis_bucket_count: 256
+  emit_legacy_group_tables: false
 
 guardrails:
   max_join_multiplier: 1.0
@@ -35,5 +37,14 @@ domains:
     pattern: "Patient/patient*.csv"
 
 rfs:
-  # Currently informational; the pipeline always runs the RFS stage.
   enabled: true
+  ruleset: corrected_v1
+  abg_min_pco2_mmhg: 45
+  vbg_min_pco2_mmhg: 45
+
+cohort:
+  event_selection: earliest_per_setting
+
+data_screen:
+  mode: diagnosis_or_lab
+  source: derived

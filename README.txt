@@ -16,10 +16,11 @@ Step 2: Place the original files in subfolders Encounter, Diagnosis, Lab Results
 - Chemo_lines, genomic, medication_drug, oncology_treatment, standardized_terminology, tumor, and tumor_properties are not used. Cohort_details, datadictionary, dataset_details, manifest, and patient_cohort contain descriptions of the cohort and are also not directly used.
 
 
-Step 3: To split each dataset to be small enough for handling (1 million per CSV) 
+Step 3: To split each dataset into bounded CSV chunks, use the portable Python
+splitter. It preserves the header and writes notebook-compatible four-digit
+suffixes:
 
-Run the following bash script: split_db.sh
-* change  mnt/d/TriNetX/ to wherever you have your data stored for each split command
+./.venv/bin/python -m trinetx_preprocessing split --input data/Encounter/encounter.csv --out data/Encounter --lines-per-chunk 1000000 --prefix encounter
 
 Step 4: Run Jupyter notebooks for each of the chunked *.csv files to pre-process (into lists of .csv files for each data element that will go into the final dataset) and discard unneeded data: Hypercapnia NEW DATA
 * For each jupyter notebook, you must manually specify how many chunks from step 3 split each database into this (this behavior is to help troubleshoot in smaller chunks if you need to).

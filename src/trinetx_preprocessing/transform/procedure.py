@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pandas as pd
 
 from ..validation import require_columns
+from .clinical_rules import CodeRule, exact_code_rule
 from .code_groups import split_rows_by_code_groups
 
 RAW_PROCEDURE_COLUMNS = [
@@ -27,61 +26,75 @@ PROCEDURE_COLUMNS = [
     "date",
 ]
 
-DROP_COLUMNS = [
+NORMALIZED_PROCEDURE_COLUMNS = [
+    "patient_id",
+    "encounter_id",
     "code_system",
+    "code",
+    "date",
+]
+
+DROP_COLUMNS = [
     "principal_procedure_indicator",
     "derived_by_TriNetX",
     "source_id",
 ]
 
 
-@dataclass(frozen=True)
-class ProcedureCodeGroup:
-    """Definition of a procedure code extract."""
-
-    name: str
-    regex: str
+ProcedureCodeGroup = CodeRule
 
 
 PROCEDURE_CODE_GROUPS = [
-    ProcedureCodeGroup("HAS_94660", r"^94660$"),
-    ProcedureCodeGroup(
+    exact_code_rule("HAS_94660", "94660"),
+    exact_code_rule(
         "HAS_TTE",
-        (
-            "^99303$|^99304$|^93306$|^93312$|^93320$|^93321$|^93350$|"
-            "^93351$|^93307$|^93308$|^93325$|^93356$"
-        ),
+        "93303",
+        "93304",
+        "93306",
+        "93307",
+        "93308",
+        "93356",
     ),
-    ProcedureCodeGroup("HAS_94640", r"^94640$"),
-    ProcedureCodeGroup("HAS_94664", r"^94664$"),
-    ProcedureCodeGroup("HAS_71045", r"^71045$"),
-    ProcedureCodeGroup("HAS_71046", r"^71046$"),
-    ProcedureCodeGroup("HAS_71250", r"^71250$"),
-    ProcedureCodeGroup("HAS_71260", r"^71260$"),
-    ProcedureCodeGroup("HAS_99291", r"^99291$|^99292$|^1013729$|^1014309$"),
-    ProcedureCodeGroup("HAS_5A09458", r"^5A09458$"),
-    ProcedureCodeGroup("HAS_430191008", r"^430191008$"),
-    ProcedureCodeGroup("HAS_5A09358", r"^5A09358$"),
-    ProcedureCodeGroup("HAS_5A09558", r"^5A09558$"),
-    ProcedureCodeGroup("HAS_94002", r"^94002$"),
-    ProcedureCodeGroup("HAS_94003", r"^94003$"),
-    ProcedureCodeGroup("HAS_5A1945Z", r"^5A1945Z$"),
-    ProcedureCodeGroup("HAS_5A1935Z", r"^5A1935Z$"),
-    ProcedureCodeGroup("HAS_5A1955Z", r"^5A1955Z$"),
-    ProcedureCodeGroup("HAS_5A19054", r"^5A19054$"),
-    ProcedureCodeGroup("HAS_5A09357", r"^5A09357$"),
-    ProcedureCodeGroup("HAS_5A09457", r"^5A09457$"),
-    ProcedureCodeGroup("HAS_5A09557", r"^5A09557$"),
-    ProcedureCodeGroup("HAS_61911006", r"^61911006$"),
-    ProcedureCodeGroup("HAS_91308007", r"^91308007$"),
-    ProcedureCodeGroup("HAS_87040", r"^87040$"),
-    ProcedureCodeGroup("HAS_36600", r"^36600$"),
-    ProcedureCodeGroup(
+    *[
+        exact_code_rule(f"HAS_{code}", code)
+        for code in (
+            "94640",
+            "94664",
+            "71045",
+            "71046",
+            "71250",
+            "71260",
+            "5A09458",
+            "430191008",
+            "5A09358",
+            "5A09558",
+            "94002",
+            "94003",
+            "5A1945Z",
+            "5A1935Z",
+            "5A1955Z",
+            "5A19054",
+            "5A09357",
+            "5A09457",
+            "5A09557",
+            "61911006",
+            "91308007",
+            "87040",
+            "36600",
+        )
+    ],
+    exact_code_rule("HAS_99291", "99291", "99292", "1013729", "1014309"),
+    exact_code_rule(
         "HAS_CT_ABDM",
-        (
-            "^74150$|^74176$|^74160$|^74170$|^36813-4$|^36267-3$|"
-            "^169070004$|^419394006$|^BW20ZZZ$"
-        ),
+        "74150",
+        "74176",
+        "74160",
+        "74170",
+        "36813-4",
+        "36267-3",
+        "169070004",
+        "419394006",
+        "BW20ZZZ",
     ),
 ]
 
@@ -99,20 +112,21 @@ def normalize_procedure_chunk(df: pd.DataFrame) -> pd.DataFrame:
     require_columns(df, RAW_PROCEDURE_COLUMNS, context="Procedure raw input")
 
     normalized = df.drop(columns=DROP_COLUMNS).copy()
-    normalized = normalized.loc[:, PROCEDURE_COLUMNS]
+    normalized = normalized.loc[:, NORMALIZED_PROCEDURE_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")
+    normalized["code_system"] = normalized["code_system"].astype("string")
     normalized["code"] = normalized["code"].astype("string")
     normalized["date"] = pd.to_datetime(normalized["date"])
     return normalized.reset_index(drop=True)
 
 
-def filter_procedure_by_code(df: pd.DataFrame, regex: str) -> pd.DataFrame:
-    """Filter procedure rows by a code pattern.
+def filter_procedure_by_code(df: pd.DataFrame, rule: CodeRule) -> pd.DataFrame:
+    """Filter procedure rows by a typed code rule.
 
     Args:
         df: Normalized procedure DataFrame.
-        regex: Regex pattern matching procedure codes to retain.
+        rule: Exact-code and prefix rule to apply.
 
     Returns:
         Filtered procedure DataFrame.
@@ -120,8 +134,7 @@ def filter_procedure_by_code(df: pd.DataFrame, regex: str) -> pd.DataFrame:
 
     require_columns(df, PROCEDURE_COLUMNS, context="Procedure normalized input")
 
-    codes = df["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
+    mask = rule.mask(df["code"])
     filtered = df.loc[mask, PROCEDURE_COLUMNS].copy()
     return filtered.reset_index(drop=True)
 

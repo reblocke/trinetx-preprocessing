@@ -125,7 +125,10 @@ def write_provenance(
         "config_sha256": _file_sha256(config_path),
         "strict": strict,
         "stage_timings_seconds": normalized_timings,
-        "generated_file_count": len(output_paths),
+        "generated_file_count": _generated_file_count(
+            config.work_dir,
+            config.output_dir,
+        ),
         "output_file_count": len(final_output_paths),
         "output_files": _output_file_inventory(final_output_paths),
         "disk_footprint_bytes": {
@@ -133,6 +136,14 @@ def write_provenance(
             "output_dir": _directory_size_bytes(config.output_dir),
         },
         "peak_rss_mb": _peak_rss_mb(),
+        "final_assembly_metrics": _optional_json(
+            config.work_dir / "final_assembly_metrics.json"
+        ),
+        "rfs_rule_audit": _optional_json(config.work_dir / "rfs_rule_audit.json"),
+        "rfs_stage_metrics": _optional_json(config.work_dir / "rfs_stage_metrics.json"),
+        "encounter_conflicts": _optional_json(
+            config.work_dir / "encounter_conflicts.json"
+        ),
     }
     out_path = out_dir / "provenance.json"
     write_text_atomic(out_path, json.dumps(payload, indent=2, sort_keys=True))
@@ -162,6 +173,16 @@ def _directory_size_bytes(path: Path) -> int:
     return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
 
 
+def _generated_file_count(*roots: Path) -> int:
+    return sum(
+        1
+        for root in roots
+        if root.exists()
+        for path in root.rglob("*")
+        if path.is_file() and not path.name.startswith("._")
+    )
+
+
 def _output_file_inventory(paths: list[Path]) -> list[dict[str, object]]:
     inventory: list[dict[str, object]] = []
     for path in sorted(paths, key=lambda item: str(item)):
@@ -176,6 +197,15 @@ def _output_file_inventory(paths: list[Path]) -> list[dict[str, object]]:
             }
         )
     return inventory
+
+
+def _optional_json(path: Path) -> object | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def _resolved_path(path: Path | None) -> str | None:

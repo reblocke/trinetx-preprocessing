@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from trinetx_preprocessing.transform.medications import (
-    MEDICATION_COLUMNS,
+    NORMALIZED_MEDICATION_COLUMNS,
     normalize_medications_chunk,
     split_medications_by_code,
 )
@@ -24,9 +24,9 @@ def test_normalize_medications_chunk_structure() -> None:
 
     normalized = normalize_medications_chunk(df)
 
-    assert list(normalized.columns) == MEDICATION_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_MEDICATION_COLUMNS
     assert len(normalized) == 12
-    assert "code_system" not in normalized.columns
+    assert normalized.loc[0, "code_system"] == "ATC"
     assert pd.isna(normalized.loc[10, "start_date"])
 
 

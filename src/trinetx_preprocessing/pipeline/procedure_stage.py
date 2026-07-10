@@ -20,6 +20,13 @@ from ..transform.procedure import (
     normalize_procedure_chunk,
     split_procedure_by_code,
 )
+from ..transform.rfs import RFS_EVENT_COLUMNS, derive_procedure_rfs_event_frames
+from .analysis_index import (
+    FEATURE_NAME_COLUMN,
+    RFS_CATEGORY_COLUMN,
+    stack_grouped_frames,
+    stack_rfs_events,
+)
 
 RAW_DTYPE = {
     "patient_id": "string",
@@ -55,6 +62,14 @@ def run_procedure_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        analysis_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_procedure_features.csv")
+        )
+        analysis_rows = 0
+        rfs_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_rfs_procedure.csv")
+        )
+        rfs_rows = 0
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(procedure_paths, start=1):
             logger.info("Reading procedure export: %s", path.name)
@@ -72,10 +87,24 @@ def run_procedure_stage(config: Config) -> list[Path]:
                     normalized = normalize_procedure_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
+                    rfs_index = stack_rfs_events(
+                        derive_procedure_rfs_event_frames(normalized),
+                        event_columns=RFS_EVENT_COLUMNS,
+                    )
+                    if not rfs_index.empty:
+                        rfs_writer.write(rfs_index)
+                        rfs_rows += len(rfs_index)
 
                     grouped = split_procedure_by_code(normalized)
+                    analysis = stack_grouped_frames(grouped, columns=PROCEDURE_COLUMNS)
+                    if not analysis.empty:
+                        analysis_writer.write(analysis)
+                        analysis_rows += len(analysis)
                     for name, frame in grouped.items():
                         if frame.empty:
+                            continue
+                        grouped_counts[name] += len(frame)
+                        if not config.storage.emit_legacy_group_tables:
                             continue
                         group_writer = grouped_writers.get(name)
                         if group_writer is None:
@@ -84,7 +113,6 @@ def run_procedure_stage(config: Config) -> list[Path]:
                             )
                             grouped_writers[name] = group_writer
                         group_writer.write(frame)
-                        grouped_counts[name] += len(frame)
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"procedure read {path.name}", rows_read)
                 log_row_count(
@@ -98,22 +126,32 @@ def run_procedure_stage(config: Config) -> list[Path]:
                     writer.written_paths[0].name,
                 )
 
-        for group in PROCEDURE_CODE_GROUPS:
-            writer = grouped_writers.get(group.name)
-            if writer is None:
-                with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
-                    empty_writer.write(pd.DataFrame(columns=PROCEDURE_COLUMNS))
-                    output_paths.extend(empty_writer.written_paths)
+        if analysis_rows == 0:
+            analysis_writer.write(
+                pd.DataFrame(columns=[FEATURE_NAME_COLUMN, *PROCEDURE_COLUMNS])
+            )
+        if rfs_rows == 0:
+            rfs_writer.write(
+                pd.DataFrame(columns=[RFS_CATEGORY_COLUMN, *RFS_EVENT_COLUMNS])
+            )
+
+        if config.storage.emit_legacy_group_tables:
+            for group in PROCEDURE_CODE_GROUPS:
+                writer = grouped_writers.get(group.name)
+                if writer is None:
+                    with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
+                        empty_writer.write(pd.DataFrame(columns=PROCEDURE_COLUMNS))
+                        output_paths.extend(empty_writer.written_paths)
+                        logger.info(
+                            "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        )
+                else:
+                    output_paths.extend(writer.written_paths)
                     logger.info(
-                        "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        "Wrote %s rows to %s",
+                        grouped_counts[group.name],
+                        writer.written_paths[0].name,
                     )
-            else:
-                output_paths.extend(writer.written_paths)
-                logger.info(
-                    "Wrote %s rows to %s",
-                    grouped_counts[group.name],
-                    writer.written_paths[0].name,
-                )
 
     return output_paths
 

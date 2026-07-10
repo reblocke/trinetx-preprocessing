@@ -537,5 +537,5 @@ FINAL_OUTPUT_COLUMNS: list[str] = [
     "last_date_OP_Med_5",
     "OP_Med_6",
     "first_date_OP_Med_6",
-    "last_date_OP_Med_6"
+    "last_date_OP_Med_6",
 ]

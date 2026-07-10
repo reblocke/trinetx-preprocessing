@@ -20,6 +20,7 @@ from ..transform.medications import (
     normalize_medications_chunk,
     split_medications_by_code,
 )
+from .analysis_index import FEATURE_NAME_COLUMN, stack_grouped_frames
 
 RAW_DTYPE = {
     "patient_id": "string",
@@ -58,6 +59,10 @@ def run_medications_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        analysis_writer = stack.enter_context(
+            WorkTableWriter(config, "analysis_medication_features.csv")
+        )
+        analysis_rows = 0
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(meds_paths, start=1):
             logger.info("Reading medications export: %s", path.name)
@@ -77,8 +82,15 @@ def run_medications_stage(config: Config) -> list[Path]:
                     writer.write(normalized)
 
                     grouped = split_medications_by_code(normalized)
+                    analysis = stack_grouped_frames(grouped, columns=MEDICATION_COLUMNS)
+                    if not analysis.empty:
+                        analysis_writer.write(analysis)
+                        analysis_rows += len(analysis)
                     for name, frame in grouped.items():
                         if frame.empty:
+                            continue
+                        grouped_counts[name] += len(frame)
+                        if not config.storage.emit_legacy_group_tables:
                             continue
                         group_writer = grouped_writers.get(name)
                         if group_writer is None:
@@ -87,7 +99,6 @@ def run_medications_stage(config: Config) -> list[Path]:
                             )
                             grouped_writers[name] = group_writer
                         group_writer.write(frame)
-                        grouped_counts[name] += len(frame)
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"medications read {path.name}", rows_read)
                 log_row_count(
@@ -101,22 +112,28 @@ def run_medications_stage(config: Config) -> list[Path]:
                     writer.written_paths[0].name,
                 )
 
-        for group in MEDICATION_CODE_GROUPS:
-            writer = grouped_writers.get(group.name)
-            if writer is None:
-                with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
-                    empty_writer.write(pd.DataFrame(columns=MEDICATION_COLUMNS))
-                    output_paths.extend(empty_writer.written_paths)
+        if analysis_rows == 0:
+            analysis_writer.write(
+                pd.DataFrame(columns=[FEATURE_NAME_COLUMN, *MEDICATION_COLUMNS])
+            )
+
+        if config.storage.emit_legacy_group_tables:
+            for group in MEDICATION_CODE_GROUPS:
+                writer = grouped_writers.get(group.name)
+                if writer is None:
+                    with WorkTableWriter(config, f"{group.name}.csv") as empty_writer:
+                        empty_writer.write(pd.DataFrame(columns=MEDICATION_COLUMNS))
+                        output_paths.extend(empty_writer.written_paths)
+                        logger.info(
+                            "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        )
+                else:
+                    output_paths.extend(writer.written_paths)
                     logger.info(
-                        "Wrote 0 rows to %s", empty_writer.written_paths[0].name
+                        "Wrote %s rows to %s",
+                        grouped_counts[group.name],
+                        writer.written_paths[0].name,
                     )
-            else:
-                output_paths.extend(writer.written_paths)
-                logger.info(
-                    "Wrote %s rows to %s",
-                    grouped_counts[group.name],
-                    writer.written_paths[0].name,
-                )
 
     return output_paths
 

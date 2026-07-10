@@ -7,7 +7,7 @@ import pandas as pd
 
 from trinetx_preprocessing.config import load_config, validate_config
 from trinetx_preprocessing.pipeline.diagnosis_stage import run_diagnosis_stage
-from trinetx_preprocessing.transform.diagnosis import DIAGNOSIS_COLUMNS
+from trinetx_preprocessing.transform.diagnosis import NORMALIZED_DIAGNOSIS_COLUMNS
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "diagnosis" / "diagnosis0001.csv"
@@ -22,6 +22,8 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "domains:\n"
         "  diagnosis:\n"
         '    pattern: "Diagnosis/diagnosis*.csv"\n'
+        "storage:\n"
+        "  emit_legacy_group_tables: true\n"
     )
     path.write_text(content)
 
@@ -49,8 +51,13 @@ def test_run_diagnosis_stage_outputs(tmp_path: Path) -> None:
     assert normalized_path in outputs
 
     normalized = pd.read_csv(normalized_path, parse_dates=["date"])
-    assert list(normalized.columns) == DIAGNOSIS_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_DIAGNOSIS_COLUMNS
     assert normalized.loc[0, "principal_diagnosis_indicator"] == "U"
+    availability = pd.read_csv(work_dir / "analysis_diagnosis_availability.csv")
+    assert (
+        availability["encounter_id"].tolist()
+        == normalized["encounter_id"].drop_duplicates().tolist()
+    )
 
     assert (work_dir / "HAS_J9612.csv").exists()
     assert (work_dir / "HAS_G473.csv").exists()
