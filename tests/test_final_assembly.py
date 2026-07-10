@@ -1153,6 +1153,56 @@ def test_load_data_check_encounter_lookup_filters_and_cleans_up(
     assert not list(work_dir.glob(".trinetx-data-check-ids-*"))
 
 
+def test_data_screen_eligibility_is_precomputed_before_patient_bucketing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = tmp_path / "work"
+    frame = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P2", "P3"],
+            "encounter_id": ["E1", "E2", "E3"],
+        }
+    )
+
+    with final_assembly._EncounterIdLookup(work_dir) as lookup:
+        lookup.add_values(pd.Series(["E1", "E3"], dtype="string"))
+        calls: list[int] = []
+        original_filter = lookup.filter_frame
+
+        def spy_filter(candidate: pd.DataFrame) -> pd.DataFrame:
+            calls.append(len(candidate))
+            return original_filter(candidate)
+
+        monkeypatch.setattr(lookup, "filter_frame", spy_filter)
+        marked = final_assembly._mark_data_screen_eligibility(frame, lookup)
+
+    assert calls == [3]
+    assert marked[final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN].tolist() == [
+        True,
+        False,
+        True,
+    ]
+
+    after = final_assembly._apply_precomputed_data_screen(
+        frame,
+        marked[final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN],
+        context="ABG/AMB",
+        logger=logging.getLogger(__name__),
+    )
+    assert after["encounter_id"].tolist() == ["E1", "E3"]
+
+
+def test_precomputed_data_screen_rejects_row_count_drift() -> None:
+    with pytest.raises(ValueError, match="eligibility length"):
+        final_assembly._apply_precomputed_data_screen(
+            pd.DataFrame({"encounter_id": ["E1", "E2"]}),
+            pd.Series([True]),
+            context="ABG/AMB",
+            logger=logging.getLogger(__name__),
+        )
+
+
 def test_run_final_assembly_removes_data_check_lookup_scratch(
     tmp_path: Path,
 ) -> None:

@@ -157,6 +157,7 @@ FINAL_LAB_BUCKET_COLUMNS = [
 ]
 FINAL_PREVIOUS_VITAL_BUCKET_COUNT = 256
 FINAL_PREVIOUS_VITAL_BUCKET_COLUMNS = ["vital_name", *VITALS_COLUMNS]
+FINAL_DATA_SCREEN_ELIGIBLE_COLUMN = "_data_screen_eligible"
 
 
 @dataclass(frozen=True)
@@ -239,6 +240,10 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
                 )
                 if base.empty:
                     continue
+                base = _mark_data_screen_eligibility(
+                    base,
+                    inputs.allowed_encounter_ids,
+                )
                 base.insert(0, "_setting", setting)
                 base.insert(0, "_category", category)
                 cohort_store.add_frame(base)
@@ -268,6 +273,7 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
                     logger=logger,
                     source_bucket=source_bucket,
                 )
+                eligibility = enriched.pop(FINAL_DATA_SCREEN_ELIGIBLE_COLUMN)
                 before = _finalize_output(enriched)
                 _append_final_rows(
                     output_paths[(str(setting), str(category), "BEFORE")],
@@ -275,13 +281,9 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
                 )
                 rows_written[(str(setting), str(category), "BEFORE")] += len(before)
 
-                inputs = setting_inputs[str(setting)]
-                after = apply_data_checks(
+                after = _apply_precomputed_data_screen(
                     before,
-                    inputs.data_checks_path,
-                    allowed_encounter_ids=inputs.allowed_encounter_ids,
-                    data_checks_preloaded=True,
-                    finalize_output=False,
+                    eligibility,
                     context=f"{category}/{setting}",
                     logger=logger,
                 )
@@ -314,6 +316,52 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
         )
 
     return _ordered_final_output_paths(output_paths)
+
+
+def _mark_data_screen_eligibility(
+    frame: pd.DataFrame,
+    allowed_encounter_ids: Collection[str] | "_EncounterIdLookup" | None,
+) -> pd.DataFrame:
+    """Attach reusable encounter-screen eligibility before patient partitioning."""
+
+    marked = frame.copy()
+    if allowed_encounter_ids is None:
+        marked[FINAL_DATA_SCREEN_ELIGIBLE_COLUMN] = True
+        return marked
+
+    if isinstance(allowed_encounter_ids, _EncounterIdLookup):
+        probe = pd.DataFrame(
+            {"encounter_id": marked["encounter_id"].astype("string").to_numpy()}
+        )
+        eligible = allowed_encounter_ids.filter_frame(probe)
+        mask = pd.Series(False, index=probe.index, dtype="boolean")
+        mask.loc[eligible.index] = True
+        marked[FINAL_DATA_SCREEN_ELIGIBLE_COLUMN] = mask.to_numpy(dtype=bool)
+        return marked
+
+    marked[FINAL_DATA_SCREEN_ELIGIBLE_COLUMN] = (
+        marked["encounter_id"].astype("string").isin(allowed_encounter_ids).to_numpy()
+    )
+    return marked
+
+
+def _apply_precomputed_data_screen(
+    frame: pd.DataFrame,
+    eligibility: pd.Series,
+    *,
+    context: str,
+    logger: logging.Logger,
+) -> pd.DataFrame:
+    """Filter an enriched bucket with eligibility computed before bucketing."""
+
+    if len(frame) != len(eligibility):
+        raise ValueError(
+            "Precomputed data-screen eligibility length does not match final rows."
+        )
+    mask = eligibility.fillna(False).astype(bool).to_numpy()
+    filtered = frame.loc[mask].copy().reset_index(drop=True)
+    log_row_count(logger, f"final {context} post-filter data checks", len(filtered))
+    return filtered
 
 
 def _initialize_final_output_files(

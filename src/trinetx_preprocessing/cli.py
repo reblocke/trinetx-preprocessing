@@ -186,8 +186,12 @@ SCRATCH_PATH_PREFIXES = (
     ".trinetx-rfs-encounters-",
     ".trinetx-demographics-",
     ".trinetx-final-encounters-",
+    ".trinetx-final-cohorts-",
     ".trinetx-final-events-",
+    ".trinetx-final-feature-sources-",
+    ".trinetx-final-labs-",
     ".trinetx-final-patients-",
+    ".trinetx-final-prev-vitals-",
     ".trinetx-data-check-ids-",
 )
 

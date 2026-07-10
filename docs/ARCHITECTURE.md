@@ -40,9 +40,11 @@
    and write compact RFS and feature candidate indexes.
 5. Derive RFS events and flags from compact indexes.
 6. Build all 18 category/setting cohorts, derive diagnosis-or-lab screening,
-   and partition final candidates by patient.
+   attach encounter-screen eligibility once per cohort, and then partition
+   final candidates by patient.
 7. Build patient-partitioned feature/history indexes once, reuse each bucket
-   across all cohorts, and stream the 36 final CSVs.
+   across all cohorts, apply the precomputed eligibility flag to `AFTER` rows,
+   and stream the 36 final CSVs.
 
 Work tables are addressed by legacy logical CSV names, but
 `storage.intermediate_format` controls whether physical intermediates are CSV or

@@ -294,6 +294,29 @@ def test_clean_scratch_delete_removes_only_known_artifacts(tmp_path: Path) -> No
     assert normal_output.exists()
 
 
+def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> None:
+    root = tmp_path / "validation"
+    work_dir = root / "refactor" / "work"
+    work_dir.mkdir(parents=True)
+    prefixes = [
+        ".trinetx-final-cohorts-",
+        ".trinetx-final-feature-sources-",
+        ".trinetx-final-labs-",
+        ".trinetx-final-prev-vitals-",
+    ]
+    for prefix in prefixes:
+        scratch = work_dir / f"{prefix}test"
+        scratch.mkdir()
+        (scratch / "bucket-000.parquet").write_text("rows")
+
+    payload = cli_module.clean_scratch_artifacts(root, delete=False)
+
+    assert payload["artifact_count"] == len(prefixes)
+    assert sorted(entry["relative_path"] for entry in payload["artifacts"]) == [
+        f"refactor/work/{prefix}test" for prefix in sorted(prefixes)
+    ]
+
+
 def test_clean_scratch_delete_tolerates_missing_nested_entries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

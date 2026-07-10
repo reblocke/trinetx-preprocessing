@@ -35,6 +35,10 @@
 - Corrected tiers 00, 01, and 02 pass again after the lab optimization with unchanged before/after row contracts and peak RSS at or below `223 MB`.
 - The third full attempt reached labs after a `1,415.21 s` encounter stage, then confirmed complete normalized domain copies were still written despite compact-index execution; it was stopped before further redundant I/O.
 - Intermediate schema `5` makes complete normalized domain tables opt-in. Tiers 00, 01, and 02 pass with unchanged final row contracts, no `*_NEW_*` work files, and peak RSS below `220 MB`.
+- Full profile attempt four completed every raw-domain scan exactly once and completed RFS, then exposed repeated encounter-screen partition reads inside patient-bucket final enrichment. The run was stopped with `SIGTERM` after the first bucket established a projected final-assembly miss; completed work tables and diagnostic evidence were preserved.
+- Data-screen eligibility is now computed once per category/setting before patient bucketing and reused during `AFTER` writes. Focused tests and Ruff pass.
+- `clean-scratch` now recognizes all current partition-store prefixes. It inventoried and deleted seven attempt-four final-assembly scratch roots totaling `35,650,393,292` bytes, then rechecked clean.
+- Full local gates pass with `231` tests. Corrected tiers 00, 01, and 02 pass with unchanged 36-file/534-column contracts and before/after row counts; tier-02 final assembly completed in `28.339 s`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -42,11 +46,12 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit and push the verified compact-only schema-5 work layout, then clean attempt-three artifacts.
+- Commit the verified data-screen placement and cleanup fix, then benchmark standalone final assembly against preserved attempt-four work tables.
 
 ## Next
-- Restart a deterministic non-strict full profile from a clean commit for performance/delta evidence; strict release acceptance remains blocked by the `286` source encounter-setting conflicts.
-- Address any GitHub review findings, then publish `v0.2.0`.
+- Benchmark standalone final assembly against preserved attempt-four work tables, then rerun a fresh full profile from the reviewed code state.
+- Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
+- Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 
 ## Open questions (UNCONFIRMED if needed)
 - Whether release acceptance may use the documented deterministic non-strict resolution for the `286` source conflicts, or requires upstream conflict adjudication before a strict profile can pass.

@@ -823,3 +823,24 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/storage.py`,
   `src/trinetx_preprocessing/work_manifest.py`,
   `src/trinetx_preprocessing/pipeline/final_feature_sources.py`.
+
+### 2026-07-10 — Apply data-screen eligibility before patient bucketing
+- Date: 2026-07-10
+- Decision: Evaluate each category/setting cohort against its encounter-level
+  data screen before patient partitioning, store a boolean eligibility column,
+  and reuse that boolean when writing `AFTER` outputs.
+- Context: A full-scale diagnostic profile showed that encounter IDs within one
+  patient bucket hash across many encounter-screen partitions. Querying the
+  encounter lookup after enrichment therefore reread much of a 303.5-million-ID
+  screen for every cohort group in every patient bucket. First-bucket timings
+  projected beyond the final-assembly performance gate.
+- Rationale: Screen eligibility depends only on the selected encounter and does
+  not depend on analytic feature enrichment. Computing it once before patient
+  bucketing preserves output semantics while reducing encounter-screen lookup
+  passes by orders of magnitude.
+- Consequences: `BEFORE` rows remain unchanged; `AFTER` rows use the same
+  encounter membership result without repeated disk lookups. Interrupted-run
+  cleanup also recognizes every current partition-store prefix.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
+  `tests/test_cli.py`.

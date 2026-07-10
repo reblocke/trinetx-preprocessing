@@ -45,6 +45,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Corrected ABG/VBG codes, specimen and unit handling, gas thresholds,
   predisposition prefix matching, J46/TTE code sets, setting-specific event
   selection, numeric boundary filtering, and deterministic feature reductions.
+- Precomputed encounter-level `AFTER` eligibility before patient bucketing so
+  final assembly no longer rereads large encounter-screen partitions for every
+  category/setting group in every patient bucket.
+- Extended `clean-scratch` to inventory and safely remove all current final
+  cohort, feature-source, lab, and previous-vital partition stores.
 
 ### Removed
 - Removed the obsolete `split_db.sh`; the portable Python `split` command is the
