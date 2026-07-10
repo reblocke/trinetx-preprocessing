@@ -86,7 +86,11 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
             chunksize = (
                 config.chunking.lines_per_chunk if config.chunking.enabled else None
             )
-            with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            with WorkTableWriter(
+                config,
+                _normalized_filename(path, index),
+                enabled=config.storage.emit_normalized_domain_tables,
+            ) as writer:
                 chunk_index = 0
                 for chunk in iter_csv(
                     path,

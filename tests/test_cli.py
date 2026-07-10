@@ -98,6 +98,8 @@ def _write_labs_config(
         "domains:\n"
         "  labs:\n"
         '    pattern: "Lab Results/lab_result*.csv"\n'
+        "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
     )
     path.write_text(content)
 

@@ -17,7 +17,8 @@ Post-Milestone 1 development follows the corrected analytic contract in
 `docs/SPEC.md`. The corrected pipeline uses explicit clinical rules, derives
 encounter screening from diagnosis or lab availability, and builds compact
 partitioned indexes while streaming each domain instead of repeatedly scanning
-legacy group tables.
+legacy group tables. Complete normalized domain copies are opt-in compatibility
+artifacts rather than default work products.
 
 This is a code-only repository; no manuscript version is expected here. The
 repository may describe restricted export schemas, but it must not include raw

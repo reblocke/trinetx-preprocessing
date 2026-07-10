@@ -13,6 +13,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   during each domain's streaming pass.
 
 ### Changed
+- Complete normalized `*_NEW_*` domain tables are now opt-in through
+  `storage.emit_normalized_domain_tables`; corrected execution writes compact
+  analysis indexes by default.
 - Post-Milestone 1 final assembly now treats selected legacy quirks as bugs
   rather than replication targets when computing prior/latest analytic dates.
 - Final assembly now reuses patient-partitioned feature/history buckets across
@@ -22,6 +25,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   `storage.emit_legacy_group_tables`.
 
 ### Fixed
+- Included compact analysis indexes in stage output inventories so work
+  manifests and callers track the artifacts consumed downstream.
 - Replaced per-encounter Python conflict aggregation with a bounded vectorized
   reduction, preserving the same conflict counts and setting combinations on
   full-scale encounter partitions.

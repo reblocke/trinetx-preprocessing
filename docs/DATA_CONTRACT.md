@@ -45,6 +45,10 @@ During each domain's single raw scan, the pipeline writes only rows needed for:
 - patient-history features; and
 - diagnosis-or-lab encounter availability.
 
+Complete normalized `*_NEW_*` domain tables are optional compatibility
+artifacts controlled by `storage.emit_normalized_domain_tables`; they are not
+written by default or consumed by corrected RFS/final assembly.
+
 Feature candidates carry a logical `source_name`; RFS candidates carry an RFS
 category. Final assembly repartitions candidates by patient, while encounter
 reducers partition by encounter. The default is 256 bounded Parquet buckets
@@ -60,7 +64,8 @@ and stage completion. Resume commands fail closed when work is incompatible.
 ## RFS and screening tables
 
 - `RFS_<CATEGORY>` contains event-level `patient_id`, `encounter_id`, and date.
-- `rfs_encounter_flags` contains one encounter row and category flags.
+- `rfs_encounter_flags` contains one retained AMB/EMER/INPAT encounter row and
+  category flags; historical normalized encounter tables remain a read fallback.
 - Corrected RFS codes, systems, units, conversions, and thresholds are defined
   in `docs/SPEC.md` and immutable typed rules.
 - `AFTER` eligibility is derived from at least one normalized diagnosis or lab

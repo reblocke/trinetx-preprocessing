@@ -55,7 +55,7 @@ def test_work_manifest_records_and_requires_completed_stages(tmp_path: Path) -> 
     manifest = require_current_work(config, required_stages=["encounter"])
 
     assert path.exists()
-    assert manifest["intermediate_schema_version"] == 4
+    assert manifest["intermediate_schema_version"] == 5
     assert manifest["runtime_versions"]["python"]
     assert manifest["stages"]["encounter"]["status"] == "complete"
     assert manifest["stages"]["encounter"]["outputs"][0]["size_bytes"] > 0

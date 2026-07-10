@@ -104,6 +104,7 @@ class StorageConfig:
 
     intermediate_format: str = "csv"
     emit_legacy_csv_intermediates: bool = True
+    emit_normalized_domain_tables: bool = False
     parquet_row_group_size: int = 250_000
     analysis_bucket_count: int = 256
     emit_legacy_group_tables: bool = False
@@ -518,6 +519,9 @@ def _load_storage(raw: Any) -> StorageConfig:
     emit_legacy_csv_intermediates = bool(
         raw.get("emit_legacy_csv_intermediates", intermediate_format == "csv")
     )
+    emit_normalized_domain_tables = bool(
+        raw.get("emit_normalized_domain_tables", False)
+    )
 
     parquet_row_group_size = raw.get("parquet_row_group_size", 250_000)
     if not isinstance(parquet_row_group_size, int) or parquet_row_group_size <= 0:
@@ -539,6 +543,7 @@ def _load_storage(raw: Any) -> StorageConfig:
     return StorageConfig(
         intermediate_format=intermediate_format,
         emit_legacy_csv_intermediates=emit_legacy_csv_intermediates,
+        emit_normalized_domain_tables=emit_normalized_domain_tables,
         parquet_row_group_size=parquet_row_group_size,
         analysis_bucket_count=analysis_bucket_count,
         emit_legacy_group_tables=emit_legacy_group_tables,

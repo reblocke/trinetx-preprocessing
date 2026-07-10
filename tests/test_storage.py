@@ -89,6 +89,16 @@ def test_work_table_writer_appends_parquet_chunks(tmp_path: Path) -> None:
     ]
 
 
+def test_work_table_writer_can_disable_compatibility_output(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    with WorkTableWriter(config, "events.csv", enabled=False) as writer:
+        writer.write(pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]}))
+
+    assert writer.written_paths == []
+    assert not (tmp_path / "work").exists()
+
+
 def test_find_work_tables_prefers_configured_format(tmp_path: Path) -> None:
     config = _config(tmp_path, emit_legacy_csv_intermediates=True)
     write_work_table(

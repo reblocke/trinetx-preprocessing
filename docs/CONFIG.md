@@ -26,6 +26,7 @@ chunking:
 storage:
   intermediate_format: parquet
   emit_legacy_csv_intermediates: false
+  emit_normalized_domain_tables: false
   parquet_row_group_size: 250000
   analysis_bucket_count: 256
   emit_legacy_group_tables: false
@@ -38,6 +39,9 @@ guardrails:
 - `storage.intermediate_format` is `csv` or `parquet`; Parquet is recommended.
 - `storage.emit_legacy_csv_intermediates` mirrors Parquet work tables to CSV for
   controlled notebook/debug compatibility.
+- `storage.emit_normalized_domain_tables` writes complete normalized `*_NEW_*`
+  domain tables. It defaults to `false`; enable it only for stage-level
+  inspection or historical notebook compatibility.
 - `storage.parquet_row_group_size` controls Parquet row groups.
 - `storage.analysis_bucket_count` must be a positive power of two. It defaults
   to `256` for patient/encounter partition stores.

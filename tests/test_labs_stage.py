@@ -23,6 +23,8 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "domains:\n"
         "  labs:\n"
         '    pattern: "Lab Results/lab_result*.csv"\n'
+        "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
     )
     path.write_text(content)
 
@@ -47,7 +49,10 @@ def test_run_labs_stage_outputs(tmp_path: Path) -> None:
     outputs = run_labs_stage(config)
 
     expected_output = work_dir / "lab_results_NEW_0001.csv"
-    assert outputs == [expected_output]
+    assert expected_output in outputs
+    assert work_dir / "analysis_lab_features.csv" in outputs
+    assert work_dir / "analysis_lab_availability.csv" in outputs
+    assert work_dir / "analysis_rfs_labs.csv" in outputs
 
     normalized = pd.read_csv(expected_output, parse_dates=["date"])
     assert list(normalized.columns) == NORMALIZED_LAB_COLUMNS

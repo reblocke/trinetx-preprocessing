@@ -23,6 +23,7 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "  procedure:\n"
         '    pattern: "Procedure/procedure*.csv"\n'
         "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
         "  emit_legacy_group_tables: true\n"
     )
     path.write_text(content)

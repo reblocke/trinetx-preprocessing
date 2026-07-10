@@ -289,9 +289,16 @@ def stable_bucket_ids(frame: pd.DataFrame, *, bucket_count: int) -> pd.Series:
 class WorkTableWriter:
     """Append-capable writer for a configured work table."""
 
-    def __init__(self, config: Config, logical_name: str) -> None:
+    def __init__(
+        self,
+        config: Config,
+        logical_name: str,
+        *,
+        enabled: bool = True,
+    ) -> None:
         self.config = config
         self.logical_name = logical_name
+        self.enabled = enabled
         self.primary_path = work_table_path(config, logical_name)
         self._parquet_writer = None
         self._csv_written = False
@@ -299,7 +306,8 @@ class WorkTableWriter:
         self.written_paths: list[Path] = []
 
     def __enter__(self) -> "WorkTableWriter":
-        self.config.work_dir.mkdir(parents=True, exist_ok=True)
+        if self.enabled:
+            self.config.work_dir.mkdir(parents=True, exist_ok=True)
         return self
 
     def __exit__(
@@ -313,6 +321,8 @@ class WorkTableWriter:
     def write(self, df: pd.DataFrame) -> None:
         """Append ``df`` to the configured work table."""
 
+        if not self.enabled:
+            return
         if self.config.storage.intermediate_format == PARQUET_FORMAT:
             self._write_parquet(df)
             if self.config.storage.emit_legacy_csv_intermediates:

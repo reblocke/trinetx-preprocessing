@@ -340,19 +340,33 @@ def _write_rfs_flags(
     logger: logging.Logger,
 ) -> list[Path]:
     rows_written = 0
+    encounter_patterns = [
+        pattern
+        for pattern in (
+            "AMB_encounters.csv",
+            "EMER_encounters.csv",
+            "INPAT_encounters.csv",
+        )
+        if find_work_tables(config, pattern)
+    ]
+    if not encounter_patterns:
+        encounter_patterns = ["encounter_NEW_*.csv"]
     with (
         WorkTableWriter(config, "rfs_encounter_flags.csv") as writer,
         _RfsEncounterStore(config.work_dir, membership.bucket_count) as encounters,
     ):
-        for frame in _iter_work_domain(
-            config,
-            "encounter_NEW_*.csv",
-            usecols=ENCOUNTER_ID_COLUMNS,
-            dtype=ENCOUNTER_DTYPE,
-        ):
-            base = frame.loc[:, ENCOUNTER_ID_COLUMNS].dropna(subset=["encounter_id"])
-            base = base.drop_duplicates(subset=["encounter_id"], keep="first")
-            encounters.add_frame(base)
+        for pattern in encounter_patterns:
+            for frame in _iter_work_domain(
+                config,
+                pattern,
+                usecols=ENCOUNTER_ID_COLUMNS,
+                dtype=ENCOUNTER_DTYPE,
+            ):
+                base = frame.loc[:, ENCOUNTER_ID_COLUMNS].dropna(
+                    subset=["encounter_id"]
+                )
+                base = base.drop_duplicates(subset=["encounter_id"], keep="first")
+                encounters.add_frame(base)
 
         for bucket, current in encounters.iter_unique_frames():
             if current.empty:

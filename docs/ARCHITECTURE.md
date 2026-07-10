@@ -47,5 +47,7 @@
 Work tables are addressed by legacy logical CSV names, but
 `storage.intermediate_format` controls whether physical intermediates are CSV or
 Parquet. Final analytic outputs remain CSV for public compatibility. Legacy
+complete normalized `*_NEW_*` domain tables are opt-in through
+`storage.emit_normalized_domain_tables: true`. Legacy
 `HAS_*`, `IPmed_*`, `OPmed_*`, and `value_*` group tables are emitted only when
 `storage.emit_legacy_group_tables: true`.

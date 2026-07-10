@@ -338,8 +338,9 @@ def test_run_pipeline_end_to_end_with_parquet_intermediates(tmp_path: Path) -> N
     result = cli_main(["run", "--config", str(config_path)])
     assert result == 0
 
-    assert (work_dir / "encounter_NEW_0001.parquet").exists()
+    assert not (work_dir / "encounter_NEW_0001.parquet").exists()
     assert not (work_dir / "encounter_NEW_0001.csv").exists()
+    assert not list(work_dir.glob("*_NEW_*.parquet"))
     assert (work_dir / "RFS_ABG.parquet").exists()
     expected_analysis_indexes = {
         "analysis_diagnosis_features.parquet",

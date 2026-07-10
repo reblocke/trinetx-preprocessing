@@ -81,7 +81,11 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
             logger.info("Reading diagnosis export: %s", path.name)
             rows_read = 0
             rows_normalized = 0
-            with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            with WorkTableWriter(
+                config,
+                _normalized_filename(path, index),
+                enabled=config.storage.emit_normalized_domain_tables,
+            ) as writer:
                 for chunk in iter_csv(
                     path,
                     chunksize=chunksize,
@@ -145,6 +149,9 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
             )
         if availability_rows == 0:
             availability_writer.write(pd.DataFrame(columns=["encounter_id"]))
+        output_paths.extend(analysis_writer.written_paths)
+        output_paths.extend(rfs_writer.written_paths)
+        output_paths.extend(availability_writer.written_paths)
 
         if config.storage.emit_legacy_group_tables:
             for group in DIAGNOSIS_CODE_GROUPS:

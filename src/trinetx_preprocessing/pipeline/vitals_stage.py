@@ -76,7 +76,11 @@ def run_vitals_stage(config: Config) -> list[Path]:
             logger.info("Reading vital-signs export: %s", path.name)
             rows_read = 0
             rows_normalized = 0
-            with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            with WorkTableWriter(
+                config,
+                _normalized_filename(path, index),
+                enabled=config.storage.emit_normalized_domain_tables,
+            ) as writer:
                 for chunk in iter_csv(
                     path,
                     chunksize=chunksize,
@@ -117,11 +121,12 @@ def run_vitals_stage(config: Config) -> list[Path]:
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"vitals read {path.name}", rows_read)
                 log_row_count(logger, f"vitals normalized {path.name}", rows_normalized)
-                logger.info(
-                    "Wrote %s rows to %s",
-                    rows_normalized,
-                    writer.written_paths[0].name,
-                )
+                if writer.written_paths:
+                    logger.info(
+                        "Wrote %s rows to %s",
+                        rows_normalized,
+                        writer.written_paths[0].name,
+                    )
 
         if analysis_rows == 0:
             analysis_writer.write(
@@ -131,6 +136,8 @@ def run_vitals_stage(config: Config) -> list[Path]:
             rfs_writer.write(
                 pd.DataFrame(columns=[RFS_CATEGORY_COLUMN, *RFS_EVENT_COLUMNS])
             )
+        output_paths.extend(analysis_writer.written_paths)
+        output_paths.extend(rfs_writer.written_paths)
 
         if config.storage.emit_legacy_group_tables:
             for rule in VITAL_SIGN_RULES:

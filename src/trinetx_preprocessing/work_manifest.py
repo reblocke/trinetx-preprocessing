@@ -17,7 +17,7 @@ from .config import Config, collect_domain_paths
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
 WORK_MANIFEST_SCHEMA_VERSION = 2
-INTERMEDIATE_SCHEMA_VERSION = 4
+INTERMEDIATE_SCHEMA_VERSION = 5
 DOMAIN_STAGES = (
     "encounter",
     "labs",

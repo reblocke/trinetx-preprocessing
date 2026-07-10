@@ -90,7 +90,11 @@ def run_labs_stage(config: Config) -> list[Path]:
             logger.info("Reading lab-results export: %s", path.name)
             rows_read = 0
             rows_written = 0
-            with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            with WorkTableWriter(
+                config,
+                _normalized_filename(path, index),
+                enabled=config.storage.emit_normalized_domain_tables,
+            ) as writer:
                 for chunk in iter_csv(
                     path,
                     chunksize=chunksize,
@@ -131,9 +135,12 @@ def run_labs_stage(config: Config) -> list[Path]:
                 output_paths.extend(writer.written_paths)
                 log_row_count(logger, f"labs read {path.name}", rows_read)
                 log_row_count(logger, f"labs normalized {path.name}", rows_written)
-                logger.info(
-                    "Wrote %s rows to %s", rows_written, writer.written_paths[0].name
-                )
+                if writer.written_paths:
+                    logger.info(
+                        "Wrote %s rows to %s",
+                        rows_written,
+                        writer.written_paths[0].name,
+                    )
         if rfs_rows == 0:
             rfs_writer.write(
                 pd.DataFrame(columns=[RFS_CATEGORY_COLUMN, *RFS_EVENT_COLUMNS])
@@ -144,6 +151,9 @@ def run_labs_stage(config: Config) -> list[Path]:
             )
         if availability_rows == 0:
             availability_writer.write(pd.DataFrame(columns=["encounter_id"]))
+        output_paths.extend(rfs_writer.written_paths)
+        output_paths.extend(feature_writer.written_paths)
+        output_paths.extend(availability_writer.written_paths)
 
     audit_payload = {
         "schema_version": 1,
@@ -161,8 +171,9 @@ def run_labs_stage(config: Config) -> list[Path]:
             },
         },
     }
+    audit_path = config.work_dir / "rfs_rule_audit.json"
     write_text_atomic(
-        config.work_dir / "rfs_rule_audit.json",
+        audit_path,
         json.dumps(audit_payload, indent=2, sort_keys=True) + "\n",
     )
 

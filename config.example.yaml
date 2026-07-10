@@ -11,6 +11,7 @@ chunking:
 storage:
   intermediate_format: parquet
   emit_legacy_csv_intermediates: false
+  emit_normalized_domain_tables: false
   parquet_row_group_size: 250000
   analysis_bucket_count: 256
   emit_legacy_group_tables: false

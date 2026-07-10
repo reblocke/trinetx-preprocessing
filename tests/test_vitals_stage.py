@@ -24,6 +24,7 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "  vitals:\n"
         '    pattern: "Vital Signs/vital*_signs*.csv"\n'
         "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
         "  emit_legacy_group_tables: true\n"
     )
     path.write_text(content)

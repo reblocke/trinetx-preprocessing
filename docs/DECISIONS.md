@@ -815,10 +815,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   Typed rules make code/system/unit/bound semantics readable, while one-pass
   classification and bounded partitions reduce external-drive I/O without
   requiring full-domain memory.
-- Consequences: Existing work tables are incompatible. Legacy group-table
-  emission is opt-in, Milestone 1 remains the historical fallback, and release
-  requires corrected staged tests, a fresh strict BOOK profile, aggregate-only
-  delta evidence, and performance gates.
+- Consequences: Existing work tables are incompatible. Complete normalized
+  domain tables and legacy group-table emission are opt-in, Milestone 1 remains
+  the historical fallback, and release requires corrected staged tests, a fresh
+  strict BOOK profile, aggregate-only delta evidence, and performance gates.
 - References: `docs/SPEC.md`, `src/trinetx_preprocessing/transform/clinical_rules.py`,
   `src/trinetx_preprocessing/storage.py`,
   `src/trinetx_preprocessing/work_manifest.py`,
