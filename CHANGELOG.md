@@ -22,6 +22,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   `storage.emit_legacy_group_tables`.
 
 ### Fixed
+- Replaced per-encounter Python conflict aggregation with a bounded vectorized
+  reduction, preserving the same conflict counts and setting combinations on
+  full-scale encounter partitions.
 - Corrected final analytic `last_date_*` selection for prior diagnosis,
   procedure-style encounter features, and outpatient medications so "last"
   dates use the latest qualifying row instead of the earliest row.

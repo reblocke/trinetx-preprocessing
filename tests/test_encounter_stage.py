@@ -225,11 +225,27 @@ def test_encounter_reducer_resolves_cross_setting_ids_globally(
 def test_encounter_reducer_reports_cross_setting_conflicts(tmp_path: Path) -> None:
     encounters = pd.DataFrame(
         {
-            "patient_id": ["P1", "P1", "P2"],
-            "encounter_id": ["E1", "E1", "E2"],
-            "start_date": pd.to_datetime(["2022-01-01", "2022-01-02", "2022-01-03"]),
-            "end_date": pd.to_datetime(["2022-01-02", "2022-01-03", "2022-01-04"]),
-            "type": ["AMB", "EMER", "AMB"],
+            "patient_id": ["P1", "P1", "P1", "P2", "P2"],
+            "encounter_id": ["E1", "E1", "E1", "E2", "E2"],
+            "start_date": pd.to_datetime(
+                [
+                    "2022-01-01",
+                    "2022-01-02",
+                    "2022-01-03",
+                    "2022-01-03",
+                    "2022-01-04",
+                ]
+            ),
+            "end_date": pd.to_datetime(
+                [
+                    "2022-01-02",
+                    "2022-01-03",
+                    "2022-01-04",
+                    "2022-01-04",
+                    "2022-01-05",
+                ]
+            ),
+            "type": ["AMB", "EMER", "IMP", "AMB", "AMB"],
         }
     )
 
@@ -240,7 +256,7 @@ def test_encounter_reducer_reports_cross_setting_conflicts(tmp_path: Path) -> No
     assert summary == {
         "schema_version": 1,
         "encounter_conflict_count": 1,
-        "type_combinations": {"AMB+EMER": 1},
+        "type_combinations": {"AMB+EMER+IMP": 1},
     }
 
 

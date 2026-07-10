@@ -20,7 +20,7 @@
 - Existing work tables are not reusable after the corrected intermediate schema is introduced.
 
 ## State
-- Branch: `codex/refactor-post-milestone-1`; review candidate `a96c899` is pushed on PR #5.
+- Branch: `codex/refactor-post-milestone-1`; release-state commit `411f42c` is pushed on PR #5.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -28,6 +28,8 @@
 - Full local gate passes: `git diff --check`, Ruff, and `226` pytest tests.
 - Corrected external tiers 00, 01, and 02 pass all 36-file/534-column, identifier, age/date, screening, and compact-index invariants under `corrected_v0.2.0/`.
 - Tier-02 final assembly improved from `66.405 s` to `31.787 s` after removing redundant bucket-local scratch; peak RSS was `219.188 MB`.
+- The first full corrected profile attempt read `592,125,331` encounter rows in about 17 minutes, then exposed an unbounded Python-callback cost in encounter conflict summarization and was stopped cleanly before downstream stages.
+- The vectorized replacement summarized all 128 retained full-scale encounter partitions in `87.526 s` and found `286` cross-setting encounter IDs (`275` EMER+IMP, `8` AMB+IMP, `3` AMB+EMER).
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -35,14 +37,14 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Package version is being finalized at `0.2.0`; GitHub Codex review is requested and pending.
+- Commit the reviewed vectorized conflict reduction and clean the interrupted full-run artifacts.
 
 ## Next
-- Run the fresh full BOOK profile and aggregate Milestone 1 delta audit.
+- Run a deterministic non-strict full profile for performance/delta evidence; strict release acceptance remains blocked by the `286` source encounter-setting conflicts.
 - Address any GitHub review findings, then publish `v0.2.0`.
 
 ## Open questions (UNCONFIRMED if needed)
-- None blocking; the approved implementation plan locks defaults.
+- Whether release acceptance may use the documented deterministic non-strict resolution for the `286` source conflicts, or requires upstream conflict adjudication before a strict profile can pass.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`

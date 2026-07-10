@@ -290,12 +290,36 @@ class _EncounterReducerStore:
         for _, bucket in self._partition_store().iter_frames(columns=REDUCER_COLUMNS):
             if bucket.empty:
                 continue
-            types = bucket.groupby("encounter_id_key", sort=False)[
-                "encounter_type"
-            ].agg(lambda values: tuple(sorted(set(values.dropna().astype(str)))))
-            conflicts = types.loc[types.map(len) > 1]
-            conflict_count += len(conflicts)
-            combinations.update("+".join(values) for values in conflicts)
+            pairs = (
+                bucket.loc[
+                    bucket["encounter_id_key"].notna()
+                    & bucket["encounter_type"].notna(),
+                    ["encounter_id_key", "encounter_type"],
+                ]
+                .drop_duplicates()
+                .reset_index(drop=True)
+            )
+            conflicting = pairs.loc[
+                pairs.duplicated(subset=["encounter_id_key"], keep=False)
+            ]
+            if conflicting.empty:
+                continue
+            conflict_count += conflicting["encounter_id_key"].nunique()
+            combination_counts = (
+                conflicting.sort_values(
+                    by=["encounter_id_key", "encounter_type"],
+                    kind="mergesort",
+                )
+                .groupby("encounter_id_key", sort=False)["encounter_type"]
+                .agg("+".join)
+                .value_counts()
+            )
+            combinations.update(
+                {
+                    str(combination): int(count)
+                    for combination, count in combination_counts.items()
+                }
+            )
         return {
             "schema_version": 1,
             "encounter_conflict_count": conflict_count,
