@@ -20,7 +20,7 @@
 - Existing work tables are not reusable after the corrected intermediate schema is introduced.
 
 ## State
-- Branch: `codex/refactor-post-milestone-1` at `23c9e45`; clean at implementation start.
+- Branch: `codex/refactor-post-milestone-1`; review candidate `a96c899` is pushed on PR #5.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -35,11 +35,11 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit and push the review candidate and request a fresh GitHub Codex review.
+- Package version is being finalized at `0.2.0`; GitHub Codex review is requested and pending.
 
 ## Next
-- Address any actionable review findings, then bump the package to `0.2.0`.
-- Run the fresh full BOOK profile and aggregate Milestone 1 delta audit, then release `v0.2.0`.
+- Run the fresh full BOOK profile and aggregate Milestone 1 delta audit.
+- Address any GitHub review findings, then publish `v0.2.0`.
 
 ## Open questions (UNCONFIRMED if needed)
 - None blocking; the approved implementation plan locks defaults.

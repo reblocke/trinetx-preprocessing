@@ -78,7 +78,7 @@ def test_write_provenance_records_config_code_and_outputs(tmp_path: Path) -> Non
     assert (
         payload["config_sha256"] == hashlib.sha256(config_path.read_bytes()).hexdigest()
     )
-    assert payload["package_version"] == "0.1.0"
+    assert payload["package_version"] == "0.2.0"
     assert payload["python_version"]
     assert isinstance(payload["git_dirty"], bool)
     assert payload["git_code_dirty"] == current_git_code_dirty()

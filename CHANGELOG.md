@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-09
 ### Added
 - Added the corrected `docs/SPEC.md` analytic contract, immutable typed clinical
   rules, aggregate gas-rule rejection audits, encounter-setting conflict
