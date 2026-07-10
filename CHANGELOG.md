@@ -25,6 +25,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Replaced per-encounter Python conflict aggregation with a bounded vectorized
   reduction, preserving the same conflict counts and setting combinations on
   full-scale encounter partitions.
+- Limited lab feature precision conversion and CSV-visible rounding to rows
+  matching each clinical code rule instead of repeating those operations over
+  every raw lab row for every rule.
 - Corrected final analytic `last_date_*` selection for prior diagnosis,
   procedure-style encounter features, and outpatient medications so "last"
   dates use the latest qualifying row instead of the earliest row.

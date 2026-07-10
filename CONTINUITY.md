@@ -25,11 +25,14 @@
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
 - Compact RFS and lab-feature indexes are built during domain streaming. The manifest now records runtime versions, row counts, artifact fingerprints, and running/completed state.
-- Full local gate passes: `git diff --check`, Ruff, and `226` pytest tests.
+- Full local gate passes: `git diff --check`, Ruff, and `227` pytest tests.
 - Corrected external tiers 00, 01, and 02 pass all 36-file/534-column, identifier, age/date, screening, and compact-index invariants under `corrected_v0.2.0/`.
 - Tier-02 final assembly improved from `66.405 s` to `31.787 s` after removing redundant bucket-local scratch; peak RSS was `219.188 MB`.
 - The first full corrected profile attempt read `592,125,331` encounter rows in about 17 minutes, then exposed an unbounded Python-callback cost in encounter conflict summarization and was stopped cleanly before downstream stages.
 - The vectorized replacement summarized all 128 retained full-scale encounter partitions in `87.526 s` and found `286` cross-setting encounter IDs (`275` EMER+IMP, `8` AMB+IMP, `3` AMB+EMER).
+- The second full attempt completed encounter in `1,499.39 s`, then exposed lab classification repeating precision/string conversion over every chunk once per feature rule; it was stopped early in labs.
+- On a real 250,000-row lab chunk, match-first classification reduced runtime from `3.166 s` to `0.200 s` (`15.84x`) with exact feature-frame equality.
+- Corrected tiers 00, 01, and 02 pass again after the lab optimization with unchanged before/after row contracts and peak RSS at or below `223 MB`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -37,10 +40,10 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the reviewed vectorized conflict reduction and clean the interrupted full-run artifacts.
+- Commit and push the verified match-first lab classification optimization, then clean attempt-two artifacts.
 
 ## Next
-- Run a deterministic non-strict full profile for performance/delta evidence; strict release acceptance remains blocked by the `286` source encounter-setting conflicts.
+- Restart a deterministic non-strict full profile from a clean commit for performance/delta evidence; strict release acceptance remains blocked by the `286` source encounter-setting conflicts.
 - Address any GitHub review findings, then publish `v0.2.0`.
 
 ## Open questions (UNCONFIRMED if needed)

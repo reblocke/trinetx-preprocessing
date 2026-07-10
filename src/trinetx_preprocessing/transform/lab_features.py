@@ -141,24 +141,41 @@ def classify_lab_feature_rows(
     """Classify and convert final-feature lab candidates in one chunk."""
 
     require_columns(frame, LAB_COLUMNS, context="Lab feature input")
-    codes = frame["code"].astype("string")
-    raw_values = pd.to_numeric(frame["lab_result_num_val"], errors="coerce")
+    codes = frame["code"].astype("string").str.strip().str.upper()
+    raw_values = pd.to_numeric(
+        frame["lab_result_num_val"], errors="coerce"
+    ).astype("float64")
     grouped: dict[str, pd.DataFrame] = {}
     for rule in LAB_VALUE_RULES:
-        values = legacy_lab_feature_values(rule, codes, raw_values)
+        code_mask = codes.isin(rule.exact_codes)
+        if rule.prefixes:
+            code_mask |= codes.str.startswith(rule.prefixes, na=False)
+        code_mask = code_mask.fillna(False)
+        if not code_mask.any():
+            continue
+
+        matching_codes = codes.loc[code_mask]
+        values = legacy_lab_feature_values(
+            rule,
+            matching_codes,
+            raw_values.loc[code_mask],
+        )
         visible_values = legacy_csv_visible_numeric_series(values)
-        mask = rule.mask(codes)
+        value_mask = pd.Series(True, index=visible_values.index)
         if rule.max_value is not None:
-            mask &= visible_values < rule.max_value
+            value_mask &= visible_values < rule.max_value
         if rule.min_value is not None:
             if rule.min_inclusive:
-                mask &= visible_values >= rule.min_value
+                value_mask &= visible_values >= rule.min_value
             else:
-                mask &= visible_values > rule.min_value
-        rows = frame.loc[mask, LAB_COLUMNS].copy()
+                value_mask &= visible_values > rule.min_value
+        value_mask = value_mask.fillna(False)
+        rows = frame.loc[value_mask.index[value_mask], LAB_COLUMNS].copy()
         if rows.empty:
             continue
-        rows["lab_result_num_val"] = float32_series(visible_values.loc[mask])
+        rows["lab_result_num_val"] = float32_series(
+            visible_values.loc[value_mask]
+        )
         grouped[rule.name] = rows.reset_index(drop=True)
     return grouped
 
