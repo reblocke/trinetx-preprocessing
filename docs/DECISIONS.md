@@ -881,3 +881,25 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/pipeline/final_features.py`,
   `src/trinetx_preprocessing/pipeline/final_feature_common.py`,
   `src/trinetx_preprocessing/pipeline/final_*_features.py`.
+
+### 2026-07-11 — Stream final event partitions into patient cohorts
+- Date: 2026-07-11
+- Decision: Yield encounter-reduced RFS event partitions directly into setting
+  lookups and the patient-partitioned cohort store. Select the global earliest
+  `(category, setting, patient)` row inside each patient bucket before feature
+  enrichment.
+- Context: The first corrected full profile met wall-time targets but reached
+  `10,125.734 MB` peak RSS. One-second follow-up sampling showed `6,884.250 MB`
+  before feature indexing while the 8.46-million-row predisposition candidate
+  frame was concatenated in memory.
+- Rationale: Encounter IDs are already deterministically partitioned, and all
+  rows for one patient converge in the cohort store. A second stable earliest
+  reduction therefore preserves cohort semantics while eliminating the
+  full-category concatenation.
+- Consequences: Setting lookups and screening remain exact, output filenames
+  and schema are unchanged, and final full-scale validation uses 512 analysis
+  buckets to bound the later feature-source partitions. The configured default
+  remains 256 for smaller runs.
+- References: `src/trinetx_preprocessing/pipeline/cohort.py`,
+  `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_final_assembly.py`.

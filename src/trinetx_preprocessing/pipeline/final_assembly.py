@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +37,7 @@ from .cohort import (
     QUALIFY_DATE_MAX,
     QUALIFY_DATE_MIN,
     prepare_event_candidates,
+    reduce_setting_cohort_rows,
     select_setting_cohort,
 )
 from .final_feature_sources import FinalFeatureSourceStore
@@ -179,7 +180,7 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
         )
         cohort_rows_indexed = 0
         for category in RFS_CATEGORIES:
-            event_candidates = _load_final_event_candidates(
+            event_candidate_frames = _iter_final_event_candidate_frames(
                 config,
                 category,
                 demographics,
@@ -188,30 +189,31 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
                 guardrails=config.guardrails,
                 strict=strict,
             )
-            for setting in SETTINGS:
-                inputs = setting_inputs[setting]
-                base = build_final_dataset_from_candidates(
-                    event_candidates,
-                    inputs.encounters,
-                    config=None,
-                    rfs_category=category,
-                    setting=setting,
-                    guardrails=config.guardrails,
-                    strict=strict,
-                    logger=logger,
-                    enrich_features=False,
-                    finalize_output=False,
-                )
-                if base.empty:
-                    continue
-                base = _mark_data_screen_eligibility(
-                    base,
-                    inputs.allowed_encounter_ids,
-                )
-                base.insert(0, "_setting", setting)
-                base.insert(0, "_category", category)
-                cohort_store.add_frame(base)
-                cohort_rows_indexed += len(base)
+            for event_candidates in event_candidate_frames:
+                for setting in SETTINGS:
+                    inputs = setting_inputs[setting]
+                    base = build_final_dataset_from_candidates(
+                        event_candidates,
+                        inputs.encounters,
+                        config=None,
+                        rfs_category=category,
+                        setting=setting,
+                        guardrails=config.guardrails,
+                        strict=strict,
+                        logger=logger,
+                        enrich_features=False,
+                        finalize_output=False,
+                    )
+                    if base.empty:
+                        continue
+                    base = _mark_data_screen_eligibility(
+                        base,
+                        inputs.allowed_encounter_ids,
+                    )
+                    base.insert(0, "_setting", setting)
+                    base.insert(0, "_category", category)
+                    cohort_store.add_frame(base)
+                    cohort_rows_indexed += len(base)
 
         feature_sources = stack.enter_context(
             FinalFeatureSourceStore(config, chunksize=chunksize)
@@ -229,7 +231,9 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
             for (category, setting), group in cohort_rows.groupby(
                 ["_category", "_setting"], sort=False
             ):
-                base = group.drop(columns=["_category", "_setting"])
+                base = reduce_setting_cohort_rows(
+                    group.drop(columns=["_category", "_setting"])
+                )
                 enriched = _enrich_legacy_final_features(
                     base,
                     config=config,
@@ -803,6 +807,34 @@ def _load_final_event_candidates(
     guardrails: GuardrailConfig,
     strict: bool,
 ) -> pd.DataFrame:
+    frames = list(
+        _iter_final_event_candidate_frames(
+            config,
+            category,
+            demographics,
+            logger,
+            chunksize=chunksize,
+            guardrails=guardrails,
+            strict=strict,
+        )
+    )
+    if not frames:
+        return pd.DataFrame(columns=FINAL_EVENT_CANDIDATE_COLUMNS)
+    return pd.concat(frames, ignore_index=True)
+
+
+def _iter_final_event_candidate_frames(
+    config: Config,
+    category: str,
+    demographics: "_DemographicsLookup",
+    logger: logging.Logger,
+    *,
+    chunksize: int | None,
+    guardrails: GuardrailConfig,
+    strict: bool,
+) -> Iterable[pd.DataFrame]:
+    """Yield encounter-reduced event partitions without a full-category concat."""
+
     path = resolve_work_table(config, f"RFS_{category}.csv")
     if not path.exists():
         raise FileNotFoundError(f"Missing RFS events file for {category}: {path}")
@@ -836,9 +868,11 @@ def _load_final_event_candidates(
         log_row_count(logger, f"rfs events read {category}", rows_read)
         log_row_count(logger, f"final {category} post-filter dates", post_dates)
         log_row_count(logger, f"final {category} post-filter location", post_location)
-        candidates = store.reduce()
-        log_row_count(logger, f"final {category} event candidates", len(candidates))
-    return candidates
+        candidate_count = 0
+        for candidates in store.iter_reduced():
+            candidate_count += len(candidates)
+            yield candidates
+        log_row_count(logger, f"final {category} event candidates", candidate_count)
 
 
 def _prepare_final_event_candidate_chunk(
@@ -938,7 +972,14 @@ class _FinalEventCandidateStore:
         self._partition_store().add_frame(bucketed.loc[:, FINAL_EVENT_BUCKET_COLUMNS])
 
     def reduce(self) -> pd.DataFrame:
-        frames: list[pd.DataFrame] = []
+        frames = list(self.iter_reduced())
+        if not frames:
+            return pd.DataFrame(columns=FINAL_EVENT_CANDIDATE_COLUMNS)
+        return pd.concat(frames, ignore_index=True)
+
+    def iter_reduced(self) -> Iterable[pd.DataFrame]:
+        """Yield one encounter-reduced partition at a time."""
+
         for _, frame in self._partition_store().iter_frames(
             columns=FINAL_EVENT_BUCKET_COLUMNS
         ):
@@ -954,10 +995,7 @@ class _FinalEventCandidateStore:
                 .reset_index(drop=True)
             )
             if not unique.empty:
-                frames.append(unique)
-        if not frames:
-            return pd.DataFrame(columns=FINAL_EVENT_CANDIDATE_COLUMNS)
-        return pd.concat(frames, ignore_index=True)
+                yield unique
 
     def _partition_store(self) -> PartitionedParquetStore:
         if self._store is None:

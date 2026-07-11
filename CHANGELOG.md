@@ -26,6 +26,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Final analytic feature logic is separated into small domain-owned vital, lab,
   diagnosis, procedure, and medication modules, leaving final assembly focused
   on cohort, lookup, screening, and output orchestration.
+- Final cohort construction streams encounter-reduced event partitions into the
+  patient-partitioned cohort index and performs the global earliest-patient
+  reduction inside each patient bucket instead of concatenating a full RFS
+  category in memory.
 
 ### Fixed
 - Included compact analysis indexes in stage output inventories so work

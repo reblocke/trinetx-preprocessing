@@ -948,6 +948,27 @@ def test_final_event_selection_is_independent_per_setting() -> None:
     ]
 
 
+def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> (
+    None
+):
+    rows = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P2"],
+            "encounter_id": ["E_LATE", "E_EARLY", "E_OTHER"],
+            "qualify_date": ["2022-03-01", "2022-01-01", "2022-02-01"],
+            "_data_screen_eligible": [False, True, True],
+        }
+    )
+
+    selected = final_assembly.reduce_setting_cohort_rows(rows)
+
+    assert selected[["patient_id", "encounter_id"]].to_dict("records") == [
+        {"patient_id": "P1", "encounter_id": "E_EARLY"},
+        {"patient_id": "P2", "encounter_id": "E_OTHER"},
+    ]
+    assert selected["_data_screen_eligible"].tolist() == [True, True]
+
+
 def test_current_diagnosis_reduction_uses_earliest_date_and_indicator_priority() -> (
     None
 ):
@@ -1691,7 +1712,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         encounter_calls.append((setting, chunksize))
         return pd.DataFrame(columns=final_assembly.ENCOUNTER_COLUMNS)
 
-    def fake_load_final_event_candidates(
+    def fake_iter_final_event_candidate_frames(
         config,
         category,
         demographics,
@@ -1702,7 +1723,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         strict,
     ):
         rfs_calls.append((category, chunksize, strict))
-        return pd.DataFrame(columns=final_assembly.FINAL_EVENT_CANDIDATE_COLUMNS)
+        yield pd.DataFrame(columns=final_assembly.FINAL_EVENT_CANDIDATE_COLUMNS)
 
     def fake_load_data_check_encounter_lookup(
         data_checks_path,
@@ -1754,8 +1775,8 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     )
     monkeypatch.setattr(
         final_assembly,
-        "_load_final_event_candidates",
-        fake_load_final_event_candidates,
+        "_iter_final_event_candidate_frames",
+        fake_iter_final_event_candidate_frames,
     )
     monkeypatch.setattr(
         final_assembly,

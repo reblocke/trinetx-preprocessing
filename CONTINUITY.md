@@ -44,6 +44,9 @@
 - GitHub PR #5 review found one current provenance gap: legacy data-screen CSVs were not manifest inputs. Commit `632bba1` requires and fingerprints both files under work-manifest schema `3`; all five review threads are resolved.
 - Final feature logic is now decomposed into a 167-line orchestrator, a shared reducer module, and dedicated vital/lab/diagnosis/procedure/medication modules; the 1,408-line final assembly retains cohort, lookup, screening, and output responsibilities. Focused tests pass without output-semantic changes.
 - Full local gates pass after the module extraction. Corrected tiers 00, 01, and 02 pass; tier 02 retained 36 tables and 51/51 rows with `37.877 s` final assembly and `218.047 MB` peak RSS.
+- The first clean full corrected profile completed in `54,513.44 s`; final assembly took `29,459.945 s`, all 36 outputs were written, and scratch cleaned to zero. Time gates passed, but provenance peak RSS was `10,125.734 MB`, above the `6,238 MB` gate.
+- One-second 512-bucket follow-up sampling isolated a `6,884.250 MB` pre-feature peak from concatenating all `8,456,198` predisposition event candidates. The failed diagnostic was stopped cleanly and seven scratch roots (`13.44 GB`) were inventoried/deleted.
+- Final event partitions now stream into the patient cohort index, with global earliest-patient reduction inside each bucket. Full local gates pass with `234` tests; tiers 00/01/02 pass unchanged with peak RSS at or below `219.031 MB`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -51,10 +54,10 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Archive the completed standalone diagnostic evidence and launch a clean full corrected profile from source commit `e51e743`.
+- Commit the streamed-cohort fix, then rerun standalone full final assembly with 512 analysis buckets and one-second RSS sampling.
 
 ## Next
-- Run a fresh full profile from the reviewed code state using the external aggregate-only monitor.
+- If the standalone memory/time/output gates pass, run a fresh full profile from the reviewed code state with 512 analysis buckets using the external aggregate-only monitor.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 

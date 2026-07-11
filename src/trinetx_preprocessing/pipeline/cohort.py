@@ -172,13 +172,21 @@ def select_setting_cohort(
         len(assembled),
     )
     assembled = assembled.drop(columns=["birth_year"])
-    assembled = assembled.sort_values(
+    return reduce_setting_cohort_rows(assembled)
+
+
+def reduce_setting_cohort_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Keep the earliest deterministic row per patient in one setting cohort."""
+
+    if frame.empty:
+        return frame.reset_index(drop=True)
+    selected = frame.sort_values(
         by=["qualify_date", "encounter_id"],
         ascending=[True, False],
         kind="mergesort",
     ).drop_duplicates(subset=["patient_id"], keep="first")
-    _require_unique_identifiers(assembled)
-    return assembled.reset_index(drop=True)
+    _require_unique_identifiers(selected)
+    return selected.reset_index(drop=True)
 
 
 def _guarded_merge(
