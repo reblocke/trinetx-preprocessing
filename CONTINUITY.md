@@ -38,10 +38,10 @@
 - Full profile attempt four completed every raw-domain scan exactly once and completed RFS, then exposed repeated encounter-screen partition reads inside patient-bucket final enrichment. The run was stopped with `SIGTERM` after the first bucket established a projected final-assembly miss; completed work tables and diagnostic evidence were preserved.
 - Data-screen eligibility is now computed once per category/setting before patient bucketing and reused during `AFTER` writes. Focused tests and Ruff pass.
 - `clean-scratch` now recognizes all current partition-store prefixes. It inventoried and deleted seven attempt-four final-assembly scratch roots totaling `35,650,393,292` bytes, then rechecked clean.
-- Full local gates pass with `231` tests. Corrected tiers 00, 01, and 02 pass with unchanged 36-file/534-column contracts and before/after row counts; tier-02 final assembly completed in `28.339 s`.
+- Full local gates pass with `233` tests. Corrected tiers 00, 01, and 02 pass from work-manifest schema `3` with unchanged 36-file/534-column contracts and before/after row counts; tier-02 final assembly completed in `34.969 s` with `218.422 MB` peak RSS.
 - The standalone full-scale final-assembly benchmark from `b5ebc38` indexed `2,375,800,669` compact feature rows once and reused precomputed screening across all 18 cohort/setting outputs.
 - The standalone benchmark completed all `256` patient buckets and `36` outputs in about `21,445 s` (`5h57m`), an `86.7%` reduction from the `161,763.975 s` baseline; it left zero recognized scratch roots.
-- GitHub PR #5 review found one current provenance gap: legacy data-screen CSVs were not manifest inputs. Work-manifest schema `3` now requires and fingerprints both files; focused tests pass. Other open review threads are already fixed and need UI resolution.
+- GitHub PR #5 review found one current provenance gap: legacy data-screen CSVs were not manifest inputs. Commit `632bba1` requires and fingerprints both files under work-manifest schema `3`; all five review threads are resolved.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -49,7 +49,7 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Verify the legacy-screen manifest fix through full local and corrected staged gates, then commit it before fresh full profiling.
+- Launch and monitor a clean full corrected profile from commit `632bba1`.
 
 ## Next
 - Rerun a fresh full profile from the reviewed code state using the external aggregate-only monitor.
