@@ -121,6 +121,7 @@ FINAL_DATA_SCREEN_BUCKET_COUNT = 256
 FINAL_DATA_SCREEN_BUCKET_COLUMNS = ["encounter_id_key", "encounter_id"]
 FINAL_EVENT_BUCKET_COUNT = 256
 FINAL_EVENT_DEFAULT_CHUNK_ROWS = 500_000
+FINAL_EVENT_REDUCED_BATCH_ROWS = 1_000_000
 FINAL_EVENT_BUCKET_COLUMNS = [*FINAL_EVENT_CANDIDATE_COLUMNS, "_row_order"]
 FINAL_DATA_SCREEN_ELIGIBLE_COLUMN = "_data_screen_eligible"
 
@@ -869,10 +870,38 @@ def _iter_final_event_candidate_frames(
         log_row_count(logger, f"final {category} post-filter dates", post_dates)
         log_row_count(logger, f"final {category} post-filter location", post_location)
         candidate_count = 0
-        for candidates in store.iter_reduced():
+        reduced_frames = store.iter_reduced()
+        for candidates in _batch_final_event_candidate_frames(
+            reduced_frames,
+            max_rows=FINAL_EVENT_REDUCED_BATCH_ROWS,
+        ):
             candidate_count += len(candidates)
             yield candidates
         log_row_count(logger, f"final {category} event candidates", candidate_count)
+
+
+def _batch_final_event_candidate_frames(
+    frames: Iterable[pd.DataFrame],
+    *,
+    max_rows: int,
+) -> Iterable[pd.DataFrame]:
+    """Combine small reduced partitions into bounded setting-join batches."""
+
+    if max_rows <= 0:
+        raise ValueError("max_rows must be positive.")
+    pending: list[pd.DataFrame] = []
+    pending_rows = 0
+    for frame in frames:
+        if frame.empty:
+            continue
+        if pending and pending_rows + len(frame) > max_rows:
+            yield pd.concat(pending, ignore_index=True)
+            pending = []
+            pending_rows = 0
+        pending.append(frame)
+        pending_rows += len(frame)
+    if pending:
+        yield pd.concat(pending, ignore_index=True)
 
 
 def _prepare_final_event_candidate_chunk(

@@ -47,6 +47,8 @@
 - The first clean full corrected profile completed in `54,513.44 s`; final assembly took `29,459.945 s`, all 36 outputs were written, and scratch cleaned to zero. Time gates passed, but provenance peak RSS was `10,125.734 MB`, above the `6,238 MB` gate.
 - One-second 512-bucket follow-up sampling isolated a `6,884.250 MB` pre-feature peak from concatenating all `8,456,198` predisposition event candidates. The failed diagnostic was stopped cleanly and seven scratch roots (`13.44 GB`) were inventoried/deleted.
 - Final event partitions now stream into the patient cohort index, with global earliest-patient reduction inside each bucket. Full local gates pass with `234` tests; tiers 00/01/02 pass unchanged with peak RSS at or below `219.031 MB`.
+- The first unbatched streaming diagnostic held peak RSS to `2,849.906 MB` but remained in ABG after 90 minutes because each reduced partition triggered separate setting joins; it was stopped cleanly and its scratch removed.
+- Reduced event partitions now form bounded one-million-row setting-join batches. Full local gates pass with `235` tests; tiers 00/01/02 pass unchanged, with tier-02 final assembly `33.725 s` and `219.000 MB` peak RSS.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -54,7 +56,7 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the streamed-cohort fix, then rerun standalone full final assembly with 512 analysis buckets and one-second RSS sampling.
+- Commit the batched streamed-cohort fix, then rerun standalone full final assembly with 512 analysis buckets and one-second RSS sampling.
 
 ## Next
 - If the standalone memory/time/output gates pass, run a fresh full profile from the reviewed code state with 512 analysis buckets using the external aggregate-only monitor.

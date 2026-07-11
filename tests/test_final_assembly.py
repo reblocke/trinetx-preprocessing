@@ -969,6 +969,27 @@ def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() ->
     assert selected["_data_screen_eligible"].tolist() == [True, True]
 
 
+def test_streamed_event_partitions_are_batched_below_row_limit() -> None:
+    frames = [
+        pd.DataFrame({"encounter_id": ["E1", "E2"]}),
+        pd.DataFrame({"encounter_id": ["E3", "E4"]}),
+        pd.DataFrame({"encounter_id": ["E5"]}),
+    ]
+
+    batches = list(
+        final_assembly._batch_final_event_candidate_frames(frames, max_rows=3)
+    )
+
+    assert [len(batch) for batch in batches] == [2, 3]
+    assert pd.concat(batches, ignore_index=True)["encounter_id"].tolist() == [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+    ]
+
+
 def test_current_diagnosis_reduction_uses_earliest_date_and_indicator_priority() -> (
     None
 ):

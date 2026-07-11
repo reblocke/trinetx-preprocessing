@@ -43,10 +43,11 @@
 4. Stream each clinical domain once. Classify typed code rules once per chunk
    and write compact RFS and feature candidate indexes.
 5. Derive RFS events and flags from compact indexes.
-6. Stream encounter-reduced event partitions through each setting lookup,
-   attach diagnosis-or-lab eligibility, and partition candidates by patient.
-   Within each patient bucket, reduce to the global earliest event for every
-   category/setting before feature enrichment.
+6. Combine encounter-reduced event partitions into bounded one-million-row
+   batches, stream them through each setting lookup, attach diagnosis-or-lab
+   eligibility, and partition candidates by patient. Within each patient
+   bucket, reduce to the global earliest event for every category/setting
+   before feature enrichment.
 7. Build patient-partitioned feature/history indexes once, reuse each bucket
    across all cohorts, apply the precomputed eligibility flag to `AFTER` rows,
    and stream the 36 final CSVs.

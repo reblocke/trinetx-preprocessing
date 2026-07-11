@@ -27,9 +27,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   diagnosis, procedure, and medication modules, leaving final assembly focused
   on cohort, lookup, screening, and output orchestration.
 - Final cohort construction streams encounter-reduced event partitions into the
-  patient-partitioned cohort index and performs the global earliest-patient
-  reduction inside each patient bucket instead of concatenating a full RFS
-  category in memory.
+  patient-partitioned cohort index in bounded one-million-row join batches and
+  performs the global earliest-patient reduction inside each patient bucket
+  instead of concatenating a full RFS category in memory.
 
 ### Fixed
 - Included compact analysis indexes in stage output inventories so work

@@ -899,7 +899,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Setting lookups and screening remain exact, output filenames
   and schema are unchanged, and final full-scale validation uses 512 analysis
   buckets to bound the later feature-source partitions. The configured default
-  remains 256 for smaller runs.
+  remains 256 for smaller runs. Reduced event partitions are combined into
+  bounded one-million-row join batches to avoid thousands of tiny external
+  lookup operations without recreating full-category memory pressure.
 - References: `src/trinetx_preprocessing/pipeline/cohort.py`,
   `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_final_assembly.py`.
