@@ -42,6 +42,8 @@
 - The standalone full-scale final-assembly benchmark from `b5ebc38` indexed `2,375,800,669` compact feature rows once and reused precomputed screening across all 18 cohort/setting outputs.
 - The standalone benchmark completed all `256` patient buckets and `36` outputs in about `21,445 s` (`5h57m`), an `86.7%` reduction from the `161,763.975 s` baseline; it left zero recognized scratch roots.
 - GitHub PR #5 review found one current provenance gap: legacy data-screen CSVs were not manifest inputs. Commit `632bba1` requires and fingerprints both files under work-manifest schema `3`; all five review threads are resolved.
+- Final feature logic is now decomposed into a 167-line orchestrator, a shared reducer module, and dedicated vital/lab/diagnosis/procedure/medication modules; the 1,408-line final assembly retains cohort, lookup, screening, and output responsibilities. Focused tests pass without output-semantic changes.
+- Full local gates pass after the module extraction. Corrected tiers 00 and 01 passed, then `/Volumes/LOCKE BOOK` disconnected before tier 02; `diskutil` currently reports no connected external physical disk.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -49,15 +51,16 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Launch and monitor a clean full corrected profile from commit `632bba1`.
+- Commit and push the locally verified final-feature module extraction while waiting for `/Volumes/LOCKE BOOK` to reconnect.
 
 ## Next
-- Rerun a fresh full profile from the reviewed code state using the external aggregate-only monitor.
+- After `/Volumes/LOCKE BOOK` reconnects, rerun corrected tier 02 and then a fresh full profile from the reviewed code state using the external aggregate-only monitor.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 
 ## Open questions (UNCONFIRMED if needed)
 - Whether release acceptance may use the documented deterministic non-strict resolution for the `286` source conflicts, or requires upstream conflict adjudication before a strict profile can pass.
+- When `/Volumes/LOCKE BOOK` will reconnect; external validation cannot proceed while no physical external disk is visible.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`

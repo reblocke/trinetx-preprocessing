@@ -23,6 +23,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - `AFTER` screening is derived from diagnosis-or-lab encounter availability.
 - Legacy domain group tables are opt-in through
   `storage.emit_legacy_group_tables`.
+- Final analytic feature logic is separated into small domain-owned vital, lab,
+  diagnosis, procedure, and medication modules, leaving final assembly focused
+  on cohort, lookup, screening, and output orchestration.
 
 ### Fixed
 - Included compact analysis indexes in stage output inventories so work

@@ -24,7 +24,11 @@
 - `Hypercapnia NEW DATA - Procedure (CSV Processing).ipynb` → `transform/procedure.py` + `pipeline/procedure_stage.py`.
 - `Hypercapnia NEW DATA - Vital Signs (CSV Processing).ipynb` → `transform/vitals.py` + `pipeline/vitals_stage.py`.
 - `Hypercapnia NEW DATA - RFS Processing.ipynb` → `transform/rfs.py` + `pipeline/rfs_stage.py`.
-- `Hypercapnia Final Dataset Generation - Master.ipynb` → `pipeline/final_assembly.py`.
+- `Hypercapnia Final Dataset Generation - Master.ipynb` → cohort and I/O
+  orchestration in `pipeline/final_assembly.py`, feature orchestration in
+  `pipeline/final_features.py`, shared reducers in
+  `pipeline/final_feature_common.py`, and domain feature modules named
+  `pipeline/final_*_features.py`.
 - `Hypercapnia Data Checks.ipynb` → diagnosis-or-lab encounter availability
   derived from normalized work tables; legacy files remain an explicit
   compatibility source.

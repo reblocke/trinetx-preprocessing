@@ -861,3 +861,23 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   external screen files.
 - References: `src/trinetx_preprocessing/work_manifest.py`,
   `tests/test_work_manifest.py`, `tests/test_cli.py`.
+
+### 2026-07-10 — Separate final features by clinical domain
+- Date: 2026-07-10
+- Decision: Keep final cohort, lookup, screening, and CSV orchestration in
+  `final_assembly.py`; move analytic feature enrichment into one small
+  orchestrator, shared deterministic reducers, and domain-owned vital, lab,
+  diagnosis, procedure, and medication modules.
+- Context: Corrected feature logic and bounded reducers had accumulated in a
+  single 2,747-line final-assembly module, making independent review and future
+  maintenance unnecessarily difficult.
+- Rationale: Clinical-domain ownership makes rules and reductions easier to
+  locate and test while preserving the existing CLI and compatibility helper
+  names.
+- Consequences: This extraction intentionally changes no output semantics.
+  Existing focused final-assembly tests exercise compatibility aliases, and
+  staged/full validation remains required before release.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/pipeline/final_features.py`,
+  `src/trinetx_preprocessing/pipeline/final_feature_common.py`,
+  `src/trinetx_preprocessing/pipeline/final_*_features.py`.
