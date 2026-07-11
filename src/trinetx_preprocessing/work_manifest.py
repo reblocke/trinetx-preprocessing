@@ -16,8 +16,12 @@ from . import __version__
 from .config import Config, collect_domain_paths
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
-WORK_MANIFEST_SCHEMA_VERSION = 2
+WORK_MANIFEST_SCHEMA_VERSION = 3
 INTERMEDIATE_SCHEMA_VERSION = 5
+LEGACY_DATA_SCREEN_FILENAMES = (
+    "amb_enc_screen.csv",
+    "inp_enc_screen.csv",
+)
 DOMAIN_STAGES = (
     "encounter",
     "labs",
@@ -69,10 +73,13 @@ def initialize_work_manifest(config: Config) -> Path:
         _require_identity(manifest, expected)
         return path
 
+    managed_top_level_names = {WORK_MANIFEST_FILENAME}
+    if config.data_screen.source == "legacy_files":
+        managed_top_level_names.add("data_checks")
     unmanaged = [
         item
         for item in config.work_dir.iterdir()
-        if item.name != WORK_MANIFEST_FILENAME and not item.name.startswith(".")
+        if item.name not in managed_top_level_names and not item.name.startswith(".")
     ]
     if unmanaged:
         raise StaleWorkError(
@@ -219,19 +226,40 @@ def _input_fingerprints(config: Config) -> list[dict[str, Any]]:
     fingerprints: list[dict[str, Any]] = []
     for domain, paths in sorted(paths_by_domain.items()):
         for path in paths:
-            stat = path.stat()
-            with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-                header = handle.readline().rstrip("\r\n")
-            fingerprints.append(
-                {
-                    "domain": domain,
-                    "path": str(path),
-                    "size_bytes": stat.st_size,
-                    "mtime_ns": stat.st_mtime_ns,
-                    "header": header,
-                }
-            )
+            fingerprints.append(_input_fingerprint(domain=domain, path=path))
+    if config.data_screen.source == "legacy_files":
+        for path in _legacy_data_screen_paths(config):
+            fingerprints.append(_input_fingerprint(domain="data_screen", path=path))
     return fingerprints
+
+
+def _legacy_data_screen_paths(config: Config) -> tuple[Path, ...]:
+    data_checks_dir = config.work_dir / "data_checks"
+    paths = tuple(data_checks_dir / name for name in LEGACY_DATA_SCREEN_FILENAMES)
+    missing = [path for path in paths if not path.is_file()]
+    if missing:
+        raise StaleWorkError(
+            "Legacy data screening requires current input files: "
+            + ", ".join(str(path) for path in missing)
+        )
+    return paths
+
+
+def _input_fingerprint(
+    *,
+    domain: str,
+    path: Path,
+) -> dict[str, Any]:
+    stat = path.stat()
+    with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
+        header = handle.readline().rstrip("\r\n")
+    return {
+        "domain": domain,
+        "path": str(path),
+        "size_bytes": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "header": header,
+    }
 
 
 def _require_identity(

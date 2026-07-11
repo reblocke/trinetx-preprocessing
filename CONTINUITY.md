@@ -20,7 +20,7 @@
 - Existing work tables are not reusable after the corrected intermediate schema is introduced.
 
 ## State
-- Branch: `codex/refactor-post-milestone-1`; release-state commit `411f42c` is pushed on PR #5.
+- Branch: `codex/refactor-post-milestone-1`; screening-performance fix `b5ebc38` is pushed on PR #5.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -39,6 +39,9 @@
 - Data-screen eligibility is now computed once per category/setting before patient bucketing and reused during `AFTER` writes. Focused tests and Ruff pass.
 - `clean-scratch` now recognizes all current partition-store prefixes. It inventoried and deleted seven attempt-four final-assembly scratch roots totaling `35,650,393,292` bytes, then rechecked clean.
 - Full local gates pass with `231` tests. Corrected tiers 00, 01, and 02 pass with unchanged 36-file/534-column contracts and before/after row counts; tier-02 final assembly completed in `28.339 s`.
+- The standalone full-scale final-assembly benchmark from `b5ebc38` indexed `2,375,800,669` compact feature rows once and reused precomputed screening across all 18 cohort/setting outputs.
+- The standalone benchmark completed all `256` patient buckets and `36` outputs in about `21,445 s` (`5h57m`), an `86.7%` reduction from the `161,763.975 s` baseline; it left zero recognized scratch roots.
+- GitHub PR #5 review found one current provenance gap: legacy data-screen CSVs were not manifest inputs. Work-manifest schema `3` now requires and fingerprints both files; focused tests pass. Other open review threads are already fixed and need UI resolution.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -46,10 +49,10 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the verified data-screen placement and cleanup fix, then benchmark standalone final assembly against preserved attempt-four work tables.
+- Verify the legacy-screen manifest fix through full local and corrected staged gates, then commit it before fresh full profiling.
 
 ## Next
-- Benchmark standalone final assembly against preserved attempt-four work tables, then rerun a fresh full profile from the reviewed code state.
+- Rerun a fresh full profile from the reviewed code state using the external aggregate-only monitor.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 

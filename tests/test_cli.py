@@ -535,6 +535,13 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
         "  source: legacy_files\n"
     )
     config = load_config(config_path)
+    data_checks_dir = work_dir / "data_checks"
+    data_checks_dir.mkdir()
+    for filename in {"amb_enc_screen.csv", "inp_enc_screen.csv"}:
+        pd.DataFrame(columns=["encounter_id"]).to_csv(
+            data_checks_dir / filename,
+            index=False,
+        )
     initialize_work_manifest(config)
     for filename in final_assembly.SETTING_ENCOUNTER_FILES.values():
         write_work_table(

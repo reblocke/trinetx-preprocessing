@@ -9,6 +9,7 @@ import pytest
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
+    DataScreenConfig,
     DomainConfig,
     GuardrailConfig,
     RfsConfig,
@@ -101,3 +102,46 @@ def test_work_manifest_running_stage_is_not_reusable(tmp_path: Path) -> None:
 
     with pytest.raises(StaleWorkError, match="missing completed stages"):
         require_current_work(config, required_stages=["encounter"])
+
+
+def test_work_manifest_fingerprints_legacy_data_screen_inputs(tmp_path: Path) -> None:
+    config = replace(
+        _config(tmp_path),
+        data_screen=DataScreenConfig(source="legacy_files"),
+    )
+    data_checks_dir = config.work_dir / "data_checks"
+    data_checks_dir.mkdir()
+    amb_path = data_checks_dir / "amb_enc_screen.csv"
+    inp_path = data_checks_dir / "inp_enc_screen.csv"
+    amb_path.write_text("encounter_id\nE1\n")
+    inp_path.write_text("encounter_id\nE2\n")
+
+    manifest_path = initialize_work_manifest(config)
+    manifest = require_current_work(config, required_stages=[])
+    data_screen_inputs = [
+        item for item in manifest["inputs"] if item["domain"] == "data_screen"
+    ]
+
+    assert manifest_path.exists()
+    assert [Path(item["path"]).name for item in data_screen_inputs] == [
+        "amb_enc_screen.csv",
+        "inp_enc_screen.csv",
+    ]
+    assert all(item["header"] == "encounter_id" for item in data_screen_inputs)
+
+    amb_path.write_text("encounter_id\nE1\nE3\n")
+    with pytest.raises(StaleWorkError, match="inputs"):
+        require_current_work(config, required_stages=[])
+
+
+def test_work_manifest_requires_both_legacy_data_screen_inputs(tmp_path: Path) -> None:
+    config = replace(
+        _config(tmp_path),
+        data_screen=DataScreenConfig(source="legacy_files"),
+    )
+    data_checks_dir = config.work_dir / "data_checks"
+    data_checks_dir.mkdir()
+    (data_checks_dir / "amb_enc_screen.csv").write_text("encounter_id\nE1\n")
+
+    with pytest.raises(StaleWorkError, match="inp_enc_screen.csv"):
+        initialize_work_manifest(config)

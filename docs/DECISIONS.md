@@ -844,3 +844,20 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
   `tests/test_cli.py`.
+
+### 2026-07-10 — Treat legacy data screens as manifest inputs
+- Date: 2026-07-10
+- Decision: Controlled `data_screen.source: legacy_files` runs require both
+  setting-specific screen CSVs before work-manifest initialization. The work
+  manifest fingerprints their path, byte size, modification time, and header,
+  and rejects missing or changed files.
+- Context: GitHub review identified that final assembly could consume edited
+  legacy screen files while the manifest still described the same raw inputs
+  and configuration.
+- Rationale: Screen membership changes final `AFTER` cohorts and is therefore
+  an analytic input, not incidental work-directory state.
+- Consequences: The work-manifest schema is version `3`; older work manifests
+  fail closed. Derived screening remains the corrected default and needs no
+  external screen files.
+- References: `src/trinetx_preprocessing/work_manifest.py`,
+  `tests/test_work_manifest.py`, `tests/test_cli.py`.

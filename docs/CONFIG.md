@@ -72,7 +72,10 @@ data_screen:
 - `cohort.event_selection` is fixed at `earliest_per_setting`.
 - `data_screen.mode` is fixed at `diagnosis_or_lab`.
 - `data_screen.source` defaults to `derived`. `legacy_files` remains available
-  only for controlled comparison work.
+  only for controlled comparison work. That mode requires
+  `work_dir/data_checks/amb_enc_screen.csv` and
+  `work_dir/data_checks/inp_enc_screen.csv` before manifest initialization;
+  both files are fingerprinted and later changes fail stale-work validation.
 
 ## External real-data template
 

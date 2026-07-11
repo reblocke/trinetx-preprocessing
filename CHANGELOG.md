@@ -50,6 +50,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   category/setting group in every patient bucket.
 - Extended `clean-scratch` to inventory and safely remove all current final
   cohort, feature-source, lab, and previous-vital partition stores.
+- Fingerprinted both legacy data-screen CSVs in the work manifest and require
+  them before controlled `legacy_files` runs, so changed screen inputs fail
+  stale-work validation instead of silently changing `AFTER` cohorts.
 
 ### Removed
 - Removed the obsolete `split_db.sh`; the portable Python `split` command is the
