@@ -186,8 +186,10 @@ def test_partitioned_parquet_store_round_trips_and_cleans(tmp_path: Path) -> Non
             [partition for _, partition in store.iter_frames()],
             ignore_index=True,
         )
+        populated = store.populated_buckets()
 
     assert observed.sort_values("encounter_id").reset_index(drop=True).equals(frame)
+    assert populated
     assert not list(tmp_path.glob(".trinetx-test-partitions-*"))
 
 
@@ -204,6 +206,34 @@ def test_partitioned_parquet_store_rejects_writes_after_read(tmp_path: Path) -> 
         list(store.iter_frames())
         with pytest.raises(RuntimeError, match="sealed"):
             store.add_frame(frame)
+
+
+def test_partitioned_parquet_store_releases_each_writer_while_sealing(
+    tmp_path: Path,
+) -> None:
+    store = PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-partitions-",
+        key_columns=["patient_id"],
+        bucket_count=4,
+    )
+    closed: list[int] = []
+
+    class _Writer:
+        def __init__(self, bucket: int) -> None:
+            self.bucket = bucket
+
+        def close(self) -> None:
+            assert self.bucket not in store._writers
+            closed.append(self.bucket)
+
+    store._writers = {bucket: _Writer(bucket) for bucket in range(4)}
+
+    store.seal()
+
+    assert sorted(closed) == [0, 1, 2, 3]
+    assert store._writers == {}
+    assert store._sealed is True
 
 
 def test_partitioned_key_lookup_queries_and_deduplicates_membership(

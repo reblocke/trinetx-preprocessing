@@ -118,9 +118,10 @@ class PartitionedParquetStore:
 
         if self._sealed:
             return
-        for writer in self._writers.values():
+        while self._writers:
+            _, writer = self._writers.popitem()
             writer.close()
-        self._writers.clear()
+            del writer
         self._sealed = True
 
     def disk_size_bytes(self) -> int:
@@ -128,6 +129,12 @@ class PartitionedParquetStore:
 
         self.seal()
         return sum(path.stat().st_size for path in self._paths.values())
+
+    def populated_buckets(self) -> set[int]:
+        """Return populated partition numbers without reading table data."""
+
+        self.seal()
+        return set(self._paths)
 
     def _write_bucket(self, bucket: int, frame: pd.DataFrame) -> None:
         import pyarrow as pa

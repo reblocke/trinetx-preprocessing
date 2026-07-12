@@ -108,19 +108,19 @@ def _enrich_legacy_final_features(
         chunksize=effective_chunksize,
         source_bucket=source_bucket,
     )
-    enriched = _merge_encounter_first_last_features(
+    enriched = _merge_prior_diagnosis_features(
         enriched,
         config=config,
-        groups=PROCEDURE_CODE_GROUPS,
-        source_columns=PROCEDURE_COLUMNS,
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,
         source_bucket=source_bucket,
     )
-    enriched = _merge_prior_diagnosis_features(
+    enriched = _merge_encounter_first_last_features(
         enriched,
         config=config,
+        groups=PROCEDURE_CODE_GROUPS,
+        source_columns=PROCEDURE_COLUMNS,
         patient_ids=patient_ids,
         encounter_ids=encounter_ids,
         chunksize=effective_chunksize,

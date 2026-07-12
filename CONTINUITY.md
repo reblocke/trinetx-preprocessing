@@ -51,6 +51,12 @@
 - Reduced event partitions now form bounded one-million-row setting-join batches. Full local gates pass with `235` tests; tiers 00/01/02 pass unchanged, with tier-02 final assembly `33.725 s` and `219.000 MB` peak RSS.
 - The batched 512-bucket diagnostic restored cohort throughput and held cohort peak RSS below `3,490 MB`, but feature indexing reached `7,017.828 MB` because open Parquet-writer memory scales with bucket count. It was stopped and cleaned; 512 buckets are rejected.
 - At 256 buckets, `FinalFeatureBucket` now retains one generic partition plus source position arrays and materializes requested columns on demand. Full local gates pass with `236` tests; tiers 00/01/02 pass unchanged, with tier-02 final assembly `30.510 s` and `218.266 MB` peak RSS.
+- The run was not blocked on an older process. It completed feature indexing, but the monitor recorded a `10,192.844 MiB` RSS peak while loading the first combined feature bucket and RSS remained above the gate during later buckets; the diagnostic was stopped cleanly once the failure was conclusive.
+- Aggregate logs/status were preserved under `corrected_v0.2.0/diagnostics/final_assembly_256_bounded_20260712`. Seven recognized scratch roots totaling `35,739,521,967` bytes were inventoried, deleted, and rechecked at zero.
+- Feature sources are now partitioned into independently sealed vital, lab, diagnosis, procedure, and medication stores. A patient bucket loads only its active domain, and diagnosis reductions are adjacent so each domain is consumed once per cohort group.
+- `PartitionedParquetStore.seal()` releases each writer as it closes instead of retaining every closed writer until all buckets are sealed.
+- Full local gates pass with `237` tests. Corrected tiers 00/01/02 pass with unchanged 36-file row contracts; tier-02 final assembly completed in `31.176 s` with `205.562 MB` peak RSS.
+- GitHub PR #5 has no newly returned actionable review. The most recent review request remains blocked by the account code-review quota; prior threads are resolved.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -58,10 +64,11 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the bounded feature-bucket fix, then rerun standalone full final assembly with 256 analysis buckets and one-second RSS sampling.
+- Commit the domain-partitioned feature-store fix, then rerun standalone full final assembly against the completed upstream work with one-second RSS sampling.
 
 ## Next
-- If the standalone memory/time/output gates pass, run a fresh full profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor.
+- After completion, require the `6,238 MB` memory gate, hash and compare all 36 outputs against the prior 256-bucket run, and preserve timing/peak evidence.
+- Once a bounded standalone rerun passes memory/time/output gates, run a fresh full profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 
@@ -73,3 +80,6 @@
 - `src/trinetx_preprocessing/config.py`, `transform/`, `pipeline/`, `storage.py`, `work_manifest.py`
 - `git diff --check`; `./.venv/bin/ruff check .`; external-TMP full `pytest -q`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
