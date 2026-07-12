@@ -897,11 +897,13 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   reduction therefore preserves cohort semantics while eliminating the
   full-category concatenation.
 - Consequences: Setting lookups and screening remain exact, output filenames
-  and schema are unchanged, and final full-scale validation uses 512 analysis
-  buckets to bound the later feature-source partitions. The configured default
-  remains 256 for smaller runs. Reduced event partitions are combined into
-  bounded one-million-row join batches to avoid thousands of tiny external
-  lookup operations without recreating full-category memory pressure.
+  and schema are unchanged. Reduced event partitions are combined into bounded
+  one-million-row join batches to avoid thousands of tiny external lookup
+  operations without recreating full-category memory pressure. Full-scale
+  validation retains the configured 256 buckets: a 512-bucket diagnostic was
+  rejected because doubling simultaneously open Parquet writers raised index
+  memory. Feature bucket reads instead retain one generic frame plus source
+  row-position arrays and materialize only requested columns on demand.
 - References: `src/trinetx_preprocessing/pipeline/cohort.py`,
   `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_final_assembly.py`.

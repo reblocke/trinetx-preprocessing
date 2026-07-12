@@ -50,41 +50,44 @@ class FinalFeatureBucket:
     """Feature source rows for one patient hash partition."""
 
     def __init__(self, frame: pd.DataFrame | None) -> None:
-        self._cache: dict[tuple[str, tuple[str, ...]], pd.DataFrame] = {}
         if frame is None or frame.empty:
-            self._frames: dict[str, pd.DataFrame] = {}
+            self._frame = pd.DataFrame(columns=SOURCE_COLUMNS)
+            self._source_positions: dict[str, np.ndarray] = {}
             return
-        self._frames = {
-            str(name): rows.sort_values("_source_row_order", kind="mergesort")
-            for name, rows in frame.groupby("source_name", sort=False)
-        }
+        self._frame = frame
+        source_row_order = frame["_source_row_order"].to_numpy(copy=False)
+        self._source_positions = {}
+        for name, positions in frame.groupby("source_name", sort=False).indices.items():
+            source_positions = np.asarray(positions, dtype=np.int64)
+            stable_order = np.argsort(
+                source_row_order[source_positions],
+                kind="stable",
+            )
+            self._source_positions[str(name)] = source_positions[stable_order]
 
     def frame(self, source_name: str, columns: Sequence[str]) -> pd.DataFrame:
         """Return one source in its historical logical column shape."""
 
-        cache_key = (source_name, tuple(columns))
-        cached = self._cache.get(cache_key)
-        if cached is not None:
-            return cached.copy()
-        source = self._frames.get(source_name)
-        if source is None:
+        positions = self._source_positions.get(source_name)
+        if positions is None:
             return pd.DataFrame(columns=columns)
-        result = pd.DataFrame(index=source.index)
+        result: dict[str, pd.Series] = {}
         for column in columns:
             if column == "start_date":
-                result[column] = source["date"]
+                source_column = "date"
             elif column in {"value", "lab_result_num_val"}:
-                result[column] = source["numeric_value"]
+                source_column = "numeric_value"
             else:
-                result[column] = source[column]
-        result = result.reset_index(drop=True)
-        self._cache[cache_key] = result
-        return result.copy()
+                source_column = column
+            result[column] = (
+                self._frame[source_column].take(positions).reset_index(drop=True)
+            )
+        return pd.DataFrame(result, columns=columns)
 
     def has_source(self, source_name: str) -> bool:
         """Return whether this patient bucket contains the logical source."""
 
-        return source_name in self._frames
+        return source_name in self._source_positions
 
 
 class FinalFeatureSourceStore:

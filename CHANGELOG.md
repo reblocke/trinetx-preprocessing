@@ -30,6 +30,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   patient-partitioned cohort index in bounded one-million-row join batches and
   performs the global earliest-patient reduction inside each patient bucket
   instead of concatenating a full RFS category in memory.
+- Feature buckets retain one generic partition plus lightweight source row
+  positions and materialize only requested historical columns on demand,
+  avoiding a second full source-partition copy and unbounded frame cache.
 
 ### Fixed
 - Included compact analysis indexes in stage output inventories so work

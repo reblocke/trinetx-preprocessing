@@ -49,8 +49,9 @@
    bucket, reduce to the global earliest event for every category/setting
    before feature enrichment.
 7. Build patient-partitioned feature/history indexes once, reuse each bucket
-   across all cohorts, apply the precomputed eligibility flag to `AFTER` rows,
-   and stream the 36 final CSVs.
+   across all cohorts through source row-position views, materialize only the
+   requested domain columns, apply the precomputed eligibility flag to `AFTER`
+   rows, and stream the 36 final CSVs.
 
 Work tables are addressed by legacy logical CSV names, but
 `storage.intermediate_format` controls whether physical intermediates are CSV or

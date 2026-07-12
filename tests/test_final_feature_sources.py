@@ -14,6 +14,8 @@ from trinetx_preprocessing.config import (
 )
 from trinetx_preprocessing.pipeline.final_feature_sources import (
     LAB_SOURCE_NAME,
+    SOURCE_COLUMNS,
+    FinalFeatureBucket,
     FinalFeatureSourceStore,
 )
 from trinetx_preprocessing.storage import stable_bucket_ids, write_work_table
@@ -88,3 +90,24 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
         assert diagnosis["principal_diagnosis_indicator"].tolist() == ["P"]
 
     assert not list(config.work_dir.glob(".trinetx-final-feature-sources-*"))
+
+
+def test_final_feature_bucket_materializes_sources_in_observed_order() -> None:
+    frame = pd.DataFrame(
+        [
+            ["value_BMI.csv", "P1", "E2", "39156-5", "2022-01-02", 41.0],
+            ["value_BMI.csv", "P1", "E1", "39156-5", "2022-01-01", 40.0],
+            ["HAS_J9600.csv", "P1", "E3", "J96.00", "2022-01-03", None],
+        ],
+        columns=SOURCE_COLUMNS[:6],
+    )
+    for column in SOURCE_COLUMNS[6:9]:
+        frame[column] = pd.NA
+    frame["_source_row_order"] = [2, 1, 3]
+
+    bucket = FinalFeatureBucket(frame.loc[:, SOURCE_COLUMNS])
+    bmi = bucket.frame("value_BMI.csv", VITALS_COLUMNS)
+
+    assert bmi["encounter_id"].tolist() == ["E1", "E2"]
+    assert bmi["value"].tolist() == [40.0, 41.0]
+    assert bucket.has_source("HAS_J9600.csv")

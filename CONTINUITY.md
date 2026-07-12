@@ -49,6 +49,8 @@
 - Final event partitions now stream into the patient cohort index, with global earliest-patient reduction inside each bucket. Full local gates pass with `234` tests; tiers 00/01/02 pass unchanged with peak RSS at or below `219.031 MB`.
 - The first unbatched streaming diagnostic held peak RSS to `2,849.906 MB` but remained in ABG after 90 minutes because each reduced partition triggered separate setting joins; it was stopped cleanly and its scratch removed.
 - Reduced event partitions now form bounded one-million-row setting-join batches. Full local gates pass with `235` tests; tiers 00/01/02 pass unchanged, with tier-02 final assembly `33.725 s` and `219.000 MB` peak RSS.
+- The batched 512-bucket diagnostic restored cohort throughput and held cohort peak RSS below `3,490 MB`, but feature indexing reached `7,017.828 MB` because open Parquet-writer memory scales with bucket count. It was stopped and cleaned; 512 buckets are rejected.
+- At 256 buckets, `FinalFeatureBucket` now retains one generic partition plus source position arrays and materializes requested columns on demand. Full local gates pass with `236` tests; tiers 00/01/02 pass unchanged, with tier-02 final assembly `30.510 s` and `218.266 MB` peak RSS.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -56,10 +58,10 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the batched streamed-cohort fix, then rerun standalone full final assembly with 512 analysis buckets and one-second RSS sampling.
+- Commit the bounded feature-bucket fix, then rerun standalone full final assembly with 256 analysis buckets and one-second RSS sampling.
 
 ## Next
-- If the standalone memory/time/output gates pass, run a fresh full profile from the reviewed code state with 512 analysis buckets using the external aggregate-only monitor.
+- If the standalone memory/time/output gates pass, run a fresh full profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 
