@@ -57,6 +57,9 @@
 - `PartitionedParquetStore.seal()` releases each writer as it closes instead of retaining every closed writer until all buckets are sealed.
 - Full local gates pass with `237` tests. Corrected tiers 00/01/02 pass with unchanged 36-file row contracts; tier-02 final assembly completed in `31.176 s` with `205.562 MB` peak RSS.
 - GitHub PR #5 has no newly returned actionable review. The most recent review request remains blocked by the account code-review quota; prior threads are resolved.
+- Commit `0ba7ded` partitions final feature sources by domain and is pushed on PR #5.
+- The full standalone 256-bucket domain-partitioned final assembly completed in `39,249.45 s` (`10h54m`) with `5,972.828 MiB` observed peak RSS, 36 outputs, and zero scratch roots. It passes the `80,882 s` and `6,238 MB` gates.
+- Current output hashes match the prior 256-bucket output exactly across all 36 tables: zero hash, schema, row-count, missing, or extra differences. Evidence is under `manifests/full_256_domain_final`, `manifests/full_256_domain_comparison.json`, and `diagnostics/final_assembly_256_domain_20260712`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -64,11 +67,10 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit the domain-partitioned feature-store fix, then rerun standalone full final assembly against the completed upstream work with one-second RSS sampling.
+- Prepare a fresh full profile from commit `0ba7ded`; preserve successful standalone diagnostics and clean only the full profile work/output/profile areas.
 
 ## Next
-- After completion, require the `6,238 MB` memory gate, hash and compare all 36 outputs against the prior 256-bucket run, and preserve timing/peak evidence.
-- Once a bounded standalone rerun passes memory/time/output gates, run a fresh full profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor.
+- Run a fresh full non-strict profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor. A strict run remains intentionally blocked by the documented `286` source encounter-setting conflicts.
 - Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
 - Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
 
