@@ -64,6 +64,7 @@
 - Fresh full output hashes exactly match the independent standalone bounded run across all 36 tables. The PHI-safe aggregate delta reports `4,412,932` Milestone 1 rows, `6,949,511` corrected rows, `3,466,002` shared keys, `946,930` Milestone-only keys, and `3,483,509` corrected-only keys.
 - GitHub review of `a98142b` found two actionable issues: eligibility could become positionally misaligned after final sorting, and strict final-assembly resumes accepted conflict-resolved non-strict encounter work. Both fixes pass `238` tests and corrected tiers 00/01/02 with unchanged row contracts.
 - The alignment fix is behavior-changing, so the `3b87b83` full profile, hashes, and Milestone 1 delta are stale for release even though they remain useful performance diagnostics.
+- Commit `b134f70` fixes both findings, is pushed, and received a clean GitHub Codex re-review with all threads resolved.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -71,7 +72,7 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Commit and push the two GitHub review fixes, resolve their review threads, then regenerate the fresh full non-strict profile and aggregate evidence from the fixed code state.
+- Regenerate the fresh full non-strict profile, output hashes, and aggregate Milestone 1 delta from the review-clean code state.
 
 ## Next
 - Request a fresh GitHub Codex review if quota permits and address actionable findings.
