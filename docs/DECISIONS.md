@@ -929,3 +929,22 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/pipeline/final_feature_sources.py`,
   `src/trinetx_preprocessing/pipeline/final_features.py`,
   `src/trinetx_preprocessing/storage.py`, `tests/test_storage.py`.
+
+### 2026-07-13 — Preserve row alignment and strictness across resume boundaries
+- Date: 2026-07-13
+- Decision: Sort precomputed data-screen eligibility with its final row before
+  writing `AFTER` outputs. Reject `run-final-assembly --strict` when completed
+  encounter work includes a non-strict conflict-resolution report.
+- Context: GitHub review found that final output sorting could separate a
+  positional eligibility mask from its row, and that strict downstream resume
+  did not reassert the encounter-stage conflict gate.
+- Rationale: Screening is an observation-level property and must follow the
+  observation through every reorder. Strictness must apply to prerequisite
+  evidence, not only to the currently invoked stage.
+- Consequences: The prior full profile is stale because the alignment fix can
+  change `AFTER` membership. Local tests and all three corrected staged tiers
+  pass; full evidence must be regenerated from the fixed commit.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/work_manifest.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
+  `tests/test_cli.py`.

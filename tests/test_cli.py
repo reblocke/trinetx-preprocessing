@@ -622,6 +622,36 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
     assert result.returncode == 0, output
     assert (output_dir / "AMBULATORY" / "RFS_ABG_ENC_AMB_BEFORE.csv").exists()
 
+    (work_dir / "encounter_conflicts.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "encounter_conflict_count": 1,
+                "type_combinations": {"AMB+IMP": 1},
+            }
+        )
+    )
+    strict_resume = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "trinetx_preprocessing",
+            "run-final-assembly",
+            "--config",
+            str(config_path),
+            "--strict",
+        ],
+        cwd=ROOT,
+        env=_build_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    strict_output = (strict_resume.stdout or "") + (strict_resume.stderr or "")
+    assert strict_resume.returncode == 2
+    assert "requires conflict-free encounter work" in strict_output
+
 
 def test_inspect_inputs_cli_reports_missing_domains(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"

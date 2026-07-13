@@ -187,6 +187,26 @@ def require_current_work(
     return manifest
 
 
+def require_strict_encounter_work(config: Config) -> None:
+    """Reject strict resumes from deterministically conflict-resolved encounters."""
+
+    path = config.work_dir / "encounter_conflicts.json"
+    if not path.exists():
+        return
+    try:
+        payload = json.loads(path.read_text())
+        conflict_count = int(payload["encounter_conflict_count"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise StaleWorkError(
+            f"Strict resume cannot validate encounter conflict report: {path}"
+        ) from exc
+    if conflict_count:
+        raise StaleWorkError(
+            "Strict resume requires conflict-free encounter work; "
+            f"found {conflict_count} deterministically resolved conflict(s)."
+        )
+
+
 def work_manifest_path(config: Config) -> Path:
     """Return the configured work-manifest path."""
 

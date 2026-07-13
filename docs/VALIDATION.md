@@ -101,7 +101,7 @@ release waits while the measured top bottleneck is addressed.
 
 ## Current corrected evidence
 
-The current full non-strict profile from commit `3b87b83` completed with:
+The pre-review full non-strict profile from commit `3b87b83` completed with:
 
 - 36 final CSVs and the ordered 534-column schema;
 - 73,993.53 seconds total wall time;
@@ -116,9 +116,11 @@ The full output manifest exactly reproduces the independently run bounded final
 assembly across all 36 tables. The PHI-safe Milestone 1 delta contains only
 aggregate counts: 4,412,932 Milestone 1 rows, 6,949,511 corrected rows,
 3,466,002 shared keys, 946,930 Milestone-only keys, and 3,483,509
-corrected-only keys. Release readiness remains blocked only by holistic review,
-fresh GitHub review availability, and the explicit decision on whether the 286
-source conflicts require upstream adjudication.
+corrected-only keys. GitHub review subsequently found a behavior-changing
+`AFTER` mask-alignment defect and a strict-resume gap. Both are fixed and pass
+local/staged tests, but this profile and delta are no longer current release
+evidence. They must be regenerated before the explicit decision on whether the
+286 source conflicts require upstream adjudication.
 
 ## Hygiene and review
 

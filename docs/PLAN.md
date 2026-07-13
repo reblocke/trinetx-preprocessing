@@ -21,11 +21,11 @@ notebook defects under `docs/SPEC.md` while preserving the public 36-file,
 
 ## Current status
 
-Implementation, local tests, staged tiers, the full bounded profile, output
-reproducibility hashes, scratch cleanup, and the aggregate-only Milestone 1
-delta are complete. The measured full profile passes all time, memory, disk,
-and output-contract gates. Remaining work is holistic review, fresh GitHub
-review when quota permits, and a release decision for the 286 source
+Implementation, local tests, and staged tiers are complete. A bounded full
+profile passed every resource gate, but GitHub review then found an `AFTER`
+mask-alignment defect and a strict-resume gap. Both fixes pass local and staged
+tests; the full profile, output hashes, and aggregate-only Milestone 1 delta
+must now be refreshed. The remaining policy decision concerns the 286 source
 encounter-setting conflicts that strict mode intentionally rejects.
 
 ## Definition of done

@@ -37,6 +37,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   5,896.062 MB peak RSS; final assembly completed in 49,153.049 seconds.
 
 ### Fixed
+- Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
+  eligible/ineligible rows cannot receive one another's screen result.
+- Made strict final-assembly resumes reject encounter work that contains a
+  non-strict conflict-resolution report.
 - Included compact analysis indexes in stage output inventories so work
   manifests and callers track the artifacts consumed downstream.
 - Replaced per-encounter Python conflict aggregation with a bounded vectorized

@@ -1245,6 +1245,28 @@ def test_precomputed_data_screen_rejects_row_count_drift() -> None:
         )
 
 
+def test_final_output_keeps_data_screen_aligned_after_sorting() -> None:
+    enriched = pd.DataFrame(
+        {
+            "patient_id": ["P2", "P1"],
+            "encounter_id": ["E2", "E1"],
+            final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN: [False, True],
+        }
+    )
+
+    before, eligibility = final_assembly._finalize_output_with_data_screen(enriched)
+    after = final_assembly._apply_precomputed_data_screen(
+        before,
+        eligibility,
+        context="ABG/AMB",
+        logger=logging.getLogger(__name__),
+    )
+
+    assert before["encounter_id"].tolist() == ["E1", "E2"]
+    assert eligibility.tolist() == [True, False]
+    assert after["encounter_id"].tolist() == ["E1"]
+
+
 def test_run_final_assembly_removes_data_check_lookup_scratch(
     tmp_path: Path,
 ) -> None:

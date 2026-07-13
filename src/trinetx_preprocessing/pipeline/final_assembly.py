@@ -242,8 +242,7 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
                     logger=logger,
                     source_bucket=source_bucket,
                 )
-                eligibility = enriched.pop(FINAL_DATA_SCREEN_ELIGIBLE_COLUMN)
-                before = _finalize_output(enriched)
+                before, eligibility = _finalize_output_with_data_screen(enriched)
                 _append_final_rows(
                     output_paths[(str(setting), str(category), "BEFORE")],
                     before,
@@ -1439,6 +1438,21 @@ def _finalize_output(df: pd.DataFrame) -> pd.DataFrame:
         drop=True
     )
     return ordered
+
+
+def _finalize_output_with_data_screen(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Finalize rows and keep precomputed screening aligned to final order."""
+
+    if FINAL_DATA_SCREEN_ELIGIBLE_COLUMN not in df:
+        raise ValueError("Final rows are missing precomputed data-screen eligibility.")
+    ordered = df.sort_values(
+        by=["patient_id", "encounter_id"],
+        kind="mergesort",
+    ).reset_index(drop=True)
+    eligibility = ordered.pop(FINAL_DATA_SCREEN_ELIGIBLE_COLUMN).reset_index(drop=True)
+    return _finalize_output(ordered), eligibility
 
 
 def _legacy_default_value(column: str) -> object:

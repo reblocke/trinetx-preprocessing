@@ -62,6 +62,8 @@
 - Current output hashes match the prior 256-bucket output exactly across all 36 tables: zero hash, schema, row-count, missing, or extra differences. Evidence is under `manifests/full_256_domain_final`, `manifests/full_256_domain_comparison.json`, and `diagnostics/final_assembly_256_domain_20260712`.
 - The fresh full non-strict profile from commit `3b87b83` completed all 36 outputs in `73,993.53 s`; final assembly took `49,153.049 s`, profiled peak RSS was `5,896.062 MB`, work footprint was `15,894,947,783` bytes, output footprint was `7,898,119,999` bytes, and recognized scratch was zero.
 - Fresh full output hashes exactly match the independent standalone bounded run across all 36 tables. The PHI-safe aggregate delta reports `4,412,932` Milestone 1 rows, `6,949,511` corrected rows, `3,466,002` shared keys, `946,930` Milestone-only keys, and `3,483,509` corrected-only keys.
+- GitHub review of `a98142b` found two actionable issues: eligibility could become positionally misaligned after final sorting, and strict final-assembly resumes accepted conflict-resolved non-strict encounter work. Both fixes pass `238` tests and corrected tiers 00/01/02 with unchanged row contracts.
+- The alignment fix is behavior-changing, so the `3b87b83` full profile, hashes, and Milestone 1 delta are stale for release even though they remain useful performance diagnostics.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -69,7 +71,7 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Run a holistic local review of the completed corrected implementation and evidence bookkeeping; address only actionable findings that preserve current evidence or explicitly invalidate it.
+- Commit and push the two GitHub review fixes, resolve their review threads, then regenerate the fresh full non-strict profile and aggregate evidence from the fixed code state.
 
 ## Next
 - Request a fresh GitHub Codex review if quota permits and address actionable findings.

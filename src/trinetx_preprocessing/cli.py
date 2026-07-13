@@ -75,6 +75,7 @@ from .work_manifest import (
     mark_stage_complete,
     mark_stage_started,
     require_current_work,
+    require_strict_encounter_work,
 )
 
 REQUIRED_COLUMNS: dict[str, list[str]] = {
@@ -1239,6 +1240,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config,
                 required_stages=FINAL_ASSEMBLY_PREREQUISITES,
             )
+            if args.strict:
+                require_strict_encounter_work(config)
             mark_stage_started(config, "final_assembly")
             output_paths = run_final_assembly(config, strict=args.strict)
             mark_stage_complete(config, "final_assembly", output_paths)
