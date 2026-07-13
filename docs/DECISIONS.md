@@ -907,3 +907,25 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/pipeline/cohort.py`,
   `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_final_assembly.py`.
+
+### 2026-07-13 — Partition final feature sources by clinical domain
+- Date: 2026-07-13
+- Decision: Build independently sealed patient-partitioned stores for vital,
+  lab, diagnosis, procedure, and medication feature candidates. Load only the
+  active clinical domain for each patient bucket and release each Parquet writer
+  as it closes.
+- Context: A 256-bucket full diagnostic still reached 10,192.844 MiB because
+  the first patient bucket materialized every feature domain in one generic
+  frame from an index containing 2.38 billion rows overall. RSS remained above
+  the 6,238 MB gate.
+- Rationale: Domain-specific stores preserve one scan per compact feature
+  source and deterministic row order while bounding bucket memory by the
+  largest active domain rather than the sum of all domains.
+- Consequences: The fresh full profile completed all 36 outputs in 73,993.53
+  seconds, final assembly in 49,153.049 seconds, and peak RSS at 5,896.062 MB.
+  All 36 output hashes match an independent standalone final-assembly run, and
+  recognized scratch is zero. Strict release acceptance remains a separate
+  decision because the source contains 286 cross-setting encounter IDs.
+- References: `src/trinetx_preprocessing/pipeline/final_feature_sources.py`,
+  `src/trinetx_preprocessing/pipeline/final_features.py`,
+  `src/trinetx_preprocessing/storage.py`, `tests/test_storage.py`.

@@ -15,9 +15,18 @@ notebook defects under `docs/SPEC.md` while preserving the public 36-file,
 6. Use bounded Parquet partitions and a fail-closed work manifest.
 7. Reuse patient-partitioned feature/history indexes across all 18 cohorts.
 8. Remove the unsupported shell splitter and maintain the Python CLI path.
-9. Pass local, corrected staged, full strict profile, aggregate delta, and
-   holistic review gates.
+9. Pass local, corrected staged, full profile, aggregate delta, and holistic
+   review gates; resolve the strict source-conflict acceptance decision.
 10. Bump to `0.2.0` and release `v0.2.0` without changing Milestone 1 tags.
+
+## Current status
+
+Implementation, local tests, staged tiers, the full bounded profile, output
+reproducibility hashes, scratch cleanup, and the aggregate-only Milestone 1
+delta are complete. The measured full profile passes all time, memory, disk,
+and output-contract gates. Remaining work is holistic review, fresh GitHub
+review when quota permits, and a release decision for the 286 source
+encounter-setting conflicts that strict mode intentionally rejects.
 
 ## Definition of done
 

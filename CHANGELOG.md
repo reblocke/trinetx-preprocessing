@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
-## [0.2.0] - 2026-07-09
+## [0.2.0] - Unreleased
 ### Added
 - Added the corrected `docs/SPEC.md` analytic contract, immutable typed clinical
   rules, aggregate gas-rule rejection audits, encounter-setting conflict
@@ -30,9 +30,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   patient-partitioned cohort index in bounded one-million-row join batches and
   performs the global earliest-patient reduction inside each patient bucket
   instead of concatenating a full RFS category in memory.
-- Feature buckets retain one generic partition plus lightweight source row
-  positions and materialize only requested historical columns on demand,
-  avoiding a second full source-partition copy and unbounded frame cache.
+- Final feature sources are partitioned independently by clinical domain.
+  Patient buckets load only the active vital, lab, diagnosis, procedure, or
+  medication domain instead of materializing all feature rows together.
+- Full corrected profiling completed all 36 outputs in 73,993.53 seconds with
+  5,896.062 MB peak RSS; final assembly completed in 49,153.049 seconds.
 
 ### Fixed
 - Included compact analysis indexes in stage output inventories so work

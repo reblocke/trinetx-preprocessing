@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Deliver post-Milestone 1 package `0.2.0` with corrected cohort and feature semantics, bounded external-memory execution, and substantially faster final assembly.
-- Success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, a fresh strict BOOK profile, aggregate-only delta evidence, and clean review/release gates.
+- Success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, a fresh BOOK profile, aggregate-only delta evidence, an explicit strict source-conflict decision, and clean review/release gates.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -60,6 +60,8 @@
 - Commit `0ba7ded` partitions final feature sources by domain and is pushed on PR #5.
 - The full standalone 256-bucket domain-partitioned final assembly completed in `39,249.45 s` (`10h54m`) with `5,972.828 MiB` observed peak RSS, 36 outputs, and zero scratch roots. It passes the `80,882 s` and `6,238 MB` gates.
 - Current output hashes match the prior 256-bucket output exactly across all 36 tables: zero hash, schema, row-count, missing, or extra differences. Evidence is under `manifests/full_256_domain_final`, `manifests/full_256_domain_comparison.json`, and `diagnostics/final_assembly_256_domain_20260712`.
+- The fresh full non-strict profile from commit `3b87b83` completed all 36 outputs in `73,993.53 s`; final assembly took `49,153.049 s`, profiled peak RSS was `5,896.062 MB`, work footprint was `15,894,947,783` bytes, output footprint was `7,898,119,999` bytes, and recognized scratch was zero.
+- Fresh full output hashes exactly match the independent standalone bounded run across all 36 tables. The PHI-safe aggregate delta reports `4,412,932` Milestone 1 rows, `6,949,511` corrected rows, `3,466,002` shared keys, `946,930` Milestone-only keys, and `3,483,509` corrected-only keys.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -67,12 +69,12 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Prepare a fresh full profile from commit `0ba7ded`; preserve successful standalone diagnostics and clean only the full profile work/output/profile areas.
+- Run a holistic local review of the completed corrected implementation and evidence bookkeeping; address only actionable findings that preserve current evidence or explicitly invalidate it.
 
 ## Next
-- Run a fresh full non-strict profile from the reviewed code state with 256 analysis buckets using the external aggregate-only monitor. A strict run remains intentionally blocked by the documented `286` source encounter-setting conflicts.
-- Validate the completed 36-file/534-column output contract, provenance, scratch cleanup, resource use, and compact-index scan evidence.
-- Produce the external aggregate-only delta report, run a holistic local review, and refresh documentation/release readiness. Strict acceptance remains blocked by `286` source encounter-setting conflicts; fresh GitHub Codex review is blocked by the current account review quota.
+- Request a fresh GitHub Codex review if quota permits and address actionable findings.
+- Decide whether release acceptance may use deterministic non-strict resolution for the `286` source conflicts or requires upstream adjudication; do not weaken strict semantics silently.
+- After review and the conflict decision, finalize `v0.2.0` release bookkeeping without changing `refactor-milestone-1`.
 
 ## Open questions (UNCONFIRMED if needed)
 - Whether release acceptance may use the documented deterministic non-strict resolution for the `286` source conflicts, or requires upstream conflict adjudication before a strict profile can pass.

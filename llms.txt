@@ -4,7 +4,9 @@ Repository: https://github.com/reblocke/trinetx-preprocessing
 Purpose: refactor TriNetX hypercapnia preprocessing notebooks into a
 deterministic Python CLI pipeline.
 Status: Milestone 1 is the immutable replication fallback; post-milestone work
-implements the corrected contract in `docs/SPEC.md`.
+implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
+output-reproducibility, and aggregate-delta evidence is complete; release is
+pending review and the documented encounter-setting conflict decision.
 
 ## Human-Readable Entry Points
 - `README.md`: primary overview and quickstart.

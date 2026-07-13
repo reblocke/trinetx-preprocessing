@@ -20,8 +20,9 @@ Post-Milestone 1 validation uses `docs/SPEC.md` as the behavior authority:
 2. Synthetic and staged tiers prove the stable 36-file/534-column contract and
    corrected invariants. Expected intentional deltas from notebooks are not
    treated as failures.
-3. A fresh full `profile --strict` proves real-data execution, resource use,
-   one-pass index construction, and output completeness.
+3. A fresh full profile proves real-data execution, resource use, one-pass
+   index construction, and output completeness. Strict execution separately
+   proves that source encounter-setting conflicts fail closed.
 4. A PHI-safe aggregate report compares corrected output to Milestone 1 by
    cohort additions/removals, rule exclusions, setting conflict resolution,
    and screening effects. It contains no identifiers or row examples.
@@ -75,9 +76,14 @@ UV_CACHE_DIR="$ROOT/uv-cache" \
 PYTHONUNBUFFERED=1 \
 ./.venv/bin/python -m trinetx_preprocessing profile \
   --config "$ROOT/config.yaml" \
-  --out "$ROOT/profile-corrected-v0.2.0" \
-  --strict
+  --out "$ROOT/profile-corrected-v0.2.0"
 ```
+
+Run the same command with `--strict` when source conflict adjudication is part
+of the acceptance gate. The current full input has 286 encounter IDs assigned
+to multiple settings, so strict execution intentionally fails; non-strict
+execution records an aggregate conflict report and applies the specified
+deterministic resolution.
 
 Required evidence:
 
@@ -92,6 +98,27 @@ Required evidence:
 
 If a performance target is missed, correctness evidence remains useful, but the
 release waits while the measured top bottleneck is addressed.
+
+## Current corrected evidence
+
+The current full non-strict profile from commit `3b87b83` completed with:
+
+- 36 final CSVs and the ordered 534-column schema;
+- 73,993.53 seconds total wall time;
+- 49,153.049 seconds final-assembly time;
+- 5,896.062 MB peak RSS;
+- 15,894,947,783 bytes of work tables and 7,898,119,999 bytes of outputs;
+- five compact feature sources scanned once, totaling 2,375,800,669 indexed
+  rows;
+- zero recognized scratch artifacts after completion.
+
+The full output manifest exactly reproduces the independently run bounded final
+assembly across all 36 tables. The PHI-safe Milestone 1 delta contains only
+aggregate counts: 4,412,932 Milestone 1 rows, 6,949,511 corrected rows,
+3,466,002 shared keys, 946,930 Milestone-only keys, and 3,483,509
+corrected-only keys. Release readiness remains blocked only by holistic review,
+fresh GitHub review availability, and the explicit decision on whether the 286
+source conflicts require upstream adjudication.
 
 ## Hygiene and review
 
