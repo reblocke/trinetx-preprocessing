@@ -795,6 +795,18 @@ def test_component_history_excludes_events_before_configured_lookbacks(
         "stale_history,e_stale_history,2020-01-01,CPT,95811,",
     )
     _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "stale_history,e_stale_history,2022-12-01,LOINC,4548-4,8,,%",
+        "stale_history,e_stale_history,2022-09-01,LOINC,77147-7,45,,"
+        "mL/min/1.73m2",
+        "stale_history,e_stale_history,2022-12-15,LOINC,77147-7,50,,"
+        "mL/min/1.73m2",
+        "stale_history,e_stale_history,2022-12-01,LOINC,69990-9,20,,"
+        "events/hour",
+        "stale_history,e_stale_history,2022-12-01,LOINC,10230-1,55,,%",
+        "stale_history,e_stale_history,2022-12-01,LOINC,48794-2,,F2,stage",
+    )
+    _append_rows(
         export_root / "Medications" / "medication.csv",
         "stale_history,e_stale_history,RXNORM,29046,2020-01-01,oral,,",
         "stale_history,e_stale_history,RXNORM,2626,2020-01-01,oral,,",
@@ -813,12 +825,30 @@ def test_component_history_excludes_events_before_configured_lookbacks(
             """
             SELECT t2d_status, pap_evidence,
                    active_antihypertensive_ingredient_count,
-                   antipsychotic_active
+                   antipsychotic_active, a1c_latest, egfr_latest,
+                   ahi_rei_value, lvef, fibrosis_stage,
+                   has_a1c, has_egfr_history, has_ahi_rei, has_lvef,
+                   has_liver_fibrosis_staging
             FROM analysis_glp1_eligibility
             WHERE patient_id = 'stale_history'
             """
         ).fetchone()
-        assert row == ("indeterminate", False, 0, False)
+        assert row == (
+            "indeterminate",
+            False,
+            0,
+            False,
+            None,
+            None,
+            None,
+            None,
+            None,
+            False,
+            False,
+            False,
+            False,
+            False,
+        )
     finally:
         connection.close()
 

@@ -22,7 +22,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and
-  medication evidence, including open-ended active medication records.
+  medication evidence, including open-ended active medication records, and
+  applied the measurement-specific window to every baseline lab phenotype.
 - Included dirty tracked and untracked source content in the deterministic run
   identity so locally modified builds cannot reuse clean-code outputs.
 - Honored the Parquet and HTML output switches and emitted aggregate warnings

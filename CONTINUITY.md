@@ -93,6 +93,9 @@
 - Local fixes for all three PR findings pass focused tests. The validation-gap checkpoint also fingerprints dirty source content, warns on required concept sets with no retained matches, honors optional output switches, and adds locked Python 3.11 CI.
 - Full local gates pass with `259` tests. A fresh 20-case production CLI smoke completed in `0.59 s` with `383,795,200` bytes maximum RSS, `0` warnings, `19` candidate encounters, `17` patient index events, `14` primary obesity-hypercapnia rows, and `651` evidence rows; `status --watch` exited normally on completion.
 - The first GitHub CI run exposed a Python 3.11-only portability defect in the `remove_tree_strict` monkeypatch test, not production cleanup. The test now dispatches to `onerror` or `onexc` according to the runtime and passes under Python 3.11.11 and 3.12.11; CI no longer duplicates feature-branch runs for both push and pull-request events.
+- Follow-up commit `17da0d2` is pushed. The single Linux CI job passes all `259` tests, all seven PR threads are resolved, and a fresh Codex review is requested but has not yet returned.
+- A read-only issue #6 acceptance audit found three pre-private-run gaps: supplemental `abg_hco3`/`abg_po2`/`abg_sao2` fields remain null placeholders, several context/exclusion flags remain constant false, and QA does not yet report high-frequency unmapped source codes. Versioned concept sets remain documented seed definitions requiring investigator review.
+- GitHub Codex review of `17da0d2` returned one P2 finding: baseline lab phenotypes used the 730-day general history instead of the 365-day measurement window. The source evidence boundary now applies `measurement_lookback_days`; focused stale A1c/eGFR/AHI/LVEF/fibrosis regression coverage and the full `259`-test suite pass.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -101,14 +104,14 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the Python 3.11 CI portability fix, then require a clean rerun.
+- Complete full verification and review closure for the measurement-lookback fix.
 
 ## Next
-- Reply to and resolve the three PR #7 threads, request a fresh Codex review, and require clean CI.
-- Audit the issue #6 acceptance ledger for any remaining configuration/terminology gaps before starting the private full build.
+- Implement and test supplemental gas features, context/exclusion derivation, and aggregate unmapped-code QA without adding repeated full raw-domain scans.
+- Obtain investigator review of the seed terminology, then preflight and launch the private full build with `status --watch` monitoring.
 
 ## Open questions (UNCONFIRMED if needed)
-- None blocking. The recovered ticket is pinned as GitHub issue #6 and is the authoritative GLP-1 endpoint specification.
+- UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`

@@ -337,7 +337,6 @@ def _build_lab_summary(
     connection: duckdb.DuckDBPyConnection,
     config: GLP1Config,
 ) -> None:
-    lookback = config.study.lookback_days
     measurement_lookback = config.study.measurement_lookback_days
     connection.execute(
         f"""
@@ -353,7 +352,8 @@ def _build_lab_summary(
         JOIN normalized_component_lab AS lab
           ON lab.patient_id = analysis.patient_id
          AND lab.event_datetime <= analysis.index_date
-         AND lab.event_datetime >= analysis.index_date - INTERVAL {lookback} DAY
+         AND lab.event_datetime >=
+             analysis.index_date - INTERVAL {measurement_lookback} DAY
         WHERE lab.normalized_numeric_value IS NOT NULL
            OR lab.fibrosis_stage_value IS NOT NULL
         """
