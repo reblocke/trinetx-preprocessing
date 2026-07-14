@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from trinetx_preprocessing.transform.vitals import (
-    VITALS_COLUMNS,
+    NORMALIZED_VITALS_COLUMNS,
     VitalSignRule,
     apply_vital_sign_rule,
     normalize_vitals_chunk,
@@ -28,9 +28,10 @@ def test_normalize_vitals_chunk_structure() -> None:
 
     normalized = normalize_vitals_chunk(df)
 
-    assert list(normalized.columns) == VITALS_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_VITALS_COLUMNS
     assert len(normalized) == 18
-    assert "code_system" not in normalized.columns
+    assert normalized.loc[0, "code_system"] == "LOINC"
+    assert normalized.loc[0, "units_of_measure"] == "F"
 
 
 def test_split_vitals_by_rule_filters() -> None:
@@ -59,7 +60,7 @@ def test_split_vitals_by_rule_filters() -> None:
     assert height["value"].tolist() == [70.0]
 
 
-def test_new_temperature_preserves_legacy_half_precision_values() -> None:
+def test_new_temperature_preserves_float64_value_before_output_cast() -> None:
     df = pd.DataFrame(
         {
             "patient_id": ["P1"],
@@ -72,7 +73,7 @@ def test_new_temperature_preserves_legacy_half_precision_values() -> None:
     result = split_vitals_by_rule(df)["value_New_Temp"]
 
     assert result["value"].dtype == "float32"
-    assert result["value"].iloc[0] == pytest.approx(98.3125)
+    assert result["value"].iloc[0] == pytest.approx(98.3)
 
 
 def test_fahrenheit_to_celsius_temperature_uses_legacy_float32_input() -> None:
@@ -107,7 +108,7 @@ def test_new_temperature_drops_extreme_values_without_overflow_warning() -> None
         result = split_vitals_by_rule(df)["value_New_Temp"]
 
     assert result["encounter_id"].tolist() == ["E1"]
-    assert result["value"].iloc[0] == pytest.approx(98.3125)
+    assert result["value"].iloc[0] == pytest.approx(98.3)
 
 
 def test_apply_vital_sign_rule_filters_before_float16_downcast() -> None:
@@ -124,7 +125,7 @@ def test_apply_vital_sign_rule_filters_before_float16_downcast() -> None:
     )
     rule = VitalSignRule(
         name="value_SysBP",
-        regex=r"^8480-6$",
+        exact_codes=("8480-6",),
         dtype="float16",
         min_value=30,
         max_value=350,

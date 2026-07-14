@@ -1,78 +1,24 @@
 # Configuration
 
-The CLI uses YAML configuration files to locate inputs and outputs. Paths are
-resolved relative to the config file location unless they are absolute.
+The CLI reads YAML configuration. Relative paths resolve from the configuration
+file, not the process working directory. See `config.example.yaml` for a
+complete synthetic configuration.
 
-## Required fields
-- `data_dir`: root directory containing the TriNetX export folders.
-- `work_dir`: scratch outputs (must exist). Some memory-bounded stages create
-  hidden `.trinetx-*` scratch files or directories here and remove them on
-  normal completion; use `clean-scratch` for a dry-run inventory before
-  deleting leftovers from interrupted runs.
-- `output_dir`: final outputs (must exist).
-- `domains`: mapping of domain names to glob patterns under `data_dir`.
+## Required paths and domains
 
-## Optional fields
-- `chunking.enabled` + `chunking.lines_per_chunk`: stream large raw CSVs,
-  final-assembly patient-demographics/data-check reads, and downstream
-  CSV/Parquet work-table reads in bounded chunks.
-- `rfs.enabled`: currently informational; the pipeline always runs the RFS stage.
-- `guardrails.max_join_multiplier`: maximum allowed join multiplier when
-  `--strict` is enabled.
-- `storage.intermediate_format`: `csv` or `parquet` for work-table outputs.
-- `storage.emit_legacy_csv_intermediates`: when Parquet is enabled, also emit
-  CSV work tables for notebook/debug compatibility.
-- `storage.parquet_row_group_size`: row group size passed to Parquet writes.
+- `data_dir`: private raw-export root.
+- `work_dir`: private intermediate and scratch root.
+- `output_dir`: final 36-file CSV root.
+- `domains`: input glob patterns for encounter, diagnosis, labs, medications,
+  procedure, vital signs, and patient demographics.
 
-## Example config.yaml
-See `config.example.yaml` for a runnable, synthetic example.
+`work_dir` contains `pipeline_work_manifest.json`. The manifest fingerprints
+the configuration, source metadata, ruleset, intermediate schema, and completed
+stages. Resume commands reject missing, stale, or incomplete work.
+
+## Execution controls
+
 ```yaml
-data_dir: tests/fixtures/example_data
-work_dir: artifacts/synthetic_example/work
-output_dir: artifacts/synthetic_example/output
-
-chunking:
-  enabled: false
-  lines_per_chunk: 10000000
-
-storage:
-  intermediate_format: parquet
-  emit_legacy_csv_intermediates: false
-  parquet_row_group_size: 250000
-
-guardrails:
-  max_join_multiplier: 1.0
-
-domains:
-  encounter: { pattern: "Encounter/encounter*.csv" }
-  diagnosis: { pattern: "Diagnosis/diagnosis*.csv" }
-  labs: { pattern: "Lab Results/lab_result*.csv" }
-  meds:
-    patterns:
-      - "Medications/medication[0-9]*.csv"
-      - "Medications/medication_ingredient*.csv"
-  procedure: { pattern: "Procedure/procedure*.csv" }
-  vitals: { pattern: "Vital Signs/vital*_signs*.csv" }
-  patient: { pattern: "Patient/patient*.csv" }
-
-rfs:
-  enabled: true
-```
-
-## External-drive real-data template
-For the current low-space machine, keep real-data paths off the internal drive:
-```bash
-./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
-  --data-dir "/Volumes/LOCKE STUDY/TriNetX" \
-  --validation-root "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation"
-```
-The generated config is equivalent to the template below and should stay
-untracked/private.
-```yaml
-data_dir: "/Volumes/LOCKE STUDY/TriNetX"
-work_dir: "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/refactor/work"
-output_dir: "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/refactor/output"
-
 chunking:
   enabled: true
   lines_per_chunk: 250000
@@ -80,35 +26,76 @@ chunking:
 storage:
   intermediate_format: parquet
   emit_legacy_csv_intermediates: false
+  emit_normalized_domain_tables: false
   parquet_row_group_size: 250000
+  analysis_bucket_count: 256
+  emit_legacy_group_tables: false
+
+guardrails:
+  max_join_multiplier: 1.0
 ```
-With Parquet intermediates, `lines_per_chunk` is also used as the Parquet
-record-batch size for work-table readers such as the RFS and final-assembly
-stages, and as the CSV chunk size for final-assembly patient demographics,
-data-check files, and legacy CSV work-table fallbacks. Encounter reducers, RFS
-membership, RFS first-seen encounter rows, final setting encounters, and final
-event candidates use hidden hash-bucket scratch directories under `work_dir`.
-Final assembly still stores patient demographics and data-check membership in
-hidden transient SQLite files under `work_dir`. These structures keep large
-lookup tables on the external validation volume without full-domain Python heap
-tables.
-Keep profile output, logs, uv cache, and manifests under the same validation
-root. Do not commit this real-data config if it captures local private paths or
-restore details that need review.
-The vitals default intentionally matches both historical `vital_signs...` files
-and restored `vitals_signs...` files. If another domain uses a different export
-name, update the corresponding `domains` pattern in the private config.
-Medication uses explicit raw-file patterns so generated `medication_NEW_*`
-intermediates in the same folder are not treated as raw inputs.
+
+- `chunking.lines_per_chunk` bounds raw CSV and work-table reads.
+- `storage.intermediate_format` is `csv` or `parquet`; Parquet is recommended.
+- `storage.emit_legacy_csv_intermediates` mirrors Parquet work tables to CSV for
+  controlled notebook/debug compatibility.
+- `storage.emit_normalized_domain_tables` writes complete normalized `*_NEW_*`
+  domain tables. It defaults to `false`; enable it only for stage-level
+  inspection or historical notebook compatibility.
+- `storage.parquet_row_group_size` controls Parquet row groups.
+- `storage.analysis_bucket_count` must be a positive power of two. It defaults
+  to `256` for patient/encounter partition stores.
+- `storage.emit_legacy_group_tables` writes historical `HAS_*`, `IPmed_*`,
+  `OPmed_*`, and `value_*` files. It defaults to `false`; compact indexes are
+  the normal implementation surface.
+
+## Corrected analytic controls
+
+```yaml
+rfs:
+  enabled: true
+  ruleset: corrected_v1
+  abg_min_pco2_mmhg: 45
+  vbg_min_pco2_mmhg: 45
+
+cohort:
+  event_selection: earliest_per_setting
+
+data_screen:
+  mode: diagnosis_or_lab
+  source: derived
+```
+
+- `rfs.ruleset` is currently fixed at `corrected_v1`.
+- ABG/VBG minimums are exclusive lower bounds in mmHg after recognized unit
+  conversion. The upper bound is the version-controlled corrected rule.
+- `cohort.event_selection` is fixed at `earliest_per_setting`.
+- `data_screen.mode` is fixed at `diagnosis_or_lab`.
+- `data_screen.source` defaults to `derived`. `legacy_files` remains available
+  only for controlled comparison work. That mode requires
+  `work_dir/data_checks/amb_enc_screen.csv` and
+  `work_dir/data_checks/inp_enc_screen.csv` before manifest initialization;
+  both files are fingerprinted and later changes fail stale-work validation.
+
+## External real-data template
+
+Keep private work, output, caches, logs, and profiles on the external volume:
+
+```bash
+./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
+  --data-dir "/Volumes/LOCKE BOOK/TriNetX" \
+  --validation-root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation"
+```
+
+The generated private config and every row-level artifact remain untracked.
+Use `clean-scratch` to inventory hidden interrupted-run scratch before deletion.
 
 ## Validation
-The config loader:
-- checks directories exist
-- expands glob patterns under `data_dir`
-- fails fast with actionable error messages
 
-CLI helpers:
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
 ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
 ```
+
+Validation checks directory availability, glob resolution, source headers,
+supported enum values, numeric bounds, and power-of-two partition counts.

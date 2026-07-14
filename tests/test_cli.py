@@ -23,6 +23,11 @@ from trinetx_preprocessing.profiling import (
 )
 from trinetx_preprocessing.regression import TableHashEntry, write_hash_manifest
 from trinetx_preprocessing.storage import write_work_table
+from trinetx_preprocessing.work_manifest import (
+    FINAL_ASSEMBLY_PREREQUISITES,
+    initialize_work_manifest,
+    mark_stage_complete,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -93,6 +98,8 @@ def _write_labs_config(
         "domains:\n"
         "  labs:\n"
         '    pattern: "Lab Results/lab_result*.csv"\n'
+        "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
     )
     path.write_text(content)
 
@@ -285,6 +292,29 @@ def test_clean_scratch_delete_removes_only_known_artifacts(tmp_path: Path) -> No
     assert not wal_scratch.exists()
     assert not hash_scratch.exists()
     assert normal_output.exists()
+
+
+def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> None:
+    root = tmp_path / "validation"
+    work_dir = root / "refactor" / "work"
+    work_dir.mkdir(parents=True)
+    prefixes = [
+        ".trinetx-final-cohorts-",
+        ".trinetx-final-feature-sources-",
+        ".trinetx-final-labs-",
+        ".trinetx-final-prev-vitals-",
+    ]
+    for prefix in prefixes:
+        scratch = work_dir / f"{prefix}test"
+        scratch.mkdir()
+        (scratch / "bucket-000.parquet").write_text("rows")
+
+    payload = cli_module.clean_scratch_artifacts(root, delete=False)
+
+    assert payload["artifact_count"] == len(prefixes)
+    assert sorted(entry["relative_path"] for entry in payload["artifacts"]) == [
+        f"refactor/work/{prefix}test" for prefix in sorted(prefixes)
+    ]
 
 
 def test_clean_scratch_delete_tolerates_missing_nested_entries(
@@ -501,8 +531,18 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
         '  intermediate_format: "parquet"\n'
         "  emit_legacy_csv_intermediates: false\n"
         "  parquet_row_group_size: 1\n"
+        "data_screen:\n"
+        "  source: legacy_files\n"
     )
     config = load_config(config_path)
+    data_checks_dir = work_dir / "data_checks"
+    data_checks_dir.mkdir()
+    for filename in {"amb_enc_screen.csv", "inp_enc_screen.csv"}:
+        pd.DataFrame(columns=["encounter_id"]).to_csv(
+            data_checks_dir / filename,
+            index=False,
+        )
+    initialize_work_manifest(config)
     for filename in final_assembly.SETTING_ENCOUNTER_FILES.values():
         write_work_table(
             config,
@@ -515,6 +555,51 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
             f"RFS_{category}.csv",
             pd.DataFrame(columns=final_assembly.RFS_EVENT_COLUMNS),
         )
+    analysis_tables = {
+        "analysis_lab_availability.csv": ["encounter_id"],
+        "analysis_diagnosis_availability.csv": ["encounter_id"],
+        "analysis_lab_features.csv": [
+            "source_name",
+            *final_assembly.LAB_COLUMNS,
+        ],
+        "analysis_rfs_labs.csv": ["category", *final_assembly.RFS_EVENT_COLUMNS],
+        "analysis_rfs_diagnosis.csv": [
+            "category",
+            *final_assembly.RFS_EVENT_COLUMNS,
+        ],
+        "analysis_rfs_procedure.csv": [
+            "category",
+            *final_assembly.RFS_EVENT_COLUMNS,
+        ],
+        "analysis_rfs_vitals.csv": ["category", *final_assembly.RFS_EVENT_COLUMNS],
+        "analysis_diagnosis_features.csv": [
+            "source_name",
+            *final_assembly.DIAGNOSIS_COLUMNS,
+        ],
+        "analysis_medication_features.csv": [
+            "source_name",
+            *final_assembly.MEDICATION_COLUMNS,
+        ],
+        "analysis_procedure_features.csv": [
+            "source_name",
+            *final_assembly.PROCEDURE_COLUMNS,
+        ],
+        "analysis_vital_features.csv": [
+            "source_name",
+            *final_assembly.VITALS_COLUMNS,
+        ],
+    }
+    for logical_name, columns in analysis_tables.items():
+        write_work_table(config, logical_name, pd.DataFrame(columns=columns))
+    (work_dir / "rfs_rule_audit.json").write_text(
+        json.dumps({"schema_version": 1, "ruleset": "corrected_v1"})
+    )
+    for stage in FINAL_ASSEMBLY_PREREQUISITES:
+        if stage == "rfs":
+            (work_dir / "rfs_stage_metrics.json").write_text(
+                json.dumps({"schema_version": 1, "used_analysis_index": True})
+            )
+        mark_stage_complete(config, stage, [])
 
     result = subprocess.run(
         [
@@ -536,6 +621,36 @@ def test_run_final_assembly_cli_with_parquet_intermediates(tmp_path: Path) -> No
     output = (result.stdout or "") + (result.stderr or "")
     assert result.returncode == 0, output
     assert (output_dir / "AMBULATORY" / "RFS_ABG_ENC_AMB_BEFORE.csv").exists()
+
+    (work_dir / "encounter_conflicts.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "encounter_conflict_count": 1,
+                "type_combinations": {"AMB+IMP": 1},
+            }
+        )
+    )
+    strict_resume = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "trinetx_preprocessing",
+            "run-final-assembly",
+            "--config",
+            str(config_path),
+            "--strict",
+        ],
+        cwd=ROOT,
+        env=_build_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    strict_output = (strict_resume.stdout or "") + (strict_resume.stderr or "")
+    assert strict_resume.returncode == 2
+    assert "requires conflict-free encounter work" in strict_output
 
 
 def test_inspect_inputs_cli_reports_missing_domains(tmp_path: Path) -> None:

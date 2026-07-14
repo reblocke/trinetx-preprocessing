@@ -1,59 +1,44 @@
-# Refactor Finalization Plan
+# Corrected Pipeline Release Plan
 
-This plan replaces the initial milestone scaffold for `refactor-pipeline`.
-The replication phase is complete for Refactor Milestone 1. The accepted
-milestone evidence is near-exact row parity against full legacy outputs:
-`4,412,875 / 4,412,932` final analytic rows matched exactly (`99.998708%`),
-with no schema, row-count, or key-set differences and `57` documented
-Weight/previous-Weight residual row differences.
+Refactor Milestone 1 completed historical replication and remains frozen at the
+`refactor-milestone-1` tag. Post-milestone work intentionally corrects known
+notebook defects under `docs/SPEC.md` while preserving the public 36-file,
+534-column output contract.
 
-## Completion principle
-- Preserve historical inclusion logic and final analytic CSV contents first.
-- Use Parquet for internal intermediates to reduce repeated CSV parsing and disk
-  overhead, while preserving legacy final CSV output names and layout.
-- Treat performance work as valid only when it preserves golden-master parity.
+## Implementation milestones
 
-## Final milestones
-1. Planning and contract cleanup.
-   - Keep this plan, `docs/VALIDATION.md`, `docs/DATA_CONTRACT.md`,
-     `docs/REPRODUCIBILITY.md`, and `docs/DECISIONS.md` current.
-   - Reconcile `main` documentation/readiness notes into this branch.
-2. Golden-master parity gate.
-   - Run the historical notebook pipeline on approved local data.
-   - Keep real-data artifacts under
-     `/Volumes/LOCKE STUDY/trinetx-preprocessing-validation` on low-space
-     machines.
-   - Hash legacy and refactor final outputs with `hash-outputs --scope final`.
-   - Compare existing manifests with `compare-manifests` so a slow external run
-     is not repeated only for comparison.
-   - Document every mismatch before changing behavior.
-3. Parquet intermediate hardening.
-   - Use `storage.intermediate_format: parquet` for refactor work tables.
-   - Keep final outputs as CSV.
-   - Emit legacy CSV intermediates only when explicitly configured.
-4. Performance and memory pass.
-   - Profile current and final runs with `profile`.
-   - Use explicit columns, explicit dtypes, stage-local writes, chunking, and
-     appendable work-table writers.
-   - Record wall time, peak RSS, row counts, and disk footprint.
-5. Merge readiness.
-   - Remove accidental metadata/noise changes.
-   - Keep legacy notebooks as references unless an intentional notebook change is
-     documented.
-   - Require Ruff, pytest, CLI smoke checks, and golden-master signoff.
+1. Specify corrected clinical and reduction semantics.
+2. Replace regex-centric definitions with typed exact/prefix/numeric rules.
+3. Retain code-system and unit metadata and report aggregate rule rejections.
+4. Validate encounter-setting conflicts and derive diagnosis-or-lab screening.
+5. Build compact RFS and feature candidates during each domain's single scan.
+6. Use bounded Parquet partitions and a fail-closed work manifest.
+7. Reuse patient-partitioned feature/history indexes across all 18 cohorts.
+8. Remove the unsupported shell splitter and maintain the Python CLI path.
+9. Pass local, corrected staged, full profile, aggregate delta, and holistic
+   review gates; document the strict source-conflict acceptance decision.
+10. Release `0.2.0` as `v0.2.0` and `refactor-milestone-2` without changing
+    Milestone 1 tags.
+
+## Current status
+
+Implementation, local tests, staged tiers, holistic review, the review-clean
+full profile, output hashes, scratch cleanup, and the aggregate-only Milestone 1
+delta are complete. All measured correctness, time, memory, disk, and public
+output-contract gates pass. Release acceptance uses deterministic non-strict
+resolution for the 286 source encounter-setting conflicts; strict mode remains
+fail-closed for workflows that require upstream conflict adjudication. The
+remaining work is GitHub release bookkeeping.
 
 ## Definition of done
-- Synthetic tests pass in default CSV mode and chunked Parquet intermediate mode.
-- Real-data golden-master comparison passes or has approved documented deltas;
-  for Refactor Milestone 1, the approved delta is the aggregate row-parity audit
-  showing `99.998708%` exact row agreement and `57` residual Weight-related row
-  differences.
-- Profiling artifacts show no unexplained performance or memory regression.
-- Documentation states how to reproduce the parity and performance gates without
-  committing raw data or row-level outputs.
 
-## Current milestone state
-- `legacy-pre-refactor` will mark the branch-point fallback before refactor work.
-- `refactor-milestone-1` will mark the reviewed current implementation.
-- Future work should start from a new post-milestone branch and may improve or
-  intentionally diverge from exact notebook quirks only after separate review.
+- Every corrected invariant in `docs/SPEC.md` has focused synthetic coverage.
+- Strict and non-strict encounter conflict behavior is deterministic.
+- All 36 final CSVs retain exact ordered schema and stable filenames.
+- Profiling proves one sequential domain scan, bounded memory, at least 25%
+  total wall-time improvement, and at least 50% final-assembly improvement.
+- Peak RSS is at most 6,238 MB and external free space remains above 100 GiB.
+- A PHI-safe aggregate report explains changes from Milestone 1 without row
+  examples or identifiers.
+- Local and GitHub reviews are clean, package version is `0.2.0`, and both
+  `v0.2.0` and `refactor-milestone-2` identify the reviewed release commit.

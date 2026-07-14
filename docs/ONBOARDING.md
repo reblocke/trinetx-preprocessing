@@ -63,7 +63,7 @@ suffixes unless `storage.emit_legacy_csv_intermediates` is enabled.
 3. Split large CSVs with the portable Python splitter (recommended), adjusting paths to your local data directory.
    - Example: `./.venv/bin/python -m trinetx_preprocessing split --input data/Encounter/encounter.csv --out data/Encounter --lines-per-chunk 10000000 --prefix encounter`.
    - The splitter preserves the header in each chunk and uses four-digit zero padding (`encounter0001.csv`) to match notebook expectations.
-   - `split_db.sh` is deprecated but kept as a legacy reference.
+   - The removed shell splitter is not required; use the supported Python CLI.
 4. Run preprocessing notebooks and set `database_dir`, `working_dir`, and `num_spreadsheets` in each:
    - `Hypercapnia NEW DATA - Encounter (CSV Processing).ipynb`
    - `Hypercapnia NEW DATA - Prior Diagnosis (CSV Processing).ipynb`

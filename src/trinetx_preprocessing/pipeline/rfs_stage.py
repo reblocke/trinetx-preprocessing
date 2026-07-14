@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
+import json
 import logging
-import tempfile
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Iterable
@@ -12,11 +11,18 @@ from typing import Iterable
 import pandas as pd
 
 from ..config import Config
-from ..filesystem import remove_tree_strict
+from ..filesystem import write_text_atomic
 from ..guardrails import log_row_count
-from ..storage import WorkTableWriter, find_work_tables, iter_work_tables
+from ..storage import (
+    PartitionedParquetStore,
+    WorkTableWriter,
+    find_work_tables,
+    iter_work_tables,
+    resolve_work_table,
+    stable_bucket_ids,
+)
 from ..transform.diagnosis import DIAGNOSIS_COLUMNS
-from ..transform.labs import LAB_COLUMNS
+from ..transform.labs import NORMALIZED_LAB_COLUMNS
 from ..transform.procedure import PROCEDURE_COLUMNS
 from ..transform.rfs import (
     ENCOUNTER_ID_COLUMNS,
@@ -25,7 +31,7 @@ from ..transform.rfs import (
     RFS_FLAG_COLUMNS,
     RFS_OUTPUT_COLUMNS,
     derive_diagnosis_rfs_event_frames,
-    derive_lab_rfs_event_frames,
+    derive_lab_rfs_event_frames_with_audit,
     derive_procedure_rfs_event_frames,
     derive_vitals_rfs_event_frames,
 )
@@ -39,9 +45,11 @@ ENCOUNTER_DTYPE = {
 LAB_DTYPE = {
     "patient_id": "string",
     "encounter_id": "string",
+    "code_system": "string",
     "code": "string",
     "date": "string",
-    "lab_result_num_val": "float32",
+    "lab_result_num_val": "float64",
+    "units_of_measure": "string",
 }
 
 DIAGNOSIS_DTYPE = {
@@ -66,12 +74,18 @@ VITALS_DTYPE = {
     "encounter_id": "string",
     "code": "string",
     "date": "string",
-    "value": "float32",
+    "value": "float64",
 }
 
 RFS_BUCKET_COUNT = 256
-RFS_MEMBERSHIP_COLUMNS = ["encounter_id"]
+RFS_MEMBERSHIP_COLUMNS = ["category", "encounter_id"]
 RFS_BUCKETED_ENCOUNTER_COLUMNS = ["_row_order", "patient_id", "encounter_id"]
+RFS_ANALYSIS_SOURCES = {
+    "labs": "analysis_rfs_labs.csv",
+    "diagnosis": "analysis_rfs_diagnosis.csv",
+    "procedure": "analysis_rfs_procedure.csv",
+    "vitals": "analysis_rfs_vitals.csv",
+}
 
 
 def run_rfs_stage(config: Config) -> list[Path]:
@@ -89,6 +103,29 @@ def run_rfs_stage(config: Config) -> list[Path]:
 
     output_paths: list[Path] = []
     event_counts = {category: 0 for category in RFS_CATEGORIES}
+    lab_audit_counts: dict[str, dict[str, int]] = {
+        category: {
+            "considered": 0,
+            "accepted": 0,
+            "rejected_code_system": 0,
+            "rejected_unit": 0,
+            "rejected_non_numeric": 0,
+            "rejected_range": 0,
+        }
+        for category in ("ABG", "VBG")
+    }
+    input_rows: dict[str, int] = {}
+
+    def derive_lab_events(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
+        events, audits = derive_lab_rfs_event_frames_with_audit(
+            frame,
+            abg_min_pco2_mmhg=config.rfs.abg_min_pco2_mmhg,
+            vbg_min_pco2_mmhg=config.rfs.vbg_min_pco2_mmhg,
+        )
+        for category, audit in audits.items():
+            for field in lab_audit_counts[category]:
+                lab_audit_counts[category][field] += int(getattr(audit, field))
+        return events
 
     with ExitStack() as stack, _RfsMembershipStore(config.work_dir) as membership:
         event_writers = {
@@ -98,54 +135,64 @@ def run_rfs_stage(config: Config) -> list[Path]:
             for category in RFS_CATEGORIES
         }
 
-        _stream_domain_events(
-            config,
-            pattern="lab_results_NEW_*.csv",
-            usecols=LAB_COLUMNS,
-            dtype=LAB_DTYPE,
-            derive=derive_lab_rfs_event_frames,
-            label="labs",
-            event_writers=event_writers,
-            event_counts=event_counts,
-            membership=membership,
-            logger=logger,
-        )
-        _stream_domain_events(
-            config,
-            pattern="diagnosis_NEW_*.csv",
-            usecols=DIAGNOSIS_COLUMNS,
-            dtype=DIAGNOSIS_DTYPE,
-            derive=derive_diagnosis_rfs_event_frames,
-            label="diagnosis",
-            event_writers=event_writers,
-            event_counts=event_counts,
-            membership=membership,
-            logger=logger,
-        )
-        _stream_domain_events(
-            config,
-            pattern="procedure_NEW_*.csv",
-            usecols=PROCEDURE_COLUMNS,
-            dtype=PROCEDURE_DTYPE,
-            derive=derive_procedure_rfs_event_frames,
-            label="procedure",
-            event_writers=event_writers,
-            event_counts=event_counts,
-            membership=membership,
-            logger=logger,
-        )
-        _stream_domain_events(
-            config,
-            pattern="vital_signs_NEW_*.csv",
-            usecols=VITALS_COLUMNS,
-            dtype=VITALS_DTYPE,
-            derive=derive_vitals_rfs_event_frames,
-            label="vitals",
-            event_writers=event_writers,
-            event_counts=event_counts,
-            membership=membership,
-            logger=logger,
-        )
+        using_analysis_index = _has_complete_rfs_analysis(config)
+        if using_analysis_index:
+            input_rows = _stream_indexed_rfs_events(
+                config,
+                event_writers=event_writers,
+                event_counts=event_counts,
+                membership=membership,
+                logger=logger,
+            )
+        else:
+            input_rows["labs"] = _stream_domain_events(
+                config,
+                pattern="lab_results_NEW_*.csv",
+                usecols=NORMALIZED_LAB_COLUMNS,
+                dtype=LAB_DTYPE,
+                derive=derive_lab_events,
+                label="labs",
+                event_writers=event_writers,
+                event_counts=event_counts,
+                membership=membership,
+                logger=logger,
+            )
+            input_rows["diagnosis"] = _stream_domain_events(
+                config,
+                pattern="diagnosis_NEW_*.csv",
+                usecols=DIAGNOSIS_COLUMNS,
+                dtype=DIAGNOSIS_DTYPE,
+                derive=derive_diagnosis_rfs_event_frames,
+                label="diagnosis",
+                event_writers=event_writers,
+                event_counts=event_counts,
+                membership=membership,
+                logger=logger,
+            )
+            input_rows["procedure"] = _stream_domain_events(
+                config,
+                pattern="procedure_NEW_*.csv",
+                usecols=PROCEDURE_COLUMNS,
+                dtype=PROCEDURE_DTYPE,
+                derive=derive_procedure_rfs_event_frames,
+                label="procedure",
+                event_writers=event_writers,
+                event_counts=event_counts,
+                membership=membership,
+                logger=logger,
+            )
+            input_rows["vitals"] = _stream_domain_events(
+                config,
+                pattern="vital_signs_NEW_*.csv",
+                usecols=VITALS_COLUMNS,
+                dtype=VITALS_DTYPE,
+                derive=derive_vitals_rfs_event_frames,
+                label="vitals",
+                event_writers=event_writers,
+                event_counts=event_counts,
+                membership=membership,
+                logger=logger,
+            )
 
         for category in RFS_CATEGORIES:
             if event_counts[category] == 0:
@@ -160,8 +207,80 @@ def run_rfs_stage(config: Config) -> list[Path]:
                 event_counts[category],
                 writer.written_paths[0].name,
             )
+        if not using_analysis_index:
+            for category, counts in lab_audit_counts.items():
+                logger.info("%s rule audit: %s", category, counts)
+        else:
+            logger.info(
+                "Using preclassified RFS candidates; gas audit: %s",
+                config.work_dir / "rfs_rule_audit.json",
+            )
+
+    metrics = {
+        "schema_version": 1,
+        "ruleset": config.rfs.ruleset,
+        "used_analysis_index": using_analysis_index,
+        "source_files": sorted(
+            path.name
+            for path in (
+                resolve_work_table(config, logical_name)
+                for logical_name in RFS_ANALYSIS_SOURCES.values()
+            )
+            if path.exists()
+        ),
+        "input_rows": input_rows,
+        "event_rows": event_counts,
+    }
+    write_text_atomic(
+        config.work_dir / "rfs_stage_metrics.json",
+        json.dumps(metrics, indent=2, sort_keys=True) + "\n",
+    )
 
     return output_paths
+
+
+def _has_complete_rfs_analysis(config: Config) -> bool:
+    return all(
+        resolve_work_table(config, logical_name).exists()
+        for logical_name in RFS_ANALYSIS_SOURCES.values()
+    )
+
+
+def _stream_indexed_rfs_events(
+    config: Config,
+    *,
+    event_writers: dict[str, WorkTableWriter],
+    event_counts: dict[str, int],
+    membership: "_RfsMembershipStore",
+    logger: logging.Logger,
+) -> dict[str, int]:
+    chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
+    input_rows: dict[str, int] = {}
+    for label, logical_name in RFS_ANALYSIS_SOURCES.items():
+        path = resolve_work_table(config, logical_name)
+        rows_read = 0
+        for frame in iter_work_tables(
+            [path],
+            chunksize=chunksize,
+            usecols=["category", *RFS_EVENT_COLUMNS],
+            dtype={
+                "category": "string",
+                "patient_id": "string",
+                "encounter_id": "string",
+            },
+        ):
+            rows_read += len(frame)
+            for category, events in frame.groupby("category", sort=False):
+                category_name = str(category)
+                if category_name not in event_writers:
+                    raise ValueError(f"Unknown RFS category in {path}: {category_name}")
+                selected = events.loc[:, RFS_EVENT_COLUMNS]
+                event_writers[category_name].write(selected)
+                event_counts[category_name] += len(selected)
+                membership.add_events(category_name, selected["encounter_id"])
+        log_row_count(logger, f"rfs indexed input {label}", rows_read)
+        input_rows[label] = rows_read
+    return input_rows
 
 
 def _iter_work_domain(
@@ -198,7 +317,7 @@ def _stream_domain_events(
     event_counts: dict[str, int],
     membership: "_RfsMembershipStore",
     logger: logging.Logger,
-) -> None:
+) -> int:
     rows_read = 0
     for frame in _iter_work_domain(config, pattern, usecols=usecols, dtype=dtype):
         rows_read += len(frame)
@@ -212,6 +331,7 @@ def _stream_domain_events(
                 events["encounter_id"].dropna().astype("string").tolist(),
             )
     log_row_count(logger, f"rfs input {label}", rows_read)
+    return rows_read
 
 
 def _write_rfs_flags(
@@ -220,24 +340,42 @@ def _write_rfs_flags(
     logger: logging.Logger,
 ) -> list[Path]:
     rows_written = 0
+    encounter_patterns = [
+        pattern
+        for pattern in (
+            "AMB_encounters.csv",
+            "EMER_encounters.csv",
+            "INPAT_encounters.csv",
+        )
+        if find_work_tables(config, pattern)
+    ]
+    if not encounter_patterns:
+        encounter_patterns = ["encounter_NEW_*.csv"]
     with (
         WorkTableWriter(config, "rfs_encounter_flags.csv") as writer,
         _RfsEncounterStore(config.work_dir, membership.bucket_count) as encounters,
     ):
-        for frame in _iter_work_domain(
-            config,
-            "encounter_NEW_*.csv",
-            usecols=ENCOUNTER_ID_COLUMNS,
-            dtype=ENCOUNTER_DTYPE,
-        ):
-            base = frame.loc[:, ENCOUNTER_ID_COLUMNS].dropna(subset=["encounter_id"])
-            base = base.drop_duplicates(subset=["encounter_id"], keep="first")
-            encounters.add_frame(base)
+        for pattern in encounter_patterns:
+            for frame in _iter_work_domain(
+                config,
+                pattern,
+                usecols=ENCOUNTER_ID_COLUMNS,
+                dtype=ENCOUNTER_DTYPE,
+            ):
+                base = frame.loc[:, ENCOUNTER_ID_COLUMNS].dropna(
+                    subset=["encounter_id"]
+                )
+                base = base.drop_duplicates(subset=["encounter_id"], keep="first")
+                encounters.add_frame(base)
 
-        for _, current in encounters.iter_unique_frames():
+        for bucket, current in encounters.iter_unique_frames():
             if current.empty:
                 continue
-            flags = _build_rfs_flags_from_membership(current, membership)
+            flags = _build_rfs_flags_from_membership(
+                current,
+                membership,
+                bucket=bucket,
+            )
             rows_written += len(flags)
             writer.write(flags)
         if rows_written == 0:
@@ -250,16 +388,21 @@ def _write_rfs_flags(
 def _build_rfs_flags_from_membership(
     encounters: pd.DataFrame,
     membership: "_RfsMembershipStore",
+    *,
+    bucket: int | None = None,
 ) -> pd.DataFrame:
     base = encounters.loc[:, ENCOUNTER_ID_COLUMNS].drop_duplicates().copy()
     base["patient_id"] = base["patient_id"].astype("string")
     base["encounter_id"] = base["encounter_id"].astype("string")
-    for category, column in RFS_FLAG_COLUMNS:
-        matches = membership.matching_encounter_ids(
-            category,
-            base["encounter_id"].tolist(),
-        )
-        base[column] = base["encounter_id"].isin(matches)
+    if bucket is not None:
+        membership.add_flags_for_bucket(base, bucket=bucket)
+    else:
+        for category, column in RFS_FLAG_COLUMNS:
+            matches = membership.matching_encounter_ids(
+                category,
+                base["encounter_id"].tolist(),
+            )
+            base[column] = base["encounter_id"].isin(matches)
     return base.loc[:, RFS_OUTPUT_COLUMNS].reset_index(drop=True)
 
 
@@ -269,33 +412,29 @@ class _RfsMembershipStore:
     def __init__(self, work_dir: Path, *, bucket_count: int = RFS_BUCKET_COUNT) -> None:
         self.work_dir = work_dir
         self.bucket_count = bucket_count
-        self.path: Path | None = None
-        self._written_paths: set[Path] = set()
+        self._store: PartitionedParquetStore | None = None
 
     def __enter__(self) -> "_RfsMembershipStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-rfs-membership-", dir=self.work_dir)
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-rfs-membership-",
+            key_columns=["encounter_id"],
+            bucket_count=self.bucket_count,
+            cleanup_context="RFS membership scratch",
         )
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dir()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def add_events(self, category: str, encounter_ids: Iterable[object]) -> None:
         normalized_ids = _normalized_identifier_values(encounter_ids)
         if not normalized_ids:
             return
-        frame = pd.DataFrame({"encounter_id": normalized_ids})
-        frame["_bucket"] = frame["encounter_id"].map(
-            lambda value: _encounter_id_bucket(value, self.bucket_count)
-        )
-        for bucket, bucket_frame in frame.groupby("_bucket", sort=False):
-            _append_csv_frame(
-                self._bucket_path(category, int(bucket)),
-                bucket_frame.loc[:, RFS_MEMBERSHIP_COLUMNS],
-                written_paths=self._written_paths,
-            )
+        frame = pd.DataFrame({"category": category, "encounter_id": normalized_ids})
+        self._partition_store().add_frame(frame.loc[:, RFS_MEMBERSHIP_COLUMNS])
 
     def matching_encounter_ids(
         self,
@@ -306,36 +445,47 @@ class _RfsMembershipStore:
         if not normalized_ids:
             return set()
 
-        ids_by_bucket: dict[int, set[str]] = {}
-        for encounter_id in normalized_ids:
-            bucket = _encounter_id_bucket(encounter_id, self.bucket_count)
-            ids_by_bucket.setdefault(bucket, set()).add(encounter_id)
+        requested = pd.DataFrame({"encounter_id": normalized_ids}).drop_duplicates()
+        requested["_bucket"] = stable_bucket_ids(
+            requested.loc[:, ["encounter_id"]],
+            bucket_count=self.bucket_count,
+        ).to_numpy()
 
         matches: set[str] = set()
-        for bucket, ids in ids_by_bucket.items():
-            matches.update(ids & self._load_bucket(category, bucket))
+        for bucket, group in requested.groupby("_bucket", sort=False):
+            frame = self._partition_store().read_frame(
+                int(bucket), columns=RFS_MEMBERSHIP_COLUMNS
+            )
+            if frame is None:
+                continue
+            ids = set(group["encounter_id"].astype(str))
+            available = set(
+                frame.loc[frame["category"] == category, "encounter_id"].astype(str)
+            )
+            matches.update(ids & available)
         return matches
 
-    def _bucket_path(self, category: str, bucket: int) -> Path:
-        if self.path is None:
-            raise RuntimeError("RFS membership store is not open.")
-        return self.path / f"{category}_{bucket:03}.csv"
+    def add_flags_for_bucket(self, encounters: pd.DataFrame, *, bucket: int) -> None:
+        """Add every category flag using one membership partition read."""
 
-    def _load_bucket(self, category: str, bucket: int) -> set[str]:
-        path = self._bucket_path(category, bucket)
-        if not path.exists():
-            return set()
-        frame = pd.read_csv(
-            path,
-            usecols=RFS_MEMBERSHIP_COLUMNS,
-            dtype={"encounter_id": "string"},
+        membership = self._partition_store().read_frame(
+            bucket,
+            columns=RFS_MEMBERSHIP_COLUMNS,
         )
-        return set(frame["encounter_id"].dropna().astype("string").astype(str))
+        for category, column in RFS_FLAG_COLUMNS:
+            if membership is None or membership.empty:
+                encounters[column] = False
+                continue
+            available = membership.loc[
+                membership["category"] == category,
+                "encounter_id",
+            ]
+            encounters[column] = encounters["encounter_id"].isin(available)
 
-    def _remove_scratch_dir(self) -> None:
-        if self.path is None:
-            return
-        remove_tree_strict(self.path, context="RFS membership scratch")
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
+            raise RuntimeError("RFS membership store is not open.")
+        return self._store
 
 
 class _RfsEncounterStore:
@@ -344,20 +494,24 @@ class _RfsEncounterStore:
     def __init__(self, work_dir: Path, bucket_count: int) -> None:
         self.work_dir = work_dir
         self.bucket_count = bucket_count
-        self.path: Path | None = None
-        self._written_paths: set[Path] = set()
+        self._store: PartitionedParquetStore | None = None
         self._next_row_order = 0
         self.seen_count = 0
 
     def __enter__(self) -> "_RfsEncounterStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.path = Path(
-            tempfile.mkdtemp(prefix=".trinetx-rfs-encounters-", dir=self.work_dir)
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-rfs-encounters-",
+            key_columns=["encounter_id"],
+            bucket_count=self.bucket_count,
+            cleanup_context="RFS encounter scratch",
         )
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._remove_scratch_dir()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def add_frame(self, encounters: pd.DataFrame) -> None:
         if encounters.empty:
@@ -370,27 +524,12 @@ class _RfsEncounterStore:
             self._next_row_order + len(frame),
         )
         self._next_row_order += len(frame)
-        frame["_bucket"] = frame["encounter_id"].map(
-            lambda value: _encounter_id_bucket(str(value), self.bucket_count)
-        )
-
-        for bucket, bucket_frame in frame.groupby("_bucket", sort=False):
-            _append_csv_frame(
-                self._bucket_path(int(bucket)),
-                bucket_frame.loc[:, RFS_BUCKETED_ENCOUNTER_COLUMNS],
-                written_paths=self._written_paths,
-            )
+        self._partition_store().add_frame(frame.loc[:, RFS_BUCKETED_ENCOUNTER_COLUMNS])
 
     def iter_unique_frames(self) -> Iterable[tuple[int, pd.DataFrame]]:
-        for bucket in range(self.bucket_count):
-            path = self._bucket_path(bucket)
-            if not path.exists():
-                continue
-            frame = pd.read_csv(
-                path,
-                usecols=RFS_BUCKETED_ENCOUNTER_COLUMNS,
-                dtype={"patient_id": "string", "encounter_id": "string"},
-            )
+        for bucket, frame in self._partition_store().iter_frames(
+            columns=RFS_BUCKETED_ENCOUNTER_COLUMNS
+        ):
             if frame.empty:
                 continue
             unique = (
@@ -402,37 +541,10 @@ class _RfsEncounterStore:
             self.seen_count += len(unique)
             yield bucket, unique
 
-    def _bucket_path(self, bucket: int) -> Path:
-        if self.path is None:
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
             raise RuntimeError("RFS encounter store is not open.")
-        return self.path / f"encounters_{bucket:03}.csv"
-
-    def _remove_scratch_dir(self) -> None:
-        if self.path is None:
-            return
-        remove_tree_strict(self.path, context="RFS encounter scratch")
-
-
-def _append_csv_frame(
-    path: Path,
-    frame: pd.DataFrame,
-    *,
-    written_paths: set[Path],
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    is_written = path in written_paths
-    frame.to_csv(
-        path,
-        index=False,
-        mode="a" if is_written else "w",
-        header=not is_written,
-    )
-    written_paths.add(path)
-
-
-def _encounter_id_bucket(encounter_id: str, bucket_count: int) -> int:
-    digest = hashlib.blake2b(encounter_id.encode("utf-8"), digest_size=8).digest()
-    return int.from_bytes(digest, byteorder="big") % bucket_count
+        return self._store
 
 
 def _normalized_identifier_values(values: Iterable[object]) -> list[str]:

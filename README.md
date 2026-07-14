@@ -13,6 +13,13 @@ Weight/previous-Weight legacy quirks for this milestone fallback point. Internal
 work tables can use Parquet for lower-overhead execution; final analytic outputs
 remain legacy CSV files.
 
+Post-Milestone 1 development follows the corrected analytic contract in
+`docs/SPEC.md`. The corrected pipeline uses explicit clinical rules, derives
+encounter screening from diagnosis or lab availability, and builds compact
+partitioned indexes while streaming each domain instead of repeatedly scanning
+legacy group tables. Complete normalized domain copies are opt-in compatibility
+artifacts rather than default work products.
+
 This is a code-only repository; no manuscript version is expected here. The
 repository may describe restricted export schemas, but it must not include raw
 TriNetX exports, row-level extracts, PHI, credentials, or generated local
@@ -51,18 +58,17 @@ data/
 ```
 Adjust domain patterns in `config.yaml` if your filenames differ.
 
-For the current low-space machine, keep real-data validation on the external
-drive instead:
+For the current machine, keep real-data validation on the external drive:
 ```bash
-export UV_CACHE_DIR="/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/uv-cache"
+export UV_CACHE_DIR="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/uv-cache"
 
 ./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
-  --data-dir "/Volumes/LOCKE STUDY/TriNetX" \
-  --validation-root "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation"
+  --data-dir "/Volumes/LOCKE BOOK/TriNetX" \
+  --validation-root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation"
 ```
-Use `/Volumes/LOCKE STUDY/TriNetX` as `data_dir`, and place `work_dir`,
+Use the mounted private raw-data tree as `data_dir`, and place `work_dir`,
 `output_dir`, profile output, logs, and manifests under
-`/Volumes/LOCKE STUDY/trinetx-preprocessing-validation`.
+`/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`.
 
 ## CLI basics
 ```bash
@@ -107,32 +113,38 @@ storage:
   intermediate_format: parquet
   emit_legacy_csv_intermediates: false
   parquet_row_group_size: 250000
+  analysis_bucket_count: 256
+  emit_legacy_group_tables: false
+
+rfs:
+  ruleset: corrected_v1
+  abg_min_pco2_mmhg: 45
+  vbg_min_pco2_mmhg: 45
+
+cohort:
+  event_selection: earliest_per_setting
+
+data_screen:
+  mode: diagnosis_or_lab
+  source: derived
 ```
 With chunking enabled, `lines_per_chunk` bounds raw CSV reads,
-final-assembly patient-demographics/data-check/work-table reads, and Parquet
-record-batch reads from work tables.
-Encounter-stage setting reducers use hidden hash-bucket scratch directories
-under `work_dir`, so retained setting-level encounter rows stay on the external
-validation volume without random SQLite writes.
-RFS flag membership and first-seen encounter rows also use hidden hash-bucket
-scratch directories under `work_dir`, so high-cardinality encounter-id checks
-stay sequential and bucket-bounded.
-Final assembly reuses setting-level encounter/data-check inputs and reads each
-per-category `RFS_*` event work table once to avoid repeated external-drive
-reads while preserving final CSV names and contents. Final patient demographics
-and data-check encounter-id membership are stored in transient SQLite scratch
-under `work_dir`; setting encounters and per-category final event candidates use
-hidden hash-bucket scratch directories. This keeps large patient, encounter,
-screening, and RFS event files off the Python heap. If an interrupted run leaves
+work-table reads, and Parquet record-batch reads. Domain stages classify codes
+once per chunk and write compact RFS/feature candidates. Final assembly builds
+separate patient-partitioned vital, lab, diagnosis, procedure, and medication
+indexes, loading one clinical domain at a time while reusing each bucket across
+all 18 cohorts. Hidden scratch remains bucket-bounded and is removed strictly. A
+versioned `pipeline_work_manifest.json` prevents stale or partially completed
+work from being resumed. If an interrupted run leaves
 hidden `.trinetx-*` scratch files under the external validation root,
 inspect them before deleting:
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing clean-scratch \
-  --root "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation" \
-  --json-out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/scratch_cleanup.json"
+  --root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation" \
+  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/scratch_cleanup.json"
 
 ./.venv/bin/python -m trinetx_preprocessing clean-scratch \
-  --root "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation" \
+  --root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation" \
   --delete
 ```
 The command is dry-run by default and only matches known hidden scratch prefixes
@@ -143,43 +155,54 @@ Milestone 1 uses the aggregate row-parity audit as the accepted replication
 evidence. Exact content-hash comparison remains useful for debugging, but a
 hash mismatch no longer blocks the `refactor-milestone-1` fallback point when
 schema, row counts, key sets, and the documented row-parity threshold are met.
+Corrected post-milestone releases are validated against `docs/SPEC.md` and an
+aggregate delta report rather than required to reproduce known legacy defects.
+
+The review-clean corrected full profile produced all 36 outputs in 73,589.093
+seconds with 6,122.562 MB peak RSS; final assembly took 49,180.54 seconds.
+Local and GitHub review are clean, all three corrected staged tiers pass, and
+the aggregate-only Milestone 1 delta contains no identifiers or row examples.
+Milestone 2 release evidence accepts deterministic non-strict resolution for
+286 source encounter IDs assigned to multiple settings. Strict execution still
+fails closed on those conflicts and remains available for upstream data-quality
+adjudication.
 
 Hash local legacy outputs without committing row-level data:
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing hash-outputs \
-  --output-dir "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/legacy/output" \
+  --output-dir "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/legacy/output" \
   --scope final \
   --hash-chunk-rows 100000 \
-  --out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/legacy_final"
+  --out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final"
 ```
 Then hash the refactor outputs and compare manifests without rerunning:
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing inspect-inputs \
-  --config "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/config.yaml" \
+  --config "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/config.yaml" \
   --min-free-gb 100 \
-  --json-out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/input_status.json"
+  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/input_status.json"
 
 ./.venv/bin/python -m trinetx_preprocessing hash-outputs \
-  --output-dir "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/refactor/output" \
+  --output-dir "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/refactor/output" \
   --scope final \
   --hash-chunk-rows 100000 \
-  --out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/refactor_final"
+  --out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final"
 
 ./.venv/bin/python -m trinetx_preprocessing compare-manifests \
-  --baseline "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/legacy_final" \
-  --current "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/refactor_final" \
-  --report "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/final_comparison.json"
+  --baseline "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final" \
+  --current "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final" \
+  --report "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/final_comparison.json"
 
 ./.venv/bin/python -m trinetx_preprocessing validation-status \
-  --input-status "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/input_status.json" \
-  --legacy-manifest "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/legacy_final" \
-  --refactor-manifest "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/refactor_final" \
-  --comparison-report "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/final_comparison.json" \
-  --profile-provenance "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/profile/provenance.json" \
-  --required-root "/Volumes/LOCKE STUDY" \
+  --input-status "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/input_status.json" \
+  --legacy-manifest "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final" \
+  --refactor-manifest "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final" \
+  --comparison-report "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/final_comparison.json" \
+  --profile-provenance "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json" \
+  --required-root "/Volumes/LOCKE BOOK" \
   --required-root-min-free-gb 100 \
-  --json-out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/validation_status.json" \
-  --markdown-out "/Volumes/LOCKE STUDY/trinetx-preprocessing-validation/manifests/validation_status.md"
+  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/validation_status.json" \
+  --markdown-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/validation_status.md"
 ```
 `validation-status` rejects old-schema input snapshots, capped input snapshots,
 snapshots without `--min-free-gb 100` filesystem evidence, non-strict,
@@ -211,6 +234,14 @@ reloads the current
 manifest JSON files and recomputes the comparison, so a hand-edited or internally
 inconsistent
 comparison report cannot pass the final gate.
+
+That command remains the strict historical-parity/merge-readiness gate. The
+Milestone 2 corrected release does not claim `validation-status` reports
+`ready: true`: its documented source conflicts make strict provenance
+unavailable. Milestone 2 instead uses the corrected evidence checklist in
+`docs/VALIDATION.md`; this release-specific policy does not weaken
+`validation-status` for future conflict-adjudicated runs.
+
 `--hash-chunk-rows` bounds both CSV sorting and Parquet record-batch hashing;
 scratch files stay beside the table being hashed, so external-drive validation
 does not spill row-level data onto the internal disk.

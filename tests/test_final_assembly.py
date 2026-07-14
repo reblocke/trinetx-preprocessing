@@ -190,7 +190,7 @@ def test_final_assembly_enriches_legacy_feature_families(tmp_path: Path) -> None
                     "code": "30934-4",
                     "date": "2022-06-01",
                     "lab_result_num_val": 1234.567,
-                }
+                },
             ]
         ),
     )
@@ -269,13 +269,9 @@ def test_final_assembly_enriches_legacy_feature_families(tmp_path: Path) -> None
     assert row["date_potassium"] == "2022-06-01"
     assert row["value_potassium"] == pytest.approx(float(np.float32(1.8)))
     assert row["date_27441"] == "2022-06-01"
-    assert row["value_27441"] == pytest.approx(
-        _legacy_lab_feature_value(7.4123456789)
-    )
+    assert row["value_27441"] == pytest.approx(_legacy_lab_feature_value(7.4123456789))
     assert row["date_265157"] == "2022-06-01"
-    assert row["value_265157"] == pytest.approx(
-        _legacy_lab_feature_value(123.456789)
-    )
+    assert row["value_265157"] == pytest.approx(_legacy_lab_feature_value(123.456789))
     assert row["date_264648"] == "2022-06-01"
     assert row["value_264648"] == pytest.approx(float(np.float32(28.24)))
     assert row["value_264648"] != pytest.approx(_legacy_lab_feature_value(28.24))
@@ -445,9 +441,23 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
                 },
                 {
                     "patient_id": "P1",
+                    "encounter_id": "E_future_1",
+                    "code": "29463-7",
+                    "date": "2022-06-20",
+                    "value": 999.9,
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E_equal_1",
+                    "code": "29463-7",
+                    "date": "2022-06-10",
+                    "value": 888.9,
+                },
+                {
+                    "patient_id": "P1",
                     "encounter_id": "E_prev_9",
                     "code": "29463-7",
-                    "date": "2022-05-01",
+                    "date": "2022-05-20",
                     "value": 159.9,
                 },
                 {
@@ -485,7 +495,14 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
                     "code": "8302-2",
                     "date": "2022-06-02",
                     "value": 70.9,
-                }
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E_height_prev",
+                    "code": "8302-2",
+                    "date": "2022-05-15",
+                    "value": 69.9,
+                },
             ]
         ),
     )
@@ -517,15 +534,133 @@ def test_previous_vitals_match_executed_notebook_selection_and_int32_output(
     )
 
     p1, p2 = result.sort_values("patient_id").to_dict("records")
-    assert p1["value_Prev_Weight"] == 220
-    assert p1["date_Prev_Weight"] == "2022-06-01"
-    assert p1["value_Prev_Height"] == 70
-    assert p1["date_Prev_Height"] == "2022-06-02"
-    assert p1["value_Prev_BMI"] == 27
-    assert p1["date_Prev_BMI"] == "2022-06-03"
+    assert p1["value_Prev_Weight"] == 159
+    assert p1["date_Prev_Weight"] == "2022-05-20"
+    assert p1["value_Prev_Height"] == 69
+    assert p1["date_Prev_Height"] == "2022-05-15"
+    assert p1["value_Prev_BMI"] == 0
+    assert pd.isna(p1["date_Prev_BMI"])
     assert p2["value_Prev_Weight"] == 0
     assert pd.isna(p2["date_Prev_Weight"])
     assert not list(config.work_dir.glob(".trinetx-final-prev-vitals-*"))
+
+
+def test_prior_diagnosis_last_date_uses_latest_patient_row(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    current = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P2", "P3"],
+            "encounter_id": ["E1", "E2", "E3"],
+            "qualify_date": pd.to_datetime(["2022-06-01", "2022-06-01", "2022-06-01"]),
+        }
+    )
+    base = {
+        "code": "G473",
+        "principal_diagnosis_indicator": "Unknown",
+        "admitting_diagnosis": "Unknown",
+        "reason_for_visit": "Unknown",
+    }
+    write_work_table(
+        config,
+        "HAS_G473.csv",
+        pd.DataFrame(
+            [
+                {
+                    **base,
+                    "patient_id": "P1",
+                    "encounter_id": "P1_old",
+                    "date": "2022-01-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P1",
+                    "encounter_id": "P1_future",
+                    "date": "2022-12-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P2",
+                    "encounter_id": "P2_old",
+                    "date": "2022-01-01",
+                },
+                {
+                    **base,
+                    "patient_id": "P2",
+                    "encounter_id": "P2_latest",
+                    "date": "2022-05-15",
+                },
+                {
+                    **base,
+                    "patient_id": "P3",
+                    "encounter_id": "P3_future",
+                    "date": "2022-12-01",
+                },
+            ]
+        ),
+    )
+
+    enriched = final_assembly._merge_prior_diagnosis_features(
+        current,
+        config=config,
+        patient_ids={"P1", "P2", "P3"},
+        encounter_ids={"E1", "E2", "E3"},
+        chunksize=1,
+    )
+
+    p1, p2, p3 = enriched.sort_values("patient_id").to_dict("records")
+    assert p1["HAS_G473"] == 1
+    assert p1["first_date_G473"] == pd.Timestamp("2022-01-01")
+    assert p1["last_date_G473"] == pd.Timestamp("2022-01-01")
+    assert p2["HAS_G473"] == 1
+    assert p2["first_date_G473"] == pd.Timestamp("2022-01-01")
+    assert p2["last_date_G473"] == pd.Timestamp("2022-05-15")
+    assert p3["HAS_G473"] == 0
+    assert pd.isna(p3["first_date_G473"])
+    assert pd.isna(p3["last_date_G473"])
+
+
+def test_encounter_first_last_features_use_latest_current_date(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    current = pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]})
+    write_work_table(
+        config,
+        "HAS_94660.csv",
+        pd.DataFrame(
+            [
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E1",
+                    "code": "94660",
+                    "date": "2022-01-01",
+                },
+                {
+                    "patient_id": "P1",
+                    "encounter_id": "E1",
+                    "code": "94660",
+                    "date": "2022-05-15",
+                },
+            ]
+        ),
+    )
+
+    enriched = final_assembly._merge_encounter_first_last_features(
+        current,
+        config=config,
+        groups=final_assembly.PROCEDURE_CODE_GROUPS,
+        source_columns=final_assembly.PROCEDURE_COLUMNS,
+        patient_ids={"P1"},
+        encounter_ids={"E1"},
+        chunksize=1,
+    )
+
+    row = enriched.iloc[0]
+    assert row["HAS_94660"] == 1
+    assert row["first_date_94660"] == pd.Timestamp("2022-01-01")
+    assert row["last_date_94660"] == pd.Timestamp("2022-05-15")
 
 
 def _write_patient_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -767,15 +902,152 @@ def test_build_final_event_candidates_drops_missing_demographics() -> None:
     assert candidates["patient_id"].tolist() == ["P2"]
 
 
+def test_final_event_selection_is_independent_per_setting() -> None:
+    events = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1"],
+            "encounter_id": ["E_AMB", "E_EMER"],
+            "date": ["2022-01-02", "2022-02-02"],
+        }
+    )
+    demographics = pd.DataFrame(
+        {
+            "patient_id": ["P1"],
+            "sex": ["F"],
+            "race": ["White"],
+            "ethnicity": ["Not Hispanic"],
+            "patient_regional_location": ["US"],
+            "birth_year": [1980],
+            "death_year_month": [""],
+        }
+    )
+    emergency_encounters = pd.DataFrame(
+        {
+            "patient_id": ["P1"],
+            "encounter_id": ["E_EMER"],
+            "start_date": ["2022-02-01"],
+            "end_date": ["2022-02-03"],
+            "type": ["EMER"],
+            "LOS": [3],
+        }
+    )
+
+    result = final_assembly.build_final_dataset(
+        events,
+        demographics,
+        emergency_encounters,
+        rfs_category="ABG",
+        setting="EMER",
+        guardrails=GuardrailConfig(),
+        strict=True,
+        logger=logging.getLogger(__name__),
+    )
+
+    assert result[["patient_id", "encounter_id"]].to_dict("records") == [
+        {"patient_id": "P1", "encounter_id": "E_EMER"}
+    ]
+
+
+def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> (
+    None
+):
+    rows = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P2"],
+            "encounter_id": ["E_LATE", "E_EARLY", "E_OTHER"],
+            "qualify_date": ["2022-03-01", "2022-01-01", "2022-02-01"],
+            "_data_screen_eligible": [False, True, True],
+        }
+    )
+
+    selected = final_assembly.reduce_setting_cohort_rows(rows)
+
+    assert selected[["patient_id", "encounter_id"]].to_dict("records") == [
+        {"patient_id": "P1", "encounter_id": "E_EARLY"},
+        {"patient_id": "P2", "encounter_id": "E_OTHER"},
+    ]
+    assert selected["_data_screen_eligible"].tolist() == [True, True]
+
+
+def test_streamed_event_partitions_are_batched_below_row_limit() -> None:
+    frames = [
+        pd.DataFrame({"encounter_id": ["E1", "E2"]}),
+        pd.DataFrame({"encounter_id": ["E3", "E4"]}),
+        pd.DataFrame({"encounter_id": ["E5"]}),
+    ]
+
+    batches = list(
+        final_assembly._batch_final_event_candidate_frames(frames, max_rows=3)
+    )
+
+    assert [len(batch) for batch in batches] == [2, 3]
+    assert pd.concat(batches, ignore_index=True)["encounter_id"].tolist() == [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+    ]
+
+
+def test_current_diagnosis_reduction_uses_earliest_date_and_indicator_priority() -> (
+    None
+):
+    rows = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P1"],
+            "encounter_id": ["E1", "E1", "E1"],
+            "code": ["J96.00"] * 3,
+            "principal_diagnosis_indicator": ["U", "S", "P"],
+            "admitting_diagnosis": ["U", "N", "Y"],
+            "reason_for_visit": ["U", "F", "T"],
+            "date": ["2022-01-03", "2022-01-01", "2022-01-02"],
+        }
+    )
+
+    selected = final_assembly._select_current_diagnosis(rows).iloc[0]
+
+    assert selected["date"] == pd.Timestamp("2022-01-01")
+    assert selected["principal_diagnosis_indicator"] == "P"
+    assert selected["admitting_diagnosis"] == "Y"
+    assert selected["reason_for_visit"] == "T"
+
+
+def test_inpatient_medication_uses_earliest_date_per_encounter() -> None:
+    rows = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P2"],
+            "encounter_id": ["E1", "E1", "E2"],
+            "code": ["4603", "4603", "4603"],
+            "start_date": pd.to_datetime(["2022-03-01", "2022-01-01", "2022-02-01"]),
+        }
+    )
+
+    selected = final_assembly._select_ip_medication(rows, med_index="5")
+
+    assert selected.sort_values("encounter_id").to_dict("records") == [
+        {
+            "encounter_id": "E1",
+            "IP_Med_5": 1,
+            "date_IP_Med_5": pd.Timestamp("2022-01-01"),
+        },
+        {
+            "encounter_id": "E2",
+            "IP_Med_5": 1,
+            "date_IP_Med_5": pd.Timestamp("2022-02-01"),
+        },
+    ]
+
+
 def test_outpatient_medication_last_date_validated_independently(
     tmp_path: Path,
 ) -> None:
     config = _config(tmp_path)
     current = pd.DataFrame(
         {
-            "patient_id": ["P1"],
-            "encounter_id": ["E1"],
-            "qualify_date": pd.to_datetime(["2022-06-01"]),
+            "patient_id": ["P1", "P2"],
+            "encounter_id": ["E1", "E2"],
+            "qualify_date": pd.to_datetime(["2022-06-01", "2022-06-01"]),
         }
     )
     write_work_table(
@@ -791,7 +1063,13 @@ def test_outpatient_medication_last_date_validated_independently(
                 },
                 {
                     "patient_id": "P1",
-                    "encounter_id": "E0",
+                    "encounter_id": "E2",
+                    "code": "1808",
+                    "start_date": "2022-12-01",
+                },
+                {
+                    "patient_id": "P2",
+                    "encounter_id": "E3",
                     "code": "1808",
                     "start_date": "2022-12-01",
                 },
@@ -802,15 +1080,18 @@ def test_outpatient_medication_last_date_validated_independently(
     enriched = final_assembly._merge_medication_features(
         current,
         config=config,
-        patient_ids={"P1"},
-        encounter_ids={"E1"},
+        patient_ids={"P1", "P2"},
+        encounter_ids={"E1", "E2"},
         chunksize=1,
     )
 
-    row = enriched.iloc[0]
-    assert row["OP_Med_1"] == 1
-    assert row["first_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
-    assert pd.isna(row["last_date_OP_Med_1"])
+    p1, p2 = enriched.sort_values("patient_id").to_dict("records")
+    assert p1["OP_Med_1"] == 1
+    assert p1["first_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
+    assert p1["last_date_OP_Med_1"] == pd.Timestamp("2022-01-01")
+    assert p2["OP_Med_1"] == 0
+    assert pd.isna(p2["first_date_OP_Med_1"])
+    assert pd.isna(p2["last_date_OP_Med_1"])
 
 
 def test_build_final_dataset_matches_encounter_lookup(
@@ -912,6 +1193,78 @@ def test_load_data_check_encounter_lookup_filters_and_cleans_up(
         assert filtered["encounter_id"].tolist() == ["E1", "E2"]
 
     assert not list(work_dir.glob(".trinetx-data-check-ids-*"))
+
+
+def test_data_screen_eligibility_is_precomputed_before_patient_bucketing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    work_dir = tmp_path / "work"
+    frame = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P2", "P3"],
+            "encounter_id": ["E1", "E2", "E3"],
+        }
+    )
+
+    with final_assembly._EncounterIdLookup(work_dir) as lookup:
+        lookup.add_values(pd.Series(["E1", "E3"], dtype="string"))
+        calls: list[int] = []
+        original_filter = lookup.filter_frame
+
+        def spy_filter(candidate: pd.DataFrame) -> pd.DataFrame:
+            calls.append(len(candidate))
+            return original_filter(candidate)
+
+        monkeypatch.setattr(lookup, "filter_frame", spy_filter)
+        marked = final_assembly._mark_data_screen_eligibility(frame, lookup)
+
+    assert calls == [3]
+    assert marked[final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN].tolist() == [
+        True,
+        False,
+        True,
+    ]
+
+    after = final_assembly._apply_precomputed_data_screen(
+        frame,
+        marked[final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN],
+        context="ABG/AMB",
+        logger=logging.getLogger(__name__),
+    )
+    assert after["encounter_id"].tolist() == ["E1", "E3"]
+
+
+def test_precomputed_data_screen_rejects_row_count_drift() -> None:
+    with pytest.raises(ValueError, match="eligibility length"):
+        final_assembly._apply_precomputed_data_screen(
+            pd.DataFrame({"encounter_id": ["E1", "E2"]}),
+            pd.Series([True]),
+            context="ABG/AMB",
+            logger=logging.getLogger(__name__),
+        )
+
+
+def test_final_output_keeps_data_screen_aligned_after_sorting() -> None:
+    enriched = pd.DataFrame(
+        {
+            "patient_id": ["P2", "P1"],
+            "encounter_id": ["E2", "E1"],
+            final_assembly.FINAL_DATA_SCREEN_ELIGIBLE_COLUMN: [False, True],
+        }
+    )
+
+    before, eligibility = final_assembly._finalize_output_with_data_screen(enriched)
+    after = final_assembly._apply_precomputed_data_screen(
+        before,
+        eligibility,
+        context="ABG/AMB",
+        logger=logging.getLogger(__name__),
+    )
+
+    assert before["encounter_id"].tolist() == ["E1", "E2"]
+    assert eligibility.tolist() == [True, False]
+    assert after["encounter_id"].tolist() == ["E1"]
 
 
 def test_run_final_assembly_removes_data_check_lookup_scratch(
@@ -1144,7 +1497,7 @@ def test_load_encounter_lookup_detects_duplicate_encounter_ids(
     assert not list(config.work_dir.glob(".trinetx-final-encounters-*"))
 
 
-def test_final_event_candidate_store_reduces_by_encounter_then_patient(
+def test_final_event_candidate_store_reduces_by_encounter_only(
     tmp_path: Path,
 ) -> None:
     candidates = pd.DataFrame(
@@ -1177,9 +1530,14 @@ def test_final_event_candidate_store_reduces_by_encounter_then_patient(
         store.add_frame(candidates.iloc[2:])
         reduced = store.reduce()
 
-    assert reduced.sort_values("patient_id")[
+    assert reduced.sort_values(["patient_id", "encounter_id"])[
         ["patient_id", "encounter_id", "qualify_date"]
     ].to_dict("records") == [
+        {
+            "patient_id": "P1",
+            "encounter_id": "E1",
+            "qualify_date": pd.Timestamp("2022-01-05"),
+        },
         {
             "patient_id": "P1",
             "encounter_id": "E2",
@@ -1192,7 +1550,6 @@ def test_final_event_candidate_store_reduces_by_encounter_then_patient(
         },
     ]
     assert not list(tmp_path.glob(".trinetx-final-events-*"))
-    assert not list(tmp_path.glob(".trinetx-final-patients-*"))
 
 
 def test_load_final_event_candidates_cleans_category_scratch_before_return(
@@ -1238,9 +1595,14 @@ def test_load_final_event_candidates_cleans_category_scratch_before_return(
         assert not list(config.work_dir.glob(".trinetx-final-events-*"))
         assert not list(config.work_dir.glob(".trinetx-final-patients-*"))
 
-    assert candidates.sort_values("patient_id")[
+    assert candidates.sort_values(["patient_id", "encounter_id"])[
         ["patient_id", "encounter_id", "qualify_date"]
     ].to_dict("records") == [
+        {
+            "patient_id": "P1",
+            "encounter_id": "E1",
+            "qualify_date": pd.Timestamp("2022-01-05"),
+        },
         {
             "patient_id": "P1",
             "encounter_id": "E2",
@@ -1261,7 +1623,10 @@ def test_final_event_candidate_store_cleanup_raises_on_delete_error(
     def fail_remove_tree(path, *, context):
         raise PermissionError(f"denied: {context}")
 
-    monkeypatch.setattr(final_assembly, "remove_tree_strict", fail_remove_tree)
+    monkeypatch.setattr(
+        "trinetx_preprocessing.storage.remove_tree_strict",
+        fail_remove_tree,
+    )
 
     with pytest.raises(PermissionError, match="Final event candidate scratch"):
         with final_assembly._FinalEventCandidateStore(tmp_path):
@@ -1275,7 +1640,10 @@ def test_final_encounter_lookup_cleanup_raises_on_delete_error(
     def fail_remove_tree(path, *, context):
         raise PermissionError(f"denied: {context}")
 
-    monkeypatch.setattr(final_assembly, "remove_tree_strict", fail_remove_tree)
+    monkeypatch.setattr(
+        "trinetx_preprocessing.storage.remove_tree_strict",
+        fail_remove_tree,
+    )
 
     with pytest.raises(PermissionError, match="Final encounter lookup scratch"):
         with final_assembly._EncounterLookup(tmp_path):
@@ -1289,7 +1657,10 @@ def test_final_lab_candidate_store_cleanup_raises_on_delete_error(
     def fail_remove_tree(path, *, context):
         raise PermissionError(f"denied: {context}")
 
-    monkeypatch.setattr(final_assembly, "remove_tree_strict", fail_remove_tree)
+    monkeypatch.setattr(
+        "trinetx_preprocessing.storage.remove_tree_strict",
+        fail_remove_tree,
+    )
 
     with pytest.raises(PermissionError, match="Final lab feature scratch"):
         with final_assembly._FinalLabCandidateStore(tmp_path):
@@ -1303,7 +1674,10 @@ def test_final_previous_vital_candidate_store_cleanup_raises_on_delete_error(
     def fail_remove_tree(path, *, context):
         raise PermissionError(f"denied: {context}")
 
-    monkeypatch.setattr(final_assembly, "remove_tree_strict", fail_remove_tree)
+    monkeypatch.setattr(
+        "trinetx_preprocessing.storage.remove_tree_strict",
+        fail_remove_tree,
+    )
 
     with pytest.raises(PermissionError, match="Final previous vital scratch"):
         with final_assembly._FinalPreviousVitalCandidateStore(tmp_path):
@@ -1381,7 +1755,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         encounter_calls.append((setting, chunksize))
         return pd.DataFrame(columns=final_assembly.ENCOUNTER_COLUMNS)
 
-    def fake_load_final_event_candidates(
+    def fake_iter_final_event_candidate_frames(
         config,
         category,
         demographics,
@@ -1392,7 +1766,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         strict,
     ):
         rfs_calls.append((category, chunksize, strict))
-        return pd.DataFrame(columns=final_assembly.FINAL_EVENT_CANDIDATE_COLUMNS)
+        yield pd.DataFrame(columns=final_assembly.FINAL_EVENT_CANDIDATE_COLUMNS)
 
     def fake_load_data_check_encounter_lookup(
         data_checks_path,
@@ -1415,6 +1789,8 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         guardrails,
         strict,
         logger,
+        enrich_features=True,
+        finalize_output=True,
     ):
         return pd.DataFrame(
             [
@@ -1442,13 +1818,24 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     )
     monkeypatch.setattr(
         final_assembly,
-        "_load_final_event_candidates",
-        fake_load_final_event_candidates,
+        "_iter_final_event_candidate_frames",
+        fake_iter_final_event_candidate_frames,
     )
     monkeypatch.setattr(
         final_assembly,
         "_load_data_check_encounter_lookup",
         fake_load_data_check_encounter_lookup,
+    )
+    monkeypatch.setattr(
+        final_assembly,
+        "_load_derived_data_screen_lookup",
+        lambda config,
+        *,
+        work_dir,
+        stack,
+        logger,
+        chunksize,
+        strict: data_check_calls.append(chunksize) or None,
     )
     monkeypatch.setattr(
         final_assembly,
@@ -1467,7 +1854,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         for category in final_assembly.RFS_CATEGORIES
     ]
     assert demographics_calls == [config.chunking.lines_per_chunk]
-    assert data_check_calls == [config.chunking.lines_per_chunk] * 2
+    assert data_check_calls == [config.chunking.lines_per_chunk]
 
     expected_outputs = [
         config.output_dir

@@ -13,6 +13,18 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 
 ## Entries
 
+### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
+- Date: 2026-07-09
+- Decision: Post-Milestone 1 releases follow `docs/SPEC.md`, including specimen-specific hypercapnia rules, structured code matching, per-setting event selection, derived diagnosis-or-lab screening, and deterministic feature reductions.
+- Context: Milestone 1 established near-exact historical replication and exposed several clinically or analytically incorrect legacy behaviors.
+- Options considered:
+  - Continue preserving all notebook behavior
+  - Patch individual defects without a governing contract
+  - Adopt a versioned corrected specification and typed rules (chosen)
+- Rationale: A written contract makes intentional divergence reviewable and prevents legacy implementation accidents from remaining requirements.
+- Consequences: `refactor-milestone-1` remains the replication fallback; corrected runs require fresh evidence and may change cohort membership while preserving the public final schema.
+- References: `docs/SPEC.md`, `src/trinetx_preprocessing/transform`, `src/trinetx_preprocessing/pipeline`.
+
 ### 2026-06-08 — Real-data golden master is the final parity gate
 - Date: 2026-06-08
 - Decision: The refactor requires approved local legacy notebook outputs and
@@ -760,3 +772,206 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: external audit reports under
   `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/diagnostics/`;
   reports are private validation artifacts and are not committed.
+
+### 2026-07-08 — Correct post-milestone "last date" and prior-vital semantics
+- Date: 2026-07-08
+- Decision: After the frozen `refactor-milestone-1` fallback tag, final
+  assembly should use corrected analytic semantics for several legacy-compatible
+  quirks: prior diagnosis and outpatient medication first/last dates are
+  selected only from rows on or before each final row's `qualify_date`,
+  `last_date_*` columns select the latest qualifying row, outpatient medication
+  last dates are validated independently of first dates, and previous
+  Weight/Height/BMI exclude current encounters and select the latest value
+  strictly before `qualify_date`.
+- Context: Local and GitHub Codex review identified that helper functions named
+  for "last" dates could sort ascending and keep the first patient row, causing
+  `last_date_*` columns to record earliest rows. The Milestone 1 parity audit
+  also showed the remaining accepted residual differences concentrated in
+  Weight/previous-Weight columns.
+- Rationale: Exact historical mimicry is no longer the active goal after
+  Milestone 1. These behaviors are more plausibly legacy bugs than intended
+  analytic definitions, and fixing them is preferable before broader
+  optimization or maintainability work.
+- Consequences: Outputs produced after this decision are post-Milestone 1
+  corrected outputs and should not be used to redefine the
+  `refactor-milestone-1` replication evidence. Any full real-data evidence
+  rerun after this point must be labeled post-milestone.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_final_assembly.py`.
+
+### 2026-07-09 — Adopt corrected rules and reusable partitioned analysis indexes
+- Date: 2026-07-09
+- Decision: Make `docs/SPEC.md` authoritative after Milestone 1, express
+  clinical inclusion as immutable typed rules, retain code-system/unit metadata,
+  derive diagnosis-or-lab screening, and build compact RFS/feature candidates
+  during one streaming pass per domain. Final assembly consumes bounded
+  patient-partitioned Parquet indexes shared by all 18 cohorts. A versioned work
+  manifest rejects stale or incomplete intermediates.
+- Context: The notebook-compatible implementation preserved several incorrect
+  gas codes, regex overmatching, cross-setting event suppression, and
+  nondeterministic feature reductions. It also repeatedly reread many large
+  group tables, producing a 161,763.975-second final-assembly baseline.
+- Rationale: Correctness is now governed by an explicit reviewable contract.
+  Typed rules make code/system/unit/bound semantics readable, while one-pass
+  classification and bounded partitions reduce external-drive I/O without
+  requiring full-domain memory.
+- Consequences: Existing work tables are incompatible. Complete normalized
+  domain tables and legacy group-table emission are opt-in, Milestone 1 remains
+  the historical fallback, and release requires corrected staged tests, a fresh
+  strict BOOK profile, aggregate-only delta evidence, and performance gates.
+- References: `docs/SPEC.md`, `src/trinetx_preprocessing/transform/clinical_rules.py`,
+  `src/trinetx_preprocessing/storage.py`,
+  `src/trinetx_preprocessing/work_manifest.py`,
+  `src/trinetx_preprocessing/pipeline/final_feature_sources.py`.
+
+### 2026-07-10 — Apply data-screen eligibility before patient bucketing
+- Date: 2026-07-10
+- Decision: Evaluate each category/setting cohort against its encounter-level
+  data screen before patient partitioning, store a boolean eligibility column,
+  and reuse that boolean when writing `AFTER` outputs.
+- Context: A full-scale diagnostic profile showed that encounter IDs within one
+  patient bucket hash across many encounter-screen partitions. Querying the
+  encounter lookup after enrichment therefore reread much of a 303.5-million-ID
+  screen for every cohort group in every patient bucket. First-bucket timings
+  projected beyond the final-assembly performance gate.
+- Rationale: Screen eligibility depends only on the selected encounter and does
+  not depend on analytic feature enrichment. Computing it once before patient
+  bucketing preserves output semantics while reducing encounter-screen lookup
+  passes by orders of magnitude.
+- Consequences: `BEFORE` rows remain unchanged; `AFTER` rows use the same
+  encounter membership result without repeated disk lookups. Interrupted-run
+  cleanup also recognizes every current partition-store prefix.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
+  `tests/test_cli.py`.
+
+### 2026-07-10 — Treat legacy data screens as manifest inputs
+- Date: 2026-07-10
+- Decision: Controlled `data_screen.source: legacy_files` runs require both
+  setting-specific screen CSVs before work-manifest initialization. The work
+  manifest fingerprints their path, byte size, modification time, and header,
+  and rejects missing or changed files.
+- Context: GitHub review identified that final assembly could consume edited
+  legacy screen files while the manifest still described the same raw inputs
+  and configuration.
+- Rationale: Screen membership changes final `AFTER` cohorts and is therefore
+  an analytic input, not incidental work-directory state.
+- Consequences: The work-manifest schema is version `3`; older work manifests
+  fail closed. Derived screening remains the corrected default and needs no
+  external screen files.
+- References: `src/trinetx_preprocessing/work_manifest.py`,
+  `tests/test_work_manifest.py`, `tests/test_cli.py`.
+
+### 2026-07-10 — Separate final features by clinical domain
+- Date: 2026-07-10
+- Decision: Keep final cohort, lookup, screening, and CSV orchestration in
+  `final_assembly.py`; move analytic feature enrichment into one small
+  orchestrator, shared deterministic reducers, and domain-owned vital, lab,
+  diagnosis, procedure, and medication modules.
+- Context: Corrected feature logic and bounded reducers had accumulated in a
+  single 2,747-line final-assembly module, making independent review and future
+  maintenance unnecessarily difficult.
+- Rationale: Clinical-domain ownership makes rules and reductions easier to
+  locate and test while preserving the existing CLI and compatibility helper
+  names.
+- Consequences: This extraction intentionally changes no output semantics.
+  Existing focused final-assembly tests exercise compatibility aliases, and
+  staged/full validation remains required before release.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/pipeline/final_features.py`,
+  `src/trinetx_preprocessing/pipeline/final_feature_common.py`,
+  `src/trinetx_preprocessing/pipeline/final_*_features.py`.
+
+### 2026-07-11 — Stream final event partitions into patient cohorts
+- Date: 2026-07-11
+- Decision: Yield encounter-reduced RFS event partitions directly into setting
+  lookups and the patient-partitioned cohort store. Select the global earliest
+  `(category, setting, patient)` row inside each patient bucket before feature
+  enrichment.
+- Context: The first corrected full profile met wall-time targets but reached
+  `10,125.734 MB` peak RSS. One-second follow-up sampling showed `6,884.250 MB`
+  before feature indexing while the 8.46-million-row predisposition candidate
+  frame was concatenated in memory.
+- Rationale: Encounter IDs are already deterministically partitioned, and all
+  rows for one patient converge in the cohort store. A second stable earliest
+  reduction therefore preserves cohort semantics while eliminating the
+  full-category concatenation.
+- Consequences: Setting lookups and screening remain exact, output filenames
+  and schema are unchanged. Reduced event partitions are combined into bounded
+  one-million-row join batches to avoid thousands of tiny external lookup
+  operations without recreating full-category memory pressure. Full-scale
+  validation retains the configured 256 buckets: a 512-bucket diagnostic was
+  rejected because doubling simultaneously open Parquet writers raised index
+  memory. Feature bucket reads instead retain one generic frame plus source
+  row-position arrays and materialize only requested columns on demand.
+- References: `src/trinetx_preprocessing/pipeline/cohort.py`,
+  `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_final_assembly.py`.
+
+### 2026-07-13 — Partition final feature sources by clinical domain
+- Date: 2026-07-13
+- Decision: Build independently sealed patient-partitioned stores for vital,
+  lab, diagnosis, procedure, and medication feature candidates. Load only the
+  active clinical domain for each patient bucket and release each Parquet writer
+  as it closes.
+- Context: A 256-bucket full diagnostic still reached 10,192.844 MiB because
+  the first patient bucket materialized every feature domain in one generic
+  frame from an index containing 2.38 billion rows overall. RSS remained above
+  the 6,238 MB gate.
+- Rationale: Domain-specific stores preserve one scan per compact feature
+  source and deterministic row order while bounding bucket memory by the
+  largest active domain rather than the sum of all domains.
+- Consequences: The review-clean full profile completed all 36 outputs in
+  73,589.093 seconds, final assembly in 49,180.54 seconds, and peak RSS at
+  6,122.562 MB.
+  All 36 output hashes match an independent standalone final-assembly run, and
+  recognized scratch is zero. Strict release acceptance remains a separate
+  decision because the source contains 286 cross-setting encounter IDs.
+- References: `src/trinetx_preprocessing/pipeline/final_feature_sources.py`,
+  `src/trinetx_preprocessing/pipeline/final_features.py`,
+  `src/trinetx_preprocessing/storage.py`, `tests/test_storage.py`.
+
+### 2026-07-13 — Preserve row alignment and strictness across resume boundaries
+- Date: 2026-07-13
+- Decision: Sort precomputed data-screen eligibility with its final row before
+  writing `AFTER` outputs. Reject `run-final-assembly --strict` when completed
+  encounter work includes a non-strict conflict-resolution report.
+- Context: GitHub review found that final output sorting could separate a
+  positional eligibility mask from its row, and that strict downstream resume
+  did not reassert the encounter-stage conflict gate.
+- Rationale: Screening is an observation-level property and must follow the
+  observation through every reorder. Strictness must apply to prerequisite
+  evidence, not only to the currently invoked stage.
+- Consequences: The review-clean full profile confirms that six obesity or
+  ventilatory-support `AFTER` hashes changed while every schema and row count
+  remained stable. Local tests, all three corrected staged tiers, full resource
+  gates, and scratch cleanup pass.
+- References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `src/trinetx_preprocessing/work_manifest.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
+  `tests/test_cli.py`.
+
+### 2026-07-14 — Accept deterministic conflict resolution for Milestone 2
+- Date: 2026-07-14
+- Decision: Use the completed non-strict full profile as Milestone 2 release
+  evidence. Deterministically resolve the 286 source encounter IDs assigned to
+  multiple settings by earliest encounter start date and then observed row
+  order. Keep strict execution fail-closed on the same conflicts.
+- Context: Every corrected semantic, staged, performance, memory, output,
+  hygiene, and review gate passed. The source export still assigns 286 encounter
+  IDs to more than one setting, and no upstream adjudication is currently
+  available.
+- Rationale: Deterministic resolution makes the ambiguity explicit and
+  reproducible without preventing release of the corrected pipeline. Retaining
+  strict failure preserves a stronger acceptance option for analyses that
+  require adjudicated source data.
+- Consequences: `v0.2.0` and `refactor-milestone-2` may be released from the
+  review-clean code state using aggregate conflict evidence. A strict real-data
+  run is not claimed to pass, and future upstream adjudication may intentionally
+  change affected cohort assignments. This release-specific decision explicitly
+  supersedes the 2026-06-08 strict `validation-status` requirement as the
+  Milestone 2 release gate only: the command remains unchanged and the current
+  bundle is not claimed to report `ready: true`.
+- References: `docs/SPEC.md`, `docs/VALIDATION.md`,
+  `src/trinetx_preprocessing/pipeline/encounter_stage.py`,
+  `src/trinetx_preprocessing/work_manifest.py`.

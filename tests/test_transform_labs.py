@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from trinetx_preprocessing.transform.labs import (
-    LAB_COLUMNS,
+    NORMALIZED_LAB_COLUMNS,
     normalize_lab_results_chunk,
 )
 
@@ -23,8 +23,9 @@ def test_normalize_lab_results_chunk_structure() -> None:
 
     normalized = normalize_lab_results_chunk(df)
 
-    assert list(normalized.columns) == LAB_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_LAB_COLUMNS
     assert len(normalized) == 3
-    assert "code_system" not in normalized.columns
+    assert normalized.loc[0, "code_system"] == "LOINC"
+    assert normalized.loc[0, "units_of_measure"] == "mmol/L"
     assert normalized["code"].tolist() == ["6298-4", "2019-8", "2823-3"]
     assert pd.isna(normalized.loc[1, "lab_result_num_val"])

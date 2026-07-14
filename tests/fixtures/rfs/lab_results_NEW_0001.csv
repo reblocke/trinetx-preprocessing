@@ -1,5 +1,5 @@
-patient_id,encounter_id,code,date,lab_result_num_val
-P1,E1,2019-8,2022-01-01,50
-P2,E2,11557-6,2022-02-01,45
-P2,E2,11557-6,2022-02-01,2
-P7,E7,2026-3,2022-07-01,205
+patient_id,encounter_id,code_system,code,date,lab_result_num_val,units_of_measure
+P1,E1,LOINC,2019-8,2022-01-01,50,mmHg
+P2,E2,LOINC,2021-4,2022-02-01,50,mmHg
+P2,E2,LOINC,11557-6,2022-02-01,80,mmHg
+P7,E7,LOINC,2026-3,2022-07-01,80,mmol/L

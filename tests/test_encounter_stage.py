@@ -25,6 +25,8 @@ def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) 
         "domains:\n"
         "  encounter:\n"
         '    pattern: "Encounter/encounter*.csv"\n'
+        "storage:\n"
+        "  emit_normalized_domain_tables: true\n"
     )
     path.write_text(content)
 
@@ -192,7 +194,7 @@ def test_encounter_reducer_streams_unique_rows_across_batches(tmp_path: Path) ->
     assert streamed.loc[0, "LOS"] == 4
 
 
-def test_encounter_reducer_keeps_only_best_row_per_type_and_encounter(
+def test_encounter_reducer_resolves_cross_setting_ids_globally(
     tmp_path: Path,
 ) -> None:
     encounters = pd.DataFrame(
@@ -219,7 +221,45 @@ def test_encounter_reducer_keeps_only_best_row_per_type_and_encounter(
         emer = reducer.frame("EMER")
 
     assert list(amb["patient_id"]) == ["P_earlier"]
-    assert list(emer["patient_id"]) == ["P_other_type"]
+    assert emer.empty
+
+
+def test_encounter_reducer_reports_cross_setting_conflicts(tmp_path: Path) -> None:
+    encounters = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P1", "P2", "P2"],
+            "encounter_id": ["E1", "E1", "E1", "E2", "E2"],
+            "start_date": pd.to_datetime(
+                [
+                    "2022-01-01",
+                    "2022-01-02",
+                    "2022-01-03",
+                    "2022-01-03",
+                    "2022-01-04",
+                ]
+            ),
+            "end_date": pd.to_datetime(
+                [
+                    "2022-01-02",
+                    "2022-01-03",
+                    "2022-01-04",
+                    "2022-01-04",
+                    "2022-01-05",
+                ]
+            ),
+            "type": ["AMB", "EMER", "IMP", "AMB", "AMB"],
+        }
+    )
+
+    with _EncounterReducerStore(tmp_path) as reducer:
+        reducer.update(encounters)
+        summary = reducer.conflict_summary()
+
+    assert summary == {
+        "schema_version": 1,
+        "encounter_conflict_count": 1,
+        "type_combinations": {"AMB+EMER+IMP": 1},
+    }
 
 
 def test_run_encounter_stage_removes_reducer_scratch_database(tmp_path: Path) -> None:
@@ -252,7 +292,7 @@ def test_encounter_reducer_cleanup_raises_on_delete_error(
         raise PermissionError(f"denied: {context}")
 
     monkeypatch.setattr(
-        "trinetx_preprocessing.pipeline.encounter_stage.remove_tree_strict",
+        "trinetx_preprocessing.storage.remove_tree_strict",
         fail_remove_tree,
     )
 

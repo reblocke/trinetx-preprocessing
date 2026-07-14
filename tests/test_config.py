@@ -50,6 +50,7 @@ def test_load_and_validate_config(tmp_path: Path) -> None:
     config = load_config(config_path)
     assert config.data_dir == data_dir.resolve()
     assert config.storage.intermediate_format == "csv"
+    assert config.storage.emit_normalized_domain_tables is False
     validate_config(config)
 
 
@@ -71,7 +72,20 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
             storage:
               intermediate_format: parquet
               emit_legacy_csv_intermediates: false
+              emit_normalized_domain_tables: true
               parquet_row_group_size: 1000
+              analysis_bucket_count: 64
+              emit_legacy_group_tables: true
+            rfs:
+              enabled: true
+              ruleset: corrected_v1
+              abg_min_pco2_mmhg: 47
+              vbg_min_pco2_mmhg: 48
+            cohort:
+              event_selection: earliest_per_setting
+            data_screen:
+              mode: diagnosis_or_lab
+              source: derived
             domains:
               encounter:
                 pattern: "Encounter/encounter*.csv"
@@ -83,7 +97,14 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     config = load_config(config_path)
     assert config.storage.intermediate_format == "parquet"
     assert config.storage.emit_legacy_csv_intermediates is False
+    assert config.storage.emit_normalized_domain_tables is True
     assert config.storage.parquet_row_group_size == 1000
+    assert config.storage.analysis_bucket_count == 64
+    assert config.storage.emit_legacy_group_tables is True
+    assert config.rfs.abg_min_pco2_mmhg == 47
+    assert config.rfs.vbg_min_pco2_mmhg == 48
+    assert config.cohort.event_selection == "earliest_per_setting"
+    assert config.data_screen.mode == "diagnosis_or_lab"
     validate_config(config)
 
 

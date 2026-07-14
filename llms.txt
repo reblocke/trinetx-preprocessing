@@ -3,12 +3,17 @@
 Repository: https://github.com/reblocke/trinetx-preprocessing
 Purpose: refactor TriNetX hypercapnia preprocessing notebooks into a
 deterministic Python CLI pipeline.
-Status: code-only repository; no manuscript version is expected here.
+Status: Milestone 1 is the immutable replication fallback; post-milestone work
+implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
+output-reproducibility, and aggregate-delta evidence is complete. Milestone 2
+accepts deterministic non-strict resolution of documented source conflicts
+while strict execution remains fail-closed.
 
 ## Human-Readable Entry Points
 - `README.md`: primary overview and quickstart.
 - `docs/ONBOARDING.md`: setup, real-data placement, and legacy workflow notes.
-- `docs/PLAN.md`: refactor finalization plan.
+- `docs/SPEC.md`: authoritative corrected analytic contract.
+- `docs/PLAN.md`: corrected pipeline completion plan.
 - `docs/VALIDATION.md`: golden-master parity workflow.
 - `docs/DATA_CONTRACT.md`: input, intermediate, and final output contracts.
 
@@ -48,8 +53,7 @@ uv sync
 ## Agent Cautions
 - Do not replace the richer `AGENTS.md` project instructions with this compact
   index.
-- Preserve notebook-derived inclusion logic unless a documented decision says
-  otherwise.
+- Follow `docs/SPEC.md`; notebooks are historical references when behavior differs.
 - Prefer concise, linked summaries over copied notebook or row-level output
   content.
 - Do not re-add a README appendix aimed primarily at LLMs; integrate

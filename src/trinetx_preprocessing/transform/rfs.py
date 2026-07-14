@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-import numpy as np
 import pandas as pd
 
 from ..validation import require_columns
+from .clinical_rules import (
+    CodeRule,
+    NumericCodeRule,
+    RuleAudit,
+    apply_numeric_code_rule,
+    exact_code_rule,
+    prefix_code_rule,
+)
 from .diagnosis import DIAGNOSIS_COLUMNS
 from .labs import LAB_COLUMNS
 from .procedure import PROCEDURE_COLUMNS
@@ -22,18 +29,27 @@ RFS_LEGACY_SOURCES = {
     "PREDISPOSITION": "Hypercapnia NEW DATA - RFS Processing.ipynb:1928",
 }
 
-ABG_CODE_REGEX = r"^2019-8$|^2026-3$|^32771-8$"
-ABG_VALUE_MIN = 5.0
+DEFAULT_ABG_VALUE_MIN = 45.0
 ABG_VALUE_MAX = 200.0
-
-VBG_CODE_REGEX = r"^11557-6$|^2021-4$"
-VBG_VALUE_MIN = 5.0
+DEFAULT_VBG_VALUE_MIN = 45.0
 VBG_VALUE_MAX = 200.0
 
-RESPFAIL_CODE_REGEX = r"^J96.*|^E66.2$"
+PCO2_UNIT_FACTORS = (
+    ("mmhg", 1.0),
+    ("mm[hg]", 1.0),
+    ("mm hg", 1.0),
+    ("kpa", 7.50062),
+)
 
-OBESITY_DIAGNOSIS_REGEX = r"^E66.01$|^Z68.41$|^Z68.42$"
-OBESITY_BMI_CODE_REGEX = r"^39156-5$"
+RESPFAIL_RULE = CodeRule(
+    name="RESPFAIL",
+    exact_codes=("E66.2",),
+    prefixes=("J96",),
+)
+OBESITY_DIAGNOSIS_RULE = exact_code_rule(
+    "OBESITY_DIAGNOSIS", "E66.01", "Z68.41", "Z68.42"
+)
+OBESITY_BMI_RULE = exact_code_rule("OBESITY_BMI", "39156-5")
 OBESITY_BMI_MIN = 40.0
 OBESITY_BMI_MAX = 100.0
 
@@ -62,13 +78,31 @@ VENTSUPPORT_CODES = [
     "94003",
     "94660",
 ]
-VENTSUPPORT_CODE_REGEX = "|".join(f"^{code}$" for code in VENTSUPPORT_CODES)
+VENTSUPPORT_RULE = CodeRule(name="VENTSUPPORT", exact_codes=tuple(VENTSUPPORT_CODES))
 
-PREDISPOSITION_CODE_REGEX = (
-    "I27.1*|I27.9*|I27.81*|I27.2*|G47.3*|G95*|G71*|G35*|G36*|"
-    "G37*|G70*|G12.21*|S14.101*|S14.102*|S14.103*|S14.104*|S14.105*|"
-    "S14.106*|S14.107*|S14.15*|S14.12*|S14.109*|S14.10*|S14.1*|D75.1*|"
-    "F11*|T40*|E84*|J45*|J44*|J43*|I50*"
+PREDISPOSITION_RULE = prefix_code_rule(
+    "PREDISPOSITION",
+    "I27.1",
+    "I27.9",
+    "I27.81",
+    "I27.2",
+    "G47.3",
+    "G95",
+    "G71",
+    "G35",
+    "G36",
+    "G37",
+    "G70",
+    "G12.21",
+    "S14.1",
+    "D75.1",
+    "F11",
+    "T40",
+    "E84",
+    "J45",
+    "J44",
+    "J43",
+    "I50",
 )
 
 RFS_FLAG_COLUMNS = [
@@ -97,6 +131,8 @@ def derive_rfs_encounter_sets(
     diagnosis: pd.DataFrame,
     procedure: pd.DataFrame,
     vitals: pd.DataFrame,
+    abg_min_pco2_mmhg: float = DEFAULT_ABG_VALUE_MIN,
+    vbg_min_pco2_mmhg: float = DEFAULT_VBG_VALUE_MIN,
 ) -> dict[str, set[str]]:
     """Derive encounter-id sets for each RFS category.
 
@@ -114,6 +150,8 @@ def derive_rfs_encounter_sets(
         diagnosis=diagnosis,
         procedure=procedure,
         vitals=vitals,
+        abg_min_pco2_mmhg=abg_min_pco2_mmhg,
+        vbg_min_pco2_mmhg=vbg_min_pco2_mmhg,
     )
     return {category: _encounter_ids(frame) for category, frame in events.items()}
 
@@ -137,6 +175,8 @@ def derive_rfs_event_frames(
     diagnosis: pd.DataFrame,
     procedure: pd.DataFrame,
     vitals: pd.DataFrame,
+    abg_min_pco2_mmhg: float = DEFAULT_ABG_VALUE_MIN,
+    vbg_min_pco2_mmhg: float = DEFAULT_VBG_VALUE_MIN,
 ) -> dict[str, pd.DataFrame]:
     """Derive event-level RFS rows with encounter dates.
 
@@ -150,24 +190,23 @@ def derive_rfs_event_frames(
         Mapping of RFS category name to event DataFrame with ``date``.
     """
 
-    abg = _select_event_columns(
-        _filter_lab_results(labs, ABG_CODE_REGEX, ABG_VALUE_MIN, ABG_VALUE_MAX)
+    lab_events, _ = derive_lab_rfs_event_frames_with_audit(
+        labs,
+        abg_min_pco2_mmhg=abg_min_pco2_mmhg,
+        vbg_min_pco2_mmhg=vbg_min_pco2_mmhg,
     )
-    vbg = _select_event_columns(
-        _filter_lab_results(labs, VBG_CODE_REGEX, VBG_VALUE_MIN, VBG_VALUE_MAX)
-    )
-    respfail = _select_event_columns(_filter_diagnosis(diagnosis, RESPFAIL_CODE_REGEX))
+    abg = lab_events["ABG"]
+    vbg = lab_events["VBG"]
+    respfail = _select_event_columns(_filter_diagnosis(diagnosis, RESPFAIL_RULE))
     obesity_dx = _select_event_columns(
-        _filter_diagnosis(diagnosis, OBESITY_DIAGNOSIS_REGEX)
+        _filter_diagnosis(diagnosis, OBESITY_DIAGNOSIS_RULE)
     )
     obesity_vitals = _select_event_columns(
-        _filter_vitals(vitals, OBESITY_BMI_CODE_REGEX, OBESITY_BMI_MIN, OBESITY_BMI_MAX)
+        _filter_vitals(vitals, OBESITY_BMI_RULE, OBESITY_BMI_MIN, OBESITY_BMI_MAX)
     )
-    ventsupport = _select_event_columns(
-        _filter_procedure(procedure, VENTSUPPORT_CODE_REGEX)
-    )
+    ventsupport = _select_event_columns(_filter_procedure(procedure, VENTSUPPORT_RULE))
     predisposition = _select_event_columns(
-        _filter_diagnosis(diagnosis, PREDISPOSITION_CODE_REGEX)
+        _filter_diagnosis(diagnosis, PREDISPOSITION_RULE)
     )
 
     obesity = pd.concat([obesity_dx, obesity_vitals], ignore_index=True)
@@ -184,17 +223,50 @@ def derive_rfs_event_frames(
     }
 
 
-def derive_lab_rfs_event_frames(labs: pd.DataFrame) -> dict[str, pd.DataFrame]:
+def derive_lab_rfs_event_frames(
+    labs: pd.DataFrame,
+    *,
+    abg_min_pco2_mmhg: float = DEFAULT_ABG_VALUE_MIN,
+    vbg_min_pco2_mmhg: float = DEFAULT_VBG_VALUE_MIN,
+) -> dict[str, pd.DataFrame]:
     """Derive RFS event rows that depend only on lab results."""
 
-    return {
-        "ABG": _select_event_columns(
-            _filter_lab_results(labs, ABG_CODE_REGEX, ABG_VALUE_MIN, ABG_VALUE_MAX)
-        ),
-        "VBG": _select_event_columns(
-            _filter_lab_results(labs, VBG_CODE_REGEX, VBG_VALUE_MIN, VBG_VALUE_MAX)
-        ),
+    frames, _ = derive_lab_rfs_event_frames_with_audit(
+        labs,
+        abg_min_pco2_mmhg=abg_min_pco2_mmhg,
+        vbg_min_pco2_mmhg=vbg_min_pco2_mmhg,
+    )
+    return frames
+
+
+def derive_lab_rfs_event_frames_with_audit(
+    labs: pd.DataFrame,
+    *,
+    abg_min_pco2_mmhg: float = DEFAULT_ABG_VALUE_MIN,
+    vbg_min_pco2_mmhg: float = DEFAULT_VBG_VALUE_MIN,
+) -> tuple[dict[str, pd.DataFrame], dict[str, RuleAudit]]:
+    """Derive specimen-specific gas events and aggregate rejection counts."""
+
+    require_columns(
+        labs,
+        [*LAB_COLUMNS, "code_system", "units_of_measure"],
+        context="Lab results normalized input",
+    )
+    rules = {
+        "ABG": _pco2_rule("ABG", ("2019-8", "32771-8"), abg_min_pco2_mmhg),
+        "VBG": _pco2_rule("VBG", ("2021-4",), vbg_min_pco2_mmhg),
     }
+    frames: dict[str, pd.DataFrame] = {}
+    audits: dict[str, RuleAudit] = {}
+    for category, rule in rules.items():
+        result = apply_numeric_code_rule(
+            labs,
+            rule,
+            value_column="lab_result_num_val",
+        )
+        frames[category] = _select_event_columns(result.rows)
+        audits[category] = result.audit
+    return frames, audits
 
 
 def derive_diagnosis_rfs_event_frames(
@@ -203,14 +275,12 @@ def derive_diagnosis_rfs_event_frames(
     """Derive RFS event rows that depend only on diagnosis rows."""
 
     return {
-        "RESPFAIL": _select_event_columns(
-            _filter_diagnosis(diagnosis, RESPFAIL_CODE_REGEX)
-        ),
+        "RESPFAIL": _select_event_columns(_filter_diagnosis(diagnosis, RESPFAIL_RULE)),
         "OBESITY": _select_event_columns(
-            _filter_diagnosis(diagnosis, OBESITY_DIAGNOSIS_REGEX)
+            _filter_diagnosis(diagnosis, OBESITY_DIAGNOSIS_RULE)
         ),
         "PREDISPOSITION": _select_event_columns(
-            _filter_diagnosis(diagnosis, PREDISPOSITION_CODE_REGEX)
+            _filter_diagnosis(diagnosis, PREDISPOSITION_RULE)
         ),
     }
 
@@ -222,7 +292,7 @@ def derive_procedure_rfs_event_frames(
 
     return {
         "VENTSUPPORT": _select_event_columns(
-            _filter_procedure(procedure, VENTSUPPORT_CODE_REGEX)
+            _filter_procedure(procedure, VENTSUPPORT_RULE)
         )
     }
 
@@ -234,7 +304,7 @@ def derive_vitals_rfs_event_frames(vitals: pd.DataFrame) -> dict[str, pd.DataFra
         "OBESITY": _select_event_columns(
             _filter_vitals(
                 vitals,
-                OBESITY_BMI_CODE_REGEX,
+                OBESITY_BMI_RULE,
                 OBESITY_BMI_MIN,
                 OBESITY_BMI_MAX,
             )
@@ -293,65 +363,49 @@ def _select_event_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[:, RFS_EVENT_COLUMNS].copy()
 
 
-def _filter_lab_results(
-    labs: pd.DataFrame,
-    regex: str,
-    min_value: float,
-    max_value: float,
-) -> pd.DataFrame:
-    require_columns(labs, LAB_COLUMNS, context="Lab results normalized input")
-    codes = labs["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
-    filtered = labs.loc[mask, LAB_COLUMNS].copy()
-    if filtered.empty:
-        return filtered
-    values = pd.to_numeric(filtered["lab_result_num_val"], errors="coerce")
-    mask = (values > min_value) & (values < max_value)
-    filtered["lab_result_num_val"] = values
-    return filtered.loc[mask].reset_index(drop=True)
-
-
-def _filter_diagnosis(diagnosis: pd.DataFrame, regex: str) -> pd.DataFrame:
+def _filter_diagnosis(diagnosis: pd.DataFrame, rule: CodeRule) -> pd.DataFrame:
     require_columns(diagnosis, DIAGNOSIS_COLUMNS, context="Diagnosis normalized input")
-    codes = diagnosis["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
+    mask = rule.mask(diagnosis["code"])
     return diagnosis.loc[mask, DIAGNOSIS_COLUMNS].reset_index(drop=True)
 
 
-def _filter_procedure(procedure: pd.DataFrame, regex: str) -> pd.DataFrame:
+def _filter_procedure(procedure: pd.DataFrame, rule: CodeRule) -> pd.DataFrame:
     require_columns(procedure, PROCEDURE_COLUMNS, context="Procedure normalized input")
-    codes = procedure["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
+    mask = rule.mask(procedure["code"])
     return procedure.loc[mask, PROCEDURE_COLUMNS].reset_index(drop=True)
 
 
 def _filter_vitals(
     vitals: pd.DataFrame,
-    regex: str,
+    rule: CodeRule,
     min_value: float,
     max_value: float,
 ) -> pd.DataFrame:
     require_columns(vitals, VITALS_COLUMNS, context="Vitals normalized input")
-    codes = vitals["code"].astype("string")
-    mask = codes.str.match(regex, na=False)
+    mask = rule.mask(vitals["code"])
     filtered = vitals.loc[mask, VITALS_COLUMNS].copy()
     if filtered.empty:
         return filtered
-    values = _legacy_float16_values(filtered["value"])
+    values = pd.to_numeric(filtered["value"], errors="coerce").astype("float64")
     mask = (values >= min_value) & (values < max_value)
     filtered["value"] = values
     return filtered.loc[mask].reset_index(drop=True)
 
 
-def _legacy_float16_values(series: pd.Series) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce").astype("float64")
-    info = np.finfo(np.float16)
-    finite = np.isfinite(values)
-    safe = finite & (values >= info.min) & (values <= info.max)
-    rounded = pd.Series(np.nan, index=values.index, dtype="float64")
-    if safe.any():
-        rounded.loc[safe] = values.loc[safe].astype("float16").astype("float64")
-    return rounded
+def _pco2_rule(
+    name: str,
+    codes: tuple[str, ...],
+    minimum: float,
+) -> NumericCodeRule:
+    return NumericCodeRule(
+        name=name,
+        exact_codes=codes,
+        allowed_code_systems=("LOINC",),
+        min_value=minimum,
+        max_value=ABG_VALUE_MAX,
+        canonical_unit="mmHg",
+        unit_factors=PCO2_UNIT_FACTORS,
+    )
 
 
 def _encounter_ids(df: pd.DataFrame) -> set[str]:

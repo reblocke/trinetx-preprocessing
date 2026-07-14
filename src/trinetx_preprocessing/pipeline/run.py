@@ -7,6 +7,11 @@ from pathlib import Path
 
 from ..config import Config
 from ..profiling import StageTimer
+from ..work_manifest import (
+    initialize_work_manifest,
+    mark_stage_complete,
+    mark_stage_started,
+)
 from .diagnosis_stage import run_diagnosis_stage
 from .encounter_stage import run_encounter_stage
 from .final_assembly import run_final_assembly
@@ -36,37 +41,26 @@ def run_pipeline(
 
     logger = logging.getLogger(__name__)
     output_paths: list[Path] = []
+    initialize_work_manifest(config)
 
-    logger.info("Starting encounter stage")
-    with StageTimer("encounter", timings=timings, logger=logger):
-        output_paths.extend(run_encounter_stage(config))
+    def run_stage(name: str, stage) -> None:
+        logger.info("Starting %s stage", name)
+        mark_stage_started(config, name)
+        with StageTimer(name, timings=timings, logger=logger):
+            paths = list(stage())
+        mark_stage_complete(config, name, paths)
+        output_paths.extend(paths)
 
-    logger.info("Starting labs stage")
-    with StageTimer("labs", timings=timings, logger=logger):
-        output_paths.extend(run_labs_stage(config))
-
-    logger.info("Starting diagnosis stage")
-    with StageTimer("diagnosis", timings=timings, logger=logger):
-        output_paths.extend(run_diagnosis_stage(config))
-
-    logger.info("Starting medications stage")
-    with StageTimer("medications", timings=timings, logger=logger):
-        output_paths.extend(run_medications_stage(config))
-
-    logger.info("Starting procedure stage")
-    with StageTimer("procedure", timings=timings, logger=logger):
-        output_paths.extend(run_procedure_stage(config))
-
-    logger.info("Starting vitals stage")
-    with StageTimer("vitals", timings=timings, logger=logger):
-        output_paths.extend(run_vitals_stage(config))
-
-    logger.info("Starting RFS stage")
-    with StageTimer("rfs", timings=timings, logger=logger):
-        output_paths.extend(run_rfs_stage(config))
-
-    logger.info("Starting final assembly stage")
-    with StageTimer("final_assembly", timings=timings, logger=logger):
-        output_paths.extend(run_final_assembly(config, strict=strict))
+    run_stage("encounter", lambda: run_encounter_stage(config, strict=strict))
+    run_stage("labs", lambda: run_labs_stage(config))
+    run_stage("diagnosis", lambda: run_diagnosis_stage(config))
+    run_stage("medications", lambda: run_medications_stage(config))
+    run_stage("procedure", lambda: run_procedure_stage(config))
+    run_stage("vitals", lambda: run_vitals_stage(config))
+    run_stage("rfs", lambda: run_rfs_stage(config))
+    run_stage(
+        "final_assembly",
+        lambda: run_final_assembly(config, strict=strict),
+    )
 
     return output_paths

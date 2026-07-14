@@ -27,10 +27,18 @@ LAB_COLUMNS = [
     "lab_result_num_val",
 ]
 
-DROP_COLUMNS = [
+NORMALIZED_LAB_COLUMNS = [
+    "patient_id",
+    "encounter_id",
     "code_system",
-    "lab_result_text_val",
+    "code",
+    "date",
+    "lab_result_num_val",
     "units_of_measure",
+]
+
+DROP_COLUMNS = [
+    "lab_result_text_val",
     "derived_by_TriNetX",
     "source_id",
 ]
@@ -49,9 +57,11 @@ def normalize_lab_results_chunk(df: pd.DataFrame) -> pd.DataFrame:
     require_columns(df, RAW_LAB_COLUMNS, context="Lab results raw input")
 
     normalized = df.drop(columns=DROP_COLUMNS).copy()
-    normalized = normalized.loc[:, LAB_COLUMNS]
+    normalized = normalized.loc[:, NORMALIZED_LAB_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")
+    normalized["code_system"] = normalized["code_system"].astype("string")
     normalized["code"] = normalized["code"].astype("string")
+    normalized["units_of_measure"] = normalized["units_of_measure"].astype("string")
     normalized["date"] = pd.to_datetime(normalized["date"])
     return normalized.reset_index(drop=True)

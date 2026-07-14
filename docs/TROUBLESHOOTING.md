@@ -10,7 +10,7 @@
 ### Memory errors
 - Process in chunks; avoid concatenating all chunks into one DataFrame.
 - Drop unused columns early.
-- Consider Parquet or SQLite for intermediate storage.
+- Use Parquet intermediates and the default bounded analysis partitions.
 
 ### CSV parse issues
 - Use explicit dtypes where possible.

@@ -33,3 +33,7 @@ python -m trinetx_preprocessing --help
   gate with `validation-status` and save JSON/Markdown reports under the
   private external validation root. Do not commit row-level outputs or
   unreviewed manifests.
+- `validation-status` remains the strict historical-parity gate. Milestone 2's
+  corrected release evidence is the explicit exception documented in
+  `docs/VALIDATION.md`; it does not claim a ready strict status while source
+  encounter-setting conflicts remain unadjudicated.

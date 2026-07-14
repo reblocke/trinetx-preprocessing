@@ -67,6 +67,16 @@ from .regression import (
 )
 from .tools.split_csv import split_csv
 from .validation import validate_csv_columns
+from .work_manifest import (
+    DOMAIN_STAGES,
+    FINAL_ASSEMBLY_PREREQUISITES,
+    StaleWorkError,
+    initialize_work_manifest,
+    mark_stage_complete,
+    mark_stage_started,
+    require_current_work,
+    require_strict_encounter_work,
+)
 
 REQUIRED_COLUMNS: dict[str, list[str]] = {
     "encounter": [
@@ -177,8 +187,12 @@ SCRATCH_PATH_PREFIXES = (
     ".trinetx-rfs-encounters-",
     ".trinetx-demographics-",
     ".trinetx-final-encounters-",
+    ".trinetx-final-cohorts-",
     ".trinetx-final-events-",
+    ".trinetx-final-feature-sources-",
+    ".trinetx-final-labs-",
     ".trinetx-final-patients-",
+    ".trinetx-final-prev-vitals-",
     ".trinetx-data-check-ids-",
 )
 
@@ -451,6 +465,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="Path to a YAML configuration file.",
+    )
+    run_encounter_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail when encounter IDs appear in multiple settings.",
     )
 
     run_labs_parser = subparsers.add_parser(
@@ -1140,7 +1159,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             return 1
         if args.command == "run-encounter":
-            output_paths = run_encounter_stage(config)
+            initialize_work_manifest(config)
+            mark_stage_started(config, "encounter")
+            output_paths = run_encounter_stage(config, strict=args.strict)
+            mark_stage_complete(config, "encounter", output_paths)
             logger.info(
                 "Encounter stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1148,7 +1170,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-labs":
+            initialize_work_manifest(config)
+            mark_stage_started(config, "labs")
             output_paths = run_labs_stage(config)
+            mark_stage_complete(config, "labs", output_paths)
             logger.info(
                 "Labs stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1156,7 +1181,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-diagnosis":
+            initialize_work_manifest(config)
+            mark_stage_started(config, "diagnosis")
             output_paths = run_diagnosis_stage(config)
+            mark_stage_complete(config, "diagnosis", output_paths)
             logger.info(
                 "Diagnosis stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1164,7 +1192,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-meds":
+            initialize_work_manifest(config)
+            mark_stage_started(config, "medications")
             output_paths = run_medications_stage(config)
+            mark_stage_complete(config, "medications", output_paths)
             logger.info(
                 "Medications stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1172,7 +1203,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-procedure":
+            initialize_work_manifest(config)
+            mark_stage_started(config, "procedure")
             output_paths = run_procedure_stage(config)
+            mark_stage_complete(config, "procedure", output_paths)
             logger.info(
                 "Procedure stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1180,7 +1214,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-vitals":
+            initialize_work_manifest(config)
+            mark_stage_started(config, "vitals")
             output_paths = run_vitals_stage(config)
+            mark_stage_complete(config, "vitals", output_paths)
             logger.info(
                 "Vitals stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1188,7 +1225,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-rfs":
+            require_current_work(config, required_stages=DOMAIN_STAGES)
+            mark_stage_started(config, "rfs")
             output_paths = run_rfs_stage(config)
+            mark_stage_complete(config, "rfs", output_paths)
             logger.info(
                 "RFS stage completed; wrote %s file(s) to %s.",
                 len(output_paths),
@@ -1196,14 +1236,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
         if args.command == "run-final-assembly":
+            require_current_work(
+                config,
+                required_stages=FINAL_ASSEMBLY_PREREQUISITES,
+            )
+            if args.strict:
+                require_strict_encounter_work(config)
+            mark_stage_started(config, "final_assembly")
             output_paths = run_final_assembly(config, strict=args.strict)
+            mark_stage_complete(config, "final_assembly", output_paths)
             logger.info(
                 "Final assembly completed; wrote %s file(s) to %s.",
                 len(output_paths),
                 config.output_dir,
             )
             return 0
-    except (ConfigError, FileNotFoundError, ValueError) as exc:
+    except (ConfigError, FileNotFoundError, StaleWorkError, ValueError) as exc:
         logger.error("%s", exc)
         return 2
 

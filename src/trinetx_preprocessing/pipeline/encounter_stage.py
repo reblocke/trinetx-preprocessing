@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-import tempfile
+from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TextIO
 
 import pandas as pd
 
 from ..config import Config, ConfigError, collect_domain_paths
-from ..filesystem import remove_tree_strict
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
-from ..storage import WorkTableWriter
+from ..storage import PartitionedParquetStore, WorkTableWriter
 from ..transform.encounter import (
     DEFAULT_END_DATE_FILL,
     DEFAULT_START_DATE,
@@ -54,19 +53,9 @@ REDUCER_COLUMNS = [
     "type",
     "row_order",
 ]
-REDUCER_DTYPE = {
-    "encounter_type": "string",
-    "encounter_id_key": "string",
-    "encounter_id": "string",
-    "patient_id": "string",
-    "start_date_ns": "int64",
-    "end_date_ns": "int64",
-    "type": "string",
-    "row_order": "int64",
-}
 
 
-def run_encounter_stage(config: Config) -> list[Path]:
+def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
     """Run the encounter stage and write outputs under ``work_dir``.
 
     Args:
@@ -97,7 +86,11 @@ def run_encounter_stage(config: Config) -> list[Path]:
             chunksize = (
                 config.chunking.lines_per_chunk if config.chunking.enabled else None
             )
-            with WorkTableWriter(config, _normalized_filename(path, index)) as writer:
+            with WorkTableWriter(
+                config,
+                _normalized_filename(path, index),
+                enabled=config.storage.emit_normalized_domain_tables,
+            ) as writer:
                 chunk_index = 0
                 for chunk in iter_csv(
                     path,
@@ -136,6 +129,24 @@ def run_encounter_stage(config: Config) -> list[Path]:
                     f"encounter normalized {path.name}",
                     rows_normalized,
                 )
+
+        conflict_summary = reducer.conflict_summary()
+        if conflict_summary["encounter_conflict_count"]:
+            if strict:
+                raise ConfigError(
+                    "Encounter IDs appear in multiple settings: "
+                    f"{conflict_summary['encounter_conflict_count']} conflicts."
+                )
+            conflict_path = config.work_dir / "encounter_conflicts.json"
+            conflict_path.write_text(
+                json.dumps(conflict_summary, indent=2, sort_keys=True) + "\n"
+            )
+            output_paths.append(conflict_path)
+            logger.warning(
+                "Resolved %s cross-setting encounter conflicts; aggregate report: %s",
+                conflict_summary["encounter_conflict_count"],
+                conflict_path,
+            )
 
         for encounter_type, filename in OUTPUT_FILENAMES.items():
             log_row_count(
@@ -193,34 +204,23 @@ class _EncounterReducerStore:
             raise ValueError("bucket_count must be a positive integer.")
         self.work_dir = work_dir
         self.bucket_count = bucket_count
-        self.bucket_dir: Path | None = None
-        self.bucket_paths: list[Path] = []
-        self.bucket_handles: list[TextIO] = []
+        self._store: PartitionedParquetStore | None = None
         self.next_row_order = 0
 
     def __enter__(self) -> "_EncounterReducerStore":
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.bucket_dir = Path(
-            tempfile.mkdtemp(
-                prefix=".trinetx-encounter-reducer-",
-                dir=self.work_dir,
-            )
+        self._store = PartitionedParquetStore(
+            self.work_dir,
+            prefix=".trinetx-encounter-reducer-",
+            key_columns=["encounter_id_key"],
+            bucket_count=self.bucket_count,
+            cleanup_context="Encounter reducer scratch",
         )
-        self.bucket_paths = [
-            self.bucket_dir / f"bucket-{index:03}.csv"
-            for index in range(self.bucket_count)
-        ]
-        self.bucket_handles = [
-            path.open("w", encoding="utf-8", newline="") for path in self.bucket_paths
-        ]
-        header = pd.DataFrame(columns=REDUCER_COLUMNS)
-        for handle in self.bucket_handles:
-            header.to_csv(handle, index=False)
+        self._store.__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._close_bucket_handles()
-        self._unlink_scratch_files()
+        if self._store is not None:
+            self._store.__exit__(exc_type, exc, tb)
 
     def update(self, filtered: pd.DataFrame) -> None:
         if filtered.empty:
@@ -257,20 +257,7 @@ class _EncounterReducerStore:
             }
         )
 
-        bucket_ids = (
-            pd.util.hash_pandas_object(
-                records["encounter_id_key"],
-                index=False,
-            )
-            % self.bucket_count
-        ).astype("int64")
-        records["_bucket"] = bucket_ids.to_numpy()
-        for bucket_id, bucket_records in records.groupby("_bucket", sort=False):
-            bucket_records.loc[:, REDUCER_COLUMNS].to_csv(
-                self._bucket_handles()[int(bucket_id)],
-                index=False,
-                header=False,
-            )
+        self._partition_store().add_frame(records.loc[:, REDUCER_COLUMNS])
 
     def frame(self, encounter_type: str) -> pd.DataFrame:
         frames = list(
@@ -299,6 +286,50 @@ class _EncounterReducerStore:
             if not finalized.empty:
                 yield finalized
 
+    def conflict_summary(self) -> dict[str, object]:
+        """Return aggregate counts for encounter IDs seen in multiple settings."""
+
+        conflict_count = 0
+        combinations: Counter[str] = Counter()
+        for _, bucket in self._partition_store().iter_frames(columns=REDUCER_COLUMNS):
+            if bucket.empty:
+                continue
+            pairs = (
+                bucket.loc[
+                    bucket["encounter_id_key"].notna()
+                    & bucket["encounter_type"].notna(),
+                    ["encounter_id_key", "encounter_type"],
+                ]
+                .drop_duplicates()
+                .reset_index(drop=True)
+            )
+            conflicting = pairs.loc[
+                pairs.duplicated(subset=["encounter_id_key"], keep=False)
+            ]
+            if conflicting.empty:
+                continue
+            conflict_count += conflicting["encounter_id_key"].nunique()
+            combination_counts = (
+                conflicting.sort_values(
+                    by=["encounter_id_key", "encounter_type"],
+                    kind="mergesort",
+                )
+                .groupby("encounter_id_key", sort=False)["encounter_type"]
+                .agg("+".join)
+                .value_counts()
+            )
+            combinations.update(
+                {
+                    str(combination): int(count)
+                    for combination, count in combination_counts.items()
+                }
+            )
+        return {
+            "schema_version": 1,
+            "encounter_conflict_count": conflict_count,
+            "type_combinations": dict(sorted(combinations.items())),
+        }
+
     def _iter_reduced_frames(
         self,
         encounter_type: str,
@@ -307,12 +338,7 @@ class _EncounterReducerStore:
     ) -> Iterable[pd.DataFrame]:
         if batch_size <= 0:
             raise ValueError("batch_size must be a positive integer.")
-        self._flush_bucket_handles()
-        for bucket_path in self.bucket_paths:
-            bucket = pd.read_csv(bucket_path, dtype=REDUCER_DTYPE)
-            if bucket.empty:
-                continue
-            bucket = bucket.loc[bucket["encounter_type"] == encounter_type]
+        for _, bucket in self._partition_store().iter_frames(columns=REDUCER_COLUMNS):
             if bucket.empty:
                 continue
             reduced = (
@@ -324,6 +350,9 @@ class _EncounterReducerStore:
                 .drop_duplicates(subset=["encounter_id_key"], keep="first")
                 .reset_index(drop=True)
             )
+            reduced = reduced.loc[reduced["encounter_type"] == encounter_type]
+            if reduced.empty:
+                continue
             for start in range(0, len(reduced), batch_size):
                 rows = reduced.iloc[start : start + batch_size].loc[
                     :,
@@ -339,31 +368,10 @@ class _EncounterReducerStore:
                     list(rows.itertuples(index=False, name=None))
                 )
 
-    def _bucket_handles(self) -> list[TextIO]:
-        if not self.bucket_handles:
+    def _partition_store(self) -> PartitionedParquetStore:
+        if self._store is None:
             raise RuntimeError("Encounter reducer store is not open.")
-        return self.bucket_handles
-
-    def _flush_bucket_handles(self) -> None:
-        for handle in self.bucket_handles:
-            if not handle.closed:
-                handle.flush()
-
-    def _close_bucket_handles(self) -> None:
-        for handle in self.bucket_handles:
-            if not handle.closed:
-                handle.close()
-        self.bucket_handles = []
-
-    def _unlink_scratch_files(self) -> None:
-        if self.bucket_dir is None:
-            return
-        remove_tree_strict(self.bucket_dir, context="Encounter reducer scratch")
-        sidecar = self.bucket_dir.with_name(f"._{self.bucket_dir.name}")
-        try:
-            sidecar.unlink()
-        except FileNotFoundError:
-            pass
+        return self._store
 
 
 def _timestamp_ns_series(series: pd.Series) -> pd.Series:

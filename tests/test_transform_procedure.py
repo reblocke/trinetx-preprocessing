@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from trinetx_preprocessing.transform.procedure import (
-    PROCEDURE_COLUMNS,
+    NORMALIZED_PROCEDURE_COLUMNS,
     normalize_procedure_chunk,
     split_procedure_by_code,
 )
@@ -24,9 +24,9 @@ def test_normalize_procedure_chunk_structure() -> None:
 
     normalized = normalize_procedure_chunk(df)
 
-    assert list(normalized.columns) == PROCEDURE_COLUMNS
+    assert list(normalized.columns) == NORMALIZED_PROCEDURE_COLUMNS
     assert len(normalized) == 13
-    assert "code_system" not in normalized.columns
+    assert normalized.loc[0, "code_system"] == "CPT"
     assert pd.isna(normalized.loc[12, "date"])
 
 
@@ -40,6 +40,25 @@ def test_split_procedure_by_code_groups() -> None:
     assert groups["HAS_99291"]["code"].tolist() == ["99292"]
     assert groups["HAS_CT_ABDM"]["code"].tolist() == ["74150"]
     assert groups["HAS_61911006"]["code"].tolist() == ["61911006"]
+
+
+def test_tte_excludes_legacy_typos_and_non_tte_modalities() -> None:
+    template = normalize_procedure_chunk(_load_fixture()).iloc[[0]]
+    codes = [
+        "93303",
+        "93304",
+        "93306",
+        "93307",
+        "93308",
+        "93356",
+        "99304",
+        "93312",
+        "93350",
+    ]
+    frame = pd.concat([template] * len(codes), ignore_index=True)
+    frame["code"] = codes
+
+    assert split_procedure_by_code(frame)["HAS_TTE"]["code"].tolist() == codes[:6]
 
 
 def test_split_procedure_preserves_duplicate_overlapping_rows() -> None:

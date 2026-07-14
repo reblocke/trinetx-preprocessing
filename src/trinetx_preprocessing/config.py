@@ -71,6 +71,24 @@ class RfsConfig:
     """RFS configuration."""
 
     enabled: bool = False
+    ruleset: str = "corrected_v1"
+    abg_min_pco2_mmhg: float = 45.0
+    vbg_min_pco2_mmhg: float = 45.0
+
+
+@dataclass(frozen=True)
+class CohortConfig:
+    """Final cohort-selection configuration."""
+
+    event_selection: str = "earliest_per_setting"
+
+
+@dataclass(frozen=True)
+class DataScreenConfig:
+    """Final AFTER-screen configuration."""
+
+    mode: str = "diagnosis_or_lab"
+    source: str = "derived"
 
 
 @dataclass(frozen=True)
@@ -86,7 +104,10 @@ class StorageConfig:
 
     intermediate_format: str = "csv"
     emit_legacy_csv_intermediates: bool = True
+    emit_normalized_domain_tables: bool = False
     parquet_row_group_size: int = 250_000
+    analysis_bucket_count: int = 256
+    emit_legacy_group_tables: bool = False
 
 
 @dataclass(frozen=True)
@@ -101,6 +122,8 @@ class Config:
     rfs: RfsConfig
     guardrails: GuardrailConfig
     storage: StorageConfig
+    cohort: CohortConfig = CohortConfig()
+    data_screen: DataScreenConfig = DataScreenConfig()
 
 
 def load_config(path: Path) -> Config:
@@ -128,6 +151,8 @@ def load_config(path: Path) -> Config:
     domains = _load_domains(raw.get("domains"))
     chunking = _load_chunking(raw.get("chunking"))
     rfs = _load_rfs(raw.get("rfs"))
+    cohort = _load_cohort(raw.get("cohort"))
+    data_screen = _load_data_screen(raw.get("data_screen"))
     guardrails = _load_guardrails(raw.get("guardrails"))
     storage = _load_storage(raw.get("storage"))
 
@@ -140,6 +165,8 @@ def load_config(path: Path) -> Config:
         rfs=rfs,
         guardrails=guardrails,
         storage=storage,
+        cohort=cohort,
+        data_screen=data_screen,
     )
 
 
@@ -428,7 +455,42 @@ def _load_rfs(raw: Any) -> RfsConfig:
     if not isinstance(raw, dict):
         raise ConfigError("Config 'rfs' must be a mapping if provided.")
     enabled = bool(raw.get("enabled", False))
-    return RfsConfig(enabled=enabled)
+    ruleset = str(raw.get("ruleset", "corrected_v1"))
+    if ruleset != "corrected_v1":
+        raise ConfigError("'rfs.ruleset' must be 'corrected_v1'.")
+    abg_min = _positive_number(raw, "abg_min_pco2_mmhg", 45.0, section="rfs")
+    vbg_min = _positive_number(raw, "vbg_min_pco2_mmhg", 45.0, section="rfs")
+    return RfsConfig(
+        enabled=enabled,
+        ruleset=ruleset,
+        abg_min_pco2_mmhg=abg_min,
+        vbg_min_pco2_mmhg=vbg_min,
+    )
+
+
+def _load_cohort(raw: Any) -> CohortConfig:
+    if raw is None:
+        return CohortConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("Config 'cohort' must be a mapping if provided.")
+    event_selection = str(raw.get("event_selection", "earliest_per_setting"))
+    if event_selection != "earliest_per_setting":
+        raise ConfigError("'cohort.event_selection' must be 'earliest_per_setting'.")
+    return CohortConfig(event_selection=event_selection)
+
+
+def _load_data_screen(raw: Any) -> DataScreenConfig:
+    if raw is None:
+        return DataScreenConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("Config 'data_screen' must be a mapping if provided.")
+    mode = str(raw.get("mode", "diagnosis_or_lab"))
+    source = str(raw.get("source", "derived"))
+    if mode != "diagnosis_or_lab":
+        raise ConfigError("'data_screen.mode' must be 'diagnosis_or_lab'.")
+    if source not in {"derived", "legacy_files"}:
+        raise ConfigError("'data_screen.source' must be 'derived' or 'legacy_files'.")
+    return DataScreenConfig(mode=mode, source=source)
 
 
 def _load_guardrails(raw: Any) -> GuardrailConfig:
@@ -457,6 +519,9 @@ def _load_storage(raw: Any) -> StorageConfig:
     emit_legacy_csv_intermediates = bool(
         raw.get("emit_legacy_csv_intermediates", intermediate_format == "csv")
     )
+    emit_normalized_domain_tables = bool(
+        raw.get("emit_normalized_domain_tables", False)
+    )
 
     parquet_row_group_size = raw.get("parquet_row_group_size", 250_000)
     if not isinstance(parquet_row_group_size, int) or parquet_row_group_size <= 0:
@@ -464,11 +529,38 @@ def _load_storage(raw: Any) -> StorageConfig:
             "'storage.parquet_row_group_size' must be a positive integer."
         )
 
+    analysis_bucket_count = raw.get("analysis_bucket_count", 256)
+    if (
+        not isinstance(analysis_bucket_count, int)
+        or analysis_bucket_count <= 0
+        or analysis_bucket_count & (analysis_bucket_count - 1)
+    ):
+        raise ConfigError(
+            "'storage.analysis_bucket_count' must be a positive power of two."
+        )
+    emit_legacy_group_tables = bool(raw.get("emit_legacy_group_tables", False))
+
     return StorageConfig(
         intermediate_format=intermediate_format,
         emit_legacy_csv_intermediates=emit_legacy_csv_intermediates,
+        emit_normalized_domain_tables=emit_normalized_domain_tables,
         parquet_row_group_size=parquet_row_group_size,
+        analysis_bucket_count=analysis_bucket_count,
+        emit_legacy_group_tables=emit_legacy_group_tables,
     )
+
+
+def _positive_number(
+    raw: dict[str, Any],
+    key: str,
+    default: float,
+    *,
+    section: str,
+) -> float:
+    value = raw.get(key, default)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+        raise ConfigError(f"'{section}.{key}' must be a positive number.")
+    return float(value)
 
 
 def _require_dir(path: Path, label: str) -> None:
