@@ -31,9 +31,10 @@ python -m trinetx_preprocessing.glp1_eligibility validate-export \
   --input /path/to/trinetx_export
 ```
 
-Long builds publish atomic aggregate progress to `.glp1_build_state.json` in
-their output directory. The status reader does not signal or attach to the
-worker:
+Long builds publish atomic aggregate progress to a hidden state file adjacent
+to their output directory while artifacts are staged, so the final output tree
+can still be published by one rename. The status reader checks that file and
+does not signal or attach to the worker:
 
 ```bash
 python -m trinetx_preprocessing.glp1_eligibility status \

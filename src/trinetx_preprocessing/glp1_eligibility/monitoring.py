@@ -43,8 +43,14 @@ class RunState:
 class RunStateWriter:
     """Durably maintain one build's aggregate state file."""
 
-    def __init__(self, output_dir: Path, run_id: str) -> None:
-        self.path = Path(output_dir) / RUN_STATE_FILENAME
+    def __init__(
+        self,
+        output_dir: Path,
+        run_id: str,
+        *,
+        state_path: Path | None = None,
+    ) -> None:
+        self.path = state_path or (Path(output_dir) / RUN_STATE_FILENAME)
         now = _utc_now()
         self.state = RunState(
             schema_version=RUN_STATE_SCHEMA_VERSION,
@@ -82,13 +88,23 @@ class RunStateWriter:
 def read_run_state(output_dir: Path) -> RunState:
     """Read and validate the state file below ``output_dir``."""
 
-    path = Path(output_dir) / RUN_STATE_FILENAME
+    output = Path(output_dir)
+    path = output / RUN_STATE_FILENAME
+    if not path.is_file():
+        path = state_path_for_output(output)
     if not path.is_file():
         raise FileNotFoundError(f"GLP-1 run state not found: {path}")
     payload = json.loads(path.read_text())
     if payload.get("schema_version") != RUN_STATE_SCHEMA_VERSION:
         raise ValueError("Unsupported GLP-1 run-state schema version.")
     return RunState(**payload)
+
+
+def state_path_for_output(output_dir: Path) -> Path:
+    """Return the stable sibling state path used during atomic builds."""
+
+    output = Path(output_dir).resolve()
+    return output.parent / f".{output.name}{RUN_STATE_FILENAME}"
 
 
 def process_appears_active(state: RunState) -> bool | None:

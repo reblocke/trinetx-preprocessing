@@ -11,15 +11,30 @@ from trinetx_preprocessing.glp1_eligibility.config import (
     GLP1ConfigError,
     load_glp1_config,
 )
+from trinetx_preprocessing.glp1_eligibility.database import (
+    initialize_database,
+    mark_database_complete,
+)
 from trinetx_preprocessing.glp1_eligibility.discovery import (
     discover_export_files,
     validate_export,
 )
+from trinetx_preprocessing.glp1_eligibility.ingestion import ingest_core_sources
 from trinetx_preprocessing.glp1_eligibility.monitoring import (
     RUN_STATE_FILENAME,
     RunStateWriter,
     process_appears_active,
     read_run_state,
+    state_path_for_output,
+)
+from trinetx_preprocessing.glp1_eligibility.provenance import (
+    build_input_inventory,
+    current_git_sha,
+    deterministic_run_id,
+)
+from trinetx_preprocessing.glp1_eligibility.workspace import (
+    prepare_workspace,
+    publish_workspace,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +75,12 @@ def _write_export(root: Path) -> None:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(header)
+
+
+def _append_rows(path: Path, *rows: str) -> None:
+    with path.open("a") as handle:
+        for row in rows:
+            handle.write(row.rstrip("\n") + "\n")
 
 
 def test_default_glp1_config_and_concept_sets_are_valid() -> None:
@@ -174,3 +195,154 @@ def test_run_state_is_atomic_and_monitorable(tmp_path: Path) -> None:
     assert state.rows_processed == 250_000
     assert process_appears_active(state) is True
     assert not list(tmp_path.glob(f".{RUN_STATE_FILENAME}.tmp-*"))
+
+
+def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    encounter = tmp_path / "Encounter" / "encounter.csv"
+    encounter.write_text(encounter.read_text() + "e1,p1,2024-01-01,2024-01-02,IMP,s1\n")
+    report = validate_export(tmp_path)
+
+    first = build_input_inventory(tmp_path, report, block_size=11)
+    second = build_input_inventory(tmp_path, report, block_size=29)
+
+    assert first.sha256 == second.sha256
+    encounter_inventory = next(
+        item for item in first.files if item.logical_domain == "encounter"
+    )
+    assert encounter_inventory.row_count == 1
+    assert encounter_inventory.source_file == "Encounter/encounter.csv"
+
+
+def test_workspace_publishes_atomically_and_status_uses_stable_sibling(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "glp1_eligibility"
+    workspace = prepare_workspace(
+        output,
+        run_id="run-1",
+        config_sha256="config-hash",
+        input_manifest_sha256="input-hash",
+        git_sha="git-hash",
+    )
+    (workspace.staging_dir / "artifact.txt").write_text("complete")
+
+    assert not output.exists()
+    assert state_path_for_output(output).is_file()
+
+    publish_workspace(workspace)
+
+    assert (output / "artifact.txt").read_text() == "complete"
+    assert not workspace.staging_dir.exists()
+    assert read_run_state(output).status == "completed"
+
+
+def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    git_sha = current_git_sha()
+    run_id = deterministic_run_id(
+        config_sha256=config.sha256,
+        input_manifest_sha256=inventory.sha256,
+        git_sha=git_sha,
+    )
+    database_path = tmp_path / "work" / "glp1_hypercapnia.duckdb"
+
+    connection = initialize_database(
+        database_path,
+        run_id=run_id,
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha=git_sha,
+    )
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM concept_set").fetchone() == (
+            21,
+        )
+        source_files = connection.execute(
+            "SELECT source_file FROM source_file_inventory ORDER BY source_file"
+        ).fetchall()
+        assert len(source_files) == len(DOMAIN_HEADERS)
+        assert all(not Path(row[0]).is_absolute() for row in source_files)
+        mark_database_complete(connection)
+        assert connection.execute(
+            "SELECT status FROM run_manifest"
+        ).fetchone() == ("complete",)
+    finally:
+        connection.close()
+
+
+def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+        "p2,M,White,Not Hispanic or Latino,1975,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "e2,p2,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
+        "p2,e2,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+        "p2,e2,2023-12-15,LOINC,39156-5,32,,kg/m2",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="synthetic-run",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+    )
+    try:
+        counts = ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+        )
+        assert counts["source_lab_measurement"] == 4
+        assert counts["gas_candidate_id"] == 1
+        assert connection.execute(
+            "SELECT patient_id, encounter_id FROM gas_candidate_id"
+        ).fetchall() == [("p1", "e1")]
+        assert connection.execute(
+            "SELECT patient_id FROM source_patient"
+        ).fetchall() == [("p1",)]
+        assert connection.execute(
+            "SELECT patient_id, value FROM source_vital_measurement"
+        ).fetchall() == [("p1", "36")]
+        assert connection.execute(
+            """
+            SELECT COUNT(*) FROM source_lab_measurement
+            WHERE code = '2026-3'
+            """
+        ).fetchone() == (2,)
+    finally:
+        connection.close()
