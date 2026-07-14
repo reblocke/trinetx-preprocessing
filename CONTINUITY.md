@@ -67,6 +67,7 @@
 - Commit `b134f70` fixes both findings, is pushed, and received a clean GitHub Codex re-review with all threads resolved.
 - The review-clean full non-strict profile from commit `1112963` completed all 36 outputs in `73,589.093 s`; final assembly took `49,180.54 s`, profiled peak RSS was `6,122.562 MB`, work footprint was `15,894,947,783` bytes, output footprint was `7,898,323,229` bytes, and recognized scratch was zero.
 - The alignment fix changed six obesity/ventilatory-support `AFTER` hashes with no schema or row-count changes. The final aggregate delta reports `3,471,448` shared keys, `941,484` Milestone-only keys, and `3,478,063` corrected-only keys.
+- The explicit strict resume check exits `2` before final assembly with `286` deterministically resolved conflicts, confirming the review-clean fail-closed behavior without changing current outputs.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -74,7 +75,7 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Finalize public evidence bookkeeping and run the final local hygiene gate.
+- Obtain the release-policy decision for the 286 source encounter-setting conflicts.
 
 ## Next
 - Decide whether release acceptance may use deterministic non-strict resolution for the `286` source conflicts or requires upstream adjudication; do not weaken strict semantics silently.
