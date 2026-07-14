@@ -12,6 +12,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   persistent-hypercapnia and VBG sensitivity cohorts, measured/calculated BMI,
   temporal component phenotypes, indication tiers, payer-route modeling, and
   GLP-1 order history.
+- Added unit-normalized arterial bicarbonate, PaO2, and oxygen-saturation
+  values paired to the selected PaCO2 through the same deterministic hierarchy.
 - Added source and derived long-form evidence, six study analysis views, atomic
   aggregate run monitoring with `status --watch`, and a committed 20-case
   synthetic acceptance fixture.

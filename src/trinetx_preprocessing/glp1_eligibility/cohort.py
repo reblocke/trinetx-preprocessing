@@ -73,7 +73,8 @@ def _build_normalized_gas(
              AND concept.concept_set_id IN (
                  'arterial_pco2', 'venous_pco2',
                  'unspecified_blood_pco2', 'arterial_total_co2',
-                 'arterial_ph', 'venous_ph'
+                 'arterial_ph', 'venous_ph', 'arterial_hco3',
+                 'arterial_po2', 'arterial_sao2'
              )
              AND regexp_replace(
                     upper(trim(lab.code_system)), '[^A-Z0-9]', '', 'g'
@@ -103,6 +104,24 @@ def _build_normalized_gas(
                     WHEN concept_set_id IN ('arterial_ph', 'venous_ph')
                          AND unit_key IN ('', 'ph', '1', 'unitless')
                     THEN raw_numeric_value
+                    WHEN concept_set_id = 'arterial_hco3'
+                         AND unit_key IN (
+                             'mmol/l', 'mmol/liter', 'mmol/litre',
+                             'meq/l', 'meq/liter', 'meq/litre'
+                         )
+                    THEN raw_numeric_value
+                    WHEN concept_set_id = 'arterial_po2'
+                         AND unit_key IN ('mmhg', 'mm hg', 'mm_hg', 'torr')
+                    THEN raw_numeric_value
+                    WHEN concept_set_id = 'arterial_po2' AND unit_key = 'kpa'
+                    THEN raw_numeric_value * 7.5006168270417
+                    WHEN concept_set_id = 'arterial_sao2'
+                         AND unit_key IN ('%', 'percent')
+                    THEN raw_numeric_value
+                    WHEN concept_set_id = 'arterial_sao2'
+                         AND unit_key IN ('1', 'fraction')
+                         AND raw_numeric_value BETWEEN 0 AND 1
+                    THEN raw_numeric_value * 100
                     ELSE NULL
                 END AS normalized_numeric_value,
                 CASE
@@ -112,6 +131,9 @@ def _build_normalized_gas(
                     ) THEN 'mm Hg'
                     WHEN concept_set_id IN ('arterial_ph', 'venous_ph')
                     THEN 'pH'
+                    WHEN concept_set_id = 'arterial_hco3' THEN 'mmol/L'
+                    WHEN concept_set_id = 'arterial_po2' THEN 'mm Hg'
+                    WHEN concept_set_id = 'arterial_sao2' THEN '%'
                     ELSE units_of_measure
                 END AS normalized_unit
             FROM matched
@@ -129,6 +151,18 @@ def _build_normalized_gas(
                 THEN normalized_numeric_value BETWEEN
                     {hypercapnia.ph_plausible_min}
                     AND {hypercapnia.ph_plausible_max}
+                WHEN concept_set_id = 'arterial_hco3'
+                THEN normalized_numeric_value BETWEEN
+                    {hypercapnia.hco3_plausible_min_mmol_l}
+                    AND {hypercapnia.hco3_plausible_max_mmol_l}
+                WHEN concept_set_id = 'arterial_po2'
+                THEN normalized_numeric_value BETWEEN
+                    {hypercapnia.po2_plausible_min_mm_hg}
+                    AND {hypercapnia.po2_plausible_max_mm_hg}
+                WHEN concept_set_id = 'arterial_sao2'
+                THEN normalized_numeric_value BETWEEN
+                    {hypercapnia.sao2_plausible_min_percent}
+                    AND {hypercapnia.sao2_plausible_max_percent}
                 ELSE normalized_numeric_value IS NOT NULL
             END AS plausible_value
         FROM normalized
@@ -266,20 +300,10 @@ def _build_hypercapnia_encounters(
     )
     connection.execute(
         f"""
-        CREATE OR REPLACE TEMP TABLE arterial_with_ph AS
-        SELECT
-            arterial.*,
-            ph.event_datetime AS paired_ph_datetime,
-            ph.normalized_numeric_value AS paired_ph_value,
-            ph.code AS paired_ph_code,
-            ph.source_record_hash AS paired_ph_source_record_hash,
-            ph.source_file AS paired_ph_source_file,
-            ph.pairing_method,
-            ph.pairing_time_difference_minutes,
-            ph.pairing_quality
-        FROM first_arterial_pco2 AS arterial
-        LEFT JOIN LATERAL (
+        CREATE OR REPLACE TEMP TABLE paired_arterial_measurement AS
+        WITH candidates AS (
             SELECT
+                arterial.source_record_hash AS reference_source_record_hash,
                 candidate.*,
                 CASE
                     WHEN (
@@ -336,10 +360,14 @@ def _build_hypercapnia_encounters(
                     )) <= {pair_minutes} THEN 3
                     ELSE 4
                 END AS pairing_rank
-            FROM normalized_gas_measurement AS candidate
-            WHERE candidate.patient_id = arterial.patient_id
-              AND candidate.encounter_id = arterial.encounter_id
-              AND candidate.concept_set_id = 'arterial_ph'
+            FROM first_arterial_pco2 AS arterial
+            JOIN normalized_gas_measurement AS candidate
+              ON candidate.patient_id = arterial.patient_id
+             AND candidate.encounter_id = arterial.encounter_id
+            WHERE candidate.concept_set_id IN (
+                    'arterial_ph', 'arterial_hco3',
+                    'arterial_po2', 'arterial_sao2'
+                  )
               AND candidate.unit_usable
               AND candidate.plausible_value
               AND (
@@ -365,11 +393,57 @@ def _build_hypercapnia_encounters(
                     AND arterial.event_datetime::DATE = candidate.event_datetime::DATE
                  )
               )
-            ORDER BY pairing_rank,
-                     pairing_time_difference_minutes,
-                     candidate.source_record_hash
-            LIMIT 1
-        ) AS ph ON TRUE
+        ), ranked AS (
+            SELECT
+                *,
+                row_number() OVER (
+                    PARTITION BY reference_source_record_hash, concept_set_id
+                    ORDER BY pairing_rank,
+                             pairing_time_difference_minutes,
+                             source_record_hash
+                ) AS pair_order
+            FROM candidates
+        )
+        SELECT * EXCLUDE (pair_order, pairing_rank)
+        FROM ranked
+        WHERE pair_order = 1
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE arterial_with_ph AS
+        SELECT
+            arterial.*,
+            ph.event_datetime AS paired_ph_datetime,
+            ph.normalized_numeric_value AS paired_ph_value,
+            ph.code AS paired_ph_code,
+            ph.source_record_hash AS paired_ph_source_record_hash,
+            ph.source_file AS paired_ph_source_file,
+            ph.pairing_method,
+            ph.pairing_time_difference_minutes,
+            ph.pairing_quality
+        FROM first_arterial_pco2 AS arterial
+        LEFT JOIN paired_arterial_measurement AS ph
+          ON ph.reference_source_record_hash = arterial.source_record_hash
+         AND ph.concept_set_id = 'arterial_ph'
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE arterial_supplemental AS
+        SELECT
+            reference_source_record_hash,
+            max(normalized_numeric_value)
+                FILTER (WHERE concept_set_id = 'arterial_hco3') AS abg_hco3,
+            max(normalized_numeric_value)
+                FILTER (WHERE concept_set_id = 'arterial_po2') AS abg_po2,
+            max(normalized_numeric_value)
+                FILTER (WHERE concept_set_id = 'arterial_sao2') AS abg_sao2
+        FROM paired_arterial_measurement
+        WHERE concept_set_id IN (
+            'arterial_hco3', 'arterial_po2', 'arterial_sao2'
+        )
+        GROUP BY reference_source_record_hash
         """
     )
     connection.execute(
@@ -407,9 +481,9 @@ def _build_hypercapnia_encounters(
                 arterial.source_record_hash AS abg_source_record_hash,
                 arterial.paired_ph_value AS abg_ph,
                 arterial.paired_ph_code AS abg_ph_code,
-                NULL::DOUBLE AS abg_hco3,
-                NULL::DOUBLE AS abg_po2,
-                NULL::DOUBLE AS abg_sao2,
+                supplemental.abg_hco3,
+                supplemental.abg_po2,
+                supplemental.abg_sao2,
                 arterial.pairing_method AS abg_pairing_method,
                 arterial.pairing_time_difference_minutes
                     AS abg_pairing_time_difference_minutes,
@@ -489,6 +563,9 @@ def _build_hypercapnia_encounters(
             FROM glp1_encounter AS encounter
             LEFT JOIN glp1_patient AS patient USING (patient_id)
             LEFT JOIN arterial_with_ph AS arterial USING (patient_id, encounter_id)
+            LEFT JOIN arterial_supplemental AS supplemental
+              ON supplemental.reference_source_record_hash =
+                 arterial.source_record_hash
             LEFT JOIN arterial_pco2_max AS maximum USING (encounter_id)
             LEFT JOIN first_venous_pco2 AS venous USING (patient_id, encounter_id)
             WHERE maximum.maximum_pco2 > {pco2_threshold}

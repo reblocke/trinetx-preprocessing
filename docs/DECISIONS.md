@@ -975,3 +975,25 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `docs/SPEC.md`, `docs/VALIDATION.md`,
   `src/trinetx_preprocessing/pipeline/encounter_stage.py`,
   `src/trinetx_preprocessing/work_manifest.py`.
+
+### 2026-07-14 — Pair supplemental arterial gases to the selected PaCO2
+- Date: 2026-07-14
+- Decision: Materialize arterial bicarbonate, PaO2, and oxygen saturation from
+  versioned LOINC seeds and pair each concept independently to the selected
+  first arterial PaCO2 using the existing specimen/panel, exact-time,
+  tolerance, and date-only hierarchy. These values do not qualify an encounter.
+- Context: The GLP-1 endpoint requires these gas descriptors, but the initial
+  implementation exposed permanent null placeholders.
+- Rationale: Reusing one pairing table prevents nearby unrelated measurements
+  from overriding a better source match and keeps pH and supplemental gas
+  provenance deterministic. Explicit unit conversions reject incompatible
+  values instead of guessing.
+- Consequences: The rule-set version advances to `2026-07-14`. The current
+  concepts and broad plausibility bounds are implementation seeds requiring
+  investigator review; real-data QA must report unit rejection and concept
+  coverage before clinical interpretation.
+- References: `config/concept_sets/measurements.csv`,
+  `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `tests/test_glp1_foundation.py`, `https://loinc.org/1960-4`,
+  `https://loinc.org/2703-7`, `https://loinc.org/2708-6`.

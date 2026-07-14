@@ -100,6 +100,9 @@
 - GitHub Codex review of `f2f58ab` returned two P2 findings: code-only HFpEF can unlock routes documented as requiring strict measurement evidence, and same-timestamp latest lab rows lack a deterministic source-record tie-breaker.
 - `LOCKE BOOK` has about `8.2 TiB` free. The future private build is not blocked by storage or an older process; the existing GLP-1 `status --watch` command is the selected aggregate monitor.
 - Both `f2f58ab` review findings are fixed locally: HFpEF-derived strict/bridge routes require strict measurement certainty, and latest lab reductions order by timestamp then source-record hash. Focused tests and the full local gate pass with `260` tests.
+- Review fixes are pushed as `b30345b`; both PR threads are resolved and a fresh Codex review is pending.
+- Supplemental arterial bicarbonate, PaO2, and oxygen saturation now use versioned LOINC seeds, explicit unit/range validation, and the same deterministic pairing hierarchy as arterial pH. Focused GLP-1 tests pass.
+- The supplemental-gas checkpoint passes `git diff --check`, Ruff, and the full `260`-test suite.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -108,7 +111,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Publish and close the two current PR #7 review fixes, then resume supplemental gas implementation.
+- Complete context/exclusion and bounded unmapped-code QA implementation without a second full raw-domain scan.
 
 ## Next
 - Implement and test supplemental gas features, context/exclusion derivation, and aggregate unmapped-code QA without adding repeated full raw-domain scans.

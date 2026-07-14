@@ -139,6 +139,9 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     assert config.study.study_start is None
     assert config.study.index_encounter_types == ("EMER", "IMP")
     assert config.obesity.thresholds == (27.0, 30.0, 35.0, 40.0)
+    assert config.hypercapnia.hco3_plausible_max_mmol_l == 80
+    assert config.hypercapnia.po2_plausible_max_mm_hg == 800
+    assert config.hypercapnia.sao2_plausible_max_percent == 100
     assert "arterial_pco2" in catalog.concept_set_ids
     assert catalog.required_concept_set_ids == (
         "arterial_pco2",
@@ -153,6 +156,11 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     }
     assert arterial_codes == {"2019-8", "32771-8"}
     assert "2026-3" not in arterial_codes
+    assert {
+        concept.concept_set_id
+        for concept in catalog.concepts
+        if concept.code in {"1960-4", "2703-7", "2708-6"}
+    } == {"arterial_hco3", "arterial_po2", "arterial_sao2"}
 
 
 def test_glp1_config_rejects_threshold_not_above_primary(tmp_path: Path) -> None:
@@ -500,6 +508,11 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         export_root / "Lab Results" / "lab_results.csv",
         "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
         "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "p1,e1,2024-01-01 01:00:00,LOINC,1960-4,30,,mmol/L",
+        "p1,e1,2024-01-01 01:00:00,LOINC,1960-4,99,,mg/dL",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2703-7,10,,kPa",
+        "p1,e1,2024-01-01 01:15:00,LOINC,2703-7,100,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2708-6,0.94,,1",
         "p1,e1,2024-01-20 01:00:00,LOINC,2019-8,40,,mmHg",
         "p1,e1,2024-02-01 01:00:00,LOINC,2019-8,55,,mmHg",
         "p2,e2,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
@@ -552,6 +565,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         primary = connection.execute(
             """
             SELECT patient_id, abg_pco2_mm_hg, abg_ph,
+                   abg_hco3, abg_po2, abg_sao2,
                    abg_pairing_method, bmi_value,
                    persistent_hypercapnia_14_84d
             FROM analysis_glp1_eligibility
@@ -561,6 +575,9 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
             "p1",
             55.0,
             7.4,
+            30.0,
+            pytest.approx(75.006168270417),
+            94.0,
             "exact_timestamp",
             36.0,
             True,

@@ -1,5 +1,5 @@
 schema_version: "1.0"
-rule_set_version: "2026-07-10"
+rule_set_version: "2026-07-14"
 labels_as_of: "2026-07-10"
 payer_policy_as_of: "2026-07-10"
 concept_sets_dir: concept_sets
@@ -23,6 +23,12 @@ hypercapnia:
   ph_max: 7.45
   ph_plausible_min: 6.5
   ph_plausible_max: 8.0
+  hco3_plausible_min_mmol_l: 1
+  hco3_plausible_max_mmol_l: 80
+  po2_plausible_min_mm_hg: 10
+  po2_plausible_max_mm_hg: 800
+  sao2_plausible_min_percent: 1
+  sao2_plausible_max_percent: 100
   acute_acidemia_ph_lt: 7.35
   repeat_window_days: [14, 84]
   pair_tolerance_minutes: 30

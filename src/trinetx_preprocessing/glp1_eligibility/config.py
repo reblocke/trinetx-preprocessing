@@ -41,6 +41,12 @@ class HypercapniaConfig:
     ph_max: float
     ph_plausible_min: float
     ph_plausible_max: float
+    hco3_plausible_min_mmol_l: float
+    hco3_plausible_max_mmol_l: float
+    po2_plausible_min_mm_hg: float
+    po2_plausible_max_mm_hg: float
+    sao2_plausible_min_percent: float
+    sao2_plausible_max_percent: float
     acute_acidemia_ph_lt: float
     repeat_window_days: tuple[int, int]
     pair_tolerance_minutes: int
@@ -201,6 +207,12 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         "ph_max",
         "ph_plausible_min",
         "ph_plausible_max",
+        "hco3_plausible_min_mmol_l",
+        "hco3_plausible_max_mmol_l",
+        "po2_plausible_min_mm_hg",
+        "po2_plausible_max_mm_hg",
+        "sao2_plausible_min_percent",
+        "sao2_plausible_max_percent",
         "acute_acidemia_ph_lt",
         "repeat_window_days",
         "pair_tolerance_minutes",
@@ -231,10 +243,25 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
     pco2_plausible_max = _positive_float(raw, "pco2_plausible_max_mm_hg")
     ph_plausible_min = _positive_float(raw, "ph_plausible_min")
     ph_plausible_max = _positive_float(raw, "ph_plausible_max")
+    hco3_plausible_min = _positive_float(raw, "hco3_plausible_min_mmol_l")
+    hco3_plausible_max = _positive_float(raw, "hco3_plausible_max_mmol_l")
+    po2_plausible_min = _positive_float(raw, "po2_plausible_min_mm_hg")
+    po2_plausible_max = _positive_float(raw, "po2_plausible_max_mm_hg")
+    sao2_plausible_min = _positive_float(raw, "sao2_plausible_min_percent")
+    sao2_plausible_max = _positive_float(raw, "sao2_plausible_max_percent")
     if pco2_plausible_min >= pco2_plausible_max:
         raise GLP1ConfigError("PCO2 plausible minimum must be below maximum.")
     if ph_plausible_min >= ph_plausible_max:
         raise GLP1ConfigError("pH plausible minimum must be below maximum.")
+    for label, minimum, maximum in (
+        ("HCO3", hco3_plausible_min, hco3_plausible_max),
+        ("PO2", po2_plausible_min, po2_plausible_max),
+        ("SaO2", sao2_plausible_min, sao2_plausible_max),
+    ):
+        if minimum >= maximum:
+            raise GLP1ConfigError(
+                f"{label} plausible minimum must be below maximum."
+            )
     return HypercapniaConfig(
         index_window_hours=_positive_int(raw, "index_window_hours"),
         pco2_gt_mm_hg=_positive_float(raw, "pco2_gt_mm_hg"),
@@ -244,6 +271,12 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         ph_max=_positive_float(raw, "ph_max"),
         ph_plausible_min=ph_plausible_min,
         ph_plausible_max=ph_plausible_max,
+        hco3_plausible_min_mmol_l=hco3_plausible_min,
+        hco3_plausible_max_mmol_l=hco3_plausible_max,
+        po2_plausible_min_mm_hg=po2_plausible_min,
+        po2_plausible_max_mm_hg=po2_plausible_max,
+        sao2_plausible_min_percent=sao2_plausible_min,
+        sao2_plausible_max_percent=sao2_plausible_max,
         acute_acidemia_ph_lt=_positive_float(raw, "acute_acidemia_ph_lt"),
         repeat_window_days=(repeat_window[0], repeat_window[1]),
         pair_tolerance_minutes=_nonnegative_int(raw, "pair_tolerance_minutes"),

@@ -14,6 +14,11 @@ records their version and source rows in DuckDB.
 - Later arterial elevation, VBG-only elevation, acute acidemia, compensated
   hypercapnia, and 14-84 day persistent arterial elevation are retained as
   separate sensitivity/context fields.
+- Arterial bicarbonate, PaO2, and oxygen saturation are supplemental values:
+  they are unit-normalized and paired to the selected arterial PaCO2 by the same
+  specimen/panel, timestamp, tolerance, and date-only hierarchy used for pH.
+  They do not define cohort membership. The current LOINC seeds and broad
+  plausibility bounds require investigator review before interpretation.
 - BMI follows measured BMI, then measured weight/height calculation, within the
   configured pre-index hierarchy. Missing BMI remains indeterminate.
 
@@ -55,5 +60,6 @@ records their version and source rows in DuckDB.
 The concept sets are implementation seeds, not clinically validated phenotype
 definitions. Investigator review is required before real-data interpretation,
 especially for MASH staging, symptomatic PAD, neurologic/chest-wall causes,
-procedure families, medication mappings, and site-specific units or code
-systems. Record-level validation must occur in an approved private environment.
+procedure families, supplemental arterial-gas measurements, medication
+mappings, and site-specific units or code systems. Record-level validation must
+occur in an approved private environment.

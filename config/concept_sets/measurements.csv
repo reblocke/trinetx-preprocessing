@@ -6,6 +6,11 @@ venous_pco2,lab,LOINC,2021-4,exact,true,Venous blood carbon dioxide partial pres
 unspecified_blood_pco2,lab,LOINC,11557-6,exact,true,Unspecified-blood carbon dioxide partial pressure,LOINC,2026-07-10,,,Do not infer arterial specimen
 arterial_ph,lab,LOINC,2744-1,exact,true,Arterial blood pH,LOINC,2026-07-10,,,PaCO2 pairing seed
 venous_ph,lab,LOINC,2746-6,exact,true,Venous blood pH,LOINC,2026-07-10,,,Sensitivity pairing seed
+arterial_hco3,lab,LOINC,1960-4,exact,true,Arterial blood bicarbonate,LOINC,2026-07-14,,,Supplemental arterial gas seed; investigator terminology review required
+arterial_po2,lab,LOINC,2703-7,exact,true,Arterial blood oxygen partial pressure,LOINC,2026-07-14,,,Supplemental arterial gas seed; investigator terminology review required
+arterial_po2,lab,LOINC,19255-9,exact,true,Temperature-adjusted arterial oxygen partial pressure,LOINC,2026-07-14,,,Supplemental arterial gas seed; investigator terminology review required
+arterial_sao2,lab,LOINC,2708-6,exact,true,Arterial blood oxygen saturation,LOINC,2026-07-14,,,Supplemental arterial gas seed; investigator terminology review required
+arterial_sao2,lab,LOINC,51733-4,exact,true,Calculated arterial blood oxygen saturation,LOINC,2026-07-14,,,Supplemental arterial gas seed; investigator terminology review required
 bmi,vital,LOINC,39156-5,exact,true,Body mass index,LOINC,2026-07-10,,,BMI hierarchy seed
 weight,vital,LOINC,29463-7,exact,true,Body weight,LOINC,2026-07-10,,,Anthropometric seed
 height,vital,LOINC,8302-2,exact,true,Body height,LOINC,2026-07-10,,,Anthropometric seed
