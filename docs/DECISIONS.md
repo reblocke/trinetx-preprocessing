@@ -950,3 +950,25 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/work_manifest.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,
   `tests/test_cli.py`.
+
+### 2026-07-14 — Accept deterministic conflict resolution for Milestone 2
+- Date: 2026-07-14
+- Decision: Use the completed non-strict full profile as Milestone 2 release
+  evidence. Deterministically resolve the 286 source encounter IDs assigned to
+  multiple settings by earliest encounter start date and then observed row
+  order. Keep strict execution fail-closed on the same conflicts.
+- Context: Every corrected semantic, staged, performance, memory, output,
+  hygiene, and review gate passed. The source export still assigns 286 encounter
+  IDs to more than one setting, and no upstream adjudication is currently
+  available.
+- Rationale: Deterministic resolution makes the ambiguity explicit and
+  reproducible without preventing release of the corrected pipeline. Retaining
+  strict failure preserves a stronger acceptance option for analyses that
+  require adjudicated source data.
+- Consequences: `v0.2.0` and `refactor-milestone-2` may be released from the
+  review-clean code state using aggregate conflict evidence. A strict real-data
+  run is not claimed to pass, and future upstream adjudication may intentionally
+  change affected cohort assignments.
+- References: `docs/SPEC.md`, `docs/VALIDATION.md`,
+  `src/trinetx_preprocessing/pipeline/encounter_stage.py`,
+  `src/trinetx_preprocessing/work_manifest.py`.

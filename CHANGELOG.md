@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-07-14
 ### Added
 - Added the corrected `docs/SPEC.md` analytic contract, immutable typed clinical
   rules, aggregate gas-rule rejection audits, encounter-setting conflict
@@ -35,6 +35,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   medication domain instead of materializing all feature rows together.
 - Full corrected profiling completed all 36 outputs in 73,589.093 seconds with
   6,122.562 MB peak RSS; final assembly completed in 49,180.54 seconds.
+- Release evidence accepts deterministic non-strict resolution for the 286
+  source encounter IDs assigned to multiple settings. Strict execution remains
+  fail-closed so unresolved source conflicts cannot be overlooked.
 
 ### Fixed
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed

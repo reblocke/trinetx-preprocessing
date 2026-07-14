@@ -162,9 +162,10 @@ The review-clean corrected full profile produced all 36 outputs in 73,589.093
 seconds with 6,122.562 MB peak RSS; final assembly took 49,180.54 seconds.
 Local and GitHub review are clean, all three corrected staged tiers pass, and
 the aggregate-only Milestone 1 delta contains no identifiers or row examples.
-Release still requires a decision on 286 source encounter IDs assigned to
-multiple settings: non-strict execution resolves them deterministically, while
-strict execution intentionally fails.
+Milestone 2 release evidence accepts deterministic non-strict resolution for
+286 source encounter IDs assigned to multiple settings. Strict execution still
+fails closed on those conflicts and remains available for upstream data-quality
+adjudication.
 
 Hash local legacy outputs without committing row-level data:
 ```bash

@@ -16,17 +16,19 @@ notebook defects under `docs/SPEC.md` while preserving the public 36-file,
 7. Reuse patient-partitioned feature/history indexes across all 18 cohorts.
 8. Remove the unsupported shell splitter and maintain the Python CLI path.
 9. Pass local, corrected staged, full profile, aggregate delta, and holistic
-   review gates; resolve the strict source-conflict acceptance decision.
-10. Bump to `0.2.0` and release `v0.2.0` without changing Milestone 1 tags.
+   review gates; document the strict source-conflict acceptance decision.
+10. Release `0.2.0` as `v0.2.0` and `refactor-milestone-2` without changing
+    Milestone 1 tags.
 
 ## Current status
 
 Implementation, local tests, staged tiers, holistic review, the review-clean
 full profile, output hashes, scratch cleanup, and the aggregate-only Milestone 1
 delta are complete. All measured correctness, time, memory, disk, and public
-output-contract gates pass. The remaining policy decision concerns the 286
-source encounter-setting conflicts that strict mode intentionally rejects;
-after that decision, finalize the `v0.2.0` release.
+output-contract gates pass. Release acceptance uses deterministic non-strict
+resolution for the 286 source encounter-setting conflicts; strict mode remains
+fail-closed for workflows that require upstream conflict adjudication. The
+remaining work is GitHub release bookkeeping.
 
 ## Definition of done
 
@@ -38,5 +40,5 @@ after that decision, finalize the `v0.2.0` release.
 - Peak RSS is at most 6,238 MB and external free space remains above 100 GiB.
 - A PHI-safe aggregate report explains changes from Milestone 1 without row
   examples or identifiers.
-- Local and GitHub reviews are clean, package version is `0.2.0`, and `v0.2.0`
-  is published from the reviewed commit.
+- Local and GitHub reviews are clean, package version is `0.2.0`, and both
+  `v0.2.0` and `refactor-milestone-2` identify the reviewed release commit.

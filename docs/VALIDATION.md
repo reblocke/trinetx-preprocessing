@@ -107,7 +107,7 @@ The review-clean full non-strict profile from commit `1112963` completed with:
 - 73,589.093 seconds total wall time;
 - 49,180.54 seconds final-assembly time;
 - 6,122.562 MB peak RSS;
-- 15,894,947,783 bytes of work tables and 7,898,119,999 bytes of outputs;
+- 15,894,947,783 bytes of work tables and 7,898,323,229 bytes of outputs;
 - five compact feature sources scanned once, totaling 2,375,800,669 indexed
   rows;
 - zero recognized scratch artifacts after completion.
@@ -117,8 +117,10 @@ obesity/ventilatory-support `AFTER` hashes; schemas and row counts are unchanged
 The PHI-safe Milestone 1 delta contains only aggregate counts: 4,412,932
 Milestone 1 rows, 6,949,511 corrected rows, 3,471,448 shared keys, 941,484
 Milestone-only keys, and 3,478,063 corrected-only keys. Local and GitHub review
-are clean. The remaining release decision is whether the 286 source conflicts
-require upstream adjudication.
+are clean. Milestone 2 accepts the documented deterministic non-strict
+resolution for the 286 source conflicts; strict execution continues to fail
+closed and is the required mode when upstream conflict adjudication is part of
+the analysis acceptance policy.
 
 ## Hygiene and review
 

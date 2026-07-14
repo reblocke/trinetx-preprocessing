@@ -1,8 +1,9 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Deliver post-Milestone 1 package `0.2.0` with corrected cohort and feature semantics, bounded external-memory execution, and substantially faster final assembly.
-- Success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, a fresh BOOK profile, aggregate-only delta evidence, an explicit strict source-conflict decision, and clean review/release gates.
+- Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
+- Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
+- GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -18,9 +19,11 @@
 - `AFTER` requires encounter-level diagnosis or lab availability derived by the pipeline.
 - Code matching uses typed exact/prefix rules. Numeric inclusion uses `float64` before output downcasts.
 - Existing work tables are not reusable after the corrected intermediate schema is introduced.
+- Milestone 2 accepts deterministic non-strict resolution for the 286 source encounter-setting conflicts; strict execution remains fail-closed.
+- `refactor-milestone-1` remains unchanged, and GLP-1 work starts only after the Milestone 2 fallback is durable on GitHub.
 
 ## State
-- Branch: `codex/refactor-post-milestone-1`; screening-performance fix `b5ebc38` is pushed on PR #5.
+- Branch: `codex/refactor-post-milestone-1`; review-clean behavior commit `b134f70` and final evidence/docs through `3054c95` are pushed on PR #5.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -75,14 +78,14 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 
 ## Now
-- Obtain the release-policy decision for the 286 source encounter-setting conflicts.
+- Finalize Milestone 2 release documentation and GitHub bookkeeping.
 
 ## Next
-- Decide whether release acceptance may use deterministic non-strict resolution for the `286` source conflicts or requires upstream adjudication; do not weaken strict semantics silently.
-- After review and the conflict decision, finalize `v0.2.0` release bookkeeping without changing `refactor-milestone-1`.
+- Run release gates, merge PR #5, and publish `refactor-milestone-2` / `v0.2.0` from the reviewed commit.
+- Locate the GLP-1 implementation ticket, create the post-Milestone 2 branch, and execute its additive-only requirements.
 
 ## Open questions (UNCONFIRMED if needed)
-- Whether release acceptance may use the documented deterministic non-strict resolution for the `286` source conflicts, or requires upstream conflict adjudication before a strict profile can pass.
+- UNCONFIRMED: the referenced GLP-1 implementation ticket is not present in the repository, GitHub issues/PRs, or indexed recent local files; its contents must be recovered before implementation requirements can be audited.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`

@@ -5,9 +5,9 @@ Purpose: refactor TriNetX hypercapnia preprocessing notebooks into a
 deterministic Python CLI pipeline.
 Status: Milestone 1 is the immutable replication fallback; post-milestone work
 implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
-output-reproducibility, and aggregate-delta evidence is complete; release is
-pending only the documented encounter-setting conflict decision and final
-release bookkeeping.
+output-reproducibility, and aggregate-delta evidence is complete. Milestone 2
+accepts deterministic non-strict resolution of documented source conflicts
+while strict execution remains fail-closed.
 
 ## Human-Readable Entry Points
 - `README.md`: primary overview and quickstart.
