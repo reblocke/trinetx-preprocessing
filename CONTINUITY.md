@@ -76,6 +76,7 @@
 - The additive GLP-1 foundation includes typed config, versioned concept-set validation, split/unsplit export discovery, PHI-safe header validation, and atomic run-status monitoring.
 - Deterministic input inventory, resumable build staging, atomic publication, DuckDB metadata/catalog tables, and concept-filtered core source ingestion are implemented. `2026-3` remains retained evidence but cannot create a gas candidate. Existing pipeline modules and outputs are unchanged; local gates pass with `249` tests.
 - The production GLP-1 `build`, `summarize`, and `status` commands now generate/reuse the core DuckDB/Parquet output contract. First-available arterial PaCO2, hierarchical pH pairing, sensitivity cohorts, persistent arterial follow-up, and measured/calculated BMI are covered by synthetic tests.
+- Full local gates pass with `251` tests. Draft PR #7 is open against `refactor-pipeline`; its requested GitHub Codex review is pending and has not returned findings yet.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -103,4 +104,5 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
-- Branch: `codex/glp1-augmentation` at `e287d14`
+- Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
+- Branch: `codex/glp1-augmentation` at `b0f6f74`
