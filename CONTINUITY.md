@@ -71,6 +71,7 @@
 - The review-clean full non-strict profile from commit `1112963` completed all 36 outputs in `73,589.093 s`; final assembly took `49,180.54 s`, profiled peak RSS was `6,122.562 MB`, work footprint was `15,894,947,783` bytes, output footprint was `7,898,323,229` bytes, and recognized scratch was zero.
 - The alignment fix changed six obesity/ventilatory-support `AFTER` hashes with no schema or row-count changes. The final aggregate delta reports `3,471,448` shared keys, `941,484` Milestone-only keys, and `3,478,063` corrected-only keys.
 - The explicit strict resume check exits `2` before final assembly with `286` deterministically resolved conflicts, confirming the review-clean fail-closed behavior without changing current outputs.
+- Final GitHub review of release commit `73e49bf` found that the non-strict Milestone 2 policy conflicted with the unchanged strict `validation-status` gate. Release docs now explicitly scope that command to historical/strict merge readiness and do not claim `ready: true`; corrected Milestone 2 acceptance uses the documented evidence checklist and aggregate conflict policy.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.

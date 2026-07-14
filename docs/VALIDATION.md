@@ -122,6 +122,14 @@ resolution for the 286 source conflicts; strict execution continues to fail
 closed and is the required mode when upstream conflict adjudication is part of
 the analysis acceptance policy.
 
+`validation-status` remains intentionally unchanged as the strict
+historical-parity/merge-readiness verifier. Consequently, the Milestone 2
+evidence bundle is expected to report that its strict-provenance gate is not
+ready, and the release does not claim `validation_status.json` has
+`ready: true`. For this release only, acceptance is the corrected evidence
+checklist above plus the explicit aggregate conflict policy. A future run on
+adjudicated source data should return to the strict `validation-status` gate.
+
 ## Hygiene and review
 
 Before release:

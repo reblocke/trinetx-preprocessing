@@ -968,7 +968,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: `v0.2.0` and `refactor-milestone-2` may be released from the
   review-clean code state using aggregate conflict evidence. A strict real-data
   run is not claimed to pass, and future upstream adjudication may intentionally
-  change affected cohort assignments.
+  change affected cohort assignments. This release-specific decision explicitly
+  supersedes the 2026-06-08 strict `validation-status` requirement as the
+  Milestone 2 release gate only: the command remains unchanged and the current
+  bundle is not claimed to report `ready: true`.
 - References: `docs/SPEC.md`, `docs/VALIDATION.md`,
   `src/trinetx_preprocessing/pipeline/encounter_stage.py`,
   `src/trinetx_preprocessing/work_manifest.py`.

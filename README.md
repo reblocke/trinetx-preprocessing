@@ -234,6 +234,14 @@ reloads the current
 manifest JSON files and recomputes the comparison, so a hand-edited or internally
 inconsistent
 comparison report cannot pass the final gate.
+
+That command remains the strict historical-parity/merge-readiness gate. The
+Milestone 2 corrected release does not claim `validation-status` reports
+`ready: true`: its documented source conflicts make strict provenance
+unavailable. Milestone 2 instead uses the corrected evidence checklist in
+`docs/VALIDATION.md`; this release-specific policy does not weaken
+`validation-status` for future conflict-adjudicated runs.
+
 `--hash-chunk-rows` bounds both CSV sorting and Parquet record-batch hashing;
 scratch files stay beside the table being hashed, so external-drive validation
 does not spill row-level data onto the internal disk.

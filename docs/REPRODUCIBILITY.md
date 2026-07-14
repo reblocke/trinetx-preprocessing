@@ -133,6 +133,13 @@ for that root and fails the root gate below the threshold.
 It also requires `input_status.json` to use current `inspect-inputs`
 `schema_version: 1`, exact input inspection with `--min-free-gb 100` or higher,
 and data/work/output filesystem evidence at or above that threshold.
+
+`validation-status` is the strict historical-parity/merge-readiness verifier.
+Milestone 2 does not claim this status is ready because its reviewed full source
+contains 286 unresolved cross-setting encounter IDs and therefore cannot
+produce strict profile provenance. The release-specific corrected acceptance
+record is documented in `docs/VALIDATION.md` and `docs/DECISIONS.md`; the CLI
+gate remains unchanged for future conflict-adjudicated runs.
 Legacy and refactor manifests must be generated with current
 `hash-outputs --scope final` and include `schema_version: 2`,
 `hash_algorithm: sha256`, `generated_at`, `scope: final`, manifest
