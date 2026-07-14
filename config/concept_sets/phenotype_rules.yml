@@ -1,0 +1,13 @@
+schema_version: "1.0"
+rule_set_version: "2026-07-10"
+phenotypes:
+  primary_hypercapnia:
+    arterial_pco2_concept_set: arterial_pco2
+    total_co2_exclusion_concept_set: arterial_total_co2
+    ph_concept_set: arterial_ph
+  measured_obesity:
+    bmi_concept_set: bmi
+  type_2_diabetes:
+    diagnosis_concept_set: type_2_diabetes
+  prediabetes:
+    diagnosis_concept_set: prediabetes

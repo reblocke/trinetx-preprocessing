@@ -1,0 +1,4 @@
+concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
+echocardiography,procedure,CPT,93306,exact,true,Complete transthoracic echocardiography,AMA CPT,2026,,,Investigator review required before clinical use
+polysomnography,procedure,CPT,95810,exact,true,Attended polysomnography,AMA CPT,2026,,,Investigator review required before clinical use
+home_sleep_apnea_test,procedure,CPT,95800,exact,true,Unattended sleep study,AMA CPT,2026,,,Investigator review required before clinical use

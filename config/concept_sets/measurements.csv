@@ -1,0 +1,13 @@
+concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
+arterial_pco2,lab,LOINC,2019-8,exact,true,Arterial blood carbon dioxide partial pressure,LOINC,2026-07-10,,,Primary PaCO2 seed; investigator terminology review required
+arterial_pco2,lab,LOINC,32771-8,exact,true,Temperature-adjusted arterial carbon dioxide partial pressure,LOINC,2026-07-10,,,Primary PaCO2 seed; investigator terminology review required
+arterial_total_co2,lab,LOINC,2026-3,exact,true,Arterial total carbon dioxide,LOINC,2026-07-10,,,Never use as PaCO2
+venous_pco2,lab,LOINC,2021-4,exact,true,Venous blood carbon dioxide partial pressure,LOINC,2026-07-10,,,Sensitivity cohort only
+unspecified_blood_pco2,lab,LOINC,11557-6,exact,true,Unspecified-blood carbon dioxide partial pressure,LOINC,2026-07-10,,,Do not infer arterial specimen
+arterial_ph,lab,LOINC,2744-1,exact,true,Arterial blood pH,LOINC,2026-07-10,,,PaCO2 pairing seed
+venous_ph,lab,LOINC,2746-6,exact,true,Venous blood pH,LOINC,2026-07-10,,,Sensitivity pairing seed
+bmi,vital,LOINC,39156-5,exact,true,Body mass index,LOINC,2026-07-10,,,BMI hierarchy seed
+weight,vital,LOINC,29463-7,exact,true,Body weight,LOINC,2026-07-10,,,Anthropometric seed
+height,vital,LOINC,8302-2,exact,true,Body height,LOINC,2026-07-10,,,Anthropometric seed
+systolic_bp,vital,LOINC,8480-6,exact,true,Systolic blood pressure,LOINC,2026-07-10,,,Hypertension component seed
+diastolic_bp,vital,LOINC,8462-4,exact,true,Diastolic blood pressure,LOINC,2026-07-10,,,Hypertension component seed

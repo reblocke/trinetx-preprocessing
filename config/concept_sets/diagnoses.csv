@@ -1,0 +1,5 @@
+concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
+obesity,diagnosis,ICD10CM,E66,prefix,true,Obesity diagnosis family,ICD-10-CM,2026,,,Investigator review required before clinical use
+type_2_diabetes,diagnosis,ICD10CM,E11,prefix,true,Type 2 diabetes mellitus,ICD-10-CM,2026,,,Investigator review required before clinical use
+prediabetes,diagnosis,ICD10CM,R73.03,exact,true,Prediabetes,ICD-10-CM,2026,,,Investigator review required before clinical use
+obstructive_sleep_apnea,diagnosis,ICD10CM,G47.33,exact,true,Obstructive sleep apnea,ICD-10-CM,2026,,,Code-only evidence without AHI

@@ -1,0 +1,37 @@
+schema_version: "1.0"
+rule_set_version: "2026-07-10"
+labels_as_of: "2026-07-10"
+payer_policy_as_of: "2026-07-10"
+concept_sets_dir: concept_sets
+
+study:
+  study_start: null
+  study_end: null
+  index_encounter_types: ["EMER", "IMP"]
+  adult_age_min: 18
+  lookback_days: 730
+  measurement_lookback_days: 365
+  medication_lookback_days: 730
+  followup_days: 365
+
+hypercapnia:
+  index_window_hours: 24
+  pco2_gt_mm_hg: 45
+  pco2_sensitivity_thresholds_mm_hg: [50, 52]
+  ph_max: 7.45
+  acute_acidemia_ph_lt: 7.35
+  repeat_window_days: [14, 84]
+  pair_tolerance_minutes: 30
+  allow_date_only_pairing: true
+  primary_requires_arterial_specimen: true
+  include_vbg_secondary_cohort: true
+
+obesity:
+  bmi_pre_index_days: 365
+  same_encounter_fallback: true
+  thresholds: [27, 30, 35, 40]
+
+output:
+  database_name: glp1_hypercapnia.duckdb
+  write_parquet: true
+  write_html_qa: true

@@ -72,6 +72,8 @@
 - The alignment fix changed six obesity/ventilatory-support `AFTER` hashes with no schema or row-count changes. The final aggregate delta reports `3,471,448` shared keys, `941,484` Milestone-only keys, and `3,478,063` corrected-only keys.
 - The explicit strict resume check exits `2` before final assembly with `286` deterministically resolved conflicts, confirming the review-clean fail-closed behavior without changing current outputs.
 - Final GitHub review of release commit `73e49bf` found that the non-strict Milestone 2 policy conflicted with the unchanged strict `validation-status` gate. Release docs now explicitly scope that command to historical/strict merge readiness and do not claim `ready: true`; corrected Milestone 2 acceptance uses the documented evidence checklist and aggregate conflict policy.
+- GitHub issue #6 now preserves the recovered GLP-1 endpoint ticket. No prior pipeline process is active or blocking implementation.
+- The additive GLP-1 foundation includes typed config, versioned concept-set validation, split/unsplit export discovery, PHI-safe header validation, and atomic run-status monitoring. Existing pipeline modules and outputs are unchanged; local gates pass with `245` tests.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -80,14 +82,15 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Recover and audit the referenced GLP-1 implementation ticket before changing behavior.
+- Implement provenance-preserving out-of-core DuckDB ingestion and atomic GLP-1 outputs on `codex/glp1-augmentation`.
 
 ## Next
-- Map the ticket requirements to additive medication/index/output seams and define tests that prove all existing 36 outputs remain unchanged.
-- Execute the ticket on `codex/glp1-augmentation`, validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
+- Add production `build`/`summarize` commands, source inventory, restart-safe staging, and normalized measurement handling.
+- Implement hypercapnia/BMI cohort logic, then component phenotypes, eligibility tiers, and synthetic acceptance cases.
+- Validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
 
 ## Open questions (UNCONFIRMED if needed)
-- UNCONFIRMED: the referenced GLP-1 implementation ticket is not present in the repository, GitHub issues/PRs, or indexed recent local files; its contents must be recovered before implementation requirements can be audited.
+- None blocking. The recovered ticket is pinned as GitHub issue #6 and is the authoritative GLP-1 endpoint specification.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -97,3 +100,5 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
+- GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
+- Branch: `codex/glp1-augmentation` at `e287d14`

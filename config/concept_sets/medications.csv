@@ -1,0 +1,3 @@
+concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
+glp1_semaglutide,medication,RXNORM,1991302,exact,true,Semaglutide ingredient or product mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
+glp1_liraglutide,medication,RXNORM,475968,exact,true,Liraglutide ingredient mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
