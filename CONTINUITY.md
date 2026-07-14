@@ -23,7 +23,7 @@
 - `refactor-milestone-1` remains unchanged, and GLP-1 work starts only after the Milestone 2 fallback is durable on GitHub.
 
 ## State
-- Branch: `codex/refactor-post-milestone-1`; review-clean behavior commit `b134f70` and final evidence/docs through `3054c95` are pushed on PR #5.
+- Branch: `codex/glp1-augmentation`, created from Milestone 2 merge commit `e3d62de`; it tracks `origin/codex/glp1-augmentation`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -77,13 +77,14 @@
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
 - Corrected post-milestone prior-date, procedure first/last, and previous-vital fixes are committed and reviewed.
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
+- PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Finalize Milestone 2 release documentation and GitHub bookkeeping.
+- Recover and audit the referenced GLP-1 implementation ticket before changing behavior.
 
 ## Next
-- Run release gates, merge PR #5, and publish `refactor-milestone-2` / `v0.2.0` from the reviewed commit.
-- Locate the GLP-1 implementation ticket, create the post-Milestone 2 branch, and execute its additive-only requirements.
+- Map the ticket requirements to additive medication/index/output seams and define tests that prove all existing 36 outputs remain unchanged.
+- Execute the ticket on `codex/glp1-augmentation`, validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: the referenced GLP-1 implementation ticket is not present in the repository, GitHub issues/PRs, or indexed recent local files; its contents must be recovered before implementation requirements can be audited.
