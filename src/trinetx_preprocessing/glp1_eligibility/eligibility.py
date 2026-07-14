@@ -369,11 +369,13 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
                      THEN TRUE ELSE NULL END
                     AS ind_guideline_weight_loss_for_probable_ohs,
                 CASE WHEN bmi_ge30 AND hfpef_status = 'met'
+                               AND hfpef_certainty = 'strict'
                      THEN TRUE ELSE NULL END AS ind_guideline_obesity_related_hfpef,
                 CASE WHEN bmi_ge27 AND pcos_status = 'met'
                      THEN TRUE ELSE NULL END
                     AS ind_guideline_pcos_with_overweight_obesity,
                 CASE WHEN bmi_ge30 AND hfpef_status = 'met'
+                               AND hfpef_certainty = 'strict'
                      THEN TRUE ELSE NULL END AS ind_rct_obesity_related_hfpef,
                 CASE WHEN t2d_status = 'met' AND symptomatic_pad_status = 'met'
                      THEN TRUE ELSE NULL END AS ind_rct_symptomatic_pad_t2d,
@@ -560,7 +562,7 @@ def _add_tier_aggregates_and_routes(
             bridge_clinical_criteria_status = CASE
                 WHEN bmi_ge35 THEN 'met'
                 WHEN bmi_ge30 AND (
-                    hfpef_status = 'met'
+                    (hfpef_status = 'met' AND hfpef_certainty = 'strict')
                     OR uncontrolled_hypertension_two_meds_status = 'met'
                     OR ckd_stage_3a_plus_status = 'met'
                 ) THEN 'met'
@@ -575,7 +577,7 @@ def _add_tier_aggregates_and_routes(
             bridge_qualifying_branch = CASE
                 WHEN bmi_ge35 THEN 'bmi_ge35'
                 WHEN bmi_ge30 AND (
-                    hfpef_status = 'met'
+                    (hfpef_status = 'met' AND hfpef_certainty = 'strict')
                     OR uncontrolled_hypertension_two_meds_status = 'met'
                     OR ckd_stage_3a_plus_status = 'met'
                 ) THEN 'bmi_ge30_comorbidity'
@@ -586,7 +588,8 @@ def _add_tier_aggregates_and_routes(
                 ) THEN 'bmi_ge27_comorbidity'
             END,
             bridge_qualifying_components = concat_ws(';',
-                CASE WHEN hfpef_status = 'met' THEN 'hfpef' END,
+                CASE WHEN hfpef_status = 'met' AND hfpef_certainty = 'strict'
+                     THEN 'hfpef' END,
                 CASE WHEN uncontrolled_hypertension_two_meds_status = 'met'
                      THEN 'uncontrolled_hypertension_two_meds' END,
                 CASE WHEN ckd_stage_3a_plus_status = 'met' THEN 'ckd_3a_plus' END,

@@ -96,6 +96,10 @@
 - Follow-up commit `17da0d2` is pushed. The single Linux CI job passes all `259` tests, all seven PR threads are resolved, and a fresh Codex review is requested but has not yet returned.
 - A read-only issue #6 acceptance audit found three pre-private-run gaps: supplemental `abg_hco3`/`abg_po2`/`abg_sao2` fields remain null placeholders, several context/exclusion flags remain constant false, and QA does not yet report high-frequency unmapped source codes. Versioned concept sets remain documented seed definitions requiring investigator review.
 - GitHub Codex review of `17da0d2` returned one P2 finding: baseline lab phenotypes used the 730-day general history instead of the 365-day measurement window. The source evidence boundary now applies `measurement_lookback_days`; focused stale A1c/eGFR/AHI/LVEF/fibrosis regression coverage and the full `259`-test suite pass.
+- Commit `f2f58ab` is pushed, its Linux CI job passes all `259` tests, and no legacy, profile, DuckDB build, pytest worker, or prior pipeline process is active.
+- GitHub Codex review of `f2f58ab` returned two P2 findings: code-only HFpEF can unlock routes documented as requiring strict measurement evidence, and same-timestamp latest lab rows lack a deterministic source-record tie-breaker.
+- `LOCKE BOOK` has about `8.2 TiB` free. The future private build is not blocked by storage or an older process; the existing GLP-1 `status --watch` command is the selected aggregate monitor.
+- Both `f2f58ab` review findings are fixed locally: HFpEF-derived strict/bridge routes require strict measurement certainty, and latest lab reductions order by timestamp then source-record hash. Focused tests and the full local gate pass with `260` tests.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -104,7 +108,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete full verification and review closure for the measurement-lookback fix.
+- Publish and close the two current PR #7 review fixes, then resume supplemental gas implementation.
 
 ## Next
 - Implement and test supplemental gas features, context/exclusion derivation, and aggregate unmapped-code QA without adding repeated full raw-domain scans.
@@ -123,4 +127,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `73c3c3f` with review and validation-gap fixes under local verification.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `f2f58ab`; PR #7 has two unresolved P2 review findings under active repair.

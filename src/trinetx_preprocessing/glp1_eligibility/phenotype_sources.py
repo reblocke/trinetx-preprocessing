@@ -363,7 +363,10 @@ def _build_lab_summary(
         CREATE OR REPLACE TABLE component_lab_summary AS
         SELECT
             index_event_id,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'hba1c'
                         AND days_before_index <= {measurement_lookback})
                 AS a1c_latest,
@@ -375,7 +378,10 @@ def _build_lab_summary(
                 FILTER (WHERE concept_set_id = 'hba1c'
                         AND normalized_numeric_value >= 6.5)
                 AS diabetes_range_a1c_dates,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'egfr') AS egfr_latest,
             max(event_datetime)
                 FILTER (WHERE concept_set_id = 'egfr') AS egfr_latest_date,
@@ -387,30 +393,54 @@ def _build_lab_summary(
             max(event_datetime::DATE)
                 FILTER (WHERE concept_set_id = 'egfr'
                         AND normalized_numeric_value < 60) AS egfr_low_last_date,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'uacr') AS uacr_latest,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'ahi') AS ahi_rei_value,
             max(event_datetime)
                 FILTER (WHERE concept_set_id = 'ahi') AS ahi_rei_date,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'lvef') AS lvef,
             max(event_datetime)
                 FILTER (WHERE concept_set_id = 'lvef') AS lvef_date,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id IN ('bnp', 'nt_probnp'))
                 AS bnp_ntprobnp_latest,
-            arg_max(fibrosis_stage_value, event_datetime)
+            first(
+                fibrosis_stage_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'fibrosis_stage')
                 AS fibrosis_stage,
             max(event_datetime)
                 FILTER (WHERE concept_set_id = 'fibrosis_stage')
                 AS fibrosis_stage_date,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'ast') AS ast_latest,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'alt') AS alt_latest,
-            arg_max(normalized_numeric_value, event_datetime)
+            first(
+                normalized_numeric_value
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE concept_set_id = 'platelets') AS platelets_latest
         FROM component_lab_evidence
         GROUP BY index_event_id

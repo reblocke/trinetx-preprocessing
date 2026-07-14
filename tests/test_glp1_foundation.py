@@ -935,7 +935,13 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
     _write_export(export_root)
     _append_primary_cases(
         export_root,
-        {"bmi35": 36, "hfpef": 31, "prediabetes": 28, "weight_only": 31},
+        {
+            "bmi35": 36,
+            "hfpef": 31,
+            "hfpef_code_only": 31,
+            "prediabetes": 28,
+            "weight_only": 31,
+        },
     )
     _append_rows(
         export_root / "Patient" / "patient.csv",
@@ -958,6 +964,7 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
     _append_rows(
         export_root / "Diagnosis" / "diagnosis.csv",
         "hfpef,e_hfpef,2023-12-01,ICD10CM,I50.3,,,,",
+        "hfpef_code_only,e_hfpef_code_only,2023-12-01,ICD10CM,I50.3,,,,",
     )
     _append_rows(
         export_root / "Medications" / "medication.csv",
@@ -1002,6 +1009,27 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
             "met",
             "strict",
         )
+        code_only_hfpef = connection.execute(
+            """
+            SELECT hfpef_status, hfpef_certainty,
+                   ind_guideline_obesity_related_hfpef,
+                   ind_rct_obesity_related_hfpef,
+                   bridge_clinical_criteria_status,
+                   bridge_qualifying_components,
+                   payer_route_model
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'hfpef_code_only'
+            """
+        ).fetchone()
+        assert code_only_hfpef == (
+            "met",
+            "code_only",
+            None,
+            None,
+            "indeterminate",
+            "",
+            "weight_label_only",
+        )
         assert by_patient["prediabetes"][:7] == (
             "met",
             "bmi_ge27_comorbidity",
@@ -1040,6 +1068,56 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
         assert observability[1:] == (31, 1, 0, 0, 1)
     finally:
         connection.close()
+
+
+def test_latest_lab_values_break_timestamp_ties_by_source_hash(
+    tmp_path: Path,
+) -> None:
+    tied_rows = (
+        "ties,e_ties,2023-12-01,LOINC,4548-4,6.0,,%",
+        "ties,e_ties,2023-12-01,LOINC,4548-4,8.0,,%",
+        "ties,e_ties,2023-12-01,LOINC,69990-9,10,,events/hour",
+        "ties,e_ties,2023-12-01,LOINC,69990-9,20,,events/hour",
+        "ties,e_ties,2023-12-01,LOINC,10230-1,45,,%",
+        "ties,e_ties,2023-12-01,LOINC,10230-1,55,,%",
+        "ties,e_ties,2023-12-01,LOINC,48794-2,,F1,stage",
+        "ties,e_ties,2023-12-01,LOINC,48794-2,,F3,stage",
+    )
+    results: list[tuple[object, ...]] = []
+    for run_name, rows in (("forward", tied_rows), ("reverse", tied_rows[::-1])):
+        export_root = tmp_path / run_name / "export"
+        output_root = tmp_path / run_name / "output" / "glp1_eligibility"
+        _write_export(export_root)
+        _append_primary_cases(export_root, {"ties": 31})
+        _append_rows(export_root / "Lab Results" / "lab_results.csv", *rows)
+
+        build_glp1_eligibility(
+            input_root=export_root,
+            output_dir=output_root,
+            config_path=GLP1_CONFIG,
+        )
+        connection = duckdb.connect(
+            str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+        )
+        try:
+            results.append(
+                connection.execute(
+                    """
+                    SELECT a1c_latest, ahi_rei_value, lvef, fibrosis_stage,
+                           hfpef_status, hfpef_certainty
+                    FROM analysis_glp1_eligibility
+                    WHERE patient_id = 'ties'
+                    """
+                ).fetchone()
+            )
+        finally:
+            connection.close()
+
+    assert results[0] == results[1]
+    assert results[0][0] in (6.0, 8.0)
+    assert results[0][1] in (10.0, 20.0)
+    assert results[0][2] in (45.0, 55.0)
+    assert results[0][3] in ("F1", "F3")
 
 
 def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> None:
