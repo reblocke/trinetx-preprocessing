@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Sequence
 
@@ -62,6 +63,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--output", type=Path, required=True)
     status_parser.add_argument("--json", action="store_true")
+    status_parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Poll until the build finishes, fails, or its local worker exits.",
+    )
+    status_parser.add_argument(
+        "--interval-seconds",
+        type=_positive_interval,
+        default=30.0,
+        help="Polling interval for --watch (default: 30 seconds).",
+    )
     return parser
 
 
@@ -130,20 +142,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         if args.command == "status":
-            state = read_run_state(args.output)
-            payload = state.to_dict()
-            payload["worker_process_detected"] = process_appears_active(state)
-            if args.json:
-                print(json.dumps(payload, indent=2))
-            else:
-                print(
-                    f"{state.status}: phase={state.phase}, "
-                    f"domain={state.current_domain or '-'}, "
-                    f"rows={state.rows_processed:,}, "
-                    f"updated={state.updated_at}, "
-                    f"worker_active={payload['worker_process_detected']}"
-                )
-            return 0
+            while True:
+                state = read_run_state(args.output)
+                worker_active = process_appears_active(state)
+                payload = state.to_dict()
+                payload["worker_process_detected"] = worker_active
+                if args.json:
+                    indent = None if args.watch else 2
+                    print(json.dumps(payload, indent=indent), flush=True)
+                else:
+                    print(
+                        f"{state.status}: phase={state.phase}, "
+                        f"domain={state.current_domain or '-'}, "
+                        f"rows={state.rows_processed:,}, "
+                        f"updated={state.updated_at}, "
+                        f"worker_active={worker_active}",
+                        flush=True,
+                    )
+                if (
+                    not args.watch
+                    or state.status in {"completed", "failed"}
+                    or worker_active is False
+                ):
+                    return 0
+                time.sleep(args.interval_seconds)
     except (FileNotFoundError, ValueError, GLP1ConfigError, ConceptSetError) as exc:
         parser.exit(2, f"error: {exc}\n")
     raise AssertionError(f"Unhandled command: {args.command}")
+
+
+def _positive_interval(value: str) -> float:
+    interval = float(value)
+    if interval <= 0:
+        raise argparse.ArgumentTypeError("interval must be greater than zero")
+    return interval

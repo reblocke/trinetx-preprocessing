@@ -80,6 +80,8 @@ def ingest_core_sources(
         builder(connection, root, inventory)
         rows[table_name] = _row_count(connection, table_name)
 
+    _update_retained_date_coverage(connection)
+
     if state is not None:
         state.update(
             phase="source_ingestion_complete",
@@ -88,6 +90,57 @@ def ingest_core_sources(
             message="Core source ingestion completed.",
         )
     return rows
+
+
+def _update_retained_date_coverage(
+    connection: duckdb.DuckDBPyConnection,
+) -> None:
+    """Record date coverage for rows retained by the analytic source filters."""
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE retained_source_date_coverage AS
+        WITH events AS (
+            SELECT source_file, event_datetime FROM source_lab_measurement
+            UNION ALL
+            SELECT source_file, encounter_start FROM source_encounter
+            UNION ALL
+            SELECT source_file, event_datetime FROM source_vital_measurement
+            UNION ALL
+            SELECT source_file, event_datetime FROM source_diagnosis
+            UNION ALL
+            SELECT source_file, event_datetime FROM source_procedure
+            UNION ALL
+            SELECT source_file, event_datetime FROM source_medication
+        )
+        SELECT source_file, min(event_datetime) AS min_event_date,
+               max(event_datetime) AS max_event_date
+        FROM events
+        WHERE event_datetime IS NOT NULL
+        GROUP BY source_file
+        """
+    )
+    connection.execute(
+        """
+        UPDATE source_file_inventory AS inventory
+        SET min_event_date = coverage.min_event_date,
+            max_event_date = coverage.max_event_date
+        FROM retained_source_date_coverage AS coverage
+        WHERE inventory.source_file = coverage.source_file
+        """
+    )
+    connection.execute(
+        """
+        UPDATE run_manifest
+        SET source_min_date = (
+                SELECT min(min_event_date) FROM retained_source_date_coverage
+            ),
+            source_max_date = (
+                SELECT max(max_event_date) FROM retained_source_date_coverage
+            )
+        """
+    )
+    connection.execute("DROP TABLE retained_source_date_coverage")
 
 
 def _load_source_path_map(

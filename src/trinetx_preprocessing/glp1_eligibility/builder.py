@@ -21,7 +21,7 @@ from .provenance import (
     current_git_sha,
     deterministic_run_id,
 )
-from .workspace import prepare_workspace, publish_workspace
+from .workspace import BUILD_STATE_FILENAME, prepare_workspace, publish_workspace
 
 
 @dataclass(frozen=True)
@@ -74,9 +74,7 @@ def build_glp1_eligibility(
             return BuildResult(
                 run_id=run_id,
                 output_dir=output,
-                output_paths=tuple(
-                    sorted(path for path in output.iterdir() if path.is_file())
-                ),
+                output_paths=_published_output_paths(output),
                 counts=CoreCohortCounts(
                     hypercapnia_encounters=int(summary["hypercapnia_encounters"]),
                     patient_index_events=int(summary["patient_index_events"]),
@@ -143,15 +141,19 @@ def build_glp1_eligibility(
             phase="output_materialization",
             rows_processed=counts.evidence_rows,
         )
-        output_paths = write_build_outputs(connection, workspace.staging_dir)
+        write_build_outputs(connection, workspace.staging_dir)
         connection.close()
         connection = None
         temp_dir = workspace.staging_dir / ".duckdb_tmp"
         if temp_dir.exists():
             remove_tree_strict(temp_dir, context="DuckDB temporary directory")
         publish_workspace(workspace, replace=replace)
-        published_paths = tuple(output / path.name for path in output_paths)
-        return BuildResult(run_id, output, published_paths, counts)
+        return BuildResult(
+            run_id,
+            output,
+            _published_output_paths(output),
+            counts,
+        )
     except Exception as exc:
         if connection is not None:
             connection.close()
@@ -165,3 +167,17 @@ def _existing_complete_run(output_dir: Path) -> dict[str, object] | None:
         return None
     payload = json.loads(path.read_text())
     return payload if payload.get("status") == "complete" else None
+
+
+def _published_output_paths(output_dir: Path) -> tuple[Path, ...]:
+    """Return public build files consistently for fresh and reused runs."""
+
+    return tuple(
+        sorted(
+            path
+            for path in output_dir.iterdir()
+            if path.is_file()
+            and not path.name.startswith(".")
+            and path.name != BUILD_STATE_FILENAME
+        )
+    )

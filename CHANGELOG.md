@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project aims to follow Semantic Versioning.
 
+## [Unreleased]
+### Added
+- Added an independent, versioned GLP-1 eligibility database build that leaves
+  the Milestone 2 pipeline and its 36 final CSV outputs unchanged.
+- Added first-available arterial PaCO2 selection, unit-aware pH pairing,
+  persistent-hypercapnia and VBG sensitivity cohorts, measured/calculated BMI,
+  temporal component phenotypes, indication tiers, payer-route modeling, and
+  GLP-1 order history.
+- Added source and derived long-form evidence, six study analysis views, atomic
+  aggregate run monitoring with `status --watch`, and a committed 20-case
+  synthetic acceptance fixture.
+
+### Fixed
+- Selected the earliest elevated repeat PaCO2 in the configured persistence
+  window so an earlier normal repeat cannot hide later persistent hypercapnia.
+- Honored the VBG sensitivity switch during cohort admission.
+- Made weight-label-only and no-documented-route payer branches reachable when
+  disease-specific and Bridge criteria do not apply.
+- Published evidence rows for lab, vital, procedure, medication, status, and
+  indication rules rather than diagnosis evidence alone.
+
 ## [0.2.0] - 2026-07-14
 ### Added
 - Added the corrected `docs/SPEC.md` analytic contract, immutable typed clinical

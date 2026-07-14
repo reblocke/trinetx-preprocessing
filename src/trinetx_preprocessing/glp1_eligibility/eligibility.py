@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import duckdb
 
+from .analysis_views import build_analysis_views
 from .config import GLP1Config
+from .evidence import append_eligibility_evidence
 from .phenotype_sources import build_component_source_summaries
 
 
@@ -16,8 +18,8 @@ def build_eligibility_phenotypes(
 
     build_component_source_summaries(connection, config)
     _build_wide_analysis(connection)
-    _append_component_evidence(connection)
-    _replace_primary_view(connection)
+    append_eligibility_evidence(connection)
+    build_analysis_views(connection)
 
 
 def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
@@ -102,6 +104,11 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
             lab.lvef,
             lab.lvef_date,
             lab.bnp_ntprobnp_latest,
+            lab.fibrosis_stage,
+            lab.fibrosis_stage_date,
+            lab.ast_latest,
+            lab.alt_latest,
+            lab.platelets_latest,
             bp.latest_sbp,
             bp.latest_dbp,
             bp.latest_bp_date,
@@ -129,13 +136,21 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
             coalesce(medication.glp1_new_order_30d, FALSE) AS glp1_new_order_30d,
             coalesce(medication.glp1_new_order_90d, FALSE) AS glp1_new_order_90d,
             coalesce(medication.glp1_new_order_365d, FALSE)
-                AS glp1_new_order_365d
+                AS glp1_new_order_365d,
+            coalesce(context.pneumonia_lri_at_index, FALSE)
+                AS context_pneumonia_lri_at_index,
+            coalesce(context.heart_failure_at_index, FALSE)
+                AS context_heart_failure_at_index,
+            coalesce(procedure_context.invasive_ventilation_at_index, FALSE)
+                AS context_invasive_ventilation_at_index
         FROM analysis_glp1_eligibility AS analysis
         LEFT JOIN diagnosis_component_summary AS diagnosis USING (index_event_id)
         LEFT JOIN procedure_component_summary AS procedure USING (index_event_id)
         LEFT JOIN component_lab_summary AS lab USING (index_event_id)
         LEFT JOIN component_bp_summary AS bp USING (index_event_id)
         LEFT JOIN medication_component_summary AS medication USING (index_event_id)
+        LEFT JOIN index_diagnosis_context AS context USING (index_event_id)
+        LEFT JOIN index_procedure_context AS procedure_context USING (index_event_id)
         """
     )
     connection.execute(
@@ -222,16 +237,42 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
                 END AS osa_severity,
                 feature.proc_pap AS pap_evidence,
                 glp1_status(feature.dx_mash) AS mash_status,
-                'indeterminate' AS mash_f2_f3_status,
-                'not_applicable' AS mash_f2_f3_certainty,
-                NULL::VARCHAR AS fibrosis_stage,
                 CASE
+                    WHEN feature.dx_mash
+                     AND feature.fibrosis_stage IN ('F2', 'F3')
+                     AND NOT feature.dx_cirrhosis THEN 'met'
+                    WHEN feature.dx_mash
+                     AND (
+                        feature.dx_cirrhosis
+                        OR feature.fibrosis_stage IN ('F0', 'F1', 'F4')
+                     ) THEN 'not_met'
+                    ELSE 'indeterminate'
+                END AS mash_f2_f3_status,
+                CASE
+                    WHEN feature.dx_mash
+                     AND feature.fibrosis_stage IS NOT NULL THEN 'strict'
+                    ELSE 'not_applicable'
+                END AS mash_f2_f3_certainty,
+                feature.fibrosis_stage,
+                CASE
+                    WHEN feature.fibrosis_stage IS NOT NULL
+                     AND feature.proc_liver_biopsy THEN 'biopsy'
+                    WHEN feature.fibrosis_stage IS NOT NULL
+                     AND feature.proc_elastography THEN 'elastography'
+                    WHEN feature.fibrosis_stage IS NOT NULL
+                    THEN 'structured_stage_result'
                     WHEN feature.proc_liver_biopsy THEN 'biopsy_without_stage'
                     WHEN feature.proc_elastography THEN 'elastography_without_stage'
                     ELSE NULL
                 END AS fibrosis_method,
                 glp1_status(feature.dx_cirrhosis) AS cirrhosis_status,
-                NULL::DOUBLE AS fib4_latest,
+                CASE
+                    WHEN feature.alt_latest > 0
+                     AND feature.platelets_latest > 0
+                    THEN analysis.age_at_index * feature.ast_latest
+                         / (feature.platelets_latest * sqrt(feature.alt_latest))
+                    ELSE NULL
+                END AS fib4_latest,
                 glp1_status(feature.dx_heart_failure) AS heart_failure_status,
                 CASE
                     WHEN feature.dx_heart_failure AND feature.lvef >= 50 THEN 'met'
@@ -289,10 +330,11 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
                     AS neuromuscular_disease_status,
                 glp1_status(feature.dx_chest_wall)
                     AS chest_wall_disease_status,
-                feature.dx_pneumonia_lri AS pneumonia_lri_at_index,
-                feature.dx_heart_failure AS heart_failure_at_index,
+                feature.context_pneumonia_lri_at_index AS pneumonia_lri_at_index,
+                feature.context_heart_failure_at_index AS heart_failure_at_index,
                 feature.proc_pap AS niv_or_pap_pre_index,
-                feature.proc_invasive_ventilation AS invasive_ventilation_at_index,
+                feature.context_invasive_ventilation_at_index
+                    AS invasive_ventilation_at_index,
                 feature.proc_bariatric AS bariatric_surgery_history
             FROM analysis_glp1_eligibility AS analysis
             JOIN glp1_component_feature AS feature USING (index_event_id)
@@ -442,11 +484,13 @@ def _add_tier_aggregates_and_routes(
         ALTER TABLE analysis_glp1_eligibility_next
         ADD COLUMN has_lvef BOOLEAN;
         ALTER TABLE analysis_glp1_eligibility_next
-        ADD COLUMN has_liver_fibrosis_staging BOOLEAN DEFAULT FALSE;
+        ADD COLUMN has_liver_fibrosis_staging BOOLEAN;
         ALTER TABLE analysis_glp1_eligibility_next
         ADD COLUMN has_medication_history BOOLEAN;
         ALTER TABLE analysis_glp1_eligibility_next
         ADD COLUMN has_payer_data BOOLEAN DEFAULT FALSE;
+        ALTER TABLE analysis_glp1_eligibility_next
+        ADD COLUMN first_observed_event_date TIMESTAMP;
         ALTER TABLE analysis_glp1_eligibility_next
         ADD COLUMN lookback_observation_days INTEGER;
         ALTER TABLE analysis_glp1_eligibility_next
@@ -459,6 +503,20 @@ def _add_tier_aggregates_and_routes(
         ADD COLUMN medication_event_count_730d BIGINT;
         ALTER TABLE analysis_glp1_eligibility_next
         ADD COLUMN code_set_version VARCHAR;
+        """
+    )
+    connection.execute(
+        """
+        UPDATE analysis_glp1_eligibility_next AS analysis
+        SET
+            first_observed_event_date = observability.first_observed_event_date,
+            lookback_observation_days = observability.lookback_observation_days,
+            encounter_count_365d = observability.encounter_count_365d,
+            diagnosis_event_count_730d = observability.diagnosis_event_count_730d,
+            lab_event_count_365d = observability.lab_event_count_365d,
+            medication_event_count_730d = observability.medication_event_count_730d
+        FROM component_observability_summary AS observability
+        WHERE analysis.index_event_id = observability.index_event_id
         """
     )
     connection.execute(
@@ -511,7 +569,7 @@ def _add_tier_aggregates_and_routes(
                     OR prior_ischemic_stroke_status = 'met'
                     OR symptomatic_pad_status = 'met'
                 ) THEN 'met'
-                WHEN bmi_valid THEN 'indeterminate'
+                WHEN bmi_valid AND NOT bmi_ge27 THEN 'not_met'
                 ELSE 'indeterminate'
             END,
             bridge_qualifying_branch = CASE
@@ -536,98 +594,43 @@ def _add_tier_aggregates_and_routes(
                 CASE WHEN prior_mi_status = 'met' THEN 'prior_mi' END,
                 CASE WHEN prior_ischemic_stroke_status = 'met' THEN 'prior_stroke' END,
                 CASE WHEN symptomatic_pad_status = 'met' THEN 'symptomatic_pad' END),
-            bridge_certainty = CASE
-                WHEN bridge_clinical_criteria_status = 'met' THEN 'strict'
-                ELSE 'not_applicable' END,
             part_d_disease_route_status = CASE
                 WHEN ind_fda_disease_specific_any THEN 'met'
                 ELSE 'indeterminate' END,
-            bridge_partd_exclusion_status = CASE
-                WHEN ind_fda_disease_specific_any THEN 'met'
-                WHEN bridge_clinical_criteria_status = 'met' THEN 'not_met'
-                ELSE 'indeterminate' END,
-            payer_route_model = CASE
-                WHEN ind_fda_disease_specific_any THEN 'part_d_disease_route'
-                WHEN bridge_clinical_criteria_status = 'met'
-                THEN 'bridge_clinical_route'
-                WHEN bridge_clinical_criteria_status = 'indeterminate'
-                THEN 'potential_bridge_but_indeterminate'
-                WHEN ind_fda_weight_management THEN 'weight_label_only'
-                ELSE 'no_documented_route' END,
             has_a1c = a1c_latest IS NOT NULL,
             has_egfr_history = egfr_latest IS NOT NULL,
             has_uacr = uacr_latest IS NOT NULL,
             has_ahi_rei = ahi_rei_value IS NOT NULL,
             has_lvef = lvef IS NOT NULL,
+            has_liver_fibrosis_staging = fibrosis_stage IS NOT NULL,
             has_medication_history =
-                glp1_ever_ordered_pre_index
-                OR active_antihypertensive_ingredient_count > 0,
+                coalesce(medication_event_count_730d, 0) > 0,
             code_set_version = rule_set_version
         """
     )
-
-
-def _append_component_evidence(connection: duckdb.DuckDBPyConnection) -> None:
     connection.execute(
         """
-        INSERT INTO eligibility_evidence_long
-        SELECT
-            analysis.run_id,
-            evidence.index_event_id,
-            evidence.patient_id,
-            evidence.concept_set_id,
-            'component',
-            evidence.concept_set_id,
-            'diagnosis_code',
-            'met',
-            'code_only',
-            evidence.event_datetime,
-            'diagnosis',
-            'source_diagnosis',
-            evidence.source_file,
-            evidence.source_record_hash,
-            evidence.encounter_id,
-            evidence.code_system,
-            evidence.code,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            -evidence.days_before_index,
-            TRUE,
-            1,
-            json_object('source', 'diagnosis_component_evidence')
-        FROM diagnosis_component_evidence AS evidence
-        JOIN analysis_glp1_eligibility AS analysis USING (index_event_id)
-        """
-    )
-
-
-def _replace_primary_view(connection: duckdb.DuckDBPyConnection) -> None:
-    connection.execute(
-        """
-        CREATE OR REPLACE VIEW analysis_primary_obesity_hypercapnia AS
-        SELECT * EXCLUDE (
-            bmi_source_file, bmi_source_record_hash,
-            abg_source_file, abg_source_record_hash,
-            dx_t2d, dx_prediabetes, dx_prior_mi, dx_ischemic_stroke,
-            dx_pad, dx_symptomatic_pad, dx_ckd_any, dx_ckd_stage_3a_plus,
-            dx_eskd, dx_osa, dx_mash, dx_masld, dx_liver_fibrosis,
-            dx_cirrhosis, dx_heart_failure, dx_hfpef, dx_hypertension,
-            dx_ohs, dx_pcos, dx_knee_oa, dx_aud, dx_iih, dx_binge_eating,
-            dx_metabolic_syndrome, dx_dyslipidemia, dx_copd, dx_asthma,
-            dx_neuromuscular, dx_chest_wall, dx_pneumonia_lri,
-            proc_polysomnography, proc_hsat, proc_pap, proc_echo,
-            proc_liver_biopsy, proc_elastography, proc_invasive_ventilation,
-            proc_dialysis, proc_bariatric, proc_lower_revascularization,
-            diabetes_range_a1c_dates, egfr_minimum,
-            egfr_low_first_date, egfr_low_last_date,
-            loop_diuretic_active_at_index
-        )
-        FROM analysis_glp1_eligibility
-        WHERE primary_cohort_status = 'included' AND bmi_ge30
+        UPDATE analysis_glp1_eligibility_next
+        SET
+            bridge_certainty = CASE
+                WHEN bridge_clinical_criteria_status IN ('met', 'not_met')
+                THEN 'strict'
+                ELSE 'not_applicable'
+            END,
+            bridge_partd_exclusion_status = CASE
+                WHEN ind_fda_disease_specific_any THEN 'met'
+                WHEN bridge_clinical_criteria_status = 'met' THEN 'not_met'
+                ELSE 'indeterminate'
+            END,
+            payer_route_model = CASE
+                WHEN ind_fda_disease_specific_any THEN 'part_d_disease_route'
+                WHEN bridge_clinical_criteria_status = 'met'
+                THEN 'bridge_clinical_route'
+                WHEN ind_fda_weight_management THEN 'weight_label_only'
+                WHEN bridge_clinical_criteria_status = 'indeterminate'
+                THEN 'potential_bridge_but_indeterminate'
+                ELSE 'no_documented_route'
+            END
         """
     )
 

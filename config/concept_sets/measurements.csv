@@ -31,3 +31,4 @@ platelets,lab,LOINC,777-3,exact,true,Platelet count,LOINC,2.82,,,FIB-4 input
 albumin,lab,LOINC,1751-7,exact,true,Serum albumin,LOINC,2.82,,,Liver phenotype input
 inr,lab,LOINC,6301-6,exact,true,International normalized ratio,LOINC,2.82,,,Liver phenotype input
 bilirubin,lab,LOINC,1975-2,exact,true,Total bilirubin,LOINC,2.82,,,Liver phenotype input
+fibrosis_stage,lab,LOINC,48794-2,exact,true,Fibrosis stage,LOINC,2.82,,,Ordinal F0-F4 result; investigator review required

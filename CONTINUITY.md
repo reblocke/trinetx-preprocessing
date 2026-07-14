@@ -81,7 +81,12 @@
 - GitHub Codex review of `b0f6f74` returned two P2 findings: persistent hypercapnia can miss a later elevated repeat after an earlier normal repeat, and the disabled VBG sensitivity switch is not honored by cohort admission.
 - Both PR #7 findings are fixed with focused regression coverage: persistence selects the earliest elevated repeat, and VBG-only candidates are admitted only when the sensitivity switch is enabled.
 - Diagnosis, procedure, lab, blood-pressure, and medication component sources now feed temporal phenotype statuses, indication tiers, payer-route modeling, and GLP-1 order/exposure fields in the production build.
-- Full local gates pass with `252` tests after the component checkpoint; no production run is active.
+- Full local gates passed with `252` tests at the component checkpoint; no production run is active.
+- PR #7 review of `dcebd2a` identified unreachable weight-label-only routing and missing non-diagnosis evidence. Local fixes make weight/no-route branches reachable and publish source plus derived evidence across all component domains.
+- MASH staging, index-context separation, observability fields, six analysis views, aggregate `status --watch`, and the committed 20-case synthetic acceptance fixture are implemented locally.
+- Long-form evidence now covers diagnosis, procedure, lab, blood pressure, medication, derived status, and every non-null indication. Retained-source date coverage, nonblank data-dictionary descriptions, and expanded aggregate QA are included without another raw-data scan.
+- The final local gate passes: `git diff --check`, Ruff, and `257` pytest tests. The production CLI completed the 20-case fixture in `0.56 s` with about `347 MiB` maximum RSS, producing 19 encounter candidates, 17 patient index events, 14 primary obesity-hypercapnia rows, and 651 evidence rows.
+- Fresh and reused build results now report the same eight public files, including DuckDB and excluding internal workspace/AppleDouble metadata.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -90,12 +95,11 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete long-form component/indication evidence and the remaining synthetic acceptance cases.
+- Commit and push the review-clean GLP-1 evidence/acceptance checkpoint; no prior worker is active or blocking progress.
 
 ## Next
-- Complete MASH fibrosis staging, observability fields, analysis views, and the full 20-case synthetic acceptance suite.
-- Re-run GitHub Codex review after the component checkpoint is pushed.
-- Validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
+- Resolve the two PR #7 threads and request a fresh Codex review.
+- Audit any returned findings, then decide whether the remaining terminology/rule configuration gaps require another local checkpoint before a private full build.
 
 ## Open questions (UNCONFIRMED if needed)
 - None blocking. The recovered ticket is pinned as GitHub issue #6 and is the authoritative GLP-1 endpoint specification.
@@ -110,4 +114,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at `03d4bb3` with the component checkpoint ready to commit.
+- Branch: `codex/glp1-augmentation` at `dcebd2a` with the evidence/acceptance checkpoint under local verification.

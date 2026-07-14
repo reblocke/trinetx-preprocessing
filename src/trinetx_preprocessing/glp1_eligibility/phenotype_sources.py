@@ -64,10 +64,85 @@ def build_component_source_summaries(
 
     _build_diagnosis_evidence(connection)
     _build_procedure_evidence(connection)
+    _build_index_context(connection)
     _build_normalized_component_labs(connection)
     _build_lab_summary(connection, config)
     _build_blood_pressure_summary(connection)
     _build_medication_evidence(connection, config)
+    _build_observability_summary(connection)
+
+
+def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE index_diagnosis_context AS
+        SELECT
+            cohort.index_event_id,
+            bool_or(concept.concept_set_id = 'cardiac_arrest')
+                AS cardiac_arrest_context,
+            bool_or(concept.concept_set_id = 'pneumonia_lri')
+                AS pneumonia_lri_at_index,
+            bool_or(concept.concept_set_id = 'heart_failure')
+                AS heart_failure_at_index
+        FROM cohort_hypercapnia_encounter AS cohort
+        JOIN source_diagnosis AS diagnosis
+          ON diagnosis.patient_id = cohort.patient_id
+         AND diagnosis.encounter_id = cohort.encounter_id
+         AND diagnosis.event_datetime >= cohort.encounter_start
+         AND diagnosis.event_datetime <= coalesce(
+                cohort.encounter_end,
+                cohort.encounter_start + INTERVAL 1 DAY
+             )
+        JOIN concept_set AS concept
+          ON concept.domain = 'diagnosis'
+         AND concept.include
+         AND concept.concept_set_id IN (
+             'cardiac_arrest', 'pneumonia_lri', 'heart_failure'
+         )
+         AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
+         AND {_concept_match_sql('diagnosis.code')}
+        GROUP BY cohort.index_event_id
+        """
+    )
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE index_procedure_context AS
+        SELECT
+            cohort.index_event_id,
+            bool_or(concept.concept_set_id = 'invasive_ventilation')
+                AS invasive_ventilation_at_index
+        FROM cohort_hypercapnia_encounter AS cohort
+        JOIN source_procedure AS procedure
+          ON procedure.patient_id = cohort.patient_id
+         AND procedure.encounter_id = cohort.encounter_id
+         AND procedure.event_datetime >= cohort.encounter_start
+         AND procedure.event_datetime <= coalesce(
+                cohort.encounter_end,
+                cohort.encounter_start + INTERVAL 1 DAY
+             )
+        JOIN concept_set AS concept
+          ON concept.domain = 'procedure'
+         AND concept.include
+         AND concept.concept_set_id = 'invasive_ventilation'
+         AND {_code_system_sql('procedure.code_system')} = concept.code_system
+         AND {_concept_match_sql('procedure.code')}
+        GROUP BY cohort.index_event_id
+        """
+    )
+    for table in (
+        "cohort_hypercapnia_encounter",
+        "cohort_hypercapnia_patient_index",
+        "analysis_glp1_eligibility",
+    ):
+        connection.execute(
+            f"""
+            UPDATE {table} AS target
+            SET cardiac_arrest_context = TRUE
+            FROM index_diagnosis_context AS context
+            WHERE target.index_event_id = context.index_event_id
+              AND context.cardiac_arrest_context
+            """
+        )
 
 
 def _build_diagnosis_evidence(connection: duckdb.DuckDBPyConnection) -> None:
@@ -165,13 +240,32 @@ def _build_normalized_component_labs(
              AND concept.concept_set_id IN (
                  'hba1c', 'egfr', 'uacr', 'ahi', 'lvef',
                  'bnp', 'nt_probnp', 'fasting_glucose', 'random_glucose',
-                 'ast', 'alt', 'platelets', 'albumin', 'inr', 'bilirubin'
+                 'ast', 'alt', 'platelets', 'albumin', 'inr', 'bilirubin',
+                 'fibrosis_stage'
              )
              AND {_code_system_sql('lab.code_system')} = concept.code_system
              AND {_concept_match_sql('lab.code')}
         )
         SELECT
             *,
+            CASE
+                WHEN concept_set_id = 'fibrosis_stage'
+                 AND regexp_matches(
+                    upper(trim(coalesce(
+                        nullif(lab_result_text_val, ''),
+                        nullif(lab_result_num_val, '')
+                    ))),
+                    '[0-4]'
+                 )
+                THEN 'F' || regexp_extract(
+                    upper(trim(coalesce(
+                        nullif(lab_result_text_val, ''),
+                        nullif(lab_result_num_val, '')
+                    ))),
+                    '([0-4])', 1
+                )
+                ELSE NULL
+            END AS fibrosis_stage_value,
             CASE
                 WHEN concept_set_id = 'hba1c' AND unit_key IN ('%', 'percent')
                 THEN raw_numeric_value
@@ -220,6 +314,7 @@ def _build_normalized_component_labs(
                 WHEN concept_set_id = 'albumin' THEN 'g/dL'
                 WHEN concept_set_id = 'inr' THEN 'ratio'
                 WHEN concept_set_id = 'bilirubin' THEN 'mg/dL'
+                WHEN concept_set_id = 'fibrosis_stage' THEN 'stage'
             END AS normalized_unit
         FROM matched
         """
@@ -248,6 +343,7 @@ def _build_lab_summary(
          AND lab.event_datetime <= analysis.index_date
          AND lab.event_datetime >= analysis.index_date - INTERVAL {lookback} DAY
         WHERE lab.normalized_numeric_value IS NOT NULL
+           OR lab.fibrosis_stage_value IS NOT NULL
         """
     )
     connection.execute(
@@ -291,7 +387,19 @@ def _build_lab_summary(
                 FILTER (WHERE concept_set_id = 'lvef') AS lvef_date,
             arg_max(normalized_numeric_value, event_datetime)
                 FILTER (WHERE concept_set_id IN ('bnp', 'nt_probnp'))
-                AS bnp_ntprobnp_latest
+                AS bnp_ntprobnp_latest,
+            arg_max(fibrosis_stage_value, event_datetime)
+                FILTER (WHERE concept_set_id = 'fibrosis_stage')
+                AS fibrosis_stage,
+            max(event_datetime)
+                FILTER (WHERE concept_set_id = 'fibrosis_stage')
+                AS fibrosis_stage_date,
+            arg_max(normalized_numeric_value, event_datetime)
+                FILTER (WHERE concept_set_id = 'ast') AS ast_latest,
+            arg_max(normalized_numeric_value, event_datetime)
+                FILTER (WHERE concept_set_id = 'alt') AS alt_latest,
+            arg_max(normalized_numeric_value, event_datetime)
+                FILTER (WHERE concept_set_id = 'platelets') AS platelets_latest
         FROM component_lab_evidence
         GROUP BY index_event_id
         """
@@ -308,6 +416,12 @@ def _build_blood_pressure_summary(
             analysis.index_event_id,
             analysis.index_date,
             concept.concept_set_id,
+            vital.patient_id,
+            vital.encounter_id,
+            vital.code_system,
+            vital.code,
+            vital.text_value,
+            vital.units_of_measure,
             vital.event_datetime,
             try_cast(vital.value AS DOUBLE) AS numeric_value,
             encounter.type AS encounter_type,
@@ -430,7 +544,7 @@ def _build_medication_evidence(
             max(event_datetime) FILTER (
                 WHERE ordered_pre_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_last_pre_index_order_date,
-            arg_max(concept_set_id, event_datetime) FILTER (
+            arg_max(replace(concept_set_id, 'glp1_', ''), event_datetime) FILTER (
                 WHERE active_at_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_ingredient_at_index,
             arg_max(coalesce(brand, code), event_datetime) FILTER (
@@ -444,6 +558,88 @@ def _build_medication_evidence(
                     AND starts_with(concept_set_id, 'glp1_')) AS glp1_new_order_365d
         FROM medication_component_evidence
         GROUP BY index_event_id
+        """
+    )
+
+
+def _build_observability_summary(connection: duckdb.DuckDBPyConnection) -> None:
+    connection.execute(
+        """
+        CREATE OR REPLACE TABLE component_observability_summary AS
+        WITH events AS (
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'encounter' AS domain, encounter.encounter_start AS event_date,
+                   encounter.encounter_id AS event_id
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_encounter AS encounter USING (patient_id)
+            UNION ALL
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'diagnosis', diagnosis.event_datetime,
+                   diagnosis.source_record_hash
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_diagnosis AS diagnosis USING (patient_id)
+            UNION ALL
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'lab', lab.event_datetime, lab.source_record_hash
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_lab_measurement AS lab USING (patient_id)
+            UNION ALL
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'vital', vital.event_datetime, vital.source_record_hash
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_vital_measurement AS vital USING (patient_id)
+            UNION ALL
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'procedure', procedure.event_datetime,
+                   procedure.source_record_hash
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_procedure AS procedure USING (patient_id)
+            UNION ALL
+            SELECT analysis.index_event_id, analysis.index_date,
+                   'medication', medication.event_datetime,
+                   medication.source_record_hash
+            FROM analysis_glp1_eligibility AS analysis
+            JOIN source_medication AS medication USING (patient_id)
+        ), aggregate AS (
+            SELECT
+                index_event_id,
+                min(event_date) FILTER (WHERE event_date <= index_date)
+                    AS first_observed_event_date,
+                count(DISTINCT event_id) FILTER (
+                    WHERE domain = 'encounter'
+                      AND event_date BETWEEN index_date - INTERVAL 365 DAY
+                                         AND index_date
+                ) AS encounter_count_365d,
+                count(*) FILTER (
+                    WHERE domain = 'diagnosis'
+                      AND event_date BETWEEN index_date - INTERVAL 730 DAY
+                                         AND index_date
+                ) AS diagnosis_event_count_730d,
+                count(*) FILTER (
+                    WHERE domain = 'lab'
+                      AND event_date BETWEEN index_date - INTERVAL 365 DAY
+                                         AND index_date
+                ) AS lab_event_count_365d,
+                count(*) FILTER (
+                    WHERE domain = 'medication'
+                      AND event_date BETWEEN index_date - INTERVAL 730 DAY
+                                         AND index_date
+                ) AS medication_event_count_730d
+            FROM events
+            GROUP BY index_event_id
+        )
+        SELECT
+            analysis.index_event_id,
+            aggregate.first_observed_event_date,
+            datediff(
+                'day', aggregate.first_observed_event_date, analysis.index_date
+            ) AS lookback_observation_days,
+            aggregate.encounter_count_365d,
+            aggregate.diagnosis_event_count_730d,
+            aggregate.lab_event_count_365d,
+            aggregate.medication_event_count_730d
+        FROM analysis_glp1_eligibility AS analysis
+        LEFT JOIN aggregate USING (index_event_id)
         """
     )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -86,6 +87,41 @@ def _append_rows(path: Path, *rows: str) -> None:
     with path.open("a") as handle:
         for row in rows:
             handle.write(row.rstrip("\n") + "\n")
+
+
+def _append_primary_cases(root: Path, bmi_by_patient: dict[str, float]) -> None:
+    """Add the minimum strict hypercapnia rows for named synthetic patients."""
+
+    patients = tuple(bmi_by_patient)
+    _append_rows(
+        root / "Patient" / "patient.csv",
+        *(f"{patient},F,White,Not Hispanic or Latino,1970,," for patient in patients),
+    )
+    _append_rows(
+        root / "Encounter" / "encounter.csv",
+        *(
+            f"e_{patient},{patient},2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00,IMP,s1"
+            for patient in patients
+        ),
+    )
+    lab_rows: list[str] = []
+    vital_rows: list[str] = []
+    for patient, bmi in bmi_by_patient.items():
+        encounter = f"e_{patient}"
+        lab_rows.extend(
+            (
+                f"{patient},{encounter},2024-01-01 01:00:00,"
+                "LOINC,2019-8,55,,mmHg",
+                f"{patient},{encounter},2024-01-01 01:00:00,"
+                "LOINC,2744-1,7.40,,pH",
+            )
+        )
+        vital_rows.append(
+            f"{patient},{encounter},2023-12-15,LOINC,39156-5,{bmi},,kg/m2"
+        )
+    _append_rows(root / "Lab Results" / "lab_results.csv", *lab_rows)
+    _append_rows(root / "Vital Signs" / "vital_signs.csv", *vital_rows)
 
 
 def test_default_glp1_config_and_concept_sets_are_valid() -> None:
@@ -200,6 +236,22 @@ def test_run_state_is_atomic_and_monitorable(tmp_path: Path) -> None:
     assert state.rows_processed == 250_000
     assert process_appears_active(state) is True
     assert not list(tmp_path.glob(f".{RUN_STATE_FILENAME}.tmp-*"))
+
+
+def test_status_watch_stops_on_completed_state(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer = RunStateWriter(tmp_path, "synthetic-run")
+    writer.complete(message="done")
+
+    result = main(
+        ["status", "--output", str(tmp_path), "--watch", "--json"]
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "completed"
+    assert payload["phase"] == "complete"
 
 
 def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -> None:
@@ -610,6 +662,274 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         assert by_patient["osa_ahi"][6:9] == ("indeterminate", "met", True)
         assert by_patient["antipsychotic_only"][9:] == ("not_met", None)
         assert by_patient["antipsychotic_metabolic"][9:] == ("met", True)
+        assert by_patient["antipsychotic_only"][1] == "no_documented_route"
+
+        indication_columns = [
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'analysis_glp1_eligibility'
+                  AND starts_with(column_name, 'ind_')
+                  AND data_type = 'BOOLEAN'
+                ORDER BY ordinal_position
+                """
+            ).fetchall()
+        ]
+        for column in indication_columns:
+            nonnull_rows = connection.execute(
+                f'SELECT COUNT(*) FROM analysis_glp1_eligibility '
+                f'WHERE "{column}" IS NOT NULL'
+            ).fetchone()[0]
+            evidence_rows = connection.execute(
+                """
+                SELECT COUNT(*) FROM eligibility_evidence_long
+                WHERE rule_id = ?
+                """,
+                [column],
+            ).fetchone()[0]
+            assert evidence_rows == nonnull_rows, column
+        assert connection.execute(
+            """
+            SELECT COUNT(*) FROM eligibility_evidence_long
+            WHERE patient_id = 'post_only'
+              AND rule_id = 'source:type_2_diabetes'
+            """
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(
+        export_root,
+        {"mash_f2": 31, "mash_f3_cirrhosis": 31, "mash_unstaged": 31},
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "mash_f2,e_mash_f2,2023-12-01,ICD10CM,K75.81,,,,",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
+        "ICD10CM,K75.81,,,,",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
+        "ICD10CM,K74.60,,,,",
+        "mash_unstaged,e_mash_unstaged,2023-12-01,ICD10CM,K75.81,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "mash_f2,e_mash_f2,2023-12-01,CPT,47000,",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,CPT,47000,",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "mash_f2,e_mash_f2,2023-12-01,LOINC,48794-2,,F2,stage",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
+        "LOINC,48794-2,,F3,stage",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        rows = connection.execute(
+            """
+            SELECT patient_id, mash_f2_f3_status, mash_f2_f3_certainty,
+                   fibrosis_stage, fibrosis_method,
+                   ind_fda_noncirrhotic_mash_f2_f3
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchall()
+        by_patient = {row[0]: row[1:] for row in rows}
+        assert by_patient["mash_f2"] == (
+            "met",
+            "strict",
+            "F2",
+            "biopsy",
+            True,
+        )
+        assert by_patient["mash_f3_cirrhosis"] == (
+            "not_met",
+            "strict",
+            "F3",
+            "biopsy",
+            None,
+        )
+        assert by_patient["mash_unstaged"] == (
+            "indeterminate",
+            "not_applicable",
+            None,
+            None,
+            None,
+        )
+    finally:
+        connection.close()
+
+
+def test_bridge_branches_missing_bmi_and_glp1_order_timing(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(
+        export_root,
+        {"bmi35": 36, "hfpef": 31, "prediabetes": 28, "weight_only": 31},
+    )
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "missing_bmi,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_missing_bmi,missing_bmi,2024-01-01 00:00:00,"
+        "2024-01-02 00:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,"
+        "LOINC,2019-8,55,,mmHg",
+        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,"
+        "LOINC,2744-1,7.40,,pH",
+        "hfpef,e_hfpef,2023-12-01,LOINC,10230-1,55,,%",
+        "prediabetes,e_prediabetes,2023-12-01,LOINC,4548-4,6.0,,%",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "hfpef,e_hfpef,2023-12-01,ICD10CM,I50.3,,,,",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "bmi35,e_bmi35,RXNORM,1991302,2023-12-01,"
+        "subcutaneous,Wegovy,2.4mg",
+        "bmi35,e_bmi35,RXNORM,1991302,2024-01-15,"
+        "subcutaneous,Ozempic,1mg",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        rows = connection.execute(
+            """
+            SELECT patient_id, bridge_clinical_criteria_status,
+                   bridge_qualifying_branch, payer_route_model,
+                   hfpef_status, hfpef_certainty, prediabetes_status,
+                   obesity_status, ind_fda_weight_management,
+                   glp1_ever_ordered_pre_index, glp1_active_at_index,
+                   glp1_ingredient_at_index, glp1_product_at_index,
+                   glp1_new_order_30d, glp1_new_order_90d,
+                   glp1_new_order_365d
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchall()
+        by_patient = {row[0]: row[1:] for row in rows}
+        assert by_patient["bmi35"][:3] == (
+            "met",
+            "bmi_ge35",
+            "bridge_clinical_route",
+        )
+        assert by_patient["hfpef"][:5] == (
+            "met",
+            "bmi_ge30_comorbidity",
+            "bridge_clinical_route",
+            "met",
+            "strict",
+        )
+        assert by_patient["prediabetes"][:7] == (
+            "met",
+            "bmi_ge27_comorbidity",
+            "bridge_clinical_route",
+            "indeterminate",
+            "not_applicable",
+            "met",
+            "not_met",
+        )
+        assert by_patient["prediabetes"][7] is True
+        assert by_patient["missing_bmi"][6:8] == ("indeterminate", None)
+        assert by_patient["weight_only"][:3] == (
+            "indeterminate",
+            None,
+            "weight_label_only",
+        )
+        assert by_patient["bmi35"][8:] == (
+            True,
+            True,
+            "semaglutide",
+            "Wegovy",
+            True,
+            True,
+            True,
+        )
+        observability = connection.execute(
+            """
+            SELECT first_observed_event_date, lookback_observation_days,
+                   encounter_count_365d, diagnosis_event_count_730d,
+                   lab_event_count_365d, medication_event_count_730d
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'bmi35'
+            """
+        ).fetchone()
+        assert observability[0].isoformat() == "2023-12-01T00:00:00"
+        assert observability[1:] == (31, 1, 0, 0, 1)
+    finally:
+        connection.close()
+
+
+def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"context": 31})
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "context,e_context,2023-12-01,ICD10CM,J18.9,,,,",
+        "context,e_context,2024-01-01 12:00:00,ICD10CM,I46.9,,,,",
+        "context,e_context,2024-01-01 12:00:00,ICD10CM,I50.9,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "context,e_context,2024-01-01 12:00:00,CPT,94002,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        context = connection.execute(
+            """
+            SELECT cardiac_arrest_context, pneumonia_lri_at_index,
+                   heart_failure_at_index, invasive_ventilation_at_index,
+                   heart_failure_status
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone()
+        assert context == (True, False, True, True, "indeterminate")
+        assert connection.execute(
+            """
+            SELECT cardiac_arrest_context
+            FROM cohort_hypercapnia_encounter
+            """
+        ).fetchone() == (True,)
     finally:
         connection.close()
 
@@ -655,9 +975,25 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
         "run_manifest.json",
     }
     assert required <= {path.name for path in output_root.iterdir()}
+    assert required == {path.name for path in first.output_paths}
     assert first.counts.patient_index_events == 1
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1
+    dictionary_rows = list(
+        csv.DictReader((output_root / "data_dictionary.csv").open())
+    )
+    assert dictionary_rows
+    assert all(row["description"].strip() for row in dictionary_rows)
+    qa_text = (output_root / "data_quality_report.html").read_text()
+    for section in (
+        "Retained source date coverage",
+        "Concept-matched code systems",
+        "Blood-gas pairing",
+        "BMI source distribution",
+        "Phenotype missingness",
+        "Sensitivity cohorts",
+    ):
+        assert section in qa_text
     connection = duckdb.connect(
         str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
     )
@@ -670,9 +1006,34 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
             [str(output_root / "analysis_glp1_eligibility.parquet")],
         ).fetchone()[0]
         assert database_rows == parquet_rows == 1
+        manifest_dates = connection.execute(
+            "SELECT source_min_date, source_max_date FROM run_manifest"
+        ).fetchone()
+        assert all(value is not None for value in manifest_dates)
+        expected_views = {
+            "analysis_primary_obesity_hypercapnia",
+            "analysis_documented_indication_prevalence",
+            "analysis_evaluable_indication_prevalence",
+            "analysis_indication_overlap",
+            "analysis_treatment_gap",
+            "analysis_missingness",
+        }
+        actual_views = {
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'main' AND table_type = 'VIEW'
+                """
+            ).fetchall()
+        }
+        assert expected_views <= actual_views
+        for view in expected_views:
+            assert connection.execute(f'SELECT COUNT(*) FROM "{view}"').fetchone()
     finally:
         connection.close()
 
+    (output_root / "._filesystem_metadata").write_text("not a public artifact")
     second = build_glp1_eligibility(
         input_root=export_root,
         output_dir=output_root,
@@ -680,4 +1041,5 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     )
     assert second.reused_existing is True
     assert second.run_id == first.run_id
+    assert second.output_paths == first.output_paths
     assert read_run_state(output_root).status == "completed"

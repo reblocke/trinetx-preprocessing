@@ -59,11 +59,13 @@ does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
   --config config/glp1_eligibility.yml
 
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility status \
-  --output /path/to/output/glp1_eligibility
+  --output /path/to/output/glp1_eligibility \
+  --watch --interval-seconds 30
 ```
 
-See `docs/GLP1_ELIGIBILITY.md` and GitHub issue #6 for the output contract,
-current implementation boundary, and clinical-review requirements.
+See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub
+issue #6 for the output contract, current implementation boundary, and
+clinical-review requirements.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:

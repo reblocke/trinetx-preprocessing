@@ -51,8 +51,13 @@ does not signal or attach to the worker:
 
 ```bash
 python -m trinetx_preprocessing.glp1_eligibility status \
-  --output /path/to/output/glp1_eligibility
+  --output /path/to/output/glp1_eligibility \
+  --watch --interval-seconds 30
 ```
+
+Watch mode emits aggregate state only and exits when the build completes,
+fails, or its recorded local worker is no longer active. It does not attach to,
+signal, or restart the worker.
 
 Print aggregate counts without identifiers:
 
@@ -63,7 +68,13 @@ python -m trinetx_preprocessing.glp1_eligibility summarize \
 
 The current build implements source inventory, first-available arterial PaCO2,
 unit-aware pH pairing, hypercapnia sensitivity cohorts, the measured/calculated
-BMI hierarchy, long-form core evidence, and the complete file publication
-mechanism. Component phenotypes and eligibility tiers remain under active
-implementation. Concept files require investigator terminology review before
-clinical use.
+BMI hierarchy, temporal component phenotypes, indication tiers, payer-route
+modeling, GLP-1 order history, long-form source and derived evidence, study
+views, and atomic file publication. The committed synthetic export exercises
+the 20 mandatory issue cases without proprietary data.
+
+See `GLP1_DATA_CONTRACT.md`, `GLP1_PHENOTYPES.md`, and
+`GLP1_MIGRATION.md` for the database contract, interpretation boundaries, and
+relationship to the historical notebooks. Concept files and high-risk
+phenotypes still require investigator terminology and record-level validation
+before clinical use.

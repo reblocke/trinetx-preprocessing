@@ -17,6 +17,26 @@ OUTPUT_TABLES = (
     "cohort_hypercapnia_encounter",
 )
 
+COLUMN_DESCRIPTIONS = {
+    "run_id": "Deterministic identifier for the code, config, and input inventory.",
+    "index_event_id": "Deterministic identifier for the selected patient index event.",
+    "patient_id": "Source patient identifier; confidential in real-data outputs.",
+    "encounter_id": "Source identifier for the selected encounter.",
+    "index_date": "Date of the selected first qualifying index event.",
+    "event_date": "Date or timestamp of the source or derived evidence event.",
+    "rule_id": "Stable identifier for the source component or derived rule.",
+    "status": "Canonical met, not_met, indeterminate, or cohort status.",
+    "certainty": "Evidence certainty assigned by the versioned phenotype rule.",
+    "source_file": "Relative source export path retained for provenance.",
+    "source_record_hash": "Stable hash of the source file and normalized source row.",
+    "code_system": "Source terminology system after normalization where applicable.",
+    "code": "Source clinical code used by the evidence record.",
+    "days_from_index": "Signed whole days from index date to evidence date.",
+    "is_pre_index": "Whether the evidence occurred on or before the index date.",
+    "evidence_rank": "Deterministic evidence order within index event and component.",
+    "provenance_json": "Structured rule-specific provenance not represented elsewhere.",
+}
+
 
 def write_build_outputs(
     connection: duckdb.DuckDBPyConnection,
@@ -70,6 +90,25 @@ def summarize_database(database_path: Path) -> dict[str, object]:
         manifest = connection.execute(
             "SELECT run_id, status, rule_set_version FROM run_manifest"
         ).fetchone()
+        indication_counts = connection.execute(
+            """
+            SELECT
+                count(*) FILTER (WHERE ind_fda_disease_specific_any),
+                count(*) FILTER (WHERE ind_guideline_any),
+                count(*) FILTER (WHERE ind_rct_any),
+                count(*) FILTER (WHERE glp1_ever_ordered_pre_index)
+            FROM analysis_primary_obesity_hypercapnia
+            """
+        ).fetchone()
+        payer_route_counts = dict(
+            connection.execute(
+                """
+                SELECT payer_route_model, count(*)
+                FROM analysis_primary_obesity_hypercapnia
+                GROUP BY payer_route_model ORDER BY payer_route_model
+                """
+            ).fetchall()
+        )
         return {
             "run_id": manifest[0],
             "status": manifest[1],
@@ -84,6 +123,11 @@ def summarize_database(database_path: Path) -> dict[str, object]:
                 connection, "analysis_primary_obesity_hypercapnia"
             ),
             "evidence_rows": _count(connection, "eligibility_evidence_long"),
+            "disease_specific_fda": indication_counts[0],
+            "guideline_supported": indication_counts[1],
+            "rct_supported": indication_counts[2],
+            "glp1_ordered_pre_index": indication_counts[3],
+            "payer_route_counts": payer_route_counts,
         }
     finally:
         connection.close()
@@ -97,7 +141,7 @@ def _write_data_dictionary(
     rows = connection.execute(
         f"""
         SELECT table_name, ordinal_position, column_name, data_type,
-               is_nullable, '' AS description
+               is_nullable
         FROM information_schema.columns
         WHERE table_schema = 'main' AND table_name IN ({placeholders})
         ORDER BY table_name, ordinal_position
@@ -116,7 +160,26 @@ def _write_data_dictionary(
                 "description",
             ]
         )
-        writer.writerows(rows)
+        writer.writerows(
+            (*row, _column_description(row[0], row[2])) for row in rows
+        )
+
+
+def _column_description(table_name: str, column_name: str) -> str:
+    if column_name in COLUMN_DESCRIPTIONS:
+        return COLUMN_DESCRIPTIONS[column_name]
+    readable = column_name.replace("_", " ")
+    if column_name.startswith("ind_"):
+        return f"Nullable indication result for {readable[4:]}."
+    if column_name.endswith("_status"):
+        return f"Canonical phenotype status for {readable[:-7]}."
+    if column_name.endswith("_certainty"):
+        return f"Evidence certainty for {readable[:-10]}."
+    if column_name.startswith("has_"):
+        return f"Data-availability indicator for {readable[4:]}."
+    if column_name.endswith("_date") or column_name.endswith("_datetime"):
+        return f"Date or timestamp for {readable.rsplit(' ', 1)[0]}."
+    return f"{readable.capitalize()} in `{table_name}`."
 
 
 def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
@@ -147,6 +210,120 @@ def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
         FROM normalized_gas_measurement
         """
     ).fetchone()
+    date_coverage = connection.execute(
+        """
+        SELECT logical_domain, min(min_event_date), max(max_event_date)
+        FROM source_file_inventory
+        GROUP BY logical_domain ORDER BY logical_domain
+        """
+    ).fetchall()
+    code_systems = connection.execute(
+        """
+        WITH codes AS (
+            SELECT 'lab' AS domain, code_system FROM source_lab_measurement
+            UNION ALL SELECT 'vital', code_system FROM source_vital_measurement
+            UNION ALL SELECT 'diagnosis', code_system FROM source_diagnosis
+            UNION ALL SELECT 'procedure', code_system FROM source_procedure
+            UNION ALL SELECT 'medication', code_system FROM source_medication
+        )
+        SELECT domain, coalesce(nullif(trim(code_system), ''), '<missing>'),
+               count(*)
+        FROM codes GROUP BY domain, code_system ORDER BY domain, count(*) DESC
+        """
+    ).fetchall()
+    unit_rows = connection.execute(
+        """
+        WITH units AS (
+            SELECT 'lab' AS domain, units_of_measure AS unit
+            FROM source_lab_measurement
+            UNION ALL
+            SELECT 'vital', units_of_measure FROM source_vital_measurement
+        ), ranked AS (
+            SELECT domain, coalesce(nullif(trim(unit), ''), '<missing>') AS unit,
+                   count(*) AS rows,
+                   row_number() OVER (
+                       PARTITION BY domain ORDER BY count(*) DESC, unit
+                   ) AS rank
+            FROM units GROUP BY domain, unit
+        )
+        SELECT domain, unit, rows FROM ranked WHERE rank <= 20
+        ORDER BY domain, rows DESC, unit
+        """
+    ).fetchall()
+    duplicate_rows = connection.execute(
+        """
+        WITH records AS (
+            SELECT 'lab' AS domain, source_record_hash
+            FROM source_lab_measurement
+            UNION ALL SELECT 'vital', source_record_hash
+            FROM source_vital_measurement
+            UNION ALL SELECT 'diagnosis', source_record_hash
+            FROM source_diagnosis
+            UNION ALL SELECT 'procedure', source_record_hash
+            FROM source_procedure
+            UNION ALL SELECT 'medication', source_record_hash
+            FROM source_medication
+        ), duplicate_groups AS (
+            SELECT domain, source_record_hash, count(*) AS rows
+            FROM records GROUP BY domain, source_record_hash HAVING count(*) > 1
+        )
+        SELECT domain, sum(rows - 1) AS duplicate_rows
+        FROM duplicate_groups GROUP BY domain ORDER BY domain
+        """
+    ).fetchall()
+    pairing_rows = connection.execute(
+        """
+        SELECT coalesce(abg_pairing_method, '<unpaired>'),
+               coalesce(abg_pairing_quality, '<unpaired>'), count(*)
+        FROM cohort_hypercapnia_encounter
+        GROUP BY abg_pairing_method, abg_pairing_quality
+        ORDER BY count(*) DESC
+        """
+    ).fetchall()
+    bmi_rows = connection.execute(
+        """
+        SELECT coalesce(bmi_source, '<missing>'), count(*)
+        FROM analysis_glp1_eligibility
+        GROUP BY bmi_source ORDER BY count(*) DESC
+        """
+    ).fetchall()
+    missingness_rows = connection.execute(
+        """
+        SELECT field, observed_n, missing_n, total_n, missing_percent
+        FROM analysis_missingness ORDER BY field
+        """
+    ).fetchall()
+    certainty_rows = connection.execute(
+        """
+        SELECT evidence_tier, certainty, status, count(*)
+        FROM eligibility_evidence_long
+        WHERE component IN ('derived_status', 'derived_rule')
+        GROUP BY evidence_tier, certainty, status
+        ORDER BY evidence_tier, certainty, status
+        """
+    ).fetchall()
+    sensitivity_rows = connection.execute(
+        """
+        SELECT
+            count(*) AS candidate_encounters,
+            count(*) FILTER (WHERE primary_cohort_status = 'included')
+                AS primary_included,
+            count(*) FILTER (WHERE later_hypercapnia_sensitivity_case)
+                AS later_hypercapnia,
+            count(*) FILTER (WHERE vbg_only_sensitivity_case) AS vbg_only,
+            count(*) FILTER (WHERE cardiac_arrest_context) AS cardiac_arrest
+        FROM cohort_hypercapnia_encounter
+        """
+    ).fetchall()
+    schema_rows = connection.execute(
+        """
+        SELECT logical_domain, count(*) AS files,
+               count(*) FILTER (WHERE load_status = 'loaded') AS loaded,
+               count(*) FILTER (WHERE warning IS NOT NULL) AS warnings
+        FROM source_file_inventory
+        GROUP BY logical_domain ORDER BY logical_domain
+        """
+    ).fetchall()
     return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>GLP-1 eligibility data quality</title>
@@ -157,13 +334,47 @@ th,td{{border:1px solid #bbb;padding:.4rem;text-align:left}}</style></head>
 <p>This report contains aggregate counts only. It does not include identifiers
 or row-level examples.</p>
 <h2>Source inventory</h2>{_html_table(('Domain','Files','Rows'), source_rows)}
+<h2>Source schema and load status</h2>{_html_table(
+        ('Domain','Files','Loaded','Warnings'), schema_rows
+    )}
+<h2>Retained source date coverage</h2>{_html_table(
+        ('Domain','First retained event','Last retained event'), date_coverage
+    )}
 <h2>Cohort flow</h2>{_html_table(
         ('Stage','Rows','Patients','Percent previous','Reason for loss'), flow_rows
     )}
 <h2>Gas normalization</h2>{_html_table(
         ('Considered','Unit usable','Plausible','Incompatible unit','Implausible'),
         (gas_quality,),
-    )}</body></html>\n"""
+    )}
+<h2>Concept-matched code systems</h2>{_html_table(
+        ('Domain','Code system','Rows'), code_systems
+    )}
+<p>Source clinical tables retain concept-matched candidates only. This table is
+not a raw-export unmapped-code audit; terminology review must inspect approved
+aggregate source-code frequencies separately before clinical use.</p>
+<h2>Top retained units</h2>{_html_table(('Domain','Unit','Rows'), unit_rows)}
+<h2>Duplicate retained records</h2>{_html_table(
+        ('Domain','Rows beyond first identical source hash'), duplicate_rows
+    )}
+<h2>Blood-gas pairing</h2>{_html_table(
+        ('Pairing method','Pairing quality','Encounters'), pairing_rows
+    )}
+<h2>BMI source distribution</h2>{_html_table(('BMI source','Rows'), bmi_rows)}
+<h2>Phenotype missingness</h2>{_html_table(
+        ('Field','Observed','Missing','Total','Missing percent'), missingness_rows
+    )}
+<h2>Derived phenotype certainty</h2>{_html_table(
+        ('Evidence tier','Certainty','Status','Rows'), certainty_rows
+    )}
+<h2>Sensitivity cohorts</h2>{_html_table(
+        ('Candidates','Primary','Later hypercapnia','VBG only','Cardiac arrest'),
+        sensitivity_rows,
+    )}
+<h2>Site heterogeneity</h2>
+<p>The current export contract does not provide a reliable site/HCO field in
+the retained analytic sources. Site heterogeneity remains unclassifiable unless
+an approved source mapping is supplied.</p></body></html>\n"""
 
 
 def _html_table(headers: tuple[str, ...], rows: tuple[tuple, ...] | list[tuple]) -> str:
