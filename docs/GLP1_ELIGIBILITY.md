@@ -31,6 +31,19 @@ python -m trinetx_preprocessing.glp1_eligibility validate-export \
   --input /path/to/trinetx_export
 ```
 
+Build the additive database and study files:
+
+```bash
+python -m trinetx_preprocessing.glp1_eligibility build \
+  --input /path/to/trinetx_export \
+  --output /path/to/output/glp1_eligibility \
+  --config config/glp1_eligibility.yml
+```
+
+An identical rerun reuses the completed output. A different input, config, or
+code state requires `--replace`; replacement preserves the previous output
+until the staged build is complete.
+
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree
 can still be published by one rename. The status reader checks that file and
@@ -41,7 +54,16 @@ python -m trinetx_preprocessing.glp1_eligibility status \
   --output /path/to/output/glp1_eligibility
 ```
 
-The production `build` and `summarize` commands are added with the DuckDB
-storage implementation. Concept files currently seed the mandatory blood-gas
-safety distinctions and initial component rules; they require investigator
-terminology review before clinical use.
+Print aggregate counts without identifiers:
+
+```bash
+python -m trinetx_preprocessing.glp1_eligibility summarize \
+  --database /path/to/output/glp1_eligibility/glp1_hypercapnia.duckdb
+```
+
+The current build implements source inventory, first-available arterial PaCO2,
+unit-aware pH pairing, hypercapnia sensitivity cohorts, the measured/calculated
+BMI hierarchy, long-form core evidence, and the complete file publication
+mechanism. Component phenotypes and eligibility tiers remain under active
+implementation. Concept files require investigator terminology review before
+clinical use.

@@ -100,13 +100,26 @@ def publish_workspace(workspace: BuildWorkspace, *, replace: bool = False) -> No
     payload["status"] = "complete"
     write_text_atomic(manifest_path, json.dumps(payload, indent=2) + "\n")
 
+    backup: Path | None = None
     if workspace.output_dir.exists():
         if not replace:
             raise FileExistsError(
                 f"GLP-1 output already exists: {workspace.output_dir}"
             )
-        remove_tree_strict(workspace.output_dir, context="Existing GLP-1 output")
-    os.replace(workspace.staging_dir, workspace.output_dir)
+        backup = workspace.output_dir.parent / (
+            f".{workspace.output_dir.name}.previous-{workspace.run_id}"
+        )
+        if backup.exists():
+            remove_tree_strict(backup, context="Stale GLP-1 output backup")
+        os.replace(workspace.output_dir, backup)
+    try:
+        os.replace(workspace.staging_dir, workspace.output_dir)
+    except Exception:
+        if backup is not None and backup.exists() and not workspace.output_dir.exists():
+            os.replace(backup, workspace.output_dir)
+        raise
+    if backup is not None:
+        remove_tree_strict(backup, context="Previous GLP-1 output backup")
     workspace.state.complete(message="Atomic output publication completed.")
 
 

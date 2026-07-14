@@ -36,7 +36,11 @@ class HypercapniaConfig:
     index_window_hours: int
     pco2_gt_mm_hg: float
     pco2_sensitivity_thresholds_mm_hg: tuple[float, ...]
+    pco2_plausible_min_mm_hg: float
+    pco2_plausible_max_mm_hg: float
     ph_max: float
+    ph_plausible_min: float
+    ph_plausible_max: float
     acute_acidemia_ph_lt: float
     repeat_window_days: tuple[int, int]
     pair_tolerance_minutes: int
@@ -52,6 +56,12 @@ class ObesityConfig:
     bmi_pre_index_days: int
     same_encounter_fallback: bool
     thresholds: tuple[float, ...]
+    bmi_min_kg_m2: float
+    bmi_max_kg_m2: float
+    weight_min_kg: float
+    weight_max_kg: float
+    height_min_m: float
+    height_max_m: float
 
 
 @dataclass(frozen=True)
@@ -186,7 +196,11 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         "index_window_hours",
         "pco2_gt_mm_hg",
         "pco2_sensitivity_thresholds_mm_hg",
+        "pco2_plausible_min_mm_hg",
+        "pco2_plausible_max_mm_hg",
         "ph_max",
+        "ph_plausible_min",
+        "ph_plausible_max",
         "acute_acidemia_ph_lt",
         "repeat_window_days",
         "pair_tolerance_minutes",
@@ -213,11 +227,23 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         raise GLP1ConfigError(
             "hypercapnia.repeat_window_days must be [minimum, maximum]."
         )
+    pco2_plausible_min = _positive_float(raw, "pco2_plausible_min_mm_hg")
+    pco2_plausible_max = _positive_float(raw, "pco2_plausible_max_mm_hg")
+    ph_plausible_min = _positive_float(raw, "ph_plausible_min")
+    ph_plausible_max = _positive_float(raw, "ph_plausible_max")
+    if pco2_plausible_min >= pco2_plausible_max:
+        raise GLP1ConfigError("PCO2 plausible minimum must be below maximum.")
+    if ph_plausible_min >= ph_plausible_max:
+        raise GLP1ConfigError("pH plausible minimum must be below maximum.")
     return HypercapniaConfig(
         index_window_hours=_positive_int(raw, "index_window_hours"),
         pco2_gt_mm_hg=_positive_float(raw, "pco2_gt_mm_hg"),
         pco2_sensitivity_thresholds_mm_hg=sensitivity,
+        pco2_plausible_min_mm_hg=pco2_plausible_min,
+        pco2_plausible_max_mm_hg=pco2_plausible_max,
         ph_max=_positive_float(raw, "ph_max"),
+        ph_plausible_min=ph_plausible_min,
+        ph_plausible_max=ph_plausible_max,
         acute_acidemia_ph_lt=_positive_float(raw, "acute_acidemia_ph_lt"),
         repeat_window_days=(repeat_window[0], repeat_window[1]),
         pair_tolerance_minutes=_nonnegative_int(raw, "pair_tolerance_minutes"),
@@ -232,7 +258,17 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
 
 
 def _load_obesity(raw: dict[str, Any]) -> ObesityConfig:
-    allowed = {"bmi_pre_index_days", "same_encounter_fallback", "thresholds"}
+    allowed = {
+        "bmi_pre_index_days",
+        "same_encounter_fallback",
+        "thresholds",
+        "bmi_min_kg_m2",
+        "bmi_max_kg_m2",
+        "weight_min_kg",
+        "weight_max_kg",
+        "height_min_m",
+        "height_max_m",
+    }
     _reject_unknown_keys(raw, allowed, context="obesity")
     thresholds = tuple(
         sorted(
@@ -244,10 +280,28 @@ def _load_obesity(raw: dict[str, Any]) -> ObesityConfig:
     )
     if not thresholds:
         raise GLP1ConfigError("obesity.thresholds must not be empty.")
+    bmi_min = _positive_float(raw, "bmi_min_kg_m2")
+    bmi_max = _positive_float(raw, "bmi_max_kg_m2")
+    weight_min = _positive_float(raw, "weight_min_kg")
+    weight_max = _positive_float(raw, "weight_max_kg")
+    height_min = _positive_float(raw, "height_min_m")
+    height_max = _positive_float(raw, "height_max_m")
+    if bmi_min >= bmi_max:
+        raise GLP1ConfigError("BMI plausible minimum must be below maximum.")
+    if weight_min >= weight_max:
+        raise GLP1ConfigError("Weight plausible minimum must be below maximum.")
+    if height_min >= height_max:
+        raise GLP1ConfigError("Height plausible minimum must be below maximum.")
     return ObesityConfig(
         bmi_pre_index_days=_nonnegative_int(raw, "bmi_pre_index_days"),
         same_encounter_fallback=_required_bool(raw, "same_encounter_fallback"),
         thresholds=thresholds,
+        bmi_min_kg_m2=bmi_min,
+        bmi_max_kg_m2=bmi_max,
+        weight_min_kg=weight_min,
+        weight_max_kg=weight_max,
+        height_min_m=height_min,
+        height_max_m=height_max,
     )
 
 

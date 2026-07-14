@@ -1,0 +1,154 @@
+"""Production orchestration for the additive GLP-1 eligibility build."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from ..filesystem import remove_tree_strict
+from .cohort import CoreCohortCounts, build_core_cohort
+from .concept_sets import load_concept_sets
+from .config import load_glp1_config
+from .database import initialize_database, mark_database_complete
+from .discovery import validate_export
+from .ingestion import ingest_core_sources
+from .monitoring import RunStateWriter, state_path_for_output
+from .outputs import summarize_database, write_build_outputs
+from .provenance import (
+    build_input_inventory,
+    current_git_sha,
+    deterministic_run_id,
+)
+from .workspace import prepare_workspace, publish_workspace
+
+
+@dataclass(frozen=True)
+class BuildResult:
+    """Published paths and aggregate counts from a GLP-1 build."""
+
+    run_id: str
+    output_dir: Path
+    output_paths: tuple[Path, ...]
+    counts: CoreCohortCounts
+    reused_existing: bool = False
+
+
+def build_glp1_eligibility(
+    *,
+    input_root: Path,
+    output_dir: Path,
+    config_path: Path,
+    replace: bool = False,
+) -> BuildResult:
+    """Build and atomically publish the GLP-1 core analytic database."""
+
+    output = Path(output_dir).resolve()
+    state = RunStateWriter(
+        output,
+        "inventory-pending",
+        state_path=state_path_for_output(output),
+    )
+    workspace = None
+    connection = None
+    try:
+        config = load_glp1_config(config_path)
+        catalog = load_concept_sets(config.concept_sets_dir)
+        report = validate_export(input_root)
+        if not report.valid:
+            raise ValueError("Export validation failed: " + "; ".join(report.errors))
+        inventory = build_input_inventory(input_root, report, state=state)
+        git_sha = current_git_sha()
+        run_id = deterministic_run_id(
+            config_sha256=config.sha256,
+            input_manifest_sha256=inventory.sha256,
+            git_sha=git_sha,
+        )
+        state.update(run_id=run_id, phase="inventory_complete")
+
+        existing = _existing_complete_run(output)
+        if existing is not None and existing.get("run_id") == run_id:
+            state.complete(message="Identical completed output already exists.")
+            summary = summarize_database(output / config.output.database_name)
+            return BuildResult(
+                run_id=run_id,
+                output_dir=output,
+                output_paths=tuple(
+                    sorted(path for path in output.iterdir() if path.is_file())
+                ),
+                counts=CoreCohortCounts(
+                    hypercapnia_encounters=int(summary["hypercapnia_encounters"]),
+                    patient_index_events=int(summary["patient_index_events"]),
+                    primary_obesity_hypercapnia=int(
+                        summary["primary_obesity_hypercapnia"]
+                    ),
+                    evidence_rows=int(summary["evidence_rows"]),
+                ),
+                reused_existing=True,
+            )
+        if output.exists() and not replace:
+            raise FileExistsError(
+                f"Output exists for a different build: {output}; use --replace."
+            )
+
+        workspace = prepare_workspace(
+            output,
+            run_id=run_id,
+            config_sha256=config.sha256,
+            input_manifest_sha256=inventory.sha256,
+            git_sha=git_sha,
+        )
+        state = workspace.state
+        database_path = workspace.staging_dir / config.output.database_name
+        connection = initialize_database(
+            database_path,
+            run_id=run_id,
+            input_root=input_root,
+            config=config,
+            inventory=inventory,
+            catalog=catalog,
+            git_sha=git_sha,
+        )
+        ingest_core_sources(
+            connection,
+            input_root=input_root,
+            inventory=inventory,
+            state=state,
+        )
+        state.update(phase="core_cohort", current_domain=None)
+        counts = build_core_cohort(
+            connection,
+            config=config,
+            run_id=run_id,
+            git_sha=git_sha,
+        )
+        connection.execute(
+            "UPDATE source_file_inventory SET load_status = 'loaded'"
+        )
+        mark_database_complete(connection)
+        state.update(
+            phase="output_materialization",
+            rows_processed=counts.evidence_rows,
+        )
+        output_paths = write_build_outputs(connection, workspace.staging_dir)
+        connection.close()
+        connection = None
+        temp_dir = workspace.staging_dir / ".duckdb_tmp"
+        if temp_dir.exists():
+            remove_tree_strict(temp_dir, context="DuckDB temporary directory")
+        publish_workspace(workspace, replace=replace)
+        published_paths = tuple(output / path.name for path in output_paths)
+        return BuildResult(run_id, output, published_paths, counts)
+    except Exception as exc:
+        if connection is not None:
+            connection.close()
+        state.fail(message=f"{type(exc).__name__}: {exc}")
+        raise
+
+
+def _existing_complete_run(output_dir: Path) -> dict[str, object] | None:
+    path = output_dir / "run_manifest.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text())
+    return payload if payload.get("status") == "complete" else None

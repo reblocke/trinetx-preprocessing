@@ -18,7 +18,11 @@ hypercapnia:
   index_window_hours: 24
   pco2_gt_mm_hg: 45
   pco2_sensitivity_thresholds_mm_hg: [50, 52]
+  pco2_plausible_min_mm_hg: 10
+  pco2_plausible_max_mm_hg: 250
   ph_max: 7.45
+  ph_plausible_min: 6.5
+  ph_plausible_max: 8.0
   acute_acidemia_ph_lt: 7.35
   repeat_window_days: [14, 84]
   pair_tolerance_minutes: 30
@@ -30,6 +34,12 @@ obesity:
   bmi_pre_index_days: 365
   same_encounter_fallback: true
   thresholds: [27, 30, 35, 40]
+  bmi_min_kg_m2: 10
+  bmi_max_kg_m2: 100
+  weight_min_kg: 20
+  weight_max_kg: 500
+  height_min_m: 1.0
+  height_max_m: 2.5
 
 output:
   database_name: glp1_hypercapnia.duckdb

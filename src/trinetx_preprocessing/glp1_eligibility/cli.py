@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Sequence
 
 from ..filesystem import write_text_atomic
+from .builder import build_glp1_eligibility
 from .concept_sets import ConceptSetError, load_concept_sets
 from .config import GLP1ConfigError, load_glp1_config
 from .discovery import validate_export
 from .monitoring import process_appears_active, read_run_state
+from .outputs import summarize_database
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +38,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate_export_parser.add_argument("--input", type=Path, required=True)
     validate_export_parser.add_argument("--json-out", type=Path)
+
+    build_command = subparsers.add_parser(
+        "build", help="Build the versioned GLP-1 DuckDB and Parquet outputs."
+    )
+    build_command.add_argument("--input", type=Path, required=True)
+    build_command.add_argument("--output", type=Path, required=True)
+    build_command.add_argument("--config", type=Path, required=True)
+    build_command.add_argument(
+        "--replace",
+        action="store_true",
+        help="Atomically replace a completed output from a different build.",
+    )
+
+    summarize_parser = subparsers.add_parser(
+        "summarize", help="Print aggregate counts from a completed database."
+    )
+    summarize_parser.add_argument("--database", type=Path, required=True)
+    summarize_parser.add_argument("--json", action="store_true")
 
     status_parser = subparsers.add_parser(
         "status", help="Read a long-running build's atomic progress state."
@@ -67,6 +87,47 @@ def main(argv: Sequence[str] | None = None) -> int:
                 write_text_atomic(args.json_out, payload)
             print(payload, end="")
             return 0 if report.valid else 2
+
+        if args.command == "build":
+            result = build_glp1_eligibility(
+                input_root=args.input,
+                output_dir=args.output,
+                config_path=args.config,
+                replace=args.replace,
+            )
+            print(
+                json.dumps(
+                    {
+                        "run_id": result.run_id,
+                        "output_dir": str(result.output_dir),
+                        "output_files": [path.name for path in result.output_paths],
+                        "reused_existing": result.reused_existing,
+                        "counts": {
+                            "hypercapnia_encounters": (
+                                result.counts.hypercapnia_encounters
+                            ),
+                            "patient_index_events": result.counts.patient_index_events,
+                            "primary_obesity_hypercapnia": (
+                                result.counts.primary_obesity_hypercapnia
+                            ),
+                            "evidence_rows": result.counts.evidence_rows,
+                        },
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        if args.command == "summarize":
+            summary = summarize_database(args.database)
+            if args.json:
+                print(json.dumps(summary, indent=2))
+            else:
+                print(
+                    "GLP-1 eligibility summary: "
+                    + ", ".join(f"{key}={value}" for key, value in summary.items())
+                )
+            return 0
 
         if args.command == "status":
             state = read_run_state(args.output)

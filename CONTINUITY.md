@@ -75,6 +75,7 @@
 - GitHub issue #6 now preserves the recovered GLP-1 endpoint ticket. No prior pipeline process is active or blocking implementation.
 - The additive GLP-1 foundation includes typed config, versioned concept-set validation, split/unsplit export discovery, PHI-safe header validation, and atomic run-status monitoring.
 - Deterministic input inventory, resumable build staging, atomic publication, DuckDB metadata/catalog tables, and concept-filtered core source ingestion are implemented. `2026-3` remains retained evidence but cannot create a gas candidate. Existing pipeline modules and outputs are unchanged; local gates pass with `249` tests.
+- The production GLP-1 `build`, `summarize`, and `status` commands now generate/reuse the core DuckDB/Parquet output contract. First-available arterial PaCO2, hierarchical pH pairing, sensitivity cohorts, persistent arterial follow-up, and measured/calculated BMI are covered by synthetic tests.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -83,11 +84,11 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Implement provenance-preserving out-of-core DuckDB ingestion and atomic GLP-1 outputs on `codex/glp1-augmentation`.
+- Implement component phenotype sources and temporal evidence on top of the core GLP-1 cohort.
 
 ## Next
-- Add production `build`/`summarize` commands, source inventory, restart-safe staging, and normalized measurement handling.
-- Implement hypercapnia/BMI cohort logic, then component phenotypes, eligibility tiers, and synthetic acceptance cases.
+- Add diagnosis/procedure/medication and remaining measurement concept sets, then deterministic component phenotype statuses.
+- Implement eligibility tiers, payer-route model, GLP-1 exposure fields, and the full 20-case synthetic acceptance suite.
 - Validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
 
 ## Open questions (UNCONFIRMED if needed)

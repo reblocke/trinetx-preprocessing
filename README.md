@@ -44,6 +44,27 @@ Or run the helper script that builds a config for you:
 
 Outputs land under `artifacts/synthetic_example/output/`.
 
+## Additive GLP-1 eligibility database
+
+The post-Milestone 2 GLP-1 endpoint is a separate command and output tree. It
+does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
+
+```bash
+./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
+  --input /path/to/trinetx_export
+
+./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility build \
+  --input /path/to/trinetx_export \
+  --output /path/to/output/glp1_eligibility \
+  --config config/glp1_eligibility.yml
+
+./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility status \
+  --output /path/to/output/glp1_eligibility
+```
+
+See `docs/GLP1_ELIGIBILITY.md` and GitHub issue #6 for the output contract,
+current implementation boundary, and clinical-review requirements.
+
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:
 ```

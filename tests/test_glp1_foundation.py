@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import duckdb
 import pytest
 
+from trinetx_preprocessing.glp1_eligibility.builder import build_glp1_eligibility
 from trinetx_preprocessing.glp1_eligibility.cli import main
+from trinetx_preprocessing.glp1_eligibility.cohort import build_core_cohort
 from trinetx_preprocessing.glp1_eligibility.concept_sets import load_concept_sets
 from trinetx_preprocessing.glp1_eligibility.config import (
     GLP1ConfigError,
@@ -27,6 +30,7 @@ from trinetx_preprocessing.glp1_eligibility.monitoring import (
     read_run_state,
     state_path_for_output,
 )
+from trinetx_preprocessing.glp1_eligibility.outputs import summarize_database
 from trinetx_preprocessing.glp1_eligibility.provenance import (
     build_input_inventory,
     current_git_sha,
@@ -346,3 +350,170 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         ).fetchone() == (2,)
     finally:
         connection.close()
+
+
+def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+        "p2,M,White,Not Hispanic or Latino,1975,,",
+        "p3,F,Black,Hispanic or Latino,1980,,",
+        "p4,M,Asian,Unknown,1985,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "e2,p2,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "e3,p3,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
+        "e4,p4,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "p2,e2,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
+        "p3,e3,2024-01-01 01:00:00,LOINC,2019-8,40,,mmHg",
+        "p3,e3,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "p3,e3,2024-01-01 02:00:00,LOINC,2019-8,55,,mmHg",
+        "p4,e4,2024-01-01 01:00:00,LOINC,2021-4,55,,mmHg",
+        "p4,e4,2024-01-01 01:00:00,LOINC,2746-6,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+        "p3,e3,2023-12-15,LOINC,39156-5,32,,kg/m2",
+        "p4,e4,2023-12-15,LOINC,39156-5,31,,kg/m2",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="synthetic-run",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+        )
+        counts = build_core_cohort(
+            connection,
+            config=config,
+            run_id="synthetic-run",
+            git_sha="test-sha",
+        )
+
+        assert counts.hypercapnia_encounters == 3
+        assert counts.patient_index_events == 1
+        assert counts.primary_obesity_hypercapnia == 1
+        assert counts.evidence_rows == 2
+        primary = connection.execute(
+            """
+            SELECT patient_id, abg_pco2_mm_hg, abg_ph,
+                   abg_pairing_method, bmi_value
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone()
+        assert primary == ("p1", 55.0, 7.4, "exact_timestamp", 36.0)
+        later = connection.execute(
+            """
+            SELECT later_hypercapnia_sensitivity_case,
+                   primary_cohort_exclusion_reason
+            FROM cohort_hypercapnia_encounter WHERE patient_id = 'p3'
+            """
+        ).fetchone()
+        assert later == (True, "first_arterial_pco2_not_elevated")
+        vbg_only = connection.execute(
+            """
+            SELECT vbg_only_sensitivity_case,
+                   primary_cohort_exclusion_reason
+            FROM cohort_hypercapnia_encounter WHERE patient_id = 'p4'
+            """
+        ).fetchone()
+        assert vbg_only == (True, "no_arterial_pco2")
+        assert connection.execute(
+            "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p2'"
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_build_publishes_required_core_outputs_and_reuses_identical_run(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+    )
+
+    first = build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+
+    required = {
+        "glp1_hypercapnia.duckdb",
+        "analysis_glp1_eligibility.parquet",
+        "eligibility_evidence_long.parquet",
+        "cohort_hypercapnia_encounter.parquet",
+        "cohort_flow.csv",
+        "data_dictionary.csv",
+        "data_quality_report.html",
+        "run_manifest.json",
+    }
+    assert required <= {path.name for path in output_root.iterdir()}
+    assert first.counts.patient_index_events == 1
+    summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
+    assert summary["primary_obesity_hypercapnia"] == 1
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        database_rows = connection.execute(
+            "SELECT COUNT(*) FROM analysis_glp1_eligibility"
+        ).fetchone()[0]
+        parquet_rows = connection.execute(
+            "SELECT COUNT(*) FROM read_parquet(?)",
+            [str(output_root / "analysis_glp1_eligibility.parquet")],
+        ).fetchone()[0]
+        assert database_rows == parquet_rows == 1
+    finally:
+        connection.close()
+
+    second = build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    assert second.reused_existing is True
+    assert second.run_id == first.run_id
+    assert read_run_state(output_root).status == "completed"
