@@ -126,6 +126,7 @@ def initialize_database(
             json.dumps(catalog.phenotype_rules, sort_keys=True),
         ],
     )
+    connection.execute("DELETE FROM build_warning")
     return connection
 
 
@@ -211,6 +212,16 @@ def _create_metadata_schema(connection: duckdb.DuckDBPyConnection) -> None:
             schema_version VARCHAR NOT NULL,
             rule_set_version VARCHAR,
             rules JSON NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS build_warning (
+            run_id VARCHAR NOT NULL,
+            warning_code VARCHAR NOT NULL,
+            message VARCHAR NOT NULL,
+            details_json JSON NOT NULL
         )
         """
     )

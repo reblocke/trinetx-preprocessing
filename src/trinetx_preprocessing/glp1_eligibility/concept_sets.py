@@ -36,7 +36,7 @@ CONCEPT_FILES = (
     "procedures.csv",
     "medications.csv",
 )
-ALLOWED_MATCH_TYPES = {"exact", "prefix", "descendant", "regex"}
+ALLOWED_MATCH_TYPES = {"exact", "prefix", "regex"}
 ALLOWED_DOMAINS = {"diagnosis", "lab", "vital", "procedure", "medication"}
 REQUIRED_SAFETY_SETS = {
     "arterial_pco2",
@@ -80,6 +80,12 @@ class ConceptSetCatalog:
         """Return all configured concept-set identifiers."""
 
         return frozenset(concept.concept_set_id for concept in self.concepts)
+
+    @property
+    def required_concept_set_ids(self) -> tuple[str, ...]:
+        """Return concept sets that must produce at least one aggregate match."""
+
+        return tuple(self.phenotype_rules["required_concept_sets"])
 
 
 def load_concept_sets(directory: Path) -> ConceptSetCatalog:
@@ -130,6 +136,20 @@ def load_concept_sets(directory: Path) -> ConceptSetCatalog:
         raise ConceptSetError("phenotype_rules.yml schema_version must be '1.0'.")
     if not isinstance(phenotype_rules.get("phenotypes"), dict):
         raise ConceptSetError("phenotype_rules.yml must define phenotypes mapping.")
+    required_concept_sets = phenotype_rules.get("required_concept_sets")
+    if not isinstance(required_concept_sets, list) or not required_concept_sets:
+        raise ConceptSetError(
+            "phenotype_rules.yml must define non-empty required_concept_sets."
+        )
+    normalized_required = tuple(str(value).strip() for value in required_concept_sets)
+    if any(not value for value in normalized_required):
+        raise ConceptSetError("required_concept_sets may not contain blank values.")
+    unknown_required = sorted(set(normalized_required) - configured)
+    if unknown_required:
+        raise ConceptSetError(
+            "Unknown required concept set(s): " + ", ".join(unknown_required)
+        )
+    phenotype_rules["required_concept_sets"] = list(normalized_required)
 
     return ConceptSetCatalog(tuple(concepts), phenotype_rules)
 

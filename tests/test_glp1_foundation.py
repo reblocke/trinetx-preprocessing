@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
@@ -32,11 +33,17 @@ from trinetx_preprocessing.glp1_eligibility.monitoring import (
     read_run_state,
     state_path_for_output,
 )
-from trinetx_preprocessing.glp1_eligibility.outputs import summarize_database
+from trinetx_preprocessing.glp1_eligibility.outputs import (
+    summarize_database,
+    write_build_outputs,
+)
 from trinetx_preprocessing.glp1_eligibility.provenance import (
     build_input_inventory,
     current_git_sha,
     deterministic_run_id,
+)
+from trinetx_preprocessing.glp1_eligibility.terminology_qa import (
+    build_concept_match_summary,
 )
 from trinetx_preprocessing.glp1_eligibility.workspace import (
     prepare_workspace,
@@ -133,6 +140,11 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     assert config.study.index_encounter_types == ("EMER", "IMP")
     assert config.obesity.thresholds == (27.0, 30.0, 35.0, 40.0)
     assert "arterial_pco2" in catalog.concept_set_ids
+    assert catalog.required_concept_set_ids == (
+        "arterial_pco2",
+        "arterial_ph",
+        "bmi",
+    )
 
     arterial_codes = {
         concept.code
@@ -271,6 +283,51 @@ def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -
     assert encounter_inventory.source_file == "Encounter/encounter.csv"
 
 
+def test_git_fingerprint_changes_with_dirty_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "config", "user.name", "Synthetic Test"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "synthetic@example.invalid"],
+        cwd=repository,
+        check=True,
+    )
+    tracked = repository / "tracked.txt"
+    (repository / ".gitignore").write_text("._*\n")
+    tracked.write_text("clean\n")
+    subprocess.run(
+        ["git", "add", ".gitignore", "tracked.txt"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "synthetic baseline"],
+        cwd=repository,
+        check=True,
+    )
+    monkeypatch.chdir(repository)
+
+    clean = current_git_sha()
+    assert len(clean) == 40
+    tracked.write_text("dirty one\n")
+    dirty_one = current_git_sha()
+    tracked.write_text("dirty two\n")
+    dirty_two = current_git_sha()
+    (repository / "untracked.txt").write_text("additional content\n")
+    dirty_with_untracked = current_git_sha()
+
+    assert dirty_one.startswith(f"{clean}-dirty-")
+    assert dirty_two.startswith(f"{clean}-dirty-")
+    assert len({dirty_one, dirty_two, dirty_with_untracked}) == 3
+
+
 def test_workspace_publishes_atomically_and_status_uses_stable_sibling(
     tmp_path: Path,
 ) -> None:
@@ -401,6 +458,19 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
             WHERE code = '2026-3'
             """
         ).fetchone() == (2,)
+        assert build_concept_match_summary(
+            connection, catalog.required_concept_set_ids
+        ) == ()
+        connection.execute("DELETE FROM source_vital_measurement")
+        warnings = build_concept_match_summary(
+            connection, catalog.required_concept_set_ids
+        )
+        assert warnings == (
+            "Required concept set 'bmi' matched no retained source rows.",
+        )
+        assert connection.execute(
+            "SELECT warning_count FROM run_manifest"
+        ).fetchone() == (1,)
     finally:
         connection.close()
 
@@ -416,6 +486,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         "p2,M,White,Not Hispanic or Latino,1975,,",
         "p3,F,Black,Hispanic or Latino,1980,,",
         "p4,M,Asian,Unknown,1985,,",
+        "p5,F,White,Unknown,1985,,",
     )
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
@@ -423,6 +494,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         "e2,p2,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
         "e3,p3,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
         "e4,p4,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
+        "e5,p5,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
     )
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
@@ -436,12 +508,15 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         "p3,e3,2024-01-01 02:00:00,LOINC,2019-8,55,,mmHg",
         "p4,e4,2024-01-01 01:00:00,LOINC,2021-4,55,,mmHg",
         "p4,e4,2024-01-01 01:00:00,LOINC,2746-6,7.40,,pH",
+        "p5,e5,2024-01-01 01:00:00,LOINC,11557-6,55,,mmHg",
+        "p5,e5,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
     )
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
         "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
         "p3,e3,2023-12-15,LOINC,39156-5,32,,kg/m2",
         "p4,e4,2023-12-15,LOINC,39156-5,31,,kg/m2",
+        "p5,e5,2023-12-15,LOINC,39156-5,31,,kg/m2",
     )
 
     report = validate_export(export_root)
@@ -517,6 +592,9 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert vbg_only == (True, "no_arterial_pco2")
         assert connection.execute(
             "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p2'"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p5'"
         ).fetchone() == (0,)
 
         without_vbg = replace(
@@ -697,6 +775,50 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
               AND rule_id = 'source:type_2_diabetes'
             """
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_component_history_excludes_events_before_configured_lookbacks(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"stale_history": 31})
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "stale_history,e_stale_history,2020-01-01,ICD10CM,E11.9,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "stale_history,e_stale_history,2020-01-01,CPT,95811,",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "stale_history,e_stale_history,RXNORM,29046,2020-01-01,oral,,",
+        "stale_history,e_stale_history,RXNORM,2626,2020-01-01,oral,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        row = connection.execute(
+            """
+            SELECT t2d_status, pap_evidence,
+                   active_antihypertensive_ingredient_count,
+                   antipsychotic_active
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'stale_history'
+            """
+        ).fetchone()
+        assert row == ("indeterminate", False, 0, False)
     finally:
         connection.close()
 
@@ -979,6 +1101,7 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert first.counts.patient_index_events == 1
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1
+    assert summary["warning_count"] == 0
     dictionary_rows = list(
         csv.DictReader((output_root / "data_dictionary.csv").open())
     )
@@ -991,6 +1114,8 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
         "Blood-gas pairing",
         "BMI source distribution",
         "Phenotype missingness",
+        "Concept-set match coverage",
+        "Build warnings",
         "Sensitivity cohorts",
     ):
         assert section in qa_text
@@ -1030,6 +1155,18 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
         assert expected_views <= actual_views
         for view in expected_views:
             assert connection.execute(f'SELECT COUNT(*) FROM "{view}"').fetchone()
+        minimal_output = tmp_path / "minimal-output"
+        minimal_paths = write_build_outputs(
+            connection,
+            minimal_output,
+            write_parquet=False,
+            write_html_qa=False,
+        )
+        assert {path.name for path in minimal_paths} == {
+            "cohort_flow.csv",
+            "data_dictionary.csv",
+            "run_manifest.json",
+        }
     finally:
         connection.close()
 

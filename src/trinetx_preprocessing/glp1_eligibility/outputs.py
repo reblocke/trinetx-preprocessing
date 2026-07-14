@@ -41,19 +41,23 @@ COLUMN_DESCRIPTIONS = {
 def write_build_outputs(
     connection: duckdb.DuckDBPyConnection,
     output_dir: Path,
+    *,
+    write_parquet: bool = True,
+    write_html_qa: bool = True,
 ) -> tuple[Path, ...]:
     """Write the required non-database outputs into a staging directory."""
 
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
-    for table in OUTPUT_TABLES:
-        path = root / f"{table}.parquet"
-        connection.execute(
-            f"COPY {_identifier(table)} TO {_sql_string(str(path))} "
-            "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 250000)"
-        )
-        paths.append(path)
+    if write_parquet:
+        for table in OUTPUT_TABLES:
+            path = root / f"{table}.parquet"
+            connection.execute(
+                f"COPY {_identifier(table)} TO {_sql_string(str(path))} "
+                "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 250000)"
+            )
+            paths.append(path)
 
     cohort_flow_path = root / "cohort_flow.csv"
     connection.execute(
@@ -66,9 +70,10 @@ def write_build_outputs(
     _write_data_dictionary(connection, dictionary_path)
     paths.append(dictionary_path)
 
-    qa_path = root / "data_quality_report.html"
-    write_text_atomic(qa_path, _quality_report_html(connection))
-    paths.append(qa_path)
+    if write_html_qa:
+        qa_path = root / "data_quality_report.html"
+        write_text_atomic(qa_path, _quality_report_html(connection))
+        paths.append(qa_path)
 
     manifest_path = root / "run_manifest.json"
     write_text_atomic(
@@ -88,7 +93,8 @@ def summarize_database(database_path: Path) -> dict[str, object]:
     connection = duckdb.connect(str(path), read_only=True)
     try:
         manifest = connection.execute(
-            "SELECT run_id, status, rule_set_version FROM run_manifest"
+            "SELECT run_id, status, rule_set_version, warning_count "
+            "FROM run_manifest"
         ).fetchone()
         indication_counts = connection.execute(
             """
@@ -113,6 +119,7 @@ def summarize_database(database_path: Path) -> dict[str, object]:
             "run_id": manifest[0],
             "status": manifest[1],
             "rule_set_version": manifest[2],
+            "warning_count": manifest[3],
             "hypercapnia_encounters": _count(
                 connection, "cohort_hypercapnia_encounter"
             ),
@@ -324,6 +331,18 @@ def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
         GROUP BY logical_domain ORDER BY logical_domain
         """
     ).fetchall()
+    concept_rows = connection.execute(
+        """
+        SELECT domain, concept_set_id, matched_rows, required
+        FROM concept_match_summary ORDER BY domain, concept_set_id
+        """
+    ).fetchall()
+    warning_rows = connection.execute(
+        """
+        SELECT warning_code, message FROM build_warning
+        ORDER BY warning_code, message
+        """
+    ).fetchall()
     return f"""<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>GLP-1 eligibility data quality</title>
@@ -353,6 +372,10 @@ or row-level examples.</p>
 <p>Source clinical tables retain concept-matched candidates only. This table is
 not a raw-export unmapped-code audit; terminology review must inspect approved
 aggregate source-code frequencies separately before clinical use.</p>
+<h2>Concept-set match coverage</h2>{_html_table(
+        ('Domain','Concept set','Matched rows','Required'), concept_rows
+    )}
+<h2>Build warnings</h2>{_html_table(('Warning code','Message'), warning_rows)}
 <h2>Top retained units</h2>{_html_table(('Domain','Unit','Rows'), unit_rows)}
 <h2>Duplicate retained records</h2>{_html_table(
         ('Domain','Rows beyond first identical source hash'), duplicate_rows

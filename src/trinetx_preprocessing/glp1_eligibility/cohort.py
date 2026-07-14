@@ -259,7 +259,7 @@ def _build_hypercapnia_encounters(
                     ORDER BY event_datetime, source_record_hash
                 ) AS result_order
             FROM gas_in_index_window AS gas
-            WHERE concept_set_id IN ('venous_pco2', 'unspecified_blood_pco2')
+            WHERE concept_set_id = 'venous_pco2'
         )
         WHERE result_order = 1
         """

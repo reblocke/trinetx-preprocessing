@@ -15,8 +15,18 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Added source and derived long-form evidence, six study analysis views, atomic
   aggregate run monitoring with `status --watch`, and a committed 20-case
   synthetic acceptance fixture.
+- Added a locked GitHub Actions gate that runs Ruff and the complete synthetic
+  pytest suite on Python 3.11.
 
 ### Fixed
+- Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
+  retaining it as non-qualifying source evidence.
+- Applied configured lookback windows to baseline diagnosis, procedure, and
+  medication evidence, including open-ended active medication records.
+- Included dirty tracked and untracked source content in the deterministic run
+  identity so locally modified builds cannot reuse clean-code outputs.
+- Honored the Parquet and HTML output switches and emitted aggregate warnings
+  when required concept sets match no retained source rows.
 - Selected the earliest elevated repeat PaCO2 in the configured persistence
   window so an earlier normal repeat cannot hide later persistent hypercapnia.
 - Honored the VBG sensitivity switch during cohort admission.

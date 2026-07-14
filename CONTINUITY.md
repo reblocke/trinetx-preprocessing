@@ -87,6 +87,11 @@
 - Long-form evidence now covers diagnosis, procedure, lab, blood pressure, medication, derived status, and every non-null indication. Retained-source date coverage, nonblank data-dictionary descriptions, and expanded aggregate QA are included without another raw-data scan.
 - The final local gate passes: `git diff --check`, Ruff, and `257` pytest tests. The production CLI completed the 20-case fixture in `0.56 s` with about `347 MiB` maximum RSS, producing 19 encounter candidates, 17 patient index events, 14 primary obesity-hypercapnia rows, and 651 evidence rows.
 - Fresh and reused build results now report the same eight public files, including DuckDB and excluding internal workspace/AppleDouble metadata.
+- Pre-full-run audit identified four local gaps: dirty-tree code was not part of run identity, required concept sets lacked no-match warnings, output toggles were ignored, and no CI workflow exercised the synthetic suite. These are being fixed before any private build.
+- Commit `73c3c3f` is pushed with the GLP-1 evidence contract, 20-case acceptance fixture, analysis views, monitoring, and publication contract. GitHub Codex review returned three P2 findings: unspecified PCO2 entered the VBG sensitivity cohort, diagnosis/procedure history ignored `study.lookback_days`, and open-ended baseline medications ignored `medication_lookback_days`.
+- No legacy pipeline, profile, DuckDB build, or prior pytest process is active. The current gate is code review and local verification, not a running historical process.
+- Local fixes for all three PR findings pass focused tests. The validation-gap checkpoint also fingerprints dirty source content, warns on required concept sets with no retained matches, honors optional output switches, and adds locked Python 3.11 CI.
+- Full local gates pass with `259` tests. A fresh 20-case production CLI smoke completed in `0.59 s` with `383,795,200` bytes maximum RSS, `0` warnings, `19` candidate encounters, `17` patient index events, `14` primary obesity-hypercapnia rows, and `651` evidence rows; `status --watch` exited normally on completion.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -95,11 +100,11 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the review-clean GLP-1 evidence/acceptance checkpoint; no prior worker is active or blocking progress.
+- Commit and push the verified PR #7 review and validation-gap checkpoint.
 
 ## Next
-- Resolve the two PR #7 threads and request a fresh Codex review.
-- Audit any returned findings, then decide whether the remaining terminology/rule configuration gaps require another local checkpoint before a private full build.
+- Reply to and resolve the three PR #7 threads, request a fresh Codex review, and require clean CI.
+- Audit the issue #6 acceptance ledger for any remaining configuration/terminology gaps before starting the private full build.
 
 ## Open questions (UNCONFIRMED if needed)
 - None blocking. The recovered ticket is pinned as GitHub issue #6 and is the authoritative GLP-1 endpoint specification.
@@ -114,4 +119,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at `dcebd2a` with the evidence/acceptance checkpoint under local verification.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `73c3c3f` with review and validation-gap fixes under local verification.

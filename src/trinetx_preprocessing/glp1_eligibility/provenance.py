@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -110,18 +111,71 @@ def deterministic_run_id(
 
 
 def current_git_sha() -> str:
-    """Return the checked-out git commit, or ``unknown`` outside a checkout."""
+    """Return a clean commit SHA or a content-sensitive dirty-tree fingerprint."""
 
     try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+        root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
             check=True,
             capture_output=True,
             text=True,
         )
+        root = Path(root_result.stdout.strip())
+        sha_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        status_result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-    return completed.stdout.strip() or "unknown"
+    commit_sha = sha_result.stdout.strip()
+    if not commit_sha:
+        return "unknown"
+    if not status_result.stdout:
+        return commit_sha
+
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "--binary", "HEAD", "--"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        untracked_result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return f"{commit_sha}-dirty-unknown"
+
+    hasher = hashlib.sha256()
+    hasher.update(status_result.stdout)
+    hasher.update(diff_result.stdout)
+    for raw_path in sorted(untracked_result.stdout.split(b"\0")):
+        if not raw_path:
+            continue
+        relative_path = os.fsdecode(raw_path)
+        path = root / relative_path
+        hasher.update(raw_path)
+        if path.is_symlink():
+            hasher.update(os.fsencode(os.readlink(path)))
+            continue
+        if not path.is_file():
+            continue
+        with path.open("rb") as handle:
+            while block := handle.read(1024 * 1024):
+                hasher.update(block)
+    return f"{commit_sha}-dirty-{hasher.hexdigest()[:12]}"
 
 
 def _hash_and_count_rows(path: Path, *, block_size: int) -> tuple[str, int, int]:

@@ -21,6 +21,11 @@ The DuckDB database also contains one-row-per-patient
 `cohort_hypercapnia_patient_index`, source inventory and concept-set tables, and
 the six `analysis_*` views described in `GLP1_PHENOTYPES.md`.
 
+Parquet companions and the HTML QA report are enabled by default. Controlled
+builds may disable them with `output.write_parquet` and
+`output.write_html_qa`; DuckDB, cohort flow, data dictionary, and run manifest
+remain mandatory.
+
 ## Keys and timing
 
 - `index_event_id` is the deterministic analytic key. The wide table has

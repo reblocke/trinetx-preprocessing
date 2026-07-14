@@ -71,7 +71,8 @@ unit-aware pH pairing, hypercapnia sensitivity cohorts, the measured/calculated
 BMI hierarchy, temporal component phenotypes, indication tiers, payer-route
 modeling, GLP-1 order history, long-form source and derived evidence, study
 views, and atomic file publication. The committed synthetic export exercises
-the 20 mandatory issue cases without proprietary data.
+the 20 mandatory issue cases without proprietary data, and the same suite runs
+in GitHub Actions.
 
 See `GLP1_DATA_CONTRACT.md`, `GLP1_PHENOTYPES.md`, and
 `GLP1_MIGRATION.md` for the database contract, interpretation boundaries, and

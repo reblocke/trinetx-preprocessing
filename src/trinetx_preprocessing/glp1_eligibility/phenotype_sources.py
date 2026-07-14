@@ -62,8 +62,8 @@ def build_component_source_summaries(
 ) -> None:
     """Build index-keyed source evidence and aggregate component summaries."""
 
-    _build_diagnosis_evidence(connection)
-    _build_procedure_evidence(connection)
+    _build_diagnosis_evidence(connection, config)
+    _build_procedure_evidence(connection, config)
     _build_index_context(connection)
     _build_normalized_component_labs(connection)
     _build_lab_summary(connection, config)
@@ -145,7 +145,11 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         )
 
 
-def _build_diagnosis_evidence(connection: duckdb.DuckDBPyConnection) -> None:
+def _build_diagnosis_evidence(
+    connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
+) -> None:
+    lookback = config.study.lookback_days
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE diagnosis_component_evidence AS
@@ -159,8 +163,10 @@ def _build_diagnosis_evidence(connection: duckdb.DuckDBPyConnection) -> None:
                 AS days_before_index
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_diagnosis AS diagnosis
-          ON diagnosis.patient_id = analysis.patient_id
+         ON diagnosis.patient_id = analysis.patient_id
          AND diagnosis.event_datetime <= analysis.index_date
+         AND diagnosis.event_datetime >=
+             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'diagnosis'
          AND concept.include
@@ -183,7 +189,11 @@ def _build_diagnosis_evidence(connection: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _build_procedure_evidence(connection: duckdb.DuckDBPyConnection) -> None:
+def _build_procedure_evidence(
+    connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
+) -> None:
+    lookback = config.study.lookback_days
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE procedure_component_evidence AS
@@ -197,8 +207,10 @@ def _build_procedure_evidence(connection: duckdb.DuckDBPyConnection) -> None:
                 AS days_before_index
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_procedure AS procedure
-          ON procedure.patient_id = analysis.patient_id
+         ON procedure.patient_id = analysis.patient_id
          AND procedure.event_datetime <= analysis.index_date
+         AND procedure.event_datetime >=
+             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
@@ -496,6 +508,8 @@ def _build_medication_evidence(
                     analysis.index_date - INTERVAL {lookback} DAY
                 AS ordered_pre_index,
             medication.event_datetime <= analysis.index_date
+                AND medication.event_datetime >=
+                    analysis.index_date - INTERVAL {lookback} DAY
                 AND (medication.end_datetime IS NULL
                      OR medication.end_datetime >= analysis.index_date)
                 AS active_at_index,
@@ -505,9 +519,11 @@ def _build_medication_evidence(
                 AS ordered_post_index
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_medication AS medication
-          ON medication.patient_id = analysis.patient_id
+         ON medication.patient_id = analysis.patient_id
          AND medication.event_datetime <=
              analysis.index_date + INTERVAL {followup} DAY
+         AND medication.event_datetime >=
+             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'medication'
          AND concept.include

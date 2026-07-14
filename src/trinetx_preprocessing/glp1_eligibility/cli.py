@@ -114,6 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "output_dir": str(result.output_dir),
                         "output_files": [path.name for path in result.output_paths],
                         "reused_existing": result.reused_existing,
+                        "warning_count": result.warning_count,
                         "counts": {
                             "hypercapnia_encounters": (
                                 result.counts.hypercapnia_encounters

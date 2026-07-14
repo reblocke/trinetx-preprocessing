@@ -21,6 +21,7 @@ from .provenance import (
     current_git_sha,
     deterministic_run_id,
 )
+from .terminology_qa import build_concept_match_summary
 from .workspace import BUILD_STATE_FILENAME, prepare_workspace, publish_workspace
 
 
@@ -32,6 +33,7 @@ class BuildResult:
     output_dir: Path
     output_paths: tuple[Path, ...]
     counts: CoreCohortCounts
+    warning_count: int = 0
     reused_existing: bool = False
 
 
@@ -83,6 +85,7 @@ def build_glp1_eligibility(
                     ),
                     evidence_rows=int(summary["evidence_rows"]),
                 ),
+                warning_count=int(summary["warning_count"]),
                 reused_existing=True,
             )
         if output.exists() and not replace:
@@ -114,6 +117,9 @@ def build_glp1_eligibility(
             inventory=inventory,
             state=state,
         )
+        warnings = build_concept_match_summary(
+            connection, catalog.required_concept_set_ids
+        )
         state.update(phase="core_cohort", current_domain=None)
         counts = build_core_cohort(
             connection,
@@ -141,7 +147,12 @@ def build_glp1_eligibility(
             phase="output_materialization",
             rows_processed=counts.evidence_rows,
         )
-        write_build_outputs(connection, workspace.staging_dir)
+        write_build_outputs(
+            connection,
+            workspace.staging_dir,
+            write_parquet=config.output.write_parquet,
+            write_html_qa=config.output.write_html_qa,
+        )
         connection.close()
         connection = None
         temp_dir = workspace.staging_dir / ".duckdb_tmp"
@@ -153,6 +164,7 @@ def build_glp1_eligibility(
             output,
             _published_output_paths(output),
             counts,
+            warning_count=len(warnings),
         )
     except Exception as exc:
         if connection is not None:
