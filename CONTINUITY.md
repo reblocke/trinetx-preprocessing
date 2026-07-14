@@ -92,6 +92,7 @@
 - No legacy pipeline, profile, DuckDB build, or prior pytest process is active. The current gate is code review and local verification, not a running historical process.
 - Local fixes for all three PR findings pass focused tests. The validation-gap checkpoint also fingerprints dirty source content, warns on required concept sets with no retained matches, honors optional output switches, and adds locked Python 3.11 CI.
 - Full local gates pass with `259` tests. A fresh 20-case production CLI smoke completed in `0.59 s` with `383,795,200` bytes maximum RSS, `0` warnings, `19` candidate encounters, `17` patient index events, `14` primary obesity-hypercapnia rows, and `651` evidence rows; `status --watch` exited normally on completion.
+- The first GitHub CI run exposed a Python 3.11-only portability defect in the `remove_tree_strict` monkeypatch test, not production cleanup. The test now dispatches to `onerror` or `onexc` according to the runtime and passes under Python 3.11.11 and 3.12.11; CI no longer duplicates feature-branch runs for both push and pull-request events.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -100,7 +101,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified PR #7 review and validation-gap checkpoint.
+- Commit and push the Python 3.11 CI portability fix, then require a clean rerun.
 
 ## Next
 - Reply to and resolve the three PR #7 threads, request a fresh Codex review, and require clean CI.
