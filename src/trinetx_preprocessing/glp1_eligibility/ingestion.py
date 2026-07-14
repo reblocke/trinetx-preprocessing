@@ -66,6 +66,20 @@ def ingest_core_sources(
         connection, "source_vital_measurement"
     )
 
+    for domain, table_name, builder in (
+        ("diagnosis", "source_diagnosis", _create_diagnoses),
+        ("procedure", "source_procedure", _create_procedures),
+        ("medication", "source_medication", _create_medications),
+    ):
+        if state is not None:
+            state.update(
+                phase="source_ingestion",
+                current_domain=domain,
+                rows_processed=sum(rows.values()),
+            )
+        builder(connection, root, inventory)
+        rows[table_name] = _row_count(connection, table_name)
+
     if state is not None:
         state.update(
             phase="source_ingestion_complete",
@@ -164,7 +178,8 @@ def _create_lab_measurements(
             FROM concept_set AS concept
             WHERE concept.domain = 'lab'
               AND concept.include
-              AND upper(trim(raw."code_system")) = concept.code_system
+              AND {_normalized_code_system_sql('raw."code_system"')}
+                    = concept.code_system
               AND {_concept_match_sql()}
         )
         """
@@ -173,7 +188,7 @@ def _create_lab_measurements(
 
 def _create_gas_candidate_ids(connection: duckdb.DuckDBPyConnection) -> None:
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE gas_candidate_id AS
         SELECT DISTINCT lab.patient_id, lab.encounter_id
         FROM source_lab_measurement AS lab
@@ -185,7 +200,8 @@ def _create_gas_candidate_ids(connection: duckdb.DuckDBPyConnection) -> None:
             )
               AND concept.domain = 'lab'
               AND concept.include
-              AND upper(trim(lab.code_system)) = concept.code_system
+              AND {_normalized_code_system_sql('lab.code_system')}
+                    = concept.code_system
               AND (
                     (concept.match_type = 'exact'
                      AND upper(trim(lab.code)) = concept.code)
@@ -321,7 +337,151 @@ def _create_vital_measurements(
             FROM concept_set AS concept
             WHERE concept.domain = 'vital'
               AND concept.include
-              AND upper(trim(raw."code_system")) = concept.code_system
+              AND {_normalized_code_system_sql('raw."code_system"')}
+                    = concept.code_system
+              AND {_concept_match_sql()}
+          )
+        """
+    )
+
+
+def _create_diagnoses(
+    connection: duckdb.DuckDBPyConnection,
+    root: Path,
+    inventory: InputInventory,
+) -> None:
+    _create_patient_concept_source(
+        connection,
+        root=root,
+        inventory=inventory,
+        domain="diagnosis",
+        table_name="source_diagnosis",
+        event_column="date",
+        names=(
+            "patient_id",
+            "encounter_id",
+            "date",
+            "code_system",
+            "code",
+            "principal_diagnosis_indicator",
+            "admitting_diagnosis",
+            "reason_for_visit",
+            "derived_by_TriNetX",
+            "source_id",
+        ),
+    )
+
+
+def _create_procedures(
+    connection: duckdb.DuckDBPyConnection,
+    root: Path,
+    inventory: InputInventory,
+) -> None:
+    _create_patient_concept_source(
+        connection,
+        root=root,
+        inventory=inventory,
+        domain="procedure",
+        table_name="source_procedure",
+        event_column="date",
+        names=(
+            "patient_id",
+            "encounter_id",
+            "date",
+            "code_system",
+            "code",
+            "principal_procedure_indicator",
+            "derived_by_TriNetX",
+            "source_id",
+        ),
+    )
+
+
+def _create_medications(
+    connection: duckdb.DuckDBPyConnection,
+    root: Path,
+    inventory: InputInventory,
+) -> None:
+    _create_patient_concept_source(
+        connection,
+        root=root,
+        inventory=inventory,
+        domain="medication",
+        table_name="source_medication",
+        event_column="start_date",
+        names=(
+            "patient_id",
+            "encounter_id",
+            "unique_id",
+            "code_system",
+            "code",
+            "medication_text",
+            "start_date",
+            "end_date",
+            "order_status",
+            "status",
+            "route",
+            "brand",
+            "strength",
+            "derived_by_TriNetX",
+            "source_id",
+        ),
+        extra_projections=(
+            'try_cast(raw."end_date" AS TIMESTAMP) AS end_datetime',
+        ),
+    )
+
+
+def _create_patient_concept_source(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    root: Path,
+    inventory: InputInventory,
+    domain: str,
+    table_name: str,
+    event_column: str,
+    names: tuple[str, ...],
+    extra_projections: tuple[str, ...] = (),
+) -> None:
+    files = _domain_files(root, inventory, domain)
+    columns = _domain_columns(inventory, domain)
+    raw = _read_csv_sql(files)
+    available_extra = tuple(
+        (
+            projection
+            if 'raw."end_date"' not in projection or "end_date" in columns
+            else "NULL::TIMESTAMP AS end_datetime"
+        )
+        for projection in extra_projections
+    )
+    extra_sql = ""
+    if available_extra:
+        extra_sql = ",\n            " + ",\n            ".join(available_extra)
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE {_identifier(table_name)} AS
+        SELECT
+            {_source_projection(columns, names)},
+            try_cast(raw.{_identifier(event_column)} AS TIMESTAMP)
+                AS event_datetime{extra_sql},
+            paths.source_file,
+            sha256(concat_ws(
+                chr(31), paths.source_file, {_hash_value_sql(columns, names)}
+            )) AS source_record_hash
+        FROM {raw} AS raw
+        JOIN source_path_map AS paths
+          ON raw.filename = paths.absolute_path
+        WHERE EXISTS (
+            SELECT 1 FROM gas_candidate_id AS gas
+            WHERE gas.patient_id = raw."patient_id"
+        )
+          AND EXISTS (
+            SELECT 1
+            FROM concept_set AS concept
+            WHERE concept.domain = {_sql_string(domain)}
+              AND concept.include
+              AND {_normalized_code_system_sql('raw."code_system"')}
+                    = concept.code_system
               AND {_concept_match_sql()}
           )
         """
@@ -389,8 +549,19 @@ def _concept_match_sql() -> str:
     """
 
 
+def _normalized_code_system_sql(expression: str) -> str:
+    return (
+        f"regexp_replace(upper(trim({expression})), "
+        "'[^A-Z0-9]', '', 'g')"
+    )
+
+
 def _sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
 
 
 def _row_count(connection: duckdb.DuckDBPyConnection, table: str) -> int:

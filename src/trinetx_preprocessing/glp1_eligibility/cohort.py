@@ -75,7 +75,9 @@ def _build_normalized_gas(
                  'unspecified_blood_pco2', 'arterial_total_co2',
                  'arterial_ph', 'venous_ph'
              )
-             AND upper(trim(lab.code_system)) = concept.code_system
+             AND regexp_replace(
+                    upper(trim(lab.code_system)), '[^A-Z0-9]', '', 'g'
+                 ) = concept.code_system
              AND (
                     (concept.match_type = 'exact'
                      AND upper(trim(lab.code)) = concept.code)
@@ -161,6 +163,7 @@ def _build_hypercapnia_encounters(
     pair_minutes = hypercapnia.pair_tolerance_minutes
     pco2_threshold = hypercapnia.pco2_gt_mm_hg
 
+    include_vbg = "TRUE" if hypercapnia.include_vbg_secondary_cohort else "FALSE"
     connection.execute(
         """
         CREATE OR REPLACE TEMP TABLE glp1_encounter AS
@@ -489,7 +492,10 @@ def _build_hypercapnia_encounters(
             LEFT JOIN arterial_pco2_max AS maximum USING (encounter_id)
             LEFT JOIN first_venous_pco2 AS venous USING (patient_id, encounter_id)
             WHERE maximum.maximum_pco2 > {pco2_threshold}
-               OR venous.normalized_numeric_value > {pco2_threshold}
+               OR (
+                    {include_vbg}
+                    AND venous.normalized_numeric_value > {pco2_threshold}
+               )
         ), first_primary AS (
             SELECT patient_id, index_event_id
             FROM candidate
@@ -532,6 +538,7 @@ def _build_patient_index(
               AND gas.concept_set_id = 'arterial_pco2'
               AND gas.unit_usable
               AND gas.plausible_value
+              AND gas.normalized_numeric_value > {threshold}
               AND gas.event_datetime >= cohort.index_date + INTERVAL {minimum} DAY
               AND gas.event_datetime <= cohort.index_date + INTERVAL {maximum} DAY
             ORDER BY gas.event_datetime, gas.source_record_hash
@@ -561,7 +568,9 @@ def _build_normalized_anthropometrics(
               ON concept.domain = 'vital'
              AND concept.include
              AND concept.concept_set_id IN ('bmi', 'height', 'weight')
-             AND upper(trim(vital.code_system)) = concept.code_system
+             AND regexp_replace(
+                    upper(trim(vital.code_system)), '[^A-Z0-9]', '', 'g'
+                 ) = concept.code_system
              AND (
                     (concept.match_type = 'exact'
                      AND upper(trim(vital.code)) = concept.code)

@@ -3,3 +3,46 @@ obesity,diagnosis,ICD10CM,E66,prefix,true,Obesity diagnosis family,ICD-10-CM,202
 type_2_diabetes,diagnosis,ICD10CM,E11,prefix,true,Type 2 diabetes mellitus,ICD-10-CM,2026,,,Investigator review required before clinical use
 prediabetes,diagnosis,ICD10CM,R73.03,exact,true,Prediabetes,ICD-10-CM,2026,,,Investigator review required before clinical use
 obstructive_sleep_apnea,diagnosis,ICD10CM,G47.33,exact,true,Obstructive sleep apnea,ICD-10-CM,2026,,,Code-only evidence without AHI
+prior_mi,diagnosis,ICD10CM,I21,prefix,true,Acute myocardial infarction family,ICD-10-CM,2026,,,Investigator review required
+prior_mi,diagnosis,ICD10CM,I25.2,exact,true,Old myocardial infarction,ICD-10-CM,2026,,,Investigator review required
+ischemic_stroke,diagnosis,ICD10CM,I63,prefix,true,Cerebral infarction family,ICD-10-CM,2026,,,Investigator review required
+ischemic_stroke,diagnosis,ICD10CM,Z86.73,exact,true,Personal history of TIA or cerebral infarction,ICD-10-CM,2026,,,History code requires review
+pad,diagnosis,ICD10CM,I70.2,prefix,true,Atherosclerosis of native extremity arteries,ICD-10-CM,2026,,,Investigator review required
+symptomatic_pad,diagnosis,ICD10CM,I70.21,prefix,true,Extremity atherosclerosis with claudication,ICD-10-CM,2026,,,Investigator review required
+symptomatic_pad,diagnosis,ICD10CM,I70.22,prefix,true,Extremity atherosclerosis with rest pain,ICD-10-CM,2026,,,Investigator review required
+ckd_any,diagnosis,ICD10CM,N18,prefix,true,Chronic kidney disease family,ICD-10-CM,2026,,,Investigator review required
+ckd_stage_3a_plus,diagnosis,ICD10CM,N18.3,prefix,true,Chronic kidney disease stage 3 family,ICD-10-CM,2026,,,Includes stage 3a and 3b
+ckd_stage_3a_plus,diagnosis,ICD10CM,N18.4,prefix,true,Chronic kidney disease stage 4,ICD-10-CM,2026,,,Investigator review required
+ckd_stage_3a_plus,diagnosis,ICD10CM,N18.5,prefix,true,Chronic kidney disease stage 5,ICD-10-CM,2026,,,Investigator review required
+eskd,diagnosis,ICD10CM,N18.6,exact,true,End stage kidney disease,ICD-10-CM,2026,,,Investigator review required
+mash,diagnosis,ICD10CM,K75.81,exact,true,Nonalcoholic steatohepatitis,ICD-10-CM,2026,,,MASH terminology mapped to historical code
+masld,diagnosis,ICD10CM,K76.0,exact,true,Fatty liver not elsewhere classified,ICD-10-CM,2026,,,Code-only MASLD evidence
+liver_fibrosis,diagnosis,ICD10CM,K74.0,prefix,true,Hepatic fibrosis family,ICD-10-CM,2026,,,Structured stage still required
+cirrhosis,diagnosis,ICD10CM,K74.6,prefix,true,Other and unspecified cirrhosis,ICD-10-CM,2026,,,Investigator review required
+heart_failure,diagnosis,ICD10CM,I50,prefix,true,Heart failure family,ICD-10-CM,2026,,,Investigator review required
+hfpef,diagnosis,ICD10CM,I50.3,prefix,true,Diastolic heart failure family,ICD-10-CM,2026,,,Code-only probable HFpEF
+hypertension,diagnosis,ICD10CM,I10,exact,true,Essential hypertension,ICD-10-CM,2026,,,Investigator review required
+ohs,diagnosis,ICD10CM,E66.2,exact,true,Morbid obesity with alveolar hypoventilation,ICD-10-CM,2026,,,Documented OHS seed
+pcos,diagnosis,ICD10CM,E28.2,exact,true,Polycystic ovarian syndrome,ICD-10-CM,2026,,,Investigator review required
+knee_osteoarthritis,diagnosis,ICD10CM,M17,prefix,true,Osteoarthritis of knee family,ICD-10-CM,2026,,,Symptom status may be unclassifiable
+alcohol_use_disorder,diagnosis,ICD10CM,F10,prefix,true,Alcohol-related disorders family,ICD-10-CM,2026,,,Broad family requires investigator review
+iih,diagnosis,ICD10CM,G93.2,exact,true,Benign intracranial hypertension,ICD-10-CM,2026,,,Investigator review required
+binge_eating,diagnosis,ICD10CM,F50.81,exact,true,Binge eating disorder,ICD-10-CM,2026,,,Investigator review required
+metabolic_syndrome,diagnosis,ICD10CM,E88.81,prefix,true,Metabolic syndrome family,ICD-10-CM,2026,,,Investigator review required
+dyslipidemia,diagnosis,ICD10CM,E78,prefix,true,Disorders of lipoprotein metabolism,ICD-10-CM,2026,,,Investigator review required
+copd,diagnosis,ICD10CM,J44,prefix,true,Chronic obstructive pulmonary disease,ICD-10-CM,2026,,,Alternative hypercapnia cause
+emphysema,diagnosis,ICD10CM,J43,prefix,true,Emphysema family,ICD-10-CM,2026,,,Alternative hypercapnia cause
+asthma,diagnosis,ICD10CM,J45,prefix,true,Asthma family,ICD-10-CM,2026,,,Context phenotype
+neuromuscular_disease,diagnosis,ICD10CM,G12,prefix,true,Spinal muscular atrophy family,ICD-10-CM,2026,,,Seed requires expansion
+neuromuscular_disease,diagnosis,ICD10CM,G70,prefix,true,Myasthenia gravis and junction disorders,ICD-10-CM,2026,,,Seed requires expansion
+neuromuscular_disease,diagnosis,ICD10CM,G71,prefix,true,Primary muscle disorders,ICD-10-CM,2026,,,Seed requires expansion
+chest_wall_disease,diagnosis,ICD10CM,M40,prefix,true,Kyphosis and lordosis family,ICD-10-CM,2026,,,Seed requires expansion
+chest_wall_disease,diagnosis,ICD10CM,M41,prefix,true,Scoliosis family,ICD-10-CM,2026,,,Seed requires expansion
+pneumonia_lri,diagnosis,ICD10CM,J12,prefix,true,Viral pneumonia family,ICD-10-CM,2026,,,Index context
+pneumonia_lri,diagnosis,ICD10CM,J13,prefix,true,Pneumococcal pneumonia family,ICD-10-CM,2026,,,Index context
+pneumonia_lri,diagnosis,ICD10CM,J14,prefix,true,Haemophilus pneumonia,ICD-10-CM,2026,,,Index context
+pneumonia_lri,diagnosis,ICD10CM,J15,prefix,true,Bacterial pneumonia family,ICD-10-CM,2026,,,Index context
+pneumonia_lri,diagnosis,ICD10CM,J16,prefix,true,Other infectious pneumonia,ICD-10-CM,2026,,,Index context
+pneumonia_lri,diagnosis,ICD10CM,J18,prefix,true,Pneumonia unspecified organism,ICD-10-CM,2026,,,Index context
+cardiac_arrest,diagnosis,ICD10CM,I46,prefix,true,Cardiac arrest family,ICD-10-CM,2026,,,Index context
+pregnancy,diagnosis,ICD10CM,O,prefix,true,Pregnancy childbirth and puerperium chapter,ICD-10-CM,2026,,,Broad exclusion context

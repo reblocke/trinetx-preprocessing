@@ -11,3 +11,23 @@ weight,vital,LOINC,29463-7,exact,true,Body weight,LOINC,2026-07-10,,,Anthropomet
 height,vital,LOINC,8302-2,exact,true,Body height,LOINC,2026-07-10,,,Anthropometric seed
 systolic_bp,vital,LOINC,8480-6,exact,true,Systolic blood pressure,LOINC,2026-07-10,,,Hypertension component seed
 diastolic_bp,vital,LOINC,8462-4,exact,true,Diastolic blood pressure,LOINC,2026-07-10,,,Hypertension component seed
+hba1c,lab,LOINC,4548-4,exact,true,Hemoglobin A1c percent,LOINC,2.82,,,NGSP percent result; investigator review required
+hba1c,lab,LOINC,17856-6,exact,true,Hemoglobin A1c by HPLC,LOINC,2.82,,,Percent result; investigator review required
+egfr,lab,LOINC,77147-7,exact,true,Creatinine-based estimated GFR,LOINC,2.82,,,Preferred MDRD source term
+egfr,lab,LOINC,33914-3,exact,true,Creatinine-based estimated GFR MDRD legacy,LOINC,2.82,,,Discouraged LOINC retained for historical exports
+egfr,lab,LOINC,48642-3,exact,true,Estimated GFR non-Black MDRD,LOINC,2.82,,,Historical race-specific source retained
+egfr,lab,LOINC,48643-1,exact,true,Estimated GFR Black MDRD,LOINC,2.82,,,Historical race-specific source retained
+egfr,lab,LOINC,50210-4,exact,true,Cystatin-based estimated GFR,LOINC,2.82,,,Investigator review required
+uacr,lab,LOINC,9318-7,exact,true,Urine albumin to creatinine mass ratio,LOINC,2.82,,,Canonical unit mg/g
+lvef,lab,LOINC,10230-1,exact,true,Left ventricular ejection fraction,LOINC,2.82,,,Canonical unit percent
+nt_probnp,lab,LOINC,33762-6,exact,true,NT-proBNP mass concentration,LOINC,2.82,,,Canonical unit pg/mL
+bnp,lab,LOINC,42637-9,exact,true,B-type natriuretic peptide,LOINC,2.82,,,Investigator review required
+ahi,lab,LOINC,69990-9,exact,true,Apnea hypopnea index,LOINC,2.82,,,Investigator terminology review required
+fasting_glucose,lab,LOINC,1558-6,exact,true,Fasting glucose,LOINC,2.82,,,Canonical unit mg/dL
+random_glucose,lab,LOINC,2345-7,exact,true,Glucose in serum or plasma,LOINC,2.82,,,Fasting state not assumed
+ast,lab,LOINC,1920-8,exact,true,Aspartate aminotransferase,LOINC,2.82,,,FIB-4 input
+alt,lab,LOINC,1742-6,exact,true,Alanine aminotransferase,LOINC,2.82,,,FIB-4 input
+platelets,lab,LOINC,777-3,exact,true,Platelet count,LOINC,2.82,,,FIB-4 input
+albumin,lab,LOINC,1751-7,exact,true,Serum albumin,LOINC,2.82,,,Liver phenotype input
+inr,lab,LOINC,6301-6,exact,true,International normalized ratio,LOINC,2.82,,,Liver phenotype input
+bilirubin,lab,LOINC,1975-2,exact,true,Total bilirubin,LOINC,2.82,,,Liver phenotype input

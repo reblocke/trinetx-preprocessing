@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import duckdb
@@ -269,7 +270,7 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
     )
     try:
         assert connection.execute("SELECT COUNT(*) FROM concept_set").fetchone() == (
-            21,
+            len(catalog.concepts),
         )
         source_files = connection.execute(
             "SELECT source_file FROM source_file_inventory ORDER BY source_file"
@@ -375,6 +376,8 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         export_root / "Lab Results" / "lab_results.csv",
         "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
         "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "p1,e1,2024-01-20 01:00:00,LOINC,2019-8,40,,mmHg",
+        "p1,e1,2024-02-01 01:00:00,LOINC,2019-8,55,,mmHg",
         "p2,e2,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
         "p3,e3,2024-01-01 01:00:00,LOINC,2019-8,40,,mmHg",
         "p3,e3,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
@@ -422,11 +425,28 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         primary = connection.execute(
             """
             SELECT patient_id, abg_pco2_mm_hg, abg_ph,
-                   abg_pairing_method, bmi_value
+                   abg_pairing_method, bmi_value,
+                   persistent_hypercapnia_14_84d
             FROM analysis_glp1_eligibility
             """
         ).fetchone()
-        assert primary == ("p1", 55.0, 7.4, "exact_timestamp", 36.0)
+        assert primary == (
+            "p1",
+            55.0,
+            7.4,
+            "exact_timestamp",
+            36.0,
+            True,
+        )
+        repeat = connection.execute(
+            """
+            SELECT repeat_pco2_date, repeat_pco2_value
+            FROM cohort_hypercapnia_patient_index
+            WHERE patient_id = 'p1'
+            """
+        ).fetchone()
+        assert repeat[0].isoformat() == "2024-02-01T01:00:00"
+        assert repeat[1] == 55.0
         later = connection.execute(
             """
             SELECT later_hypercapnia_sensitivity_case,
@@ -446,6 +466,150 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert connection.execute(
             "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p2'"
         ).fetchone() == (0,)
+
+        without_vbg = replace(
+            config,
+            hypercapnia=replace(
+                config.hypercapnia,
+                include_vbg_secondary_cohort=False,
+            ),
+        )
+        disabled_counts = build_core_cohort(
+            connection,
+            config=without_vbg,
+            run_id="synthetic-run",
+            git_sha="test-sha",
+        )
+        assert disabled_counts.hypercapnia_encounters == 2
+        assert connection.execute(
+            "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p4'"
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_component_phenotypes_are_temporal_and_evidence_based(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    patients = (
+        "t2d",
+        "post_only",
+        "htn_one",
+        "htn_two",
+        "ckd_single",
+        "ckd_persistent",
+        "osa_code",
+        "osa_ahi",
+        "antipsychotic_only",
+        "antipsychotic_metabolic",
+    )
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        *(f"{patient},F,White,Not Hispanic or Latino,1970,," for patient in patients),
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        *(
+            f"e_{patient},{patient},2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00,IMP,s1"
+            for patient in patients
+        ),
+    )
+    lab_rows: list[str] = []
+    vital_rows: list[str] = []
+    for patient in patients:
+        encounter = f"e_{patient}"
+        lab_rows.extend(
+            (
+                f"{patient},{encounter},2024-01-01 01:00:00,"
+                "LOINC,2019-8,55,,mmHg",
+                f"{patient},{encounter},2024-01-01 01:00:00,"
+                "LOINC,2744-1,7.40,,pH",
+            )
+        )
+        bmi = 25 if patient == "antipsychotic_only" else 31
+        vital_rows.append(
+            f"{patient},{encounter},2023-12-15,LOINC,39156-5,{bmi},,kg/m2"
+        )
+    lab_rows.extend(
+        (
+            "ckd_single,e_ckd_single,2023-12-01,LOINC,77147-7,45,,"
+            "mL/min/1.73m2",
+            "ckd_persistent,e_ckd_persistent,2023-05-01,LOINC,77147-7,45,,"
+            "mL/min/1.73m2",
+            "ckd_persistent,e_ckd_persistent,2023-12-01,LOINC,77147-7,50,,"
+            "mL/min/1.73m2",
+            "osa_ahi,e_osa_ahi,2023-12-01,LOINC,69990-9,20,,events/hour",
+        )
+    )
+    vital_rows.extend(
+        (
+            "htn_one,e_htn_one,2023-12-20,LOINC,8480-6,150,,mmHg",
+            "htn_one,e_htn_one,2023-12-20,LOINC,8462-4,95,,mmHg",
+            "htn_two,e_htn_two,2023-12-20,LOINC,8480-6,150,,mmHg",
+            "htn_two,e_htn_two,2023-12-20,LOINC,8462-4,95,,mmHg",
+        )
+    )
+    _append_rows(export_root / "Lab Results" / "lab_results.csv", *lab_rows)
+    _append_rows(export_root / "Vital Signs" / "vital_signs.csv", *vital_rows)
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "t2d,e_t2d,2023-12-01,ICD-10-CM,E11.9,,,,",
+        "post_only,e_post_only,2024-01-02,ICD10CM,E11.9,,,,",
+        "osa_code,e_osa_code,2023-12-01,ICD10CM,G47.33,,,,",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "htn_one,e_htn_one,RXNORM,29046,2023-01-01,oral,,",
+        "htn_two,e_htn_two,RXNORM,29046,2023-01-01,oral,,",
+        "htn_two,e_htn_two,RXNORM,17767,2023-01-01,oral,,",
+        "antipsychotic_only,e_antipsychotic_only,RXNORM,2626,"
+        "2023-01-01,oral,,",
+        "antipsychotic_metabolic,e_antipsychotic_metabolic,RXNORM,2626,"
+        "2023-01-01,oral,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        rows = connection.execute(
+            """
+            SELECT patient_id, t2d_status, payer_route_model,
+                   uncontrolled_hypertension_two_meds_status,
+                   bridge_clinical_criteria_status,
+                   egfr_persistent_lt60, ckd_stage_3a_plus_status,
+                   osa_any_status, osa_moderate_severe_status,
+                   ind_fda_moderate_severe_osa,
+                   metabolic_dysfunction_status,
+                   ind_rct_antipsychotic_metabolic
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchall()
+        by_patient = {row[0]: row[1:] for row in rows}
+
+        assert by_patient["t2d"][:2] == ("met", "part_d_disease_route")
+        assert by_patient["post_only"][0] == "indeterminate"
+        assert by_patient["htn_one"][2:4] == ("not_met", "indeterminate")
+        assert by_patient["htn_two"][2:4] == ("met", "met")
+        assert by_patient["ckd_single"][4:6] == (False, "indeterminate")
+        assert by_patient["ckd_persistent"][4:6] == (True, "met")
+        assert by_patient["osa_code"][6:9] == (
+            "met",
+            "indeterminate",
+            None,
+        )
+        assert by_patient["osa_ahi"][6:9] == ("indeterminate", "met", True)
+        assert by_patient["antipsychotic_only"][9:] == ("not_met", None)
+        assert by_patient["antipsychotic_metabolic"][9:] == ("met", True)
     finally:
         connection.close()
 

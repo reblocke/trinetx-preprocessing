@@ -1,3 +1,16 @@
 concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
 glp1_semaglutide,medication,RXNORM,1991302,exact,true,Semaglutide ingredient or product mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
 glp1_liraglutide,medication,RXNORM,475968,exact,true,Liraglutide ingredient mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
+glp1_tirzepatide,medication,RXNORM,2601723,exact,true,Tirzepatide mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
+glp1_dulaglutide,medication,RXNORM,1551291,exact,true,Dulaglutide mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
+glp1_exenatide,medication,RXNORM,60548,exact,true,Exenatide mapping seed,RxNorm,2026-07-10,,,Verify source export representation before clinical use
+antihypertensive_lisinopril,medication,RXNORM,29046,exact,true,Lisinopril ingredient,RxNorm,2026-07-10,,,Investigator review required
+antihypertensive_losartan,medication,RXNORM,52175,exact,true,Losartan ingredient,RxNorm,2026-07-10,,,Investigator review required
+antihypertensive_amlodipine,medication,RXNORM,17767,exact,true,Amlodipine ingredient,RxNorm,2026-07-10,,,Investigator review required
+antihypertensive_hydrochlorothiazide,medication,RXNORM,5487,exact,true,Hydrochlorothiazide ingredient,RxNorm,2026-07-10,,,Investigator review required
+antihypertensive_metoprolol,medication,RXNORM,6918,exact,true,Metoprolol ingredient,RxNorm,2026-07-10,,,Investigator review required
+clozapine,medication,RXNORM,2626,exact,true,Clozapine ingredient,RxNorm,2026-07-10,,,Investigator review required
+olanzapine,medication,RXNORM,61381,exact,true,Olanzapine ingredient,RxNorm,2026-07-10,,,Investigator review required
+opioid_morphine,medication,RXNORM,7052,exact,true,Morphine ingredient,RxNorm,2026-07-10,,,Investigator review required
+benzodiazepine_diazepam,medication,RXNORM,3322,exact,true,Diazepam ingredient,RxNorm,2026-07-10,,,Investigator review required
+loop_diuretic_furosemide,medication,RXNORM,4603,exact,true,Furosemide ingredient,RxNorm,2026-07-10,,,Investigator review required

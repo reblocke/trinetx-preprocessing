@@ -205,7 +205,7 @@ def _parse_concept(
     return Concept(
         concept_set_id=row["concept_set_id"].strip(),
         domain=domain,
-        code_system=row["code_system"].strip().upper(),
+        code_system=re.sub(r"[^A-Z0-9]", "", row["code_system"].strip().upper()),
         code=row["code"].strip().upper(),
         match_type=match_type,
         include=include_text == "true",

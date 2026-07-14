@@ -12,6 +12,7 @@ from .concept_sets import load_concept_sets
 from .config import load_glp1_config
 from .database import initialize_database, mark_database_complete
 from .discovery import validate_export
+from .eligibility import build_eligibility_phenotypes
 from .ingestion import ingest_core_sources
 from .monitoring import RunStateWriter, state_path_for_output
 from .outputs import summarize_database, write_build_outputs
@@ -121,6 +122,18 @@ def build_glp1_eligibility(
             config=config,
             run_id=run_id,
             git_sha=git_sha,
+        )
+        state.update(phase="component_phenotypes", current_domain=None)
+        build_eligibility_phenotypes(connection, config)
+        counts = CoreCohortCounts(
+            hypercapnia_encounters=counts.hypercapnia_encounters,
+            patient_index_events=counts.patient_index_events,
+            primary_obesity_hypercapnia=counts.primary_obesity_hypercapnia,
+            evidence_rows=int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM eligibility_evidence_long"
+                ).fetchone()[0]
+            ),
         )
         connection.execute(
             "UPDATE source_file_inventory SET load_status = 'loaded'"

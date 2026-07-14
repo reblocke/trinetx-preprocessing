@@ -76,7 +76,12 @@
 - The additive GLP-1 foundation includes typed config, versioned concept-set validation, split/unsplit export discovery, PHI-safe header validation, and atomic run-status monitoring.
 - Deterministic input inventory, resumable build staging, atomic publication, DuckDB metadata/catalog tables, and concept-filtered core source ingestion are implemented. `2026-3` remains retained evidence but cannot create a gas candidate. Existing pipeline modules and outputs are unchanged; local gates pass with `249` tests.
 - The production GLP-1 `build`, `summarize`, and `status` commands now generate/reuse the core DuckDB/Parquet output contract. First-available arterial PaCO2, hierarchical pH pairing, sensitivity cohorts, persistent arterial follow-up, and measured/calculated BMI are covered by synthetic tests.
-- Full local gates pass with `251` tests. Draft PR #7 is open against `refactor-pipeline`; its requested GitHub Codex review is pending and has not returned findings yet.
+- Full local gates pass with `251` tests. Draft PR #7 is open against `refactor-pipeline`.
+- No legacy, profile, DuckDB build, or prior pipeline process is active; implementation is not blocked on an older run. The existing GLP-1 `status` command provides aggregate monitoring for future long builds.
+- GitHub Codex review of `b0f6f74` returned two P2 findings: persistent hypercapnia can miss a later elevated repeat after an earlier normal repeat, and the disabled VBG sensitivity switch is not honored by cohort admission.
+- Both PR #7 findings are fixed with focused regression coverage: persistence selects the earliest elevated repeat, and VBG-only candidates are admitted only when the sensitivity switch is enabled.
+- Diagnosis, procedure, lab, blood-pressure, and medication component sources now feed temporal phenotype statuses, indication tiers, payer-route modeling, and GLP-1 order/exposure fields in the production build.
+- Full local gates pass with `252` tests after the component checkpoint; no production run is active.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -85,11 +90,11 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Implement component phenotype sources and temporal evidence on top of the core GLP-1 cohort.
+- Complete long-form component/indication evidence and the remaining synthetic acceptance cases.
 
 ## Next
-- Add diagnosis/procedure/medication and remaining measurement concept sets, then deterministic component phenotype statuses.
-- Implement eligibility tiers, payer-route model, GLP-1 exposure fields, and the full 20-case synthetic acceptance suite.
+- Complete MASH fibrosis staging, observability fields, analysis views, and the full 20-case synthetic acceptance suite.
+- Re-run GitHub Codex review after the component checkpoint is pushed.
 - Validate synthetic fixtures first, then run only the minimum necessary private aggregate/full evidence externally.
 
 ## Open questions (UNCONFIRMED if needed)
@@ -105,4 +110,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at `b0f6f74`
+- Branch: `codex/glp1-augmentation` at `03d4bb3` with the component checkpoint ready to commit.
