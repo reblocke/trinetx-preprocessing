@@ -921,8 +921,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Rationale: Domain-specific stores preserve one scan per compact feature
   source and deterministic row order while bounding bucket memory by the
   largest active domain rather than the sum of all domains.
-- Consequences: The fresh full profile completed all 36 outputs in 73,993.53
-  seconds, final assembly in 49,153.049 seconds, and peak RSS at 5,896.062 MB.
+- Consequences: The review-clean full profile completed all 36 outputs in
+  73,589.093 seconds, final assembly in 49,180.54 seconds, and peak RSS at
+  6,122.562 MB.
   All 36 output hashes match an independent standalone final-assembly run, and
   recognized scratch is zero. Strict release acceptance remains a separate
   decision because the source contains 286 cross-setting encounter IDs.
@@ -941,9 +942,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Rationale: Screening is an observation-level property and must follow the
   observation through every reorder. Strictness must apply to prerequisite
   evidence, not only to the currently invoked stage.
-- Consequences: The prior full profile is stale because the alignment fix can
-  change `AFTER` membership. Local tests and all three corrected staged tiers
-  pass; full evidence must be regenerated from the fixed commit.
+- Consequences: The review-clean full profile confirms that six obesity or
+  ventilatory-support `AFTER` hashes changed while every schema and row count
+  remained stable. Local tests, all three corrected staged tiers, full resource
+  gates, and scratch cleanup pass.
 - References: `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `src/trinetx_preprocessing/work_manifest.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_final_assembly.py`,

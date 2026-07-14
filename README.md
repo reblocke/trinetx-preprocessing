@@ -158,11 +158,11 @@ schema, row counts, key sets, and the documented row-parity threshold are met.
 Corrected post-milestone releases are validated against `docs/SPEC.md` and an
 aggregate delta report rather than required to reproduce known legacy defects.
 
-The pre-review corrected full profile produced all 36 outputs in 73,993.53
-seconds with 5,896.062 MB peak RSS; final assembly took 49,153.049 seconds.
-GitHub review then identified an `AFTER` mask-alignment defect and strict-resume
-gap. Both fixes pass local and staged tests, but fresh full evidence is required.
-Release also requires a decision on 286 source encounter IDs assigned to
+The review-clean corrected full profile produced all 36 outputs in 73,589.093
+seconds with 6,122.562 MB peak RSS; final assembly took 49,180.54 seconds.
+Local and GitHub review are clean, all three corrected staged tiers pass, and
+the aggregate-only Milestone 1 delta contains no identifiers or row examples.
+Release still requires a decision on 286 source encounter IDs assigned to
 multiple settings: non-strict execution resolves them deterministically, while
 strict execution intentionally fails.
 

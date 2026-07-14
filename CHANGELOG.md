@@ -33,8 +33,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Final feature sources are partitioned independently by clinical domain.
   Patient buckets load only the active vital, lab, diagnosis, procedure, or
   medication domain instead of materializing all feature rows together.
-- Full corrected profiling completed all 36 outputs in 73,993.53 seconds with
-  5,896.062 MB peak RSS; final assembly completed in 49,153.049 seconds.
+- Full corrected profiling completed all 36 outputs in 73,589.093 seconds with
+  6,122.562 MB peak RSS; final assembly completed in 49,180.54 seconds.
 
 ### Fixed
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed

@@ -101,26 +101,24 @@ release waits while the measured top bottleneck is addressed.
 
 ## Current corrected evidence
 
-The pre-review full non-strict profile from commit `3b87b83` completed with:
+The review-clean full non-strict profile from commit `1112963` completed with:
 
 - 36 final CSVs and the ordered 534-column schema;
-- 73,993.53 seconds total wall time;
-- 49,153.049 seconds final-assembly time;
-- 5,896.062 MB peak RSS;
+- 73,589.093 seconds total wall time;
+- 49,180.54 seconds final-assembly time;
+- 6,122.562 MB peak RSS;
 - 15,894,947,783 bytes of work tables and 7,898,119,999 bytes of outputs;
 - five compact feature sources scanned once, totaling 2,375,800,669 indexed
   rows;
 - zero recognized scratch artifacts after completion.
 
-The full output manifest exactly reproduces the independently run bounded final
-assembly across all 36 tables. The PHI-safe Milestone 1 delta contains only
-aggregate counts: 4,412,932 Milestone 1 rows, 6,949,511 corrected rows,
-3,466,002 shared keys, 946,930 Milestone-only keys, and 3,483,509
-corrected-only keys. GitHub review subsequently found a behavior-changing
-`AFTER` mask-alignment defect and a strict-resume gap. Both are fixed and pass
-local/staged tests, but this profile and delta are no longer current release
-evidence. They must be regenerated before the explicit decision on whether the
-286 source conflicts require upstream adjudication.
+The review-clean output differs from the pre-review profile only in six
+obesity/ventilatory-support `AFTER` hashes; schemas and row counts are unchanged.
+The PHI-safe Milestone 1 delta contains only aggregate counts: 4,412,932
+Milestone 1 rows, 6,949,511 corrected rows, 3,471,448 shared keys, 941,484
+Milestone-only keys, and 3,478,063 corrected-only keys. Local and GitHub review
+are clean. The remaining release decision is whether the 286 source conflicts
+require upstream adjudication.
 
 ## Hygiene and review
 
