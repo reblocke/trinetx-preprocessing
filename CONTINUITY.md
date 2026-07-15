@@ -143,6 +143,9 @@
 - Commit `e8ad7d4` is pushed, Linux CI passes all `293` tests, and both output-file and single-chunk review threads are resolved.
 - Codex review of `e8ad7d4` found one P2 clinical edge case: same-encounter BMI fallback discarded later valid BMI evidence when the selected encounter had no end date.
 - Same-encounter BMI fallback now uses the same one-day open-encounter bound as gas windows. Ruff, `55` focused tests, and all `294` tests pass. The production fixture completed in `0.63 s` with `370,524,160` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, and no WAL.
+- Commit `5acda33` is pushed, Linux CI passes all `294` tests, and the open-ended BMI review thread is resolved.
+- Codex review of `5acda33` returned one P1 discovery finding: independent per-domain nearest-family selection can combine a shallow partial export with a nested complete export.
+- Selected clinical domains now must share one supported export layout root; mixed shallow/nested domain-folder and flat sources fail before inventory or ingestion. Ruff, `57` focused tests, and all `296` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `375,439,360` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -151,10 +154,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified open-ended encounter BMI fix.
+- Commit and push the verified cross-domain single-root invariant.
 
 ## Next
-- Resolve the BMI PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the single-root PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -169,4 +172,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `e8ad7d4`; PR #7 has one verified open-ended BMI fix ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `5acda33`; PR #7 has one verified cross-domain single-root fix ready to commit.

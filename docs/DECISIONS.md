@@ -1060,7 +1060,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   any chunk, including a one-file chunk family, lacks the required medication
   header fields; retain independently valid medication and ingredient families
   even when optional fields or column order differ. Reject tied nearest export
-  roots and ambiguous same-root source families before inventory or ingestion.
+  roots, ambiguous same-root source families, and cross-domain selections that
+  do not share one export root before inventory or ingestion.
 - Context: A changed external concept catalog or code executed from another
   working directory could reuse stale output. Concept-filtered source tables
   also made unmatched history appear absent, and discovered ingredient exports
@@ -1074,7 +1075,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   inventory includes metadata files and hashes. Ingredient-only exports are
   valid, and restored roots no longer ingest unsupported headerless medication
   artifacts. Same-size but distinct medication and ingredient domains remain
-  discoverable, while one logical domain can never combine tied source roots.
+  discoverable, while neither one logical domain nor a cross-domain selection
+  can combine different export roots.
 - References: `src/trinetx_preprocessing/glp1_eligibility/concept_sets.py`,
   `builder.py`, `provenance.py`, `discovery.py`, `ingestion.py`, `workspace.py`,
   `tests/test_glp1_foundation.py`.

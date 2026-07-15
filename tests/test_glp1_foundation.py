@@ -268,6 +268,44 @@ def test_validate_export_reports_tied_nearest_roots(tmp_path: Path) -> None:
     assert str(tmp_path) not in report.errors[0]
 
 
+@pytest.mark.parametrize(
+    ("nested_layout", "shallow_patient_relative", "nested_encounter_relative"),
+    (
+        (
+            "domain_folders",
+            "Patient/patient.csv",
+            "complete_export/Encounter/encounter.csv",
+        ),
+        ("flat", "patient.csv", "complete_export/encounter.csv"),
+    ),
+)
+def test_validate_export_rejects_mixed_domain_export_roots(
+    tmp_path: Path,
+    nested_layout: str,
+    shallow_patient_relative: str,
+    nested_encounter_relative: str,
+) -> None:
+    nested_export = tmp_path / "complete_export"
+    if nested_layout == "domain_folders":
+        _write_export(nested_export)
+    else:
+        nested_export.mkdir()
+        for relative, header in DOMAIN_HEADERS.items():
+            (nested_export / Path(relative).name).write_text(header)
+    shallow_patient = tmp_path / shallow_patient_relative
+    shallow_patient.parent.mkdir(parents=True, exist_ok=True)
+    shallow_patient.write_text(DOMAIN_HEADERS["Patient/patient.csv"])
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is False
+    assert len(report.errors) == 1
+    assert "do not share one export root" in report.errors[0]
+    assert f"patient={shallow_patient_relative}" in report.errors[0]
+    assert f"encounter={nested_encounter_relative}" in report.errors[0]
+    assert str(tmp_path) not in report.errors[0]
+
+
 def test_ingredient_only_export_satisfies_medication_source_contract(
     tmp_path: Path,
 ) -> None:

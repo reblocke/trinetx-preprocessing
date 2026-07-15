@@ -36,9 +36,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   canonical unsplit source, falls back to supported split files, and ignores
   medication chunks, including one-file chunk families, that lack required
   header fields beside a canonical ingredient file while allowing valid
-  column-order differences. Discovery
-  now rejects tied nearest export roots or source families instead of merging
-  separate exports silently.
+  column-order differences. Discovery now rejects tied nearest export roots,
+  ambiguous source families, and selected clinical domains that do not share
+  one export root instead of merging separate exports silently.
 - Required ingredient-only exports to expose `patient_id`, `code_system`,
   `code`, and `start_date`, so malformed medication sources fail during header
   validation instead of later ingestion.

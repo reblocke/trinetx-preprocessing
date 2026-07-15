@@ -169,6 +169,7 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
         )
     if _medication_split_family_has_invalid_headers(selected):
         selected["medication"] = ()
+    _require_single_selected_export_root(selected, root)
     return selected
 
 
@@ -329,6 +330,57 @@ def _raise_ambiguous_source_family(
     raise ExportDiscoveryError(
         f"Ambiguous nearest source family for {logical_domain}: {candidates}. "
         "Pass the root of exactly one TriNetX export."
+    )
+
+
+def _require_single_selected_export_root(
+    discovered: dict[str, tuple[Path, ...]], root: Path
+) -> None:
+    """Require one flat export or sibling domain directories under one root."""
+
+    domain_parents: dict[str, Path] = {}
+    for logical_domain, paths in discovered.items():
+        if logical_domain == "export_metadata" or not paths:
+            continue
+        parents = {path.parent for path in paths}
+        if len(parents) != 1:
+            _raise_mixed_export_roots(discovered, root)
+        domain_parents[logical_domain] = next(iter(parents))
+
+    unique_parents = set(domain_parents.values())
+    # Every selected source is a direct child of one flat export root.
+    if len(unique_parents) <= 1:
+        return
+
+    groups_by_parent: dict[Path, set[str]] = {}
+    for logical_domain, parent in domain_parents.items():
+        physical_group = (
+            "medication"
+            if logical_domain in {"medication", "medication_ingredient"}
+            else logical_domain
+        )
+        groups_by_parent.setdefault(parent, set()).add(physical_group)
+    if any(len(groups) > 1 for groups in groups_by_parent.values()):
+        _raise_mixed_export_roots(discovered, root)
+
+    # Each physical domain occupies one directory under the export root.
+    if len({parent.parent for parent in unique_parents}) == 1:
+        return
+
+    _raise_mixed_export_roots(discovered, root)
+
+
+def _raise_mixed_export_roots(
+    discovered: dict[str, tuple[Path, ...]], root: Path
+) -> None:
+    selected_paths = "; ".join(
+        f"{logical_domain}={paths[0].relative_to(root).as_posix()}"
+        for logical_domain, paths in discovered.items()
+        if logical_domain != "export_metadata" and paths
+    )
+    raise ExportDiscoveryError(
+        "Selected clinical source domains do not share one export root: "
+        f"{selected_paths}. Pass the root of exactly one TriNetX export."
     )
 
 
