@@ -38,7 +38,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   header fields beside a canonical ingredient file while allowing valid
   column-order differences. Discovery now rejects tied nearest export roots,
   ambiguous source families, and selected clinical domains that do not share
-  one export root instead of merging separate exports silently.
+  one flat root or recognized sibling domain-folder root instead of merging
+  separate exports silently.
 - Required ingredient-only exports to expose `patient_id`, `code_system`,
   `code`, and `start_date`, so malformed medication sources fail during header
   validation instead of later ingestion.

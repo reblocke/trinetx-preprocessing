@@ -35,9 +35,10 @@ When a restored root contains both a canonical unsplit export and legacy split
 artifacts, discovery selects the nearest canonical file. Headered split files
 remain the fallback when no unsplit source exists. If multiple nearest export
 roots or same-root source families tie, validation fails and requires the root
-of exactly one export. Selected clinical domains must also share one inferred
-export root, preventing a shallow partial export from being combined with a
-nested export. Either a medication export or a medication-ingredient export
+of exactly one export. Selected clinical domains must also share one flat root
+or recognized sibling domain-folder root, preventing partial domain folders
+from being combined with a sibling or nested export. Either a medication export
+or a medication-ingredient export
 satisfies the medication source contract; independently valid headered
 medication and ingredient families are both retained even when optional columns
 or column order differ. Legacy medication chunks, including one-file chunk

@@ -134,6 +134,31 @@ _EXPORT_METADATA_STEMS = {
     "terminologymetadata",
 }
 _EXPORT_METADATA_SUFFIXES = {".csv", ".json", ".txt", ".pdf", ".xls", ".xlsx"}
+_DOMAIN_FOLDER_NAMES = {
+    "patient": frozenset({"patient", "patients"}),
+    "encounter": frozenset({"encounter", "encounters"}),
+    "diagnosis": frozenset({"diagnosis", "diagnoses"}),
+    "labs": frozenset(
+        {
+            "lab",
+            "labs",
+            "labresult",
+            "labresults",
+            "laboratoryresult",
+            "laboratoryresults",
+        }
+    ),
+    "vitals": frozenset({"vital", "vitals", "vitalsign", "vitalsigns"}),
+    "procedure": frozenset({"procedure", "procedures"}),
+    "medication": frozenset(
+        {
+            "medication",
+            "medications",
+            "medicationingredient",
+            "medicationingredients",
+        }
+    ),
+}
 
 
 def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
@@ -354,11 +379,10 @@ def _require_single_selected_export_root(
 
     groups_by_parent: dict[Path, set[str]] = {}
     for logical_domain, parent in domain_parents.items():
-        physical_group = (
-            "medication"
-            if logical_domain in {"medication", "medication_ingredient"}
-            else logical_domain
-        )
+        physical_group = _physical_domain_group(logical_domain)
+        folder_name = re.sub(r"[^a-z0-9]", "", parent.name.casefold())
+        if folder_name not in _DOMAIN_FOLDER_NAMES[physical_group]:
+            _raise_mixed_export_roots(discovered, root)
         groups_by_parent.setdefault(parent, set()).add(physical_group)
     if any(len(groups) > 1 for groups in groups_by_parent.values()):
         _raise_mixed_export_roots(discovered, root)
@@ -368,6 +392,14 @@ def _require_single_selected_export_root(
         return
 
     _raise_mixed_export_roots(discovered, root)
+
+
+def _physical_domain_group(logical_domain: str) -> str:
+    return (
+        "medication"
+        if logical_domain in {"medication", "medication_ingredient"}
+        else logical_domain
+    )
 
 
 def _raise_mixed_export_roots(

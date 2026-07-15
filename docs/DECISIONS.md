@@ -1061,7 +1061,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   header fields; retain independently valid medication and ingredient families
   even when optional fields or column order differ. Reject tied nearest export
   roots, ambiguous same-root source families, and cross-domain selections that
-  do not share one export root before inventory or ingestion.
+  do not share one flat root or recognized sibling domain-folder root before
+  inventory or ingestion.
 - Context: A changed external concept catalog or code executed from another
   working directory could reuse stale output. Concept-filtered source tables
   also made unmatched history appear absent, and discovered ingredient exports

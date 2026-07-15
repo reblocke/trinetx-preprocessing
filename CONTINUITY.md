@@ -146,6 +146,9 @@
 - Commit `5acda33` is pushed, Linux CI passes all `294` tests, and the open-ended BMI review thread is resolved.
 - Codex review of `5acda33` returned one P1 discovery finding: independent per-domain nearest-family selection can combine a shallow partial export with a nested complete export.
 - Selected clinical domains now must share one supported export layout root; mixed shallow/nested domain-folder and flat sources fail before inventory or ingestion. Ruff, `57` focused tests, and all `296` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `375,439,360` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
+- Commit `f40b97c` is pushed, Linux CI passes all `296` tests, and the mixed shallow/nested review thread is resolved.
+- Codex re-review of `f40b97c` found one P2 layout edge case: a sibling flat export directory could be mistaken for one domain folder when the main domain-folder export omitted that domain. The explicit recognized-domain-folder fix is in progress.
+- Multi-directory discovery now accepts only recognized TriNetX domain-folder names; a missing domain cannot be borrowed from a sibling flat export. Ruff, `59` focused tests, and all `298` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `378,224,640` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -154,10 +157,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified cross-domain single-root invariant.
+- Commit and push the verified sibling-flat export-root fix.
 
 ## Next
-- Resolve the single-root PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the sibling-flat PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -172,4 +175,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `5acda33`; PR #7 has one verified cross-domain single-root fix ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `f40b97c`; PR #7 has one verified sibling-flat layout fix ready to commit.

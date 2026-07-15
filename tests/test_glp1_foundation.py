@@ -306,6 +306,36 @@ def test_validate_export_rejects_mixed_domain_export_roots(
     assert str(tmp_path) not in report.errors[0]
 
 
+def test_validate_export_rejects_sibling_flat_export_as_domain_folder(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    sibling_export = tmp_path / "complete_export"
+    sibling_export.mkdir()
+    (tmp_path / "Encounter" / "encounter.csv").replace(
+        sibling_export / "encounter.csv"
+    )
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is False
+    assert len(report.errors) == 1
+    assert "do not share one export root" in report.errors[0]
+    assert "patient=Patient/patient.csv" in report.errors[0]
+    assert "encounter=complete_export/encounter.csv" in report.errors[0]
+    assert str(tmp_path) not in report.errors[0]
+
+
+def test_validate_export_accepts_flat_export_layout(tmp_path: Path) -> None:
+    for relative, header in DOMAIN_HEADERS.items():
+        (tmp_path / Path(relative).name).write_text(header)
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is True
+    assert report.errors == ()
+
+
 def test_ingredient_only_export_satisfies_medication_source_contract(
     tmp_path: Path,
 ) -> None:
