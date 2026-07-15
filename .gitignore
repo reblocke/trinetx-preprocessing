@@ -26,6 +26,7 @@ trinetx_preprocessing_scaffold_md.zip
 /results/**/glp1_eligibility/
 /artifacts/**/glp1_eligibility/
 *.duckdb
+*.duckdb.wal
 **/glp1_hypercapnia.duckdb
 **/analysis_glp1_eligibility.parquet
 **/eligibility_evidence_long.parquet

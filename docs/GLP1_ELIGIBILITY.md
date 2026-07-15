@@ -36,8 +36,9 @@ artifacts, discovery selects the nearest canonical file. Headered split files
 remain the fallback when no unsplit source exists. Either a medication export
 or a medication-ingredient export satisfies the medication source contract;
 independently valid headered medication and ingredient families are both
-retained. Unsupported headerless legacy medication chunks are ignored when a
-canonical ingredient file is available. Ingredient exports must provide
+retained even when optional columns or column order differ. Legacy medication
+chunks lacking required header fields are ignored when a canonical ingredient
+file is available. Ingredient exports must provide
 `patient_id`, `code_system`, `code`, and `start_date` because those fields
 define medication phenotype membership and timing.
 
@@ -57,7 +58,9 @@ staged build is complete.
 
 Confidential output should normally live outside the repository. A
 repository-local output is accepted only when Git ignores the complete output
-directory, including its staging and replacement siblings.
+directory, including its staging and replacement siblings. Before atomic
+publication, the builder checkpoints and closes DuckDB and refuses to publish
+if a write-ahead log remains.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree

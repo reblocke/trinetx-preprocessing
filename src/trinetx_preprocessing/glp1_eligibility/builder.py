@@ -171,8 +171,15 @@ def build_glp1_eligibility(
             write_parquet=config.output.write_parquet,
             write_html_qa=config.output.write_html_qa,
         )
+        connection.execute("CHECKPOINT")
         connection.close()
         connection = None
+        write_ahead_log = Path(f"{database_path}.wal")
+        if write_ahead_log.exists():
+            raise RuntimeError(
+                "DuckDB write-ahead log remained after checkpoint: "
+                f"{write_ahead_log.name}"
+            )
         temp_dir = workspace.staging_dir / ".duckdb_tmp"
         if temp_dir.exists():
             remove_tree_strict(temp_dir, context="DuckDB temporary directory")

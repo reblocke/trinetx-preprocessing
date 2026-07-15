@@ -327,6 +327,30 @@ def test_same_size_distinct_medication_split_is_retained(tmp_path: Path) -> None
     assert discovered["medication_ingredient"] == (ingredient,)
 
 
+def test_medication_chunks_allow_different_valid_header_order(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    (tmp_path / "Medications" / "medication.csv").unlink()
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    ingredient.write_text(
+        "patient_id,encounter_id,code_system,code,start_date\n"
+    )
+    first = tmp_path / "Medications" / "medication0001.csv"
+    second = tmp_path / "Medications" / "medication0002.csv"
+    first.write_text(
+        "patient_id,encounter_id,code_system,code,start_date,route\n"
+        "p1,e1,RXNORM,1991302,2024-01-01,oral\n"
+    )
+    second.write_text(
+        "code,start_date,patient_id,code_system,encounter_id,brand\n"
+        "1991303,2024-01-02,p2,RXNORM,e2,Wegovy\n"
+    )
+
+    discovered = discover_export_files(tmp_path)
+
+    assert discovered["medication"] == (first, second)
+    assert discovered["medication_ingredient"] == (ingredient,)
+
+
 def test_validate_export_reports_only_relative_paths(tmp_path: Path) -> None:
     _write_export(tmp_path)
 
@@ -1853,6 +1877,7 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     }
     assert required <= {path.name for path in output_root.iterdir()}
     assert required == {path.name for path in first.output_paths}
+    assert not (output_root / "glp1_hypercapnia.duckdb.wal").exists()
     assert first.counts.patient_index_events == 1
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1
@@ -1990,6 +2015,7 @@ def test_repository_local_glp1_output_must_be_git_ignored(tmp_path: Path) -> Non
     (
         "results/glp1_eligibility/glp1_hypercapnia.duckdb",
         "results/custom-name.duckdb",
+        "results/custom-name.duckdb.wal",
         "results/private/analysis_glp1_eligibility.parquet",
         "results/private/eligibility_evidence_long.parquet",
         "results/private/cohort_hypercapnia_encounter.parquet",

@@ -1053,8 +1053,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   from unfiltered raw-domain aggregate scans. Prefer the nearest canonical
   unsplit source family and use headered chunks only as a fallback. When a
   canonical ingredient file exists, ignore a medication chunk family only if
-  the chunks fail the supported repeated-header contract; retain independently
-  valid medication and ingredient families.
+  a chunk lacks the required medication header fields; retain independently
+  valid medication and ingredient families even when optional fields or column
+  order differ.
 - Context: A changed external concept catalog or code executed from another
   working directory could reuse stale output. Concept-filtered source tables
   also made unmatched history appear absent, and discovered ingredient exports
@@ -1087,8 +1088,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   output locations.
 - Consequences: Cohort flow has exactly 15 ordered rows. The final five are
   parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
-  DuckDB files are ignored by format and unsafe repository-local roots fail
-  before staging starts.
+  DuckDB files and write-ahead logs are ignored by format, unsafe
+  repository-local roots fail before staging starts, and publication fails
+  closed if a WAL remains after an explicit checkpoint and connection close.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
   `tests/test_glp1_foundation.py`.

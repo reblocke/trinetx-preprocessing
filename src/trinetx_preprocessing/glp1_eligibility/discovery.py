@@ -164,7 +164,7 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
         )
         for name, paths in discovered.items()
     }
-    if _medication_split_family_is_headerless_artifact(selected):
+    if _medication_split_family_has_invalid_headers(selected):
         selected["medication"] = ()
     return selected
 
@@ -295,10 +295,10 @@ def _select_source_family(paths: list[Path], root: Path) -> list[Path]:
     )
 
 
-def _medication_split_family_is_headerless_artifact(
+def _medication_split_family_has_invalid_headers(
     discovered: dict[str, tuple[Path, ...]],
 ) -> bool:
-    """Ignore unsupported headerless legacy chunks beside an ingredient export."""
+    """Ignore unsupported legacy chunks beside a valid ingredient export."""
 
     medication = discovered["medication"]
     ingredient = discovered["medication_ingredient"]
@@ -306,10 +306,16 @@ def _medication_split_family_is_headerless_artifact(
         return False
     if any(_chunk_index(path) is None for path in medication):
         return False
+    required = frozenset(
+        next(
+            definition.required_columns
+            for definition in DOMAIN_DEFINITIONS
+            if definition.name == "medication"
+        )
+    )
     try:
-        expected_header = _read_header(medication[0])
         return any(
-            _read_header(path) != expected_header for path in medication[1:]
+            not required.issubset(_read_header(path)) for path in medication
         )
     except (OSError, UnicodeError, csv.Error):
         return False

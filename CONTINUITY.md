@@ -118,6 +118,10 @@
 - The final `f4184d3` Codex review returned three additional findings: date-only context rows missed later same-day encounter starts, same-size medication sources could be suppressed without exact equality, and the actual sibling run-state filename was not ignored.
 - All three are fixed locally. Date-only context uses calendar-date overlap only after patient/encounter linkage; independently valid medication and ingredient families are retained while unsupported headerless chunks are ignored; and both internal and sibling run-state filenames are protected. Ruff, diff checks, `48` focused tests, and all `287` tests pass. BOOK header validation remains clean, and the production fixture completed in `0.69 s` with `356,859,904` bytes maximum RSS and unchanged 19/17/14/651 counts.
 - Running pytest temporary files directly on the ExFAT validation volume was pathologically metadata-bound (`5` tests in `450 s`); the complete synthetic suite therefore used a bounded `/tmp` basetemp while retaining the uv cache externally.
+- Commit `b2a161c` is pushed on PR #7 with the date-only context, medication-family retention, and sibling run-state protections; Linux CI passes all `287` tests and the corresponding review threads are resolved.
+- The latest Codex review returned one P2 finding: valid medication chunks with differing optional columns or header order could be mistaken for legacy headerless artifacts. Local discovery changes now validate each chunk against required medication fields instead of comparing it with the first chunk's exact header.
+- Focused verification of that fix exposed a nondeterministic DuckDB write-ahead-log file in the public output inventory. The build now checkpoints before close, fails closed if the WAL remains, and protects `*.duckdb.wal` from tracking.
+- The final local gate passes `git diff --check`, Ruff, `50` focused foundation tests, and all `289` tests. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.62 s` with `372,981,760` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL artifact.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -126,10 +130,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified final PR #7 review fixes.
+- Commit and push the verified medication split-header and DuckDB WAL fixes.
 
 ## Next
-- Resolve the three PR threads, request a final Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the remaining PR thread, request a final Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -144,4 +148,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `f4184d3`; PR #7 has three final review fixes ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `b2a161c`; PR #7 has one verified review fix plus a verified DuckDB WAL publication safeguard ready to commit.
