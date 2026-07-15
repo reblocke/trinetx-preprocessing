@@ -90,11 +90,9 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         JOIN source_diagnosis AS diagnosis
           ON diagnosis.patient_id = cohort.patient_id
          AND diagnosis.encounter_id = cohort.encounter_id
-         AND diagnosis.event_datetime >= cohort.encounter_start
-         AND diagnosis.event_datetime <= coalesce(
-                cohort.encounter_end,
-                cohort.encounter_start + INTERVAL 1 DAY
-             )
+         AND {_encounter_context_window_sql(
+             'diagnosis.event_datetime', 'diagnosis.date'
+         )}
         JOIN concept_set AS concept
           ON concept.domain = 'diagnosis'
          AND concept.include
@@ -128,11 +126,9 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         JOIN source_procedure AS procedure
           ON procedure.patient_id = cohort.patient_id
          AND procedure.encounter_id = cohort.encounter_id
-         AND procedure.event_datetime >= cohort.encounter_start
-         AND procedure.event_datetime <= coalesce(
-                cohort.encounter_end,
-                cohort.encounter_start + INTERVAL 1 DAY
-             )
+         AND {_encounter_context_window_sql(
+             'procedure.event_datetime', 'procedure.date'
+         )}
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
@@ -706,6 +702,26 @@ def _code_system_sql(expression: str) -> str:
         f"regexp_replace(upper(trim({expression})), "
         "'[^A-Z0-9]', '', 'g')"
     )
+
+
+def _encounter_context_window_sql(
+    event_datetime: str,
+    raw_date: str,
+) -> str:
+    """Match precise timestamps or date-only events within encounter dates."""
+
+    encounter_end = (
+        "coalesce(cohort.encounter_end, "
+        "cohort.encounter_start + INTERVAL 1 DAY)"
+    )
+    return f"""(
+        {event_datetime} BETWEEN cohort.encounter_start AND {encounter_end}
+        OR (
+            NOT contains(trim(coalesce({raw_date}, '')), ':')
+            AND {event_datetime}::DATE BETWEEN cohort.encounter_start::DATE
+                AND {encounter_end}::DATE
+        )
+    )"""
 
 
 def _concept_match_sql(code_expression: str) -> str:

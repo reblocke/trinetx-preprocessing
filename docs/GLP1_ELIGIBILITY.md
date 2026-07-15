@@ -35,9 +35,11 @@ When a restored root contains both a canonical unsplit export and legacy split
 artifacts, discovery selects the nearest canonical file. Headered split files
 remain the fallback when no unsplit source exists. Either a medication export
 or a medication-ingredient export satisfies the medication source contract;
-an exact duplicate split alias is not ingested twice. Ingredient exports must
-provide `patient_id`, `code_system`, `code`, and `start_date` because those
-fields define medication phenotype membership and timing.
+independently valid headered medication and ingredient families are both
+retained. Unsupported headerless legacy medication chunks are ignored when a
+canonical ingredient file is available. Ingredient exports must provide
+`patient_id`, `code_system`, `code`, and `start_date` because those fields
+define medication phenotype membership and timing.
 
 Build the additive database and study files:
 

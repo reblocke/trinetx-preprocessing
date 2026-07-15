@@ -278,7 +278,7 @@ def test_ingredient_source_rejects_missing_medication_fields(tmp_path: Path) -> 
     )
 
 
-def test_duplicate_medication_split_alias_is_not_discovered_twice(
+def test_headerless_medication_split_artifact_is_not_discovered(
     tmp_path: Path,
 ) -> None:
     _write_export(tmp_path)
@@ -292,10 +292,38 @@ def test_duplicate_medication_split_alias_is_not_discovered_twice(
     ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
     ingredient.write_text(content)
     (tmp_path / "Medications" / "medication0001.csv").write_text(content)
+    (tmp_path / "Medications" / "medication0002.csv").write_text(
+        "p2,e2,u2,RXNORM,1991302,2024-01-02,oral,Wegovy,2.4mg,,s1\n"
+    )
 
     discovered = discover_export_files(tmp_path)
 
     assert discovered["medication"] == ()
+    assert discovered["medication_ingredient"] == (ingredient,)
+
+
+def test_same_size_distinct_medication_split_is_retained(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    (tmp_path / "Medications" / "medication.csv").unlink()
+    header = (
+        "patient_id,encounter_id,unique_id,code_system,code,start_date,route,"
+        "brand,strength,derived_by_TriNetX,source_id\n"
+    )
+    ingredient_content = (
+        header + "p1,e1,u1,RXNORM,1991302,2024-01-01,oral,Wegovy,2.4mg,,s1\n"
+    )
+    medication_content = (
+        header + "p1,e1,u1,RXNORM,1991303,2024-01-01,oral,Wegovy,2.4mg,,s1\n"
+    )
+    assert len(ingredient_content) == len(medication_content)
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    medication = tmp_path / "Medications" / "medication0001.csv"
+    ingredient.write_text(ingredient_content)
+    medication.write_text(medication_content)
+
+    discovered = discover_export_files(tmp_path)
+
+    assert discovered["medication"] == (medication,)
     assert discovered["medication_ingredient"] == (ingredient,)
 
 
@@ -1672,6 +1700,64 @@ def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> Non
         connection.close()
 
 
+def test_date_only_context_rows_match_same_encounter_date(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "date_only,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_date_only,date_only,2024-01-01 12:00:00,"
+        "2024-01-02 12:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "date_only,e_date_only,2024-01-01 13:00:00,LOINC,2019-8,55,,mmHg",
+        "date_only,e_date_only,2024-01-01 13:00:00,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "date_only,e_date_only,2023-12-15,LOINC,39156-5,31,,kg/m2",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "date_only,e_date_only,2024-01-01,ICD10CM,I46.9,,,,",
+        "date_only,e_date_only,2024-01-01,ICD10CM,T07.XXXA,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "date_only,e_date_only,2024-01-01,CPT,99152,",
+        "date_only,e_date_only,2024-01-01,CPT,00100,",
+        "date_only,e_date_only,2024-01-01,CPT,94002,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT cardiac_arrest_context, major_trauma_context,
+                   procedure_sedation_context, postoperative_context,
+                   invasive_ventilation_at_index
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == (True, True, True, True, True)
+        assert connection.execute(
+            "SELECT count(*) FROM analysis_primary_cleaned_obesity_hypercapnia"
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
 def test_probable_venous_specimen_is_retained_but_excluded_from_cleaned_view(
     tmp_path: Path,
 ) -> None:
@@ -1907,6 +1993,7 @@ def test_repository_local_glp1_output_must_be_git_ignored(tmp_path: Path) -> Non
         "results/private/analysis_glp1_eligibility.parquet",
         "results/private/eligibility_evidence_long.parquet",
         "results/private/cohort_hypercapnia_encounter.parquet",
+        "results/.glp1_eligibility.glp1_build_state.json",
     ),
 )
 def test_gitignore_protects_glp1_row_level_artifacts(relative_path: str) -> None:

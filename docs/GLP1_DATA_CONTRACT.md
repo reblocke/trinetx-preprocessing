@@ -41,6 +41,8 @@ remain mandatory.
 - Baseline phenotype inputs are constrained to each row's `index_date`.
 - Index-context fields use only the selected encounter window and are separated
   from pre-index history.
+- Timestamped context rows use exact encounter bounds. Date-only diagnosis and
+  procedure rows on the selected encounter use encounter calendar-date overlap.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
 - Nullable indication booleans use `NULL` for indeterminate or unevaluable,

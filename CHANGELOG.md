@@ -33,8 +33,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Ingested optional medication-ingredient exports and separated raw-domain
   observability counts from concept matching so incomplete seed terminology is
   not reported as absent patient history. Discovery now prefers the nearest
-  canonical unsplit source, falls back to supported split files, and suppresses
-  byte-identical legacy medication aliases.
+  canonical unsplit source, falls back to supported split files, and ignores
+  unsupported headerless medication chunks beside a canonical ingredient file.
 - Required ingredient-only exports to expose `patient_id`, `code_system`,
   `code`, and `start_date`, so malformed medication sources fail during header
   validation instead of later ingestion.
@@ -45,7 +45,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   single checkpointed domain stream, and rejected unsupported custom threshold
   and arterial-specimen configurations instead of silently ignoring them.
 - Rejected repository-local confidential output roots unless Git ignores the
-  entire directory, and added format-specific protection for DuckDB artifacts.
+  entire directory, and added format-specific protection for DuckDB artifacts
+  plus the actual sibling run-state filename.
+- Matched date-only diagnosis and procedure context rows by encounter calendar
+  date while retaining exact encounter-bound checks for timestamped rows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and

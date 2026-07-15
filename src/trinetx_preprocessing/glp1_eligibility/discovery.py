@@ -164,7 +164,7 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
         )
         for name, paths in discovered.items()
     }
-    if _medication_alias_duplicates_ingredient(selected):
+    if _medication_split_family_is_headerless_artifact(selected):
         selected["medication"] = ()
     return selected
 
@@ -295,21 +295,22 @@ def _select_source_family(paths: list[Path], root: Path) -> list[Path]:
     )
 
 
-def _medication_alias_duplicates_ingredient(
+def _medication_split_family_is_headerless_artifact(
     discovered: dict[str, tuple[Path, ...]],
 ) -> bool:
+    """Ignore unsupported headerless legacy chunks beside an ingredient export."""
+
     medication = discovered["medication"]
     ingredient = discovered["medication_ingredient"]
-    if not medication or not ingredient:
+    if len(medication) < 2 or not ingredient:
         return False
     if any(_chunk_index(path) is None for path in medication):
         return False
-    if sum(path.stat().st_size for path in medication) != sum(
-        path.stat().st_size for path in ingredient
-    ):
-        return False
     try:
-        return _read_header(medication[0]) == _read_header(ingredient[0])
+        expected_header = _read_header(medication[0])
+        return any(
+            _read_header(path) != expected_header for path in medication[1:]
+        )
     except (OSError, UnicodeError, csv.Error):
         return False
 

@@ -1051,9 +1051,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   hash supplied export metadata. Ingest optional medication-ingredient files
   into medication evidence, while computing candidate-patient observability
   from unfiltered raw-domain aggregate scans. Prefer the nearest canonical
-  unsplit source family, use headered chunks only as a fallback, and suppress a
-  medication chunk family only when its schema and total bytes exactly match
-  the selected ingredient family.
+  unsplit source family and use headered chunks only as a fallback. When a
+  canonical ingredient file exists, ignore a medication chunk family only if
+  the chunks fail the supported repeated-header contract; retain independently
+  valid medication and ingredient families.
 - Context: A changed external concept catalog or code executed from another
   working directory could reuse stale output. Concept-filtered source tables
   also made unmatched history appear absent, and discovered ingredient exports
@@ -1065,8 +1066,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   observability adds bounded sequential aggregate scans but stores no additional
   row-level source copy. Run manifests expose the concept digest and source
   inventory includes metadata files and hashes. Ingredient-only exports are
-  valid, and restored roots no longer ingest both canonical files and legacy
-  duplicate splits.
+  valid, and restored roots no longer ingest unsupported headerless medication
+  artifacts. Same-size but distinct valid source families remain discoverable.
 - References: `src/trinetx_preprocessing/glp1_eligibility/concept_sets.py`,
   `builder.py`, `provenance.py`, `discovery.py`, `ingestion.py`, `workspace.py`,
   `tests/test_glp1_foundation.py`.
@@ -1090,4 +1091,20 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   before staging starts.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Preserve date-only encounter context
+- Date: 2026-07-15
+- Decision: Match timestamped diagnosis and procedure context rows against exact
+  encounter bounds. When a source date contains no time, match by calendar-date
+  overlap after requiring the same patient and encounter identifiers.
+- Context: Casting a date-only value to midnight excluded valid same-encounter
+  context whenever the encounter began later that day.
+- Rationale: Date-only source precision should widen only the temporal boundary,
+  not the patient or encounter linkage.
+- Consequences: Cardiac arrest, trauma, pneumonia, heart failure, ventilation,
+  sedation, and postoperative context remain visible for same-day date-only
+  records. The cleaned primary view can therefore apply its configured context
+  exclusions consistently.
+- References: `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `tests/test_glp1_foundation.py`.

@@ -115,6 +115,8 @@
 - The staging audit caught and fixed an overbroad output ignore that also matched the Python package; repository-local generated outputs remain protected, and a regression test now proves source files are not hidden.
 - Commit `be64733` is pushed on PR #7, GitHub CI passes all `283` tests, and the fresh Codex review returned one P2 boundary finding: ingredient-only exports could pass validation without fields required by ingestion.
 - Ingredient-only exports now require `patient_id`, `code_system`, `code`, and `start_date` at header validation. Ruff, diff checks, `45` focused tests, and all `284` tests pass; the header-only BOOK preflight remains valid with 0 errors and 0 warnings.
+- The final `f4184d3` Codex review returned three additional findings: date-only context rows missed later same-day encounter starts, same-size medication sources could be suppressed without exact equality, and the actual sibling run-state filename was not ignored.
+- All three are fixed locally. Date-only context uses calendar-date overlap only after patient/encounter linkage; independently valid medication and ingredient families are retained while unsupported headerless chunks are ignored; and both internal and sibling run-state filenames are protected. Ruff, diff checks, `48` focused tests, and all `287` tests pass. BOOK header validation remains clean, and the production fixture completed in `0.69 s` with `356,859,904` bytes maximum RSS and unchanged 19/17/14/651 counts.
 - Running pytest temporary files directly on the ExFAT validation volume was pathologically metadata-bound (`5` tests in `450 s`); the complete synthetic suite therefore used a bounded `/tmp` basetemp while retaining the uv cache externally.
 
 ## Done
@@ -124,10 +126,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified medication-ingredient header-contract correction.
+- Commit and push the verified final PR #7 review fixes.
 
 ## Next
-- Push the focused correction, resolve the PR thread, request a final Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the three PR threads, request a final Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -142,4 +144,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `be64733`; PR #7 has one focused follow-up ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `f4184d3`; PR #7 has three final review fixes ready to commit.

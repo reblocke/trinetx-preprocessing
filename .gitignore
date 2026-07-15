@@ -33,7 +33,8 @@ trinetx_preprocessing_scaffold_md.zip
 **/cohort_flow.csv
 **/data_quality_report.html
 **/run_manifest.json
-**/.glp1_eligibility.run-state.json
+**/.glp1_build_state.json
+**/.*.glp1_build_state.json
 **/.glp1_eligibility.build-*/
 **/.glp1_eligibility.previous-*/
 
