@@ -1030,16 +1030,20 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   encounter maximum from plausible arterial measurements through discharge.
   Treat the published 50/52 PaCO2 and 27/30/35/40 BMI columns plus arterial
   primary endpoint as fixed contracts; reject configurations that request
-  unsupported alternatives.
+  unsupported alternatives. When encounter end is missing, use the existing
+  one-day post-start bound for same-encounter BMI fallback as well as gas windows.
 - Context: Review found that validity filtering promoted later gas values,
   fixed output columns ignored custom configuration, and the 24-hour table
-  understated encounter maxima.
+  understated encounter maxima. A null encounter end also made valid later BMI
+  evidence unreachable within the selected encounter.
 - Rationale: Selection and validity are distinct operations. Failing closed is
   safer than silently changing the index event or accepting configuration that
   cannot alter the published contract.
 - Consequences: The GLP-1 ruleset advances to `2026-07-15`. Unusable first gas
   rows remain auditable but do not enter the strict cohort. Alternate thresholds
   require a future versioned output schema rather than a YAML-only change.
+  Open-ended index encounters use `index_date + 1 day` for the configured
+  same-encounter BMI fallback.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `src/trinetx_preprocessing/glp1_eligibility/config.py`,
   `tests/test_glp1_foundation.py`.

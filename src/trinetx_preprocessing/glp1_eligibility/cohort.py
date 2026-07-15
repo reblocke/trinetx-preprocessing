@@ -872,7 +872,10 @@ def _build_analysis_table(
          AND bmi.concept_set_id = 'bmi'
          AND bmi.plausible_value
          AND bmi.event_datetime > cohort.index_date
-         AND bmi.event_datetime <= cohort.encounter_end
+         AND bmi.event_datetime <= coalesce(
+                cohort.encounter_end,
+                cohort.index_date + INTERVAL 1 DAY
+             )
         WHERE {fallback}
         """
     )

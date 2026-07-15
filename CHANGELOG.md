@@ -48,6 +48,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Made multi-file unmapped-code sketches preserve their error bounds by using a
   single checkpointed domain stream, and rejected unsupported custom threshold
   and arterial-specimen configurations instead of silently ignoring them.
+- Applied the existing one-day open-encounter bound to same-encounter BMI
+  fallback, so a missing encounter end does not discard later valid BMI evidence.
 - Rejected every repository-local confidential output root regardless of Git
   ignore rules, and added format-specific defense-in-depth protection for
   DuckDB artifacts, write-ahead logs, and the sibling run-state filename.

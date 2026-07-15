@@ -1015,6 +1015,69 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         connection.close()
 
 
+def test_same_encounter_bmi_fallback_handles_missing_encounter_end(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2024-01-01 12:00:00,LOINC,39156-5,36,,kg/m2",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="synthetic-run",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+        counts = build_core_cohort(
+            connection,
+            config=config,
+            run_id="synthetic-run",
+            git_sha="test-sha",
+        )
+
+        assert counts.patient_index_events == 1
+        assert counts.primary_obesity_hypercapnia == 1
+        assert connection.execute(
+            """
+            SELECT bmi_source, bmi_value
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == ("measured_index_encounter", 36.0)
+    finally:
+        connection.close()
+
+
 def test_first_arterial_gas_is_selected_before_unit_and_plausibility_filters(
     tmp_path: Path,
 ) -> None:

@@ -90,6 +90,7 @@ python -m trinetx_preprocessing.glp1_eligibility summarize \
 The current build implements source and export-metadata inventory,
 first-observed arterial PaCO2 selection before validity checks, unit-aware pH
 pairing, hypercapnia sensitivity cohorts, the measured/calculated BMI hierarchy,
+including a one-day same-encounter fallback when encounter end is missing,
 concept-independent raw observability, temporal component phenotypes,
 indication tiers, payer-route modeling, medication and ingredient order
 history, all 15 flow stages, long-form source and derived evidence, study views,
