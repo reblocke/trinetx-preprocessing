@@ -39,8 +39,8 @@ of exactly one export. Either a medication export or a medication-ingredient
 export satisfies the medication source contract;
 independently valid headered medication and ingredient families are both
 retained even when optional columns or column order differ. Legacy medication
-chunks lacking required header fields are ignored when a canonical ingredient
-file is available. Ingredient exports must provide
+chunks, including one-file chunk families, lacking required header fields are
+ignored when a canonical ingredient file is available. Ingredient exports must provide
 `patient_id`, `code_system`, `code`, and `start_date` because those fields
 define medication phenotype membership and timing.
 
@@ -60,9 +60,10 @@ staged build is complete.
 
 Confidential output must live outside every Git worktree. Repository-local
 output is rejected even when ignore rules appear to cover it, because negation
-rules can re-expose selected children. Ignore patterns remain defense in depth.
-Before atomic publication, the builder checkpoints and closes DuckDB and
-refuses to publish if a write-ahead log remains.
+rules can re-expose selected children. Existing non-directory output paths are
+also rejected before Git probing. Ignore patterns remain defense in depth.
+Before atomic publication, the builder checkpoints and closes DuckDB and refuses
+to publish if a write-ahead log remains.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree

@@ -326,6 +326,28 @@ def test_headerless_medication_split_artifact_is_not_discovered(
     assert discovered["medication_ingredient"] == (ingredient,)
 
 
+def test_single_headerless_medication_chunk_is_not_discovered(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    (tmp_path / "Medications" / "medication.csv").unlink()
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    ingredient.write_text(
+        "patient_id,encounter_id,code_system,code,start_date\n"
+        "p1,e1,RXNORM,1991302,2024-01-01\n"
+    )
+    (tmp_path / "Medications" / "medication0001.csv").write_text(
+        "p2,e2,RXNORM,1991302,2024-01-02\n"
+    )
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is True
+    assert report.domain_file_counts["medication"] == 0
+    assert report.domain_file_counts["medication_ingredient"] == 1
+    assert report.errors == ()
+
+
 def test_same_size_distinct_medication_split_is_retained(tmp_path: Path) -> None:
     _write_export(tmp_path)
     (tmp_path / "Medications" / "medication.csv").unlink()
@@ -2043,6 +2065,13 @@ def test_output_outside_git_worktree_is_allowed(tmp_path: Path) -> None:
         check=True,
     )
     output = repository / "results" / "custom"
+    output.parent.mkdir()
+    output.write_text("not a directory\n")
+
+    with pytest.raises(ValueError, match="exists and is not a directory"):
+        _require_safe_output_location(output)
+
+    output.unlink()
     (repository / ".gitignore").write_text("/results/custom/\n")
 
     with pytest.raises(ValueError, match="outside the Git worktree"):

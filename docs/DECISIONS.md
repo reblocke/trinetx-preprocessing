@@ -1053,10 +1053,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   from unfiltered raw-domain aggregate scans. Prefer the nearest canonical
   unsplit source family and use headered chunks only as a fallback. When a
   canonical ingredient file exists, ignore a medication chunk family only if
-  a chunk lacks the required medication header fields; retain independently
-  valid medication and ingredient families even when optional fields or column
-  order differ. Reject tied nearest export roots and ambiguous same-root source
-  families before inventory or ingestion.
+  any chunk, including a one-file chunk family, lacks the required medication
+  header fields; retain independently valid medication and ingredient families
+  even when optional fields or column order differ. Reject tied nearest export
+  roots and ambiguous same-root source families before inventory or ingestion.
 - Context: A changed external concept catalog or code executed from another
   working directory could reuse stale output. Concept-filtered source tables
   also made unmatched history appear absent, and discovered ingredient exports
@@ -1093,8 +1093,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
   Repository-local roots always fail before staging starts. DuckDB files,
   write-ahead logs, and other generated artifacts remain ignored as defense in
-  depth. Publication fails closed if a WAL remains after an explicit checkpoint
-  and connection close.
+  depth. Existing non-directory output paths fail before Git probing.
+  Publication fails closed if a WAL remains after an explicit checkpoint and
+  connection close.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
   `tests/test_glp1_foundation.py`.

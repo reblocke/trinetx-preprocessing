@@ -224,6 +224,10 @@ def _require_safe_output_location(output_dir: Path) -> None:
     """Reject every output path inside a Git worktree."""
 
     output = Path(output_dir).resolve()
+    if output.exists() and not output.is_dir():
+        raise ValueError(
+            f"GLP-1 output path exists and is not a directory: {output}"
+        )
     existing_parent = output
     while not existing_parent.exists() and existing_parent != existing_parent.parent:
         existing_parent = existing_parent.parent

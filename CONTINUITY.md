@@ -137,6 +137,9 @@
 - Commit `d74d0d6` is pushed, Linux CI passes all `292` tests, and its sentinel-collision thread is resolved.
 - Codex review of `d74d0d6` returned one P1 privacy finding: Git negation rules can ignore a directory path while re-exposing selected generated children. The selected resolution is to reject every repository-local GLP-1 output path rather than infer confidentiality from Git ignore rules.
 - GLP-1 builds now reject every output path inside a Git worktree regardless of ignore rules; external paths remain supported and format ignores remain defense in depth. Ruff, `53` focused tests, and all `292` tests pass. The production fixture completed in `0.63 s` with `360,628,224` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
+- Commit `70f7140` is pushed, Linux CI passes all `292` tests, and its child-negation privacy thread is resolved.
+- Codex review of `70f7140` returned two findings: an existing-file output can bypass Git worktree detection, and one invalid medication chunk is retained beside a valid ingredient export even though larger invalid chunk families are ignored.
+- Existing non-directory outputs now fail before Git probing, and required-header validation applies to one-file medication chunk families beside a valid ingredient source. Ruff, `54` focused tests, and all `293` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.85 s` with `359,022,592` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -145,10 +148,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified external-output-only privacy policy.
+- Commit and push the verified output-file and single-chunk fixes.
 
 ## Next
-- Resolve the privacy-policy PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve both PR threads, request another Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -163,4 +166,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `d74d0d6`; PR #7 has one verified external-output-only privacy fix ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `70f7140`; PR #7 has two verified review fixes ready to commit.

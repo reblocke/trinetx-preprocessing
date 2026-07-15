@@ -339,7 +339,7 @@ def _medication_split_family_has_invalid_headers(
 
     medication = discovered["medication"]
     ingredient = discovered["medication_ingredient"]
-    if len(medication) < 2 or not ingredient:
+    if not medication or not ingredient:
         return False
     if any(_chunk_index(path) is None for path in medication):
         return False
