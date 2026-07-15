@@ -1080,22 +1080,21 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Decision: Build all 15 contracted cohort-flow rows only after component
   phenotypes and payer routes exist. Use bounded source aggregates for the first
   two stages, one checkpointed domain-wide Space-Saving stream for terminology
-  QA, and reject repository-local output directories unless Git ignores the
-  final directory plus its hidden staging, replacement, and run-state siblings.
+  QA, and reject every repository-local output directory regardless of Git
+  ignore rules.
 - Context: The previous flow stopped after five rows, per-file sketch merges
   lost valid error bounds, and custom repository-local output paths could leave
   confidential databases or staging trees trackable.
 - Rationale: Aggregate reports must reconcile the actual endpoint, QA bounds
   must remain truthful, and privacy controls must cover both final and temporary
-  output locations.
+  output locations. Ignore patterns can contain exceptions and cannot prove that
+  every current or future clinical artifact is untrackable.
 - Consequences: Cohort flow has exactly 15 ordered rows. The final five are
   parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
-  DuckDB files and write-ahead logs are ignored by format, unsafe
-  repository-local roots fail before staging starts even when only the final
-  directory is ignored, the exact deterministic run paths are rechecked before
-  staging, and Git must ignore each generated directory path itself rather than
-  only dotfiles, output formats, or a fixed sentinel name. Publication fails
-  closed if a WAL remains after an explicit checkpoint and connection close.
+  Repository-local roots always fail before staging starts. DuckDB files,
+  write-ahead logs, and other generated artifacts remain ignored as defense in
+  depth. Publication fails closed if a WAL remains after an explicit checkpoint
+  and connection close.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
   `tests/test_glp1_foundation.py`.

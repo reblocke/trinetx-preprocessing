@@ -47,15 +47,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Made multi-file unmapped-code sketches preserve their error bounds by using a
   single checkpointed domain stream, and rejected unsupported custom threshold
   and arterial-specimen configurations instead of silently ignoring them.
-- Rejected repository-local confidential output roots unless Git ignores the
-  entire directory, and added format-specific protection for DuckDB artifacts,
-  write-ahead logs, and the actual sibling run-state filename. Builds now
-  checkpoint DuckDB and fail before publication if a WAL remains. The safety
-  gate separately verifies the final, staging, replacement, and run-state paths
-  and rechecks the exact deterministic run paths before staging, so a narrow
-  final-directory rule cannot expose temporary clinical artifacts. Directory
-  coverage is verified on each directory path itself, so dotfile, format-only,
-  or fixed-sentinel ignores cannot satisfy the gate accidentally.
+- Rejected every repository-local confidential output root regardless of Git
+  ignore rules, and added format-specific defense-in-depth protection for
+  DuckDB artifacts, write-ahead logs, and the sibling run-state filename.
+  Builds now checkpoint DuckDB and fail before publication if a WAL remains.
 - Matched date-only diagnosis and procedure context rows by encounter calendar
   date while retaining exact encounter-bound checks for timestamped rows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while

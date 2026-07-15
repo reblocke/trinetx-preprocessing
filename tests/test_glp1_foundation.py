@@ -2021,22 +2021,21 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert read_run_state(output_root).status == "completed"
 
 
-def test_repository_local_glp1_output_must_be_git_ignored(tmp_path: Path) -> None:
+def test_repository_local_glp1_output_is_rejected(tmp_path: Path) -> None:
     unsafe_output = ROOT / "results" / "unsafe-glp1-output"
 
-    with pytest.raises(ValueError, match="Git does not ignore"):
+    with pytest.raises(ValueError, match="outside the Git worktree"):
         build_glp1_eligibility(
             input_root=tmp_path / "unused-input",
             output_dir=unsafe_output,
             config_path=GLP1_CONFIG,
         )
 
-    _require_safe_output_location(ROOT / "results" / "glp1_eligibility")
+    with pytest.raises(ValueError, match="outside the Git worktree"):
+        _require_safe_output_location(ROOT / "results" / "glp1_eligibility")
 
 
-def test_repository_local_output_requires_atomic_sibling_ignores(
-    tmp_path: Path,
-) -> None:
+def test_output_outside_git_worktree_is_allowed(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
     subprocess.run(
@@ -2044,46 +2043,12 @@ def test_repository_local_output_requires_atomic_sibling_ignores(
         check=True,
     )
     output = repository / "results" / "custom"
-    ignore_file = repository / ".gitignore"
+    (repository / ".gitignore").write_text("/results/custom/\n")
 
-    ignore_file.write_text(
-        "confidential-output-check\n"
-        "/results/.custom.glp1_build_state.json\n"
-    )
-    with pytest.raises(ValueError, match="final output directory"):
+    with pytest.raises(ValueError, match="outside the Git worktree"):
         _require_safe_output_location(output)
 
-    ignore_file.write_text(".*\n")
-    with pytest.raises(ValueError, match="final output directory"):
-        _require_safe_output_location(output)
-
-    ignore_file.write_text("/results/custom/\n")
-
-    with pytest.raises(ValueError, match="staging workspace") as exc_info:
-        _require_safe_output_location(output)
-
-    message = str(exc_info.value)
-    assert "replacement backup" in message
-    assert "run-state file" in message
-
-    probe_run_id = "0" * 24
-    ignore_file.write_text(
-        "/results/custom/\n"
-        f"/results/.custom.build-{probe_run_id}/\n"
-        f"/results/.custom.previous-{probe_run_id}/\n"
-        "/results/.custom.glp1_build_state.json\n"
-    )
-    _require_safe_output_location(output)
-    with pytest.raises(ValueError, match="staging workspace"):
-        _require_safe_output_location(output, run_id="a" * 24)
-
-    ignore_file.write_text(
-        "/results/custom/\n"
-        "/results/.custom.build-*/\n"
-        "/results/.custom.previous-*/\n"
-        "/results/.custom.glp1_build_state.json\n"
-    )
-    _require_safe_output_location(output, run_id="a" * 24)
+    _require_safe_output_location(tmp_path / "external-output")
 
 
 @pytest.mark.parametrize(

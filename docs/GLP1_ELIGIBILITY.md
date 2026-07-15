@@ -58,15 +58,11 @@ parsed concept catalog, supplied export metadata file, or package code state
 requires `--replace`; replacement preserves the previous output until the
 staged build is complete.
 
-Confidential output should normally live outside the repository. A
-repository-local output is accepted only when Git ignores the complete output
-directory, including its staging and replacement siblings. Before atomic
-publication, the builder checkpoints and closes DuckDB and refuses to publish
-if a write-ahead log remains. The preflight checks the final directory, staging
-workspace, replacement backup, and sibling run-state file independently, then
-rechecks the exact deterministic run paths before staging begins. Git must
-ignore each generated directory path itself; dotfile, file-format, or fixed-name
-ignore rules cannot hide an unsafe output location.
+Confidential output must live outside every Git worktree. Repository-local
+output is rejected even when ignore rules appear to cover it, because negation
+rules can re-expose selected children. Ignore patterns remain defense in depth.
+Before atomic publication, the builder checkpoints and closes DuckDB and
+refuses to publish if a write-ahead log remains.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree

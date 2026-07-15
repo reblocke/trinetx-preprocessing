@@ -75,7 +75,6 @@ def build_glp1_eligibility(
             concept_catalog_sha256=catalog.sha256,
             code_fingerprint=git_sha,
         )
-        _require_safe_output_location(output, run_id=run_id)
         state.update(run_id=run_id, phase="inventory_complete")
 
         existing = _existing_complete_run(output)
@@ -221,12 +220,11 @@ def _published_output_paths(output_dir: Path) -> tuple[Path, ...]:
     )
 
 
-def _require_safe_output_location(
-    output_dir: Path, *, run_id: str | None = None
-) -> None:
-    """Reject a repository-local output unless Git ignores every build path."""
+def _require_safe_output_location(output_dir: Path) -> None:
+    """Reject every output path inside a Git worktree."""
 
-    existing_parent = output_dir
+    output = Path(output_dir).resolve()
+    existing_parent = output
     while not existing_parent.exists() and existing_parent != existing_parent.parent:
         existing_parent = existing_parent.parent
     try:
@@ -239,46 +237,12 @@ def _require_safe_output_location(
     except (OSError, subprocess.CalledProcessError):
         return
     repository = Path(result.stdout.strip()).resolve()
-    probe_run_id = run_id or "0" * 24
-    paths_to_check = {
-        "final output directory": (output_dir, True),
-        "staging workspace": (
-            output_dir.parent / f".{output_dir.name}.build-{probe_run_id}",
-            True,
-        ),
-        "replacement backup": (
-            output_dir.parent / f".{output_dir.name}.previous-{probe_run_id}",
-            True,
-        ),
-        "run-state file": (state_path_for_output(output_dir), False),
-    }
-    unignored = [
-        label
-        for label, (path, is_directory) in paths_to_check.items()
-        if not _git_ignores_path(repository, path, is_directory=is_directory)
-    ]
-    if unignored:
-        raise ValueError(
-            "Refusing repository-local GLP-1 output because Git does not ignore "
-            f"every generated path ({', '.join(unignored)}): {output_dir}. "
-            "Ignore the final, staging, replacement, and run-state paths or use "
-            "a path outside the repository."
-        )
-
-
-def _git_ignores_path(repository: Path, path: Path, *, is_directory: bool) -> bool:
-    candidate = f"{path.as_posix()}/" if is_directory else str(path)
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "check-ignore",
-            "--quiet",
-            "--no-index",
-            "--",
-            candidate,
-        ],
-        check=False,
+    try:
+        output.relative_to(repository)
+    except ValueError:
+        return
+    raise ValueError(
+        "Refusing repository-local GLP-1 output: "
+        f"{output}. Clinical outputs must use a path outside the Git worktree "
+        f"{repository}; ignore rules are defense in depth only."
     )
-    return result.returncode == 0

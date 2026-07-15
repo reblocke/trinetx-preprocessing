@@ -62,7 +62,6 @@ The run identifier is derived from configuration, the complete parsed concept
 catalog, input inventory (including supplied export metadata), and code content
 anchored to the installed package or its source checkout. Identical completed
 runs are reused; a differing run requires `--replace` and is published
-atomically only after staging succeeds. Repository-local output is accepted
-only when Git ignores the entire output directory. Real databases, Parquet
-files, manifests, logs, and reports are private generated artifacts and must
-remain untracked.
+atomically only after staging succeeds. Repository-local output is always
+rejected; real databases, Parquet files, manifests, logs, and reports must live
+outside Git worktrees and remain untracked.
