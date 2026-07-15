@@ -150,6 +150,7 @@
 - Codex re-review of `f40b97c` found one P2 layout edge case: a sibling flat export directory could be mistaken for one domain folder when the main domain-folder export omitted that domain. The explicit recognized-domain-folder fix is in progress.
 - Multi-directory discovery now accepts only recognized TriNetX domain-folder names; a missing domain cannot be borrowed from a sibling flat export. Ruff, `59` focused tests, and all `298` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `378,224,640` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
 - Commit `e946458` is pushed, Linux CI passes all `298` tests, all PR #7 threads are resolved, and Codex review of that commit found no major issues.
+- On 2026-07-15, the user approved rule set `2026-07-15` and the current 118-row seed concept catalog for a private exploratory full-data QA build. This approval permits the run but does not validate clinical phenotypes or authorize clinical interpretation before aggregate QA and approved record-level review.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -158,13 +159,13 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- The GLP-1 engineering and code-review gate is complete; no private build is active.
+- Preflight and launch the approved provisional full GLP-1 build on `LOCKE BOOK`; no prior build process is active.
 
 ## Next
-- Obtain investigator approval for expanded terminology, then launch the private full build with aggregate `status --watch` monitoring and external outputs.
+- Monitor the full build with aggregate `status --watch`, inspect PHI-safe QA and unmapped-code evidence, then perform targeted clinical and approved record-level validation before any validity claim.
 
 ## Open questions (UNCONFIRMED if needed)
-- UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
+- None blocking launch. Terminology expansion decisions after the provisional build remain UNCONFIRMED and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -176,4 +177,5 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at review-clean pushed checkpoint `e946458`; PR #7 is green with all threads resolved.
+- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `e946458` is followed only by continuity bookkeeping. PR #7 is green with all threads resolved.
+- Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
