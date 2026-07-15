@@ -62,7 +62,9 @@ Confidential output should normally live outside the repository. A
 repository-local output is accepted only when Git ignores the complete output
 directory, including its staging and replacement siblings. Before atomic
 publication, the builder checkpoints and closes DuckDB and refuses to publish
-if a write-ahead log remains.
+if a write-ahead log remains. The preflight checks the final directory, staging
+workspace, replacement backup, and sibling run-state file independently, then
+rechecks the exact deterministic run paths before staging begins.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree

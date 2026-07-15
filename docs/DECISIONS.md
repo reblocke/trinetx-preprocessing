@@ -1081,7 +1081,7 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   phenotypes and payer routes exist. Use bounded source aggregates for the first
   two stages, one checkpointed domain-wide Space-Saving stream for terminology
   QA, and reject repository-local output directories unless Git ignores the
-  directory as a whole.
+  final directory plus its hidden staging, replacement, and run-state siblings.
 - Context: The previous flow stopped after five rows, per-file sketch merges
   lost valid error bounds, and custom repository-local output paths could leave
   confidential databases or staging trees trackable.
@@ -1091,8 +1091,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Cohort flow has exactly 15 ordered rows. The final five are
   parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
   DuckDB files and write-ahead logs are ignored by format, unsafe
-  repository-local roots fail before staging starts, and publication fails
-  closed if a WAL remains after an explicit checkpoint and connection close.
+  repository-local roots fail before staging starts even when only the final
+  directory is ignored, the exact deterministic run paths are rechecked before
+  staging, and publication fails closed if a WAL remains after an explicit
+  checkpoint and connection close.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
   `tests/test_glp1_foundation.py`.

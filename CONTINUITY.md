@@ -125,6 +125,9 @@
 - Commit `66889e4` is pushed, Linux CI passes all `289` tests, and its medication split-header review thread is resolved.
 - Codex review of `66889e4` returned one P2 discovery finding: two same-depth canonical export roots can be silently combined. The next patch will reject tied nearest roots and ambiguous same-root source families before inventory or ingestion.
 - Tied nearest export roots and ambiguous same-root source families now fail closed with relative-path diagnostics before inventory or ingestion. Ruff, `52` focused tests, and all `291` tests pass; BOOK header-only validation remains clean with zero errors/warnings. The production fixture completed in `0.70 s` with `354,402,304` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
+- Commit `9de83c6` is pushed, Linux CI passes all `291` tests, and the tied-root review thread is resolved.
+- Codex review of `9de83c6` returned one P1 privacy finding: a narrow Git ignore can cover a repository-local final output without covering the hidden staging, replacement, and run-state siblings used during atomic publication.
+- Repository-local safety now probes the final output, hidden staging workspace, hidden replacement backup, and sibling run-state file independently, then rechecks the exact deterministic run paths before staging. Ruff, `53` focused tests, and all `292` tests pass. The production fixture completed in `0.64 s` with `361,152,512` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -133,10 +136,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified fail-closed source-discovery fix.
+- Commit and push the verified repository-local sibling-path safety fix.
 
 ## Next
-- Resolve the discovery PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the sibling-path PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -151,4 +154,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `66889e4`; PR #7 has one verified tied-export-root discovery fix ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `9de83c6`; PR #7 has one verified repository-local sibling-path safety fix ready to commit.

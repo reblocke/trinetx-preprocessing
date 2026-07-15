@@ -2034,6 +2034,46 @@ def test_repository_local_glp1_output_must_be_git_ignored(tmp_path: Path) -> Non
     _require_safe_output_location(ROOT / "results" / "glp1_eligibility")
 
 
+def test_repository_local_output_requires_atomic_sibling_ignores(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(
+        ["git", "init", "--quiet", str(repository)],
+        check=True,
+    )
+    output = repository / "results" / "custom"
+    ignore_file = repository / ".gitignore"
+    ignore_file.write_text("/results/custom/\n")
+
+    with pytest.raises(ValueError, match="staging workspace") as exc_info:
+        _require_safe_output_location(output)
+
+    message = str(exc_info.value)
+    assert "replacement backup" in message
+    assert "run-state file" in message
+
+    probe_run_id = "0" * 24
+    ignore_file.write_text(
+        "/results/custom/\n"
+        f"/results/.custom.build-{probe_run_id}/\n"
+        f"/results/.custom.previous-{probe_run_id}/\n"
+        "/results/.custom.glp1_build_state.json\n"
+    )
+    _require_safe_output_location(output)
+    with pytest.raises(ValueError, match="staging workspace"):
+        _require_safe_output_location(output, run_id="a" * 24)
+
+    ignore_file.write_text(
+        "/results/custom/\n"
+        "/results/.custom.build-*/\n"
+        "/results/.custom.previous-*/\n"
+        "/results/.custom.glp1_build_state.json\n"
+    )
+    _require_safe_output_location(output, run_id="a" * 24)
+
+
 @pytest.mark.parametrize(
     "relative_path",
     (

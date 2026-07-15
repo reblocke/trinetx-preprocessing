@@ -50,7 +50,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Rejected repository-local confidential output roots unless Git ignores the
   entire directory, and added format-specific protection for DuckDB artifacts,
   write-ahead logs, and the actual sibling run-state filename. Builds now
-  checkpoint DuckDB and fail before publication if a WAL remains.
+  checkpoint DuckDB and fail before publication if a WAL remains. The safety
+  gate separately verifies the final, staging, replacement, and run-state paths
+  and rechecks the exact deterministic run paths before staging, so a narrow
+  final-directory rule cannot expose temporary clinical artifacts.
 - Matched date-only diagnosis and procedure context rows by encounter calendar
   date while retaining exact encounter-bound checks for timestamped rows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
