@@ -53,7 +53,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   checkpoint DuckDB and fail before publication if a WAL remains. The safety
   gate separately verifies the final, staging, replacement, and run-state paths
   and rechecks the exact deterministic run paths before staging, so a narrow
-  final-directory rule cannot expose temporary clinical artifacts.
+  final-directory rule cannot expose temporary clinical artifacts. Directory
+  coverage uses a non-hidden, extensionless probe so dotfile or format-only
+  ignores cannot satisfy the gate accidentally.
 - Matched date-only diagnosis and procedure context rows by encounter calendar
   date while retaining exact encounter-bound checks for timestamped rows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while

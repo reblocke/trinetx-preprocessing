@@ -1093,8 +1093,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   DuckDB files and write-ahead logs are ignored by format, unsafe
   repository-local roots fail before staging starts even when only the final
   directory is ignored, the exact deterministic run paths are rechecked before
-  staging, and publication fails closed if a WAL remains after an explicit
-  checkpoint and connection close.
+  staging, and a non-hidden extensionless sentinel proves whole-directory ignore
+  coverage rather than dotfile or format-only coverage. Publication fails
+  closed if a WAL remains after an explicit checkpoint and connection close.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
   `tests/test_glp1_foundation.py`.

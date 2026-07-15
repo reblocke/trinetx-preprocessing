@@ -240,7 +240,7 @@ def _require_safe_output_location(
         return
     repository = Path(result.stdout.strip()).resolve()
     probe_run_id = run_id or "0" * 24
-    probe_name = ".confidential-output-check"
+    probe_name = "confidential-output-check"
     paths_to_check = {
         "final output directory": output_dir / probe_name,
         "staging workspace": output_dir.parent

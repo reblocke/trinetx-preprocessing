@@ -64,7 +64,9 @@ directory, including its staging and replacement siblings. Before atomic
 publication, the builder checkpoints and closes DuckDB and refuses to publish
 if a write-ahead log remains. The preflight checks the final directory, staging
 workspace, replacement backup, and sibling run-state file independently, then
-rechecks the exact deterministic run paths before staging begins.
+rechecks the exact deterministic run paths before staging begins. Directory
+checks use a non-hidden, extensionless sentinel so dotfile or file-format ignore
+rules cannot hide an unsafe output location.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree

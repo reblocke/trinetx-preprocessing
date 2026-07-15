@@ -2045,6 +2045,11 @@ def test_repository_local_output_requires_atomic_sibling_ignores(
     )
     output = repository / "results" / "custom"
     ignore_file = repository / ".gitignore"
+
+    ignore_file.write_text(".*\n")
+    with pytest.raises(ValueError, match="final output directory"):
+        _require_safe_output_location(output)
+
     ignore_file.write_text("/results/custom/\n")
 
     with pytest.raises(ValueError, match="staging workspace") as exc_info:
