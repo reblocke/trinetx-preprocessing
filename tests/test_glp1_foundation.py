@@ -262,6 +262,22 @@ def test_ingredient_only_export_satisfies_medication_source_contract(
     assert report.domain_file_counts["medication_ingredient"] == 1
 
 
+def test_ingredient_source_rejects_missing_medication_fields(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    (tmp_path / "Medications" / "medication.csv").unlink()
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    ingredient.write_text("patient_id\np1\n")
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is False
+    assert any(
+        "medication_ingredient.csv is missing required column(s): "
+        "code_system, code, start_date" in error
+        for error in report.errors
+    )
+
+
 def test_duplicate_medication_split_alias_is_not_discovered_twice(
     tmp_path: Path,
 ) -> None:

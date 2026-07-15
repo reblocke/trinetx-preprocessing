@@ -35,6 +35,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   not reported as absent patient history. Discovery now prefers the nearest
   canonical unsplit source, falls back to supported split files, and suppresses
   byte-identical legacy medication aliases.
+- Required ingredient-only exports to expose `patient_id`, `code_system`,
+  `code`, and `start_date`, so malformed medication sources fail during header
+  validation instead of later ingestion.
 - Published all 15 contracted cohort-flow stages after phenotype and payer-route
   derivation, with source-patient and adult-encounter counts computed from the
   unfiltered export.

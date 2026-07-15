@@ -108,7 +108,7 @@ DOMAIN_DEFINITIONS = (
             r"^medication_ingredients?(?:_?\d+)?\.csv$", re.IGNORECASE
         ),
         False,
-        ("patient_id",),
+        ("patient_id", "code_system", "code", "start_date"),
     ),
     DomainDefinition(
         "medication",
