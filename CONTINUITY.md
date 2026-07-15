@@ -131,6 +131,9 @@
 - Commit `f9f6a9a` is pushed, Linux CI passes all `292` tests, and its sibling-path privacy thread is resolved.
 - Codex review of `f9f6a9a` returned one P1 probe finding: a hidden sentinel can be ignored by a broad dotfile rule even when non-hidden final artifacts remain trackable.
 - Output-directory coverage now uses a non-hidden, extensionless sentinel; dotfile-only and format-only ignores cannot satisfy the privacy gate. Ruff, `53` focused tests, and all `292` tests pass. The production fixture completed in `0.65 s` with `360,333,312` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
+- Commit `6e62fb5` is pushed, Linux CI passes all `292` tests, and its dotfile-probe thread is resolved.
+- Codex review of `6e62fb5` returned one P2 probe finding: a Git rule matching the fixed sentinel basename can still satisfy the check without ignoring the output directory itself.
+- Safety now checks each generated directory path directly with Git and checks the sibling state file separately; sentinel-name, dotfile-only, and format-only rules cannot satisfy the gate. Ruff, `53` focused tests, and all `292` tests pass. The production fixture completed in `0.64 s` with `364,363,776` bytes maximum RSS, unchanged `19/17/14/651` counts, eight public files, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -139,10 +142,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified non-hidden output safety probe.
+- Commit and push the verified direct-directory output safety check.
 
 ## Next
-- Resolve the probe PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Resolve the directory-check PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -157,4 +160,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `f9f6a9a`; PR #7 has one verified non-hidden safety-probe fix ready to commit.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `6e62fb5`; PR #7 has one verified direct-directory safety-check fix ready to commit.

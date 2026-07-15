@@ -240,21 +240,22 @@ def _require_safe_output_location(
         return
     repository = Path(result.stdout.strip()).resolve()
     probe_run_id = run_id or "0" * 24
-    probe_name = "confidential-output-check"
     paths_to_check = {
-        "final output directory": output_dir / probe_name,
-        "staging workspace": output_dir.parent
-        / f".{output_dir.name}.build-{probe_run_id}"
-        / probe_name,
-        "replacement backup": output_dir.parent
-        / f".{output_dir.name}.previous-{probe_run_id}"
-        / probe_name,
-        "run-state file": state_path_for_output(output_dir),
+        "final output directory": (output_dir, True),
+        "staging workspace": (
+            output_dir.parent / f".{output_dir.name}.build-{probe_run_id}",
+            True,
+        ),
+        "replacement backup": (
+            output_dir.parent / f".{output_dir.name}.previous-{probe_run_id}",
+            True,
+        ),
+        "run-state file": (state_path_for_output(output_dir), False),
     }
     unignored = [
         label
-        for label, path in paths_to_check.items()
-        if not _git_ignores_path(repository, path)
+        for label, (path, is_directory) in paths_to_check.items()
+        if not _git_ignores_path(repository, path, is_directory=is_directory)
     ]
     if unignored:
         raise ValueError(
@@ -265,7 +266,8 @@ def _require_safe_output_location(
         )
 
 
-def _git_ignores_path(repository: Path, path: Path) -> bool:
+def _git_ignores_path(repository: Path, path: Path, *, is_directory: bool) -> bool:
+    candidate = f"{path.as_posix()}/" if is_directory else str(path)
     result = subprocess.run(
         [
             "git",
@@ -275,7 +277,7 @@ def _git_ignores_path(repository: Path, path: Path) -> bool:
             "--quiet",
             "--no-index",
             "--",
-            str(path),
+            candidate,
         ],
         check=False,
     )
