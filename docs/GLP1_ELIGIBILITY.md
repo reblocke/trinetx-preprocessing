@@ -33,8 +33,10 @@ python -m trinetx_preprocessing.glp1_eligibility validate-export \
 
 When a restored root contains both a canonical unsplit export and legacy split
 artifacts, discovery selects the nearest canonical file. Headered split files
-remain the fallback when no unsplit source exists. Either a medication export
-or a medication-ingredient export satisfies the medication source contract;
+remain the fallback when no unsplit source exists. If multiple nearest export
+roots or same-root source families tie, validation fails and requires the root
+of exactly one export. Either a medication export or a medication-ingredient
+export satisfies the medication source contract;
 independently valid headered medication and ingredient families are both
 retained even when optional columns or column order differ. Legacy medication
 chunks lacking required header fields are ignored when a canonical ingredient

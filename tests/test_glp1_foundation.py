@@ -26,6 +26,7 @@ from trinetx_preprocessing.glp1_eligibility.database import (
     mark_database_complete,
 )
 from trinetx_preprocessing.glp1_eligibility.discovery import (
+    ExportDiscoveryError,
     discover_export_files,
     validate_export,
 )
@@ -242,6 +243,29 @@ def test_export_discovery_falls_back_to_split_files(tmp_path: Path) -> None:
         "encounter0001.csv",
         "encounter0002.csv",
     ]
+
+
+def test_export_discovery_rejects_tied_nearest_roots(tmp_path: Path) -> None:
+    _write_export(tmp_path / "first_export")
+    _write_export(tmp_path / "second_export")
+
+    with pytest.raises(ExportDiscoveryError, match="Ambiguous nearest source"):
+        discover_export_files(tmp_path)
+
+
+def test_validate_export_reports_tied_nearest_roots(tmp_path: Path) -> None:
+    _write_export(tmp_path / "first_export")
+    _write_export(tmp_path / "second_export")
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is False
+    assert report.files == ()
+    assert len(report.errors) == 1
+    assert "Pass the root of exactly one TriNetX export" in report.errors[0]
+    assert "first_export/Patient/patient.csv" in report.errors[0]
+    assert "second_export/Patient/patient.csv" in report.errors[0]
+    assert str(tmp_path) not in report.errors[0]
 
 
 def test_ingredient_only_export_satisfies_medication_source_contract(

@@ -35,7 +35,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   not reported as absent patient history. Discovery now prefers the nearest
   canonical unsplit source, falls back to supported split files, and ignores
   medication chunks that lack required header fields beside a canonical
-  ingredient file while allowing valid column-order differences.
+  ingredient file while allowing valid column-order differences. Discovery
+  now rejects tied nearest export roots or source families instead of merging
+  separate exports silently.
 - Required ingredient-only exports to expose `patient_id`, `code_system`,
   `code`, and `start_date`, so malformed medication sources fail during header
   validation instead of later ingestion.

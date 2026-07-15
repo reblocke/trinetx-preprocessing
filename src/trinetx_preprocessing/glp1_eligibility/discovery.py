@@ -49,6 +49,10 @@ class ExportValidationReport:
         return payload
 
 
+class ExportDiscoveryError(ValueError):
+    """Raised when source discovery cannot select one export family safely."""
+
+
 DOMAIN_DEFINITIONS = (
     DomainDefinition(
         "patient",
@@ -156,14 +160,13 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
         if not matched_clinical and _is_export_metadata(path):
             discovered["export_metadata"].append(path)
 
-    selected = {
-        name: tuple(
+    selected: dict[str, tuple[Path, ...]] = {}
+    for name, paths in discovered.items():
+        selected[name] = tuple(
             sorted(paths, key=lambda path: path.as_posix().lower())
             if name == "export_metadata"
-            else _select_source_family(paths, root)
+            else _select_source_family(paths, root, logical_domain=name)
         )
-        for name, paths in discovered.items()
-    }
     if _medication_split_family_has_invalid_headers(selected):
         selected["medication"] = ()
     return selected
@@ -183,7 +186,17 @@ def validate_export(input_root: Path) -> ExportValidationReport:
             warnings=(),
         )
 
-    discovered = discover_export_files(root)
+    try:
+        discovered = discover_export_files(root)
+    except ExportDiscoveryError as exc:
+        return ExportValidationReport(
+            valid=False,
+            input_exists=True,
+            domain_file_counts={},
+            files=(),
+            errors=(str(exc),),
+            warnings=(),
+        )
     errors: list[str] = []
     warnings: list[str] = []
     validated_files: list[FileValidation] = []
@@ -277,7 +290,9 @@ def _is_export_metadata(path: Path) -> bool:
     return normalized_stem in _EXPORT_METADATA_STEMS
 
 
-def _select_source_family(paths: list[Path], root: Path) -> list[Path]:
+def _select_source_family(
+    paths: list[Path], root: Path, *, logical_domain: str
+) -> list[Path]:
     """Select one nearest source family, preferring its canonical unsplit file."""
 
     if not paths:
@@ -286,12 +301,34 @@ def _select_source_family(paths: list[Path], root: Path) -> list[Path]:
     nearest = [
         path for path in paths if len(path.relative_to(root).parts) == minimum_depth
     ]
+    nearest_parents = {path.parent for path in nearest}
+    if len(nearest_parents) > 1:
+        _raise_ambiguous_source_family(logical_domain, nearest, root)
+
     unsplit = [path for path in nearest if _chunk_index(path) is None]
     if unsplit:
-        return sorted(unsplit, key=lambda path: path.as_posix().lower())
+        if len(unsplit) > 1:
+            _raise_ambiguous_source_family(logical_domain, unsplit, root)
+        return unsplit
+
+    chunk_prefixes = {_chunk_family_prefix(path) for path in nearest}
+    if len(chunk_prefixes) > 1:
+        _raise_ambiguous_source_family(logical_domain, nearest, root)
     return sorted(
         nearest,
         key=lambda path: (path.parent.as_posix().lower(), _chunk_index(path)),
+    )
+
+
+def _raise_ambiguous_source_family(
+    logical_domain: str, paths: list[Path], root: Path
+) -> None:
+    candidates = ", ".join(
+        sorted(path.relative_to(root).as_posix() for path in paths)
+    )
+    raise ExportDiscoveryError(
+        f"Ambiguous nearest source family for {logical_domain}: {candidates}. "
+        "Pass the root of exactly one TriNetX export."
     )
 
 
@@ -324,3 +361,10 @@ def _medication_split_family_has_invalid_headers(
 def _chunk_index(path: Path) -> int | None:
     match = _CHUNK_SUFFIX.fullmatch(path.stem)
     return int(match.group("index")) if match else None
+
+
+def _chunk_family_prefix(path: Path) -> str:
+    match = _CHUNK_SUFFIX.fullmatch(path.stem)
+    if match is None:
+        raise ValueError(f"Path is not a chunked source: {path.name}")
+    return match.group("prefix").rstrip("_").casefold()
