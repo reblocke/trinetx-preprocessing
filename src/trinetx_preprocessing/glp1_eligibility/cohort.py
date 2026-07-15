@@ -34,8 +34,7 @@ def build_core_cohort(
     _build_normalized_anthropometrics(connection, config)
     _build_analysis_table(connection, config, git_sha)
     _build_evidence_table(connection, run_id)
-    _build_views(connection)
-    _build_cohort_flow(connection)
+    _build_views(connection, config)
     return CoreCohortCounts(
         hypercapnia_encounters=_count(connection, "cohort_hypercapnia_encounter"),
         patient_index_events=_count(connection, "cohort_hypercapnia_patient_index"),
@@ -196,6 +195,9 @@ def _build_hypercapnia_encounters(
     window_hours = hypercapnia.index_window_hours
     pair_minutes = hypercapnia.pair_tolerance_minutes
     pco2_threshold = hypercapnia.pco2_gt_mm_hg
+    sensitivity_50, sensitivity_52 = (
+        hypercapnia.pco2_sensitivity_thresholds_mm_hg
+    )
 
     include_vbg = "TRUE" if hypercapnia.include_vbg_secondary_cohort else "FALSE"
     connection.execute(
@@ -241,8 +243,6 @@ def _build_hypercapnia_encounters(
         WHERE gas.concept_set_id IN (
             'arterial_pco2', 'venous_pco2', 'unspecified_blood_pco2'
         )
-          AND gas.unit_usable
-          AND gas.plausible_value
           AND (
                 gas.event_datetime BETWEEN encounter.encounter_start
                     AND encounter.encounter_start + INTERVAL {window_hours} HOUR
@@ -275,10 +275,32 @@ def _build_hypercapnia_encounters(
     connection.execute(
         """
         CREATE OR REPLACE TEMP TABLE arterial_pco2_max AS
-        SELECT encounter_id, max(normalized_numeric_value) AS maximum_pco2
-        FROM gas_in_index_window
-        WHERE concept_set_id = 'arterial_pco2'
-        GROUP BY encounter_id
+        SELECT
+            encounter.encounter_id,
+            max(gas.normalized_numeric_value) AS maximum_pco2
+        FROM glp1_encounter AS encounter
+        JOIN normalized_gas_measurement AS gas
+          ON gas.encounter_id = encounter.encounter_id
+         AND gas.patient_id = encounter.patient_id
+        WHERE gas.concept_set_id = 'arterial_pco2'
+          AND gas.unit_usable
+          AND gas.plausible_value
+          AND (
+                gas.event_datetime BETWEEN encounter.encounter_start
+                    AND coalesce(
+                        encounter.encounter_end,
+                        encounter.encounter_start + INTERVAL 1 DAY
+                    )
+             OR (
+                    gas.timestamp_precision = 'date_only'
+                AND gas.event_datetime::DATE BETWEEN encounter.encounter_start::DATE
+                    AND coalesce(
+                        encounter.encounter_end,
+                        encounter.encounter_start + INTERVAL 1 DAY
+                    )::DATE
+             )
+          )
+        GROUP BY encounter.encounter_id
         """
     )
     connection.execute(
@@ -490,14 +512,33 @@ def _build_hypercapnia_encounters(
                 arterial.timestamp_precision AS abg_timestamp_precision,
                 arterial.pairing_quality AS abg_pairing_quality,
                 arterial.paired_ph_value IS NOT NULL AS abg_ph_available,
-                arterial.normalized_numeric_value IS NOT NULL
+                coalesce(arterial.unit_usable, FALSE)
+                    AS abg_pco2_unit_usable,
+                coalesce(arterial.plausible_value, FALSE)
+                    AS abg_pco2_plausible,
+                arterial.source_record_hash IS NOT NULL
                     AS first_arterial_pco2_in_window,
                 maximum.maximum_pco2 AS maximum_pco2_in_encounter,
-                coalesce(arterial.normalized_numeric_value > {pco2_threshold}, FALSE)
+                coalesce(
+                    arterial.unit_usable
+                    AND arterial.plausible_value
+                    AND arterial.normalized_numeric_value > {pco2_threshold},
+                    FALSE
+                )
                     AS hypercapnia_gt45,
-                coalesce(arterial.normalized_numeric_value >= 50, FALSE)
+                coalesce(
+                    arterial.unit_usable
+                    AND arterial.plausible_value
+                    AND arterial.normalized_numeric_value >= {sensitivity_50},
+                    FALSE
+                )
                     AS hypercapnia_ge50,
-                coalesce(arterial.normalized_numeric_value >= 52, FALSE)
+                coalesce(
+                    arterial.unit_usable
+                    AND arterial.plausible_value
+                    AND arterial.normalized_numeric_value >= {sensitivity_52},
+                    FALSE
+                )
                     AS hypercapnia_ge52,
                 coalesce(arterial.paired_ph_value <
                     {hypercapnia.acute_acidemia_ph_lt}, FALSE) AS acute_acidemia,
@@ -514,12 +555,16 @@ def _build_hypercapnia_encounters(
                     FALSE
                 ) AS pco2_only_sensitivity_case,
                 coalesce(
-                    arterial.normalized_numeric_value <= {pco2_threshold}
+                    arterial.unit_usable
+                    AND arterial.plausible_value
+                    AND arterial.normalized_numeric_value <= {pco2_threshold}
                     AND maximum.maximum_pco2 > {pco2_threshold},
                     FALSE
                 ) AS later_hypercapnia_sensitivity_case,
                 coalesce(
                     arterial.encounter_id IS NULL
+                    AND venous.unit_usable
+                    AND venous.plausible_value
                     AND venous.normalized_numeric_value > {pco2_threshold},
                     FALSE
                 ) AS vbg_only_sensitivity_case,
@@ -527,9 +572,26 @@ def _build_hypercapnia_encounters(
                 FALSE AS major_trauma_context,
                 FALSE AS procedure_sedation_context,
                 FALSE AS postoperative_context,
-                FALSE AS probable_venous_specimen,
-                coalesce(arterial.plausible_value = FALSE, FALSE)
-                    AS implausible_value,
+                regexp_matches(
+                    lower(trim(coalesce(arterial.specimen, ''))),
+                    'venous|vein|vbg'
+                ) AS probable_venous_specimen,
+                coalesce(
+                    arterial.source_record_hash IS NOT NULL
+                    AND (
+                        NOT coalesce(arterial.unit_usable, FALSE)
+                        OR NOT coalesce(arterial.plausible_value, FALSE)
+                    ),
+                    FALSE
+                ) AS implausible_value,
+                coalesce(
+                    year_of_birth IS NOT NULL
+                    AND age_at_index >= {study.adult_age_min}
+                    AND upper(trim(encounter.type)) IN ({encounter_types})
+                    AND ({start_condition})
+                    AND ({end_condition}),
+                    FALSE
+                ) AS index_encounter_eligible,
                 CASE
                     WHEN year_of_birth IS NULL THEN 'excluded'
                     WHEN age_at_index < {study.adult_age_min} THEN 'excluded'
@@ -538,6 +600,8 @@ def _build_hypercapnia_encounters(
                     WHEN NOT ({start_condition}) OR NOT ({end_condition})
                     THEN 'excluded'
                     WHEN arterial.encounter_id IS NULL THEN 'excluded'
+                    WHEN NOT coalesce(arterial.unit_usable, FALSE) THEN 'excluded'
+                    WHEN NOT coalesce(arterial.plausible_value, FALSE) THEN 'excluded'
                     WHEN arterial.normalized_numeric_value <= {pco2_threshold}
                     THEN 'excluded'
                     WHEN arterial.paired_ph_value IS NULL THEN 'excluded'
@@ -553,6 +617,10 @@ def _build_hypercapnia_encounters(
                     WHEN NOT ({start_condition}) OR NOT ({end_condition})
                     THEN 'outside_study_period'
                     WHEN arterial.encounter_id IS NULL THEN 'no_arterial_pco2'
+                    WHEN NOT coalesce(arterial.unit_usable, FALSE)
+                    THEN 'first_arterial_pco2_unit_unusable'
+                    WHEN NOT coalesce(arterial.plausible_value, FALSE)
+                    THEN 'first_arterial_pco2_implausible'
                     WHEN arterial.normalized_numeric_value <= {pco2_threshold}
                     THEN 'first_arterial_pco2_not_elevated'
                     WHEN arterial.paired_ph_value IS NULL THEN 'missing_paired_ph'
@@ -568,9 +636,11 @@ def _build_hypercapnia_encounters(
                  arterial.source_record_hash
             LEFT JOIN arterial_pco2_max AS maximum USING (encounter_id)
             LEFT JOIN first_venous_pco2 AS venous USING (patient_id, encounter_id)
-            WHERE maximum.maximum_pco2 > {pco2_threshold}
+            WHERE arterial.source_record_hash IS NOT NULL
                OR (
                     {include_vbg}
+                    AND venous.unit_usable
+                    AND venous.plausible_value
                     AND venous.normalized_numeric_value > {pco2_threshold}
                )
         ), first_primary AS (
@@ -865,6 +935,9 @@ def _build_analysis_table(
             cohort.cardiac_arrest_context,
             cohort.major_trauma_context,
             cohort.procedure_sedation_context,
+            cohort.postoperative_context,
+            cohort.probable_venous_specimen,
+            cohort.implausible_value,
             bmi.bmi_value,
             bmi.bmi_datetime,
             bmi.bmi_source,
@@ -984,9 +1057,19 @@ def _build_evidence_table(
     )
 
 
-def _build_views(connection: duckdb.DuckDBPyConnection) -> None:
+def _build_views(
+    connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
+) -> None:
+    cleaned_conditions = "\n          AND ".join(
+        f"NOT coalesce({column}, FALSE)"
+        for column in config.exclusions.cleaned_view_excludes
+    )
+    cleaned_filter = (
+        f"\n          AND {cleaned_conditions}" if cleaned_conditions else ""
+    )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE VIEW analysis_primary_obesity_hypercapnia AS
         SELECT * EXCLUDE (
             bmi_source_file, bmi_source_record_hash,
@@ -994,39 +1077,125 @@ def _build_views(connection: duckdb.DuckDBPyConnection) -> None:
         )
         FROM analysis_glp1_eligibility
         WHERE primary_cohort_status = 'included' AND bmi_ge30
+        ;
+
+        CREATE OR REPLACE VIEW analysis_primary_cleaned_obesity_hypercapnia AS
+        SELECT *
+        FROM analysis_primary_obesity_hypercapnia
+        WHERE TRUE{cleaned_filter}
         """
     )
 
 
-def _build_cohort_flow(connection: duckdb.DuckDBPyConnection) -> None:
+def build_cohort_flow(
+    connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
+) -> None:
+    """Publish the complete endpoint cohort-flow contract after phenotyping."""
+
+    context_filter = " AND ".join(
+        f"NOT coalesce({column}, FALSE)"
+        for column in config.exclusions.cleaned_view_excludes
+    )
+    context_filter = context_filter or "TRUE"
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE cohort_flow AS
         WITH stages AS (
-            SELECT 1 AS stage_order, 'gas_candidate_encounter' AS stage,
-                   count(DISTINCT encounter_id) AS row_count,
-                   count(DISTINCT patient_id) AS unique_patient_count,
-                   'source gas concept present' AS reason_for_loss
-            FROM gas_candidate_id
+            SELECT base.stage_order,
+                   CASE base.stage_order
+                       WHEN 1 THEN 'source_patients'
+                       ELSE 'adult_candidate_emergency_inpatient_encounters'
+                   END AS stage,
+                   base.row_count,
+                   base.unique_patient_count,
+                   CASE base.stage_order
+                       WHEN 1 THEN 'all source patients'
+                       ELSE 'age, encounter type, or study-period restriction'
+                   END AS reason_for_loss
+            FROM source_cohort_flow_base AS base
             UNION ALL
-            SELECT 2, 'hypercapnia_or_sensitivity', count(*),
+            SELECT 3, 'arterial_pco2_first_24h', count(*),
                    count(DISTINCT patient_id),
-                   'no elevated arterial maximum or VBG sensitivity'
+                   'no arterial PaCO2 in first 24 hours'
             FROM cohort_hypercapnia_encounter
+            WHERE index_encounter_eligible
+              AND first_arterial_pco2_in_window
             UNION ALL
-            SELECT 3, 'strict_primary_encounter', count(*),
+            SELECT 4, 'valid_arterial_pco2_units', count(*),
                    count(DISTINCT patient_id),
-                   'age, setting, date, first PaCO2, or paired pH rule'
+                   'missing, incompatible, or nonnumeric PaCO2 value/unit'
+            FROM cohort_hypercapnia_encounter
+            WHERE index_encounter_eligible
+              AND first_arterial_pco2_in_window
+              AND abg_pco2_unit_usable
+            UNION ALL
+            SELECT 5, 'paired_ph', count(*), count(DISTINCT patient_id),
+                   'no valid paired arterial pH'
+            FROM cohort_hypercapnia_encounter
+            WHERE index_encounter_eligible
+              AND first_arterial_pco2_in_window
+              AND abg_pco2_unit_usable
+              AND abg_ph_available
+            UNION ALL
+            SELECT 6, 'first_pco2_gt45_ph_le7_45', count(*),
+                   count(DISTINCT patient_id),
+                   'first PaCO2 not elevated, implausible, or pH above 7.45'
             FROM cohort_hypercapnia_encounter
             WHERE primary_cohort_status = 'included'
             UNION ALL
-            SELECT 4, 'first_patient_index', count(*), count(*),
-                   'later qualifying encounter for same patient'
-            FROM cohort_hypercapnia_patient_index
+            SELECT 7, 'post_context_exclusions', count(*),
+                   count(DISTINCT patient_id),
+                   'cardiac arrest, trauma, procedure, specimen, or value context'
+            FROM cohort_hypercapnia_encounter
+            WHERE primary_cohort_status = 'included' AND {context_filter}
             UNION ALL
-            SELECT 5, 'measured_obesity_hypercapnia', count(*), count(*),
-                   'missing or BMI below 30'
-            FROM analysis_primary_obesity_hypercapnia
+            SELECT 8, 'unique_patients', count(*), count(*),
+                   'later qualifying encounter for the same patient'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+            UNION ALL
+            SELECT 9, 'valid_bmi', count(*), count(*),
+                   'no valid measured or calculated BMI'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_valid
+            UNION ALL
+            SELECT 10, 'bmi_ge30', count(*), count(*),
+                   'BMI below 30 kg/m2'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30
+            UNION ALL
+            SELECT 11, 'disease_specific_fda_documented', count(*), count(*),
+                   'no disease-specific FDA indication documented'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30 AND ind_fda_disease_specific_any
+            UNION ALL
+            SELECT 12, 'guideline_society_documented', count(*), count(*),
+                   'no configured guideline/society phenotype documented'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30 AND ind_guideline_any
+            UNION ALL
+            SELECT 13, 'rct_supported_documented', count(*), count(*),
+                   'no configured RCT-supported phenotype documented'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30 AND ind_rct_any
+            UNION ALL
+            SELECT 14, 'existing_glp1_order', count(*), count(*),
+                   'no GLP-1 order before index'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30 AND glp1_ever_ordered_pre_index
+            UNION ALL
+            SELECT 15, 'payer_route_categories', count(*), count(*),
+                   'modeled payer route assigned for BMI >=30 denominator'
+            FROM analysis_glp1_eligibility
+            WHERE primary_cohort_status = 'included' AND {context_filter}
+              AND bmi_ge30 AND payer_route_model IS NOT NULL
         ), measured AS (
             SELECT
                 *,

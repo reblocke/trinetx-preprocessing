@@ -238,6 +238,13 @@ def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
         FROM codes GROUP BY domain, code_system ORDER BY domain, count(*) DESC
         """
     ).fetchall()
+    unmapped_codes = connection.execute(
+        """
+        SELECT logical_domain, code_system, code, estimated_count, max_error
+        FROM unmapped_code_frequency
+        ORDER BY logical_domain, estimated_count DESC, code_system, code
+        """
+    ).fetchall()
     unit_rows = connection.execute(
         """
         WITH units AS (
@@ -318,7 +325,13 @@ def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
             count(*) FILTER (WHERE later_hypercapnia_sensitivity_case)
                 AS later_hypercapnia,
             count(*) FILTER (WHERE vbg_only_sensitivity_case) AS vbg_only,
-            count(*) FILTER (WHERE cardiac_arrest_context) AS cardiac_arrest
+            count(*) FILTER (WHERE cardiac_arrest_context) AS cardiac_arrest,
+            count(*) FILTER (WHERE major_trauma_context) AS major_trauma,
+            count(*) FILTER (WHERE procedure_sedation_context)
+                AS procedure_sedation,
+            count(*) FILTER (WHERE postoperative_context) AS postoperative,
+            count(*) FILTER (WHERE probable_venous_specimen)
+                AS probable_venous
         FROM cohort_hypercapnia_encounter
         """
     ).fetchall()
@@ -366,12 +379,16 @@ or row-level examples.</p>
         ('Considered','Unit usable','Plausible','Incompatible unit','Implausible'),
         (gas_quality,),
     )}
-<h2>Concept-matched code systems</h2>{_html_table(
+    <h2>Concept-matched code systems</h2>{_html_table(
         ('Domain','Code system','Rows'), code_systems
     )}
-<p>Source clinical tables retain concept-matched candidates only. This table is
-not a raw-export unmapped-code audit; terminology review must inspect approved
-aggregate source-code frequencies separately before clinical use.</p>
+<h2>High-frequency unmapped source codes</h2>{_html_table(
+        ('Domain','Code system','Code','Estimated rows','Maximum error'),
+        unmapped_codes,
+    )}
+<p>These PHI-safe aggregate frequencies use a bounded Space-Saving summary
+collected during the input inventory scan. Counts with nonzero maximum error are
+estimates; no patient identifiers or row examples are retained.</p>
 <h2>Concept-set match coverage</h2>{_html_table(
         ('Domain','Concept set','Matched rows','Required'), concept_rows
     )}
@@ -391,7 +408,11 @@ aggregate source-code frequencies separately before clinical use.</p>
         ('Evidence tier','Certainty','Status','Rows'), certainty_rows
     )}
 <h2>Sensitivity cohorts</h2>{_html_table(
-        ('Candidates','Primary','Later hypercapnia','VBG only','Cardiac arrest'),
+        (
+            'Candidates','Primary','Later hypercapnia','VBG only',
+            'Cardiac arrest','Major trauma','Procedure/sedation',
+            'Postoperative','Probable venous specimen'
+        ),
         sensitivity_rows,
     )}
 <h2>Site heterogeneity</h2>

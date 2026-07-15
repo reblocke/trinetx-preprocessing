@@ -27,6 +27,7 @@ class FileValidation:
     file_size_bytes: int
     columns: tuple[str, ...]
     missing_columns: tuple[str, ...]
+    file_kind: str = "clinical_csv"
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,7 @@ DOMAIN_DEFINITIONS = (
     ),
     DomainDefinition(
         "vitals",
-        re.compile(r"^vital_signs?(?:_?\d+)?\.csv$", re.IGNORECASE),
+        re.compile(r"^vitals?_signs?(?:_?\d+)?\.csv$", re.IGNORECASE),
         True,
         (
             "patient_id",
@@ -112,11 +113,23 @@ DOMAIN_DEFINITIONS = (
     DomainDefinition(
         "medication",
         re.compile(r"^medications?(?:_?\d+)?\.csv$", re.IGNORECASE),
-        True,
+        False,
         ("patient_id", "encounter_id", "code_system", "code", "start_date"),
     ),
 )
 _CHUNK_SUFFIX = re.compile(r"^(?P<prefix>.*?)(?:_?)(?P<index>\d+)$")
+_EXPORT_METADATA_STEMS = {
+    "manifest",
+    "exportmanifest",
+    "datadictionary",
+    "datasetdetail",
+    "datasetdetails",
+    "cohortdetail",
+    "cohortdetails",
+    "standardizedterminology",
+    "terminologymetadata",
+}
+_EXPORT_METADATA_SUFFIXES = {".csv", ".json", ".txt", ".pdf", ".xls", ".xlsx"}
 
 
 def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
@@ -126,21 +139,34 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
     discovered: dict[str, list[Path]] = {
         definition.name: [] for definition in DOMAIN_DEFINITIONS
     }
+    discovered["export_metadata"] = []
     if not root.is_dir():
         return {name: () for name in discovered}
 
-    for path in root.rglob("*.csv"):
+    for path in root.rglob("*"):
         if not path.is_file() or any(part.startswith(".") for part in path.parts):
             continue
-        for definition in DOMAIN_DEFINITIONS:
-            if definition.filename_pattern.fullmatch(path.name):
-                discovered[definition.name].append(path)
-                break
+        matched_clinical = False
+        if path.suffix.lower() == ".csv":
+            for definition in DOMAIN_DEFINITIONS:
+                if definition.filename_pattern.fullmatch(path.name):
+                    discovered[definition.name].append(path)
+                    matched_clinical = True
+                    break
+        if not matched_clinical and _is_export_metadata(path):
+            discovered["export_metadata"].append(path)
 
-    return {
-        name: tuple(_prefer_chunked_files(paths))
+    selected = {
+        name: tuple(
+            sorted(paths, key=lambda path: path.as_posix().lower())
+            if name == "export_metadata"
+            else _select_source_family(paths, root)
+        )
         for name, paths in discovered.items()
     }
+    if _medication_alias_duplicates_ingredient(selected):
+        selected["medication"] = ()
+    return selected
 
 
 def validate_export(input_root: Path) -> ExportValidationReport:
@@ -194,8 +220,36 @@ def validate_export(input_root: Path) -> ExportValidationReport:
                     file_size_bytes=path.stat().st_size,
                     columns=columns,
                     missing_columns=missing,
+                    file_kind="clinical_csv",
                 )
             )
+
+    if not discovered["medication"] and not discovered["medication_ingredient"]:
+        errors.append(
+            "Required medication source has no medication or "
+            "medication-ingredient files."
+        )
+
+    for path in discovered["export_metadata"]:
+        relative = path.relative_to(root).as_posix()
+        columns: tuple[str, ...] = ()
+        if path.suffix.lower() == ".csv":
+            try:
+                columns = _read_header(path)
+            except (OSError, UnicodeError, csv.Error) as exc:
+                warnings.append(
+                    f"Unable to read metadata CSV header for {relative}: {exc}"
+                )
+        validated_files.append(
+            FileValidation(
+                logical_domain="export_metadata",
+                source_file=relative,
+                file_size_bytes=path.stat().st_size,
+                columns=columns,
+                missing_columns=(),
+                file_kind="export_metadata",
+            )
+        )
 
     return ExportValidationReport(
         valid=not errors,
@@ -215,15 +269,49 @@ def _read_header(path: Path) -> tuple[str, ...]:
     return tuple(column.strip() for column in row)
 
 
-def _prefer_chunked_files(paths: list[Path]) -> list[Path]:
-    ordered = sorted(paths, key=lambda path: path.as_posix().lower())
-    chunked = [path for path in ordered if _chunk_index(path) is not None]
-    if not chunked:
-        return ordered
+def _is_export_metadata(path: Path) -> bool:
+    if path.suffix.lower() not in _EXPORT_METADATA_SUFFIXES:
+        return False
+    normalized_stem = re.sub(r"[^a-z0-9]", "", path.stem.lower())
+    normalized_stem = re.sub(r"\d+$", "", normalized_stem)
+    return normalized_stem in _EXPORT_METADATA_STEMS
+
+
+def _select_source_family(paths: list[Path], root: Path) -> list[Path]:
+    """Select one nearest source family, preferring its canonical unsplit file."""
+
+    if not paths:
+        return []
+    minimum_depth = min(len(path.relative_to(root).parts) for path in paths)
+    nearest = [
+        path for path in paths if len(path.relative_to(root).parts) == minimum_depth
+    ]
+    unsplit = [path for path in nearest if _chunk_index(path) is None]
+    if unsplit:
+        return sorted(unsplit, key=lambda path: path.as_posix().lower())
     return sorted(
-        chunked,
-        key=lambda path: (path.parent.as_posix(), _chunk_index(path)),
+        nearest,
+        key=lambda path: (path.parent.as_posix().lower(), _chunk_index(path)),
     )
+
+
+def _medication_alias_duplicates_ingredient(
+    discovered: dict[str, tuple[Path, ...]],
+) -> bool:
+    medication = discovered["medication"]
+    ingredient = discovered["medication_ingredient"]
+    if not medication or not ingredient:
+        return False
+    if any(_chunk_index(path) is None for path in medication):
+        return False
+    if sum(path.stat().st_size for path in medication) != sum(
+        path.stat().st_size for path in ingredient
+    ):
+        return False
+    try:
+        return _read_header(medication[0]) == _read_header(ingredient[0])
+    except (OSError, UnicodeError, csv.Error):
+        return False
 
 
 def _chunk_index(path: Path) -> int | None:

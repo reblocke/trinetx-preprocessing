@@ -6,14 +6,19 @@ records their version and source rows in DuckDB.
 
 ## Core cohort
 
-- The index measurement is the first usable arterial PaCO2 in the first 24
-  hours of an adult emergency or inpatient encounter.
+- The index measurement candidate is the first observed arterial PaCO2 in the
+  first 24 hours of an adult emergency or inpatient encounter. Selection occurs
+  before unit and plausibility checks; an unusable first result is retained with
+  an explicit exclusion reason and a later result is not promoted into its
+  place.
 - Strict hypercapnia requires PaCO2 greater than 45 mm Hg and paired pH at or
   below 7.45. Pressure units are normalized explicitly; total CO2 LOINC
   `2026-3` cannot create a PaCO2 candidate.
 - Later arterial elevation, VBG-only elevation, acute acidemia, compensated
   hypercapnia, and 14-84 day persistent arterial elevation are retained as
-  separate sensitivity/context fields.
+  separate sensitivity/context fields. Maximum PaCO2 uses all valid arterial
+  values from encounter start through discharge, not only the 24-hour index
+  window.
 - Arterial bicarbonate, PaO2, and oxygen saturation are supplemental values:
   they are unit-normalized and paired to the selected arterial PaCO2 by the same
   specimen/panel, timestamp, tolerance, and date-only hierarchy used for pH.
@@ -21,6 +26,13 @@ records their version and source rows in DuckDB.
   plausibility bounds require investigator review before interpretation.
 - BMI follows measured BMI, then measured weight/height calculation, within the
   configured pre-index hierarchy. Missing BMI remains indeterminate.
+- Candidate and primary tables retain documented arrest, trauma,
+  anesthesia/sedation, postoperative, implausible-value, and probable-venous
+  context flags. `analysis_primary_cleaned_obesity_hypercapnia` applies only the
+  flags named in `exclusions.cleaned_view_excludes`; the unfiltered primary view
+  remains available. The narrow trauma and procedure seeds require investigator
+  review and should not be interpreted as proof that an unflagged event lacked
+  those contexts.
 
 ## Component and indication semantics
 
@@ -41,6 +53,10 @@ records their version and source rows in DuckDB.
   routes are hypothetical clinical-route categories, not coverage decisions.
 - An EHR medication order is not evidence that medication was dispensed or
   taken.
+- Medication and medication-ingredient exports feed the same versioned
+  medication concepts. Data-sufficiency counts come from all candidate-patient
+  source rows before concept matching, so terminology gaps do not masquerade as
+  absent longitudinal history.
 
 ## Study views
 
@@ -60,6 +76,7 @@ records their version and source rows in DuckDB.
 The concept sets are implementation seeds, not clinically validated phenotype
 definitions. Investigator review is required before real-data interpretation,
 especially for MASH staging, symptomatic PAD, neurologic/chest-wall causes,
-procedure families, supplemental arterial-gas measurements, medication
+trauma and anesthesia/procedure families, supplemental arterial-gas
+measurements, medication
 mappings, and site-specific units or code systems. Record-level validation must
 occur in an approved private environment.

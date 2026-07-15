@@ -1,5 +1,5 @@
 schema_version: "1.0"
-rule_set_version: "2026-07-14"
+rule_set_version: "2026-07-15"
 labels_as_of: "2026-07-10"
 payer_policy_as_of: "2026-07-10"
 concept_sets_dir: concept_sets
@@ -46,6 +46,15 @@ obesity:
   weight_max_kg: 500
   height_min_m: 1.0
   height_max_m: 2.5
+
+exclusions:
+  cleaned_view_excludes:
+    - cardiac_arrest_context
+    - major_trauma_context
+    - procedure_sedation_context
+    - postoperative_context
+    - implausible_value
+    - probable_venous_specimen
 
 output:
   database_name: glp1_hypercapnia.duckdb

@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..filesystem import remove_tree_strict
-from .cohort import CoreCohortCounts, build_core_cohort
+from .cohort import CoreCohortCounts, build_cohort_flow, build_core_cohort
 from .concept_sets import load_concept_sets
 from .config import load_glp1_config
 from .database import initialize_database, mark_database_complete
 from .discovery import validate_export
 from .eligibility import build_eligibility_phenotypes
-from .ingestion import ingest_core_sources
+from .ingestion import build_raw_observability_summaries, ingest_core_sources
 from .monitoring import RunStateWriter, state_path_for_output
 from .outputs import summarize_database, write_build_outputs
 from .provenance import (
@@ -47,6 +48,7 @@ def build_glp1_eligibility(
     """Build and atomically publish the GLP-1 core analytic database."""
 
     output = Path(output_dir).resolve()
+    _require_safe_output_location(output)
     state = RunStateWriter(
         output,
         "inventory-pending",
@@ -60,12 +62,18 @@ def build_glp1_eligibility(
         report = validate_export(input_root)
         if not report.valid:
             raise ValueError("Export validation failed: " + "; ".join(report.errors))
-        inventory = build_input_inventory(input_root, report, state=state)
+        inventory = build_input_inventory(
+            input_root,
+            report,
+            state=state,
+            catalog=catalog,
+        )
         git_sha = current_git_sha()
         run_id = deterministic_run_id(
             config_sha256=config.sha256,
             input_manifest_sha256=inventory.sha256,
-            git_sha=git_sha,
+            concept_catalog_sha256=catalog.sha256,
+            code_fingerprint=git_sha,
         )
         state.update(run_id=run_id, phase="inventory_complete")
 
@@ -98,6 +106,7 @@ def build_glp1_eligibility(
             run_id=run_id,
             config_sha256=config.sha256,
             input_manifest_sha256=inventory.sha256,
+            concept_catalog_sha256=catalog.sha256,
             git_sha=git_sha,
         )
         state = workspace.state
@@ -110,11 +119,13 @@ def build_glp1_eligibility(
             inventory=inventory,
             catalog=catalog,
             git_sha=git_sha,
+            concept_catalog_sha256=catalog.sha256,
         )
         ingest_core_sources(
             connection,
             input_root=input_root,
             inventory=inventory,
+            config=config,
             state=state,
         )
         warnings = build_concept_match_summary(
@@ -127,8 +138,15 @@ def build_glp1_eligibility(
             run_id=run_id,
             git_sha=git_sha,
         )
+        build_raw_observability_summaries(
+            connection,
+            input_root=input_root,
+            inventory=inventory,
+            state=state,
+        )
         state.update(phase="component_phenotypes", current_domain=None)
         build_eligibility_phenotypes(connection, config)
+        build_cohort_flow(connection, config)
         counts = CoreCohortCounts(
             hypercapnia_encounters=counts.hypercapnia_encounters,
             patient_index_events=counts.patient_index_events,
@@ -193,3 +211,40 @@ def _published_output_paths(output_dir: Path) -> tuple[Path, ...]:
             and path.name != BUILD_STATE_FILENAME
         )
     )
+
+
+def _require_safe_output_location(output_dir: Path) -> None:
+    """Reject a repository-local output unless Git ignores the whole directory."""
+
+    existing_parent = output_dir
+    while not existing_parent.exists() and existing_parent != existing_parent.parent:
+        existing_parent = existing_parent.parent
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(existing_parent), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return
+    repository = Path(result.stdout.strip()).resolve()
+    ignored = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository),
+            "check-ignore",
+            "--quiet",
+            "--no-index",
+            "--",
+            str(output_dir / ".confidential-output-check"),
+        ],
+        check=False,
+    )
+    if ignored.returncode != 0:
+        raise ValueError(
+            "Refusing repository-local GLP-1 output that Git does not ignore: "
+            f"{output_dir}. Use an ignored output directory or a path outside "
+            "the repository."
+        )

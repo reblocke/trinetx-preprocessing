@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -9,7 +10,10 @@ from pathlib import Path
 import duckdb
 import pytest
 
-from trinetx_preprocessing.glp1_eligibility.builder import build_glp1_eligibility
+from trinetx_preprocessing.glp1_eligibility.builder import (
+    _require_safe_output_location,
+    build_glp1_eligibility,
+)
 from trinetx_preprocessing.glp1_eligibility.cli import main
 from trinetx_preprocessing.glp1_eligibility.cohort import build_core_cohort
 from trinetx_preprocessing.glp1_eligibility.concept_sets import load_concept_sets
@@ -38,6 +42,7 @@ from trinetx_preprocessing.glp1_eligibility.outputs import (
     write_build_outputs,
 )
 from trinetx_preprocessing.glp1_eligibility.provenance import (
+    _BoundedFrequencyCounter,
     build_input_inventory,
     current_git_sha,
     deterministic_run_id,
@@ -142,6 +147,7 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     assert config.hypercapnia.hco3_plausible_max_mmol_l == 80
     assert config.hypercapnia.po2_plausible_max_mm_hg == 800
     assert config.hypercapnia.sao2_plausible_max_percent == 100
+    assert "major_trauma_context" in config.exclusions.cleaned_view_excludes
     assert "arterial_pco2" in catalog.concept_set_ids
     assert catalog.required_concept_set_ids == (
         "arterial_pco2",
@@ -175,7 +181,40 @@ def test_glp1_config_rejects_threshold_not_above_primary(tmp_path: Path) -> None
         load_glp1_config(path)
 
 
-def test_export_discovery_prefers_split_files(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    (
+        (
+            "pco2_sensitivity_thresholds_mm_hg: [50, 52]",
+            "pco2_sensitivity_thresholds_mm_hg: [60, 70]",
+            r"must be \[50, 52\]",
+        ),
+        (
+            "primary_requires_arterial_specimen: true",
+            "primary_requires_arterial_specimen: false",
+            "must be true",
+        ),
+        (
+            "thresholds: [27, 30, 35, 40]",
+            "thresholds: [25, 30, 35, 40]",
+            r"must be \[27, 30, 35, 40\]",
+        ),
+    ),
+)
+def test_glp1_config_rejects_unsupported_fixed_contract_options(
+    tmp_path: Path,
+    old: str,
+    new: str,
+    message: str,
+) -> None:
+    path = tmp_path / "config.yml"
+    path.write_text(GLP1_CONFIG.read_text().replace(old, new))
+
+    with pytest.raises(GLP1ConfigError, match=message):
+        load_glp1_config(path)
+
+
+def test_export_discovery_prefers_canonical_unsplit_file(tmp_path: Path) -> None:
     _write_export(tmp_path)
     unsplit = tmp_path / "Encounter" / "encounter.csv"
     split_1 = tmp_path / "Encounter" / "encounter0001.csv"
@@ -185,10 +224,63 @@ def test_export_discovery_prefers_split_files(tmp_path: Path) -> None:
 
     discovered = discover_export_files(tmp_path)
 
+    assert [path.name for path in discovered["encounter"]] == ["encounter.csv"]
+
+
+def test_export_discovery_falls_back_to_split_files(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    unsplit = tmp_path / "Encounter" / "encounter.csv"
+    split_1 = tmp_path / "Encounter" / "encounter0001.csv"
+    split_2 = tmp_path / "Encounter" / "encounter0002.csv"
+    split_1.write_text(unsplit.read_text())
+    split_2.write_text(unsplit.read_text())
+    unsplit.unlink()
+
+    discovered = discover_export_files(tmp_path)
+
     assert [path.name for path in discovered["encounter"]] == [
         "encounter0001.csv",
         "encounter0002.csv",
     ]
+
+
+def test_ingredient_only_export_satisfies_medication_source_contract(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    (tmp_path / "Medications" / "medication.csv").unlink()
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    ingredient.write_text(
+        "patient_id,encounter_id,unique_id,code_system,code,start_date,route,"
+        "brand,strength,derived_by_TriNetX,source_id\n"
+    )
+
+    report = validate_export(tmp_path)
+
+    assert report.valid is True
+    assert report.domain_file_counts["medication"] == 0
+    assert report.domain_file_counts["medication_ingredient"] == 1
+
+
+def test_duplicate_medication_split_alias_is_not_discovered_twice(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    medication = tmp_path / "Medications" / "medication.csv"
+    medication.unlink()
+    content = (
+        "patient_id,encounter_id,unique_id,code_system,code,start_date,route,"
+        "brand,strength,derived_by_TriNetX,source_id\n"
+        "p1,e1,u1,RXNORM,1991302,2024-01-01,oral,Wegovy,2.4mg,,s1\n"
+    )
+    ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
+    ingredient.write_text(content)
+    (tmp_path / "Medications" / "medication0001.csv").write_text(content)
+
+    discovered = discover_export_files(tmp_path)
+
+    assert discovered["medication"] == ()
+    assert discovered["medication_ingredient"] == (ingredient,)
 
 
 def test_validate_export_reports_only_relative_paths(tmp_path: Path) -> None:
@@ -291,6 +383,130 @@ def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -
     assert encounter_inventory.source_file == "Encounter/encounter.csv"
 
 
+def test_export_metadata_is_inventoried_and_invalidates_input_identity(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    metadata = tmp_path / "export_manifest.json"
+    dictionary = tmp_path / "Data Dictionary.csv"
+    metadata.write_text('{"export": "synthetic-v1"}\n')
+    dictionary.write_text("field,description\npatient_id,Synthetic identifier\n")
+
+    report = validate_export(tmp_path)
+    first = build_input_inventory(tmp_path, report)
+    metadata_rows = tuple(
+        item for item in first.files if item.logical_domain == "export_metadata"
+    )
+
+    assert report.domain_file_counts["export_metadata"] == 2
+    assert {item.source_file for item in metadata_rows} == {
+        "Data Dictionary.csv",
+        "export_manifest.json",
+    }
+    assert {
+        item.source_file: item.row_count for item in metadata_rows
+    } == {"Data Dictionary.csv": 1, "export_manifest.json": 0}
+    metadata.write_text('{"export": "synthetic-v2"}\n')
+    second = build_input_inventory(tmp_path, validate_export(tmp_path))
+    assert second.sha256 != first.sha256
+
+
+def test_input_inventory_collects_bounded_unmapped_code_frequencies(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    _append_rows(
+        tmp_path / "Diagnosis" / "diagnosis.csv",
+        "p1,e1,2024-01-01,ICD10CM,E11.9,,,",
+        "p1,e1,2024-01-01,LOCAL,UNMAPPED_A,,,",
+        "p2,e2,2024-01-01,LOCAL,UNMAPPED_A,,,",
+        "p3,e3,2024-01-01,LOCAL,UNMAPPED_B,,,",
+    )
+    report = validate_export(tmp_path)
+    catalog = load_concept_sets(load_glp1_config(GLP1_CONFIG).concept_sets_dir)
+
+    inventory = build_input_inventory(
+        tmp_path,
+        report,
+        catalog=catalog,
+        block_size=1_024,
+    )
+
+    frequencies = {
+        (row.logical_domain, row.code_system, row.code): (
+            row.estimated_count,
+            row.max_error,
+        )
+        for row in inventory.unmapped_code_frequencies
+    }
+    assert frequencies[("diagnosis", "LOCAL", "UNMAPPED_A")] == (2, 0)
+    assert frequencies[("diagnosis", "LOCAL", "UNMAPPED_B")] == (1, 0)
+    assert ("diagnosis", "ICD10CM", "E11.9") not in frequencies
+
+
+def test_multifile_unmapped_sketch_preserves_cross_file_error_bound(
+    tmp_path: Path,
+) -> None:
+    _write_export(tmp_path)
+    diagnosis = tmp_path / "Diagnosis" / "diagnosis.csv"
+    header = diagnosis.read_text()
+    first = tmp_path / "Diagnosis" / "diagnosis0001.csv"
+    second = tmp_path / "Diagnosis" / "diagnosis0002.csv"
+    first.write_text(
+        header
+        + "".join(
+            f"p{index},e{index},2024-01-01,LOCAL,CODE_{index:04d},,,\n"
+            for index in range(2_002)
+        )
+        + "p_target,e_target,2024-01-01,LOCAL,TARGET,,,\n"
+    )
+    second.write_text(
+        header
+        + "".join(
+            "p_target,e_target,2024-01-01,LOCAL,TARGET,,,\n"
+            for _ in range(100)
+        )
+    )
+    diagnosis.unlink()
+    report = validate_export(tmp_path)
+    catalog = load_concept_sets(load_glp1_config(GLP1_CONFIG).concept_sets_dir)
+
+    inventory = build_input_inventory(tmp_path, report, catalog=catalog)
+    target = next(
+        row
+        for row in inventory.unmapped_code_frequencies
+        if row.logical_domain == "diagnosis" and row.code == "TARGET"
+    )
+
+    assert target.estimated_count - target.max_error <= 101
+    assert 101 <= target.estimated_count
+
+
+def test_bounded_frequency_counter_preserves_error_bounds_across_checkpoints() -> None:
+    counter = _BoundedFrequencyCounter(capacity=2)
+    first_counts = {
+        ("LOCAL", "A"): 5,
+        ("LOCAL", "B"): 4,
+        ("LOCAL", "C"): 3,
+    }
+    second_counts = {
+        ("LOCAL", "C"): 3,
+        ("LOCAL", "D"): 2,
+    }
+    exact_counts = first_counts | second_counts
+    exact_counts[("LOCAL", "C")] = 6
+    for key, count in first_counts.items():
+        counter.update(key, count)
+    checkpoint = counter.copy()
+    for key, count in second_counts.items():
+        checkpoint.update(key, count)
+
+    for frequency in checkpoint.frequencies("diagnosis", limit=2):
+        exact = exact_counts[(frequency.code_system, frequency.code)]
+        assert frequency.estimated_count - frequency.max_error <= exact
+        assert exact <= frequency.estimated_count
+
+
 def test_git_fingerprint_changes_with_dirty_content(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -320,20 +536,59 @@ def test_git_fingerprint_changes_with_dirty_content(
         cwd=repository,
         check=True,
     )
-    monkeypatch.chdir(repository)
+    monkeypatch.chdir(tmp_path)
 
-    clean = current_git_sha()
+    clean = current_git_sha(repository)
     assert len(clean) == 40
     tracked.write_text("dirty one\n")
-    dirty_one = current_git_sha()
+    dirty_one = current_git_sha(repository)
     tracked.write_text("dirty two\n")
-    dirty_two = current_git_sha()
+    dirty_two = current_git_sha(repository)
     (repository / "untracked.txt").write_text("additional content\n")
-    dirty_with_untracked = current_git_sha()
+    dirty_with_untracked = current_git_sha(repository)
 
     assert dirty_one.startswith(f"{clean}-dirty-")
     assert dirty_two.startswith(f"{clean}-dirty-")
     assert len({dirty_one, dirty_two, dirty_with_untracked}) == 3
+
+
+def test_git_fingerprint_ignores_callers_working_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package_identity = current_git_sha()
+    unrelated = tmp_path / "unrelated"
+    unrelated.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=unrelated, check=True)
+    monkeypatch.chdir(unrelated)
+
+    assert current_git_sha() == package_identity
+
+
+def test_concept_catalog_content_changes_build_identity(tmp_path: Path) -> None:
+    config = load_glp1_config(GLP1_CONFIG)
+    copied_catalog = tmp_path / "concept_sets"
+    shutil.copytree(config.concept_sets_dir, copied_catalog)
+    first = load_concept_sets(copied_catalog)
+    first_run = deterministic_run_id(
+        config_sha256="config",
+        input_manifest_sha256="input",
+        concept_catalog_sha256=first.sha256,
+        code_fingerprint="code",
+    )
+    medications = copied_catalog / "medications.csv"
+    medications.write_text(medications.read_text().replace(
+        "Semaglutide ingredient", "Semaglutide revised ingredient", 1
+    ))
+    second = load_concept_sets(copied_catalog)
+    second_run = deterministic_run_id(
+        config_sha256="config",
+        input_manifest_sha256="input",
+        concept_catalog_sha256=second.sha256,
+        code_fingerprint="code",
+    )
+
+    assert first.sha256 != second.sha256
+    assert first_run != second_run
 
 
 def test_workspace_publishes_atomically_and_status_uses_stable_sibling(
@@ -345,6 +600,7 @@ def test_workspace_publishes_atomically_and_status_uses_stable_sibling(
         run_id="run-1",
         config_sha256="config-hash",
         input_manifest_sha256="input-hash",
+        concept_catalog_sha256="catalog-hash",
         git_sha="git-hash",
     )
     (workspace.staging_dir / "artifact.txt").write_text("complete")
@@ -372,7 +628,8 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
     run_id = deterministic_run_id(
         config_sha256=config.sha256,
         input_manifest_sha256=inventory.sha256,
-        git_sha=git_sha,
+        concept_catalog_sha256=catalog.sha256,
+        code_fingerprint=git_sha,
     )
     database_path = tmp_path / "work" / "glp1_hypercapnia.duckdb"
 
@@ -384,6 +641,7 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
         inventory=inventory,
         catalog=catalog,
         git_sha=git_sha,
+        concept_catalog_sha256=catalog.sha256,
     )
     try:
         assert connection.execute("SELECT COUNT(*) FROM concept_set").fetchone() == (
@@ -394,6 +652,9 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
         ).fetchall()
         assert len(source_files) == len(DOMAIN_HEADERS)
         assert all(not Path(row[0]).is_absolute() for row in source_files)
+        assert connection.execute(
+            "SELECT concept_catalog_sha256 FROM run_manifest"
+        ).fetchone() == (catalog.sha256,)
         mark_database_complete(connection)
         assert connection.execute(
             "SELECT status FROM run_manifest"
@@ -442,12 +703,14 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         inventory=inventory,
         catalog=catalog,
         git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
     )
     try:
         counts = ingest_core_sources(
             connection,
             input_root=export_root,
             inventory=inventory,
+            config=config,
         )
         assert counts["source_lab_measurement"] == 4
         assert counts["gas_candidate_id"] == 1
@@ -500,7 +763,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         export_root / "Encounter" / "encounter.csv",
         "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
         "e2,p2,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
-        "e3,p3,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
+        "e3,p3,2024-01-01 00:00:00,2024-01-03 12:00:00,EMER,s1",
         "e4,p4,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
         "e5,p5,2024-01-01 00:00:00,2024-01-02 00:00:00,EMER,s1",
     )
@@ -518,7 +781,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         "p2,e2,2024-01-01 01:00:00,LOINC,2026-3,60,,mmol/L",
         "p3,e3,2024-01-01 01:00:00,LOINC,2019-8,40,,mmHg",
         "p3,e3,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
-        "p3,e3,2024-01-01 02:00:00,LOINC,2019-8,55,,mmHg",
+        "p3,e3,2024-01-02 06:00:00,LOINC,2019-8,55,,mmHg",
         "p4,e4,2024-01-01 01:00:00,LOINC,2021-4,55,,mmHg",
         "p4,e4,2024-01-01 01:00:00,LOINC,2746-6,7.40,,pH",
         "p5,e5,2024-01-01 01:00:00,LOINC,11557-6,55,,mmHg",
@@ -544,12 +807,14 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         inventory=inventory,
         catalog=catalog,
         git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
     )
     try:
         ingest_core_sources(
             connection,
             input_root=export_root,
             inventory=inventory,
+            config=config,
         )
         counts = build_core_cohort(
             connection,
@@ -594,11 +859,12 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         later = connection.execute(
             """
             SELECT later_hypercapnia_sensitivity_case,
-                   primary_cohort_exclusion_reason
+                   primary_cohort_exclusion_reason,
+                   maximum_pco2_in_encounter
             FROM cohort_hypercapnia_encounter WHERE patient_id = 'p3'
             """
         ).fetchone()
-        assert later == (True, "first_arterial_pco2_not_elevated")
+        assert later == (True, "first_arterial_pco2_not_elevated", 55.0)
         vbg_only = connection.execute(
             """
             SELECT vbg_only_sensitivity_case,
@@ -631,6 +897,92 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert connection.execute(
             "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p4'"
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_first_arterial_gas_is_selected_before_unit_and_plausibility_filters(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "bad_unit,F,White,Unknown,1970,,",
+        "bad_value,F,White,Unknown,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_bad_unit,bad_unit,2024-01-01,2024-01-02,IMP,s1",
+        "e_bad_value,bad_value,2024-01-01,2024-01-02,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "bad_unit,e_bad_unit,2024-01-01 01:00:00,LOINC,2019-8,55,,mmol/L",
+        "bad_unit,e_bad_unit,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "bad_unit,e_bad_unit,2024-01-01 02:00:00,LOINC,2019-8,60,,mmHg",
+        "bad_value,e_bad_value,2024-01-01 01:00:00,LOINC,2019-8,500,,mmHg",
+        "bad_value,e_bad_value,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "bad_value,e_bad_value,2024-01-01 02:00:00,LOINC,2019-8,60,,mmHg",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="synthetic-run",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+        counts = build_core_cohort(
+            connection,
+            config=config,
+            run_id="synthetic-run",
+            git_sha="test-sha",
+        )
+
+        assert counts.hypercapnia_encounters == 2
+        assert counts.patient_index_events == 0
+        observed = connection.execute(
+            """
+            SELECT patient_id, abg_pco2_raw, abg_pco2_mm_hg,
+                   maximum_pco2_in_encounter, implausible_value,
+                   primary_cohort_exclusion_reason
+            FROM cohort_hypercapnia_encounter
+            ORDER BY patient_id
+            """
+        ).fetchall()
+        assert observed == [
+            (
+                "bad_unit",
+                "55",
+                None,
+                60.0,
+                True,
+                "first_arterial_pco2_unit_unusable",
+            ),
+            (
+                "bad_value",
+                "500",
+                500.0,
+                60.0,
+                True,
+                "first_arterial_pco2_implausible",
+            ),
+        ]
     finally:
         connection.close()
 
@@ -791,6 +1143,75 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
             WHERE patient_id = 'post_only'
               AND rule_id = 'source:type_2_diabetes'
             """
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_medication_ingredients_and_unmapped_raw_history_are_observable(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    ingredient_path = export_root / "Medications" / "medication_ingredient.csv"
+    ingredient_path.write_text(
+        "patient_id,encounter_id,unique_id,code_system,code,start_date,route,"
+        "brand,strength,derived_by_TriNetX,source_id\n"
+    )
+    _append_primary_cases(export_root, {"ingredient": 31, "unmapped": 31})
+    _append_rows(
+        ingredient_path,
+        "ingredient,e_ingredient,uid-1,RXNORM,1991302,2023-12-01,oral,"
+        "Wegovy,2.4mg,,s1",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "unmapped,e_unmapped,2023-12-01,LOCAL,UNMAPPED_DIAGNOSIS,,,,",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "unmapped,e_unmapped,2023-12-02,LOCAL,UNMAPPED_LAB,1,,arbitrary",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "unmapped,e_unmapped,LOCAL,UNMAPPED_MEDICATION,2023-12-03,oral,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+
+    connection = duckdb.connect(str(output_root / "glp1_hypercapnia.duckdb"))
+    try:
+        ingredient = connection.execute(
+            """
+            SELECT glp1_ever_ordered_pre_index, glp1_ingredient_at_index
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'ingredient'
+            """
+        ).fetchone()
+        assert ingredient == (True, "semaglutide")
+        assert connection.execute(
+            """
+            SELECT source_file FROM source_medication
+            WHERE patient_id = 'ingredient'
+            """
+        ).fetchone() == ("Medications/medication_ingredient.csv",)
+
+        observability = connection.execute(
+            """
+            SELECT diagnosis_event_count_730d, lab_event_count_365d,
+                   medication_event_count_730d, has_medication_history
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'unmapped'
+            """
+        ).fetchone()
+        assert observability == (1, 1, 1, True)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM source_medication WHERE patient_id = 'unmapped'"
         ).fetchone() == (0,)
     finally:
         connection.close()
@@ -1137,6 +1558,46 @@ def test_latest_lab_values_break_timestamp_ties_by_source_hash(
     assert results[0][3] in ("F1", "F3")
 
 
+def test_active_glp1_selection_breaks_timestamp_ties_by_source_hash(
+    tmp_path: Path,
+) -> None:
+    tied_rows = (
+        "ties,e_ties,RXNORM,1991302,2023-12-01,subcutaneous,Wegovy,2.4mg",
+        "ties,e_ties,RXNORM,475968,2023-12-01,subcutaneous,Saxenda,3mg",
+    )
+    results: list[tuple[str, str]] = []
+    for run_name, rows in (("forward", tied_rows), ("reverse", tied_rows[::-1])):
+        export_root = tmp_path / run_name / "export"
+        output_root = tmp_path / run_name / "output" / "glp1_eligibility"
+        _write_export(export_root)
+        _append_primary_cases(export_root, {"ties": 31})
+        _append_rows(export_root / "Medications" / "medication.csv", *rows)
+
+        build_glp1_eligibility(
+            input_root=export_root,
+            output_dir=output_root,
+            config_path=GLP1_CONFIG,
+        )
+        connection = duckdb.connect(
+            str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+        )
+        try:
+            results.append(
+                connection.execute(
+                    """
+                    SELECT glp1_ingredient_at_index, glp1_product_at_index
+                    FROM analysis_glp1_eligibility
+                    WHERE patient_id = 'ties'
+                    """
+                ).fetchone()
+            )
+        finally:
+            connection.close()
+
+    assert results[0] == results[1]
+    assert results[0] in (("semaglutide", "Wegovy"), ("liraglutide", "Saxenda"))
+
+
 def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> None:
     export_root = tmp_path / "export"
     output_root = tmp_path / "output" / "glp1_eligibility"
@@ -1147,9 +1608,12 @@ def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> Non
         "context,e_context,2023-12-01,ICD10CM,J18.9,,,,",
         "context,e_context,2024-01-01 12:00:00,ICD10CM,I46.9,,,,",
         "context,e_context,2024-01-01 12:00:00,ICD10CM,I50.9,,,,",
+        "context,e_context,2024-01-01 12:00:00,ICD10CM,T07.XXXA,,,,",
     )
     _append_rows(
         export_root / "Procedure" / "procedure.csv",
+        "context,e_context,2024-01-01 00:30:00,CPT,99152,",
+        "context,e_context,2024-01-01 00:45:00,CPT,00100,",
         "context,e_context,2024-01-01 12:00:00,CPT,94002,",
     )
 
@@ -1164,19 +1628,79 @@ def test_index_context_is_separate_from_pre_index_history(tmp_path: Path) -> Non
     try:
         context = connection.execute(
             """
-            SELECT cardiac_arrest_context, pneumonia_lri_at_index,
+            SELECT cardiac_arrest_context, major_trauma_context,
+                   procedure_sedation_context, postoperative_context,
+                   pneumonia_lri_at_index,
                    heart_failure_at_index, invasive_ventilation_at_index,
                    heart_failure_status
             FROM analysis_glp1_eligibility
             """
         ).fetchone()
-        assert context == (True, False, True, True, "indeterminate")
+        assert context == (
+            True,
+            True,
+            True,
+            True,
+            False,
+            True,
+            True,
+            "indeterminate",
+        )
         assert connection.execute(
             """
             SELECT cardiac_arrest_context
             FROM cohort_hypercapnia_encounter
             """
         ).fetchone() == (True,)
+    finally:
+        connection.close()
+
+
+def test_probable_venous_specimen_is_retained_but_excluded_from_cleaned_view(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    (export_root / "Lab Results" / "lab_results.csv").write_text(
+        "patient_id,encounter_id,date,code_system,code,lab_result_num_val,"
+        "lab_result_text_val,units_of_measure,specimen\n"
+    )
+    _append_primary_cases(export_root, {"venous_label": 31})
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    rows = lab_path.read_text().splitlines()
+    lab_path.write_text(
+        "\n".join(
+            [rows[0]]
+            + [
+                row + (",Venous blood" if ",2019-8," in row else ",Arterial blood")
+                for row in rows[1:]
+            ]
+        )
+        + "\n"
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT probable_venous_specimen
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == (True,)
+        assert connection.execute(
+            "SELECT count(*) FROM analysis_primary_obesity_hypercapnia"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT count(*) FROM analysis_primary_cleaned_obesity_hypercapnia"
+        ).fetchone() == (0,)
     finally:
         connection.close()
 
@@ -1203,6 +1727,10 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
         "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "p1,e1,2023-12-15,LOCAL,UNMAPPED_BUILD_CODE,,,",
     )
 
     first = build_glp1_eligibility(
@@ -1236,6 +1764,7 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     for section in (
         "Retained source date coverage",
         "Concept-matched code systems",
+        "High-frequency unmapped source codes",
         "Blood-gas pairing",
         "BMI source distribution",
         "Phenotype missingness",
@@ -1260,8 +1789,22 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
             "SELECT source_min_date, source_max_date FROM run_manifest"
         ).fetchone()
         assert all(value is not None for value in manifest_dates)
+        assert connection.execute(
+            """
+            SELECT logical_domain, code_system, code, estimated_count, max_error
+            FROM unmapped_code_frequency
+            WHERE code = 'UNMAPPED_BUILD_CODE'
+            """
+        ).fetchone() == (
+            "diagnosis",
+            "LOCAL",
+            "UNMAPPED_BUILD_CODE",
+            1,
+            0,
+        )
         expected_views = {
             "analysis_primary_obesity_hypercapnia",
+            "analysis_primary_cleaned_obesity_hypercapnia",
             "analysis_documented_indication_prevalence",
             "analysis_evaluable_indication_prevalence",
             "analysis_indication_overlap",
@@ -1278,6 +1821,26 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
             ).fetchall()
         }
         assert expected_views <= actual_views
+        flow = connection.execute(
+            "SELECT stage_order, stage FROM cohort_flow ORDER BY stage_order"
+        ).fetchall()
+        assert flow == [
+            (1, "source_patients"),
+            (2, "adult_candidate_emergency_inpatient_encounters"),
+            (3, "arterial_pco2_first_24h"),
+            (4, "valid_arterial_pco2_units"),
+            (5, "paired_ph"),
+            (6, "first_pco2_gt45_ph_le7_45"),
+            (7, "post_context_exclusions"),
+            (8, "unique_patients"),
+            (9, "valid_bmi"),
+            (10, "bmi_ge30"),
+            (11, "disease_specific_fda_documented"),
+            (12, "guideline_society_documented"),
+            (13, "rct_supported_documented"),
+            (14, "existing_glp1_order"),
+            (15, "payer_route_categories"),
+        ]
         for view in expected_views:
             assert connection.execute(f'SELECT COUNT(*) FROM "{view}"').fetchone()
         minimal_output = tmp_path / "minimal-output"
@@ -1305,3 +1868,60 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert second.run_id == first.run_id
     assert second.output_paths == first.output_paths
     assert read_run_state(output_root).status == "completed"
+
+
+def test_repository_local_glp1_output_must_be_git_ignored(tmp_path: Path) -> None:
+    unsafe_output = ROOT / "results" / "unsafe-glp1-output"
+
+    with pytest.raises(ValueError, match="Git does not ignore"):
+        build_glp1_eligibility(
+            input_root=tmp_path / "unused-input",
+            output_dir=unsafe_output,
+            config_path=GLP1_CONFIG,
+        )
+
+    _require_safe_output_location(ROOT / "results" / "glp1_eligibility")
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    (
+        "results/glp1_eligibility/glp1_hypercapnia.duckdb",
+        "results/custom-name.duckdb",
+        "results/private/analysis_glp1_eligibility.parquet",
+        "results/private/eligibility_evidence_long.parquet",
+        "results/private/cohort_hypercapnia_encounter.parquet",
+    ),
+)
+def test_gitignore_protects_glp1_row_level_artifacts(relative_path: str) -> None:
+    result = subprocess.run(
+        [
+            "git",
+            "check-ignore",
+            "--quiet",
+            "--no-index",
+            "--",
+            str(ROOT / relative_path),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+    assert result.returncode == 0
+
+
+def test_gitignore_does_not_hide_glp1_source_package() -> None:
+    result = subprocess.run(
+        [
+            "git",
+            "check-ignore",
+            "--quiet",
+            "--no-index",
+            "--",
+            str(ROOT / "src" / "trinetx_preprocessing" / "glp1_eligibility"),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+
+    assert result.returncode == 1

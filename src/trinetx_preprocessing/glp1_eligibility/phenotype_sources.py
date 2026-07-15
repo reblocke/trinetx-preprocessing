@@ -80,6 +80,8 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
             cohort.index_event_id,
             bool_or(concept.concept_set_id = 'cardiac_arrest')
                 AS cardiac_arrest_context,
+            bool_or(concept.concept_set_id = 'major_trauma')
+                AS major_trauma_context,
             bool_or(concept.concept_set_id = 'pneumonia_lri')
                 AS pneumonia_lri_at_index,
             bool_or(concept.concept_set_id = 'heart_failure')
@@ -97,7 +99,8 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
           ON concept.domain = 'diagnosis'
          AND concept.include
          AND concept.concept_set_id IN (
-             'cardiac_arrest', 'pneumonia_lri', 'heart_failure'
+             'cardiac_arrest', 'major_trauma',
+             'pneumonia_lri', 'heart_failure'
          )
          AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
          AND {_concept_match_sql('diagnosis.code')}
@@ -110,7 +113,17 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         SELECT
             cohort.index_event_id,
             bool_or(concept.concept_set_id = 'invasive_ventilation')
-                AS invasive_ventilation_at_index
+                AS invasive_ventilation_at_index,
+            bool_or(
+                concept.concept_set_id IN (
+                    'procedural_sedation', 'anesthesia_procedure'
+                )
+                AND procedure.event_datetime <= cohort.abg_datetime
+            ) AS procedure_sedation_context,
+            bool_or(
+                concept.concept_set_id = 'anesthesia_procedure'
+                AND procedure.event_datetime <= cohort.abg_datetime
+            ) AS postoperative_context
         FROM cohort_hypercapnia_encounter AS cohort
         JOIN source_procedure AS procedure
           ON procedure.patient_id = cohort.patient_id
@@ -123,7 +136,10 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
-         AND concept.concept_set_id = 'invasive_ventilation'
+         AND concept.concept_set_id IN (
+             'invasive_ventilation', 'procedural_sedation',
+             'anesthesia_procedure'
+         )
          AND {_code_system_sql('procedure.code_system')} = concept.code_system
          AND {_concept_match_sql('procedure.code')}
         GROUP BY cohort.index_event_id
@@ -137,10 +153,19 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         connection.execute(
             f"""
             UPDATE {table} AS target
-            SET cardiac_arrest_context = TRUE
+            SET cardiac_arrest_context = context.cardiac_arrest_context,
+                major_trauma_context = context.major_trauma_context
             FROM index_diagnosis_context AS context
             WHERE target.index_event_id = context.index_event_id
-              AND context.cardiac_arrest_context
+            """
+        )
+        connection.execute(
+            f"""
+            UPDATE {table} AS target
+            SET procedure_sedation_context = context.procedure_sedation_context,
+                postoperative_context = context.postoperative_context
+            FROM index_procedure_context AS context
+            WHERE target.index_event_id = context.index_event_id
             """
         )
 
@@ -590,10 +615,16 @@ def _build_medication_evidence(
             max(event_datetime) FILTER (
                 WHERE ordered_pre_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_last_pre_index_order_date,
-            arg_max(replace(concept_set_id, 'glp1_', ''), event_datetime) FILTER (
+            first(
+                replace(concept_set_id, 'glp1_', '')
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            ) FILTER (
                 WHERE active_at_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_ingredient_at_index,
-            arg_max(coalesce(brand, code), event_datetime) FILTER (
+            first(
+                coalesce(brand, code)
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            ) FILTER (
                 WHERE active_at_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_product_at_index,
             bool_or(ordered_post_index AND days_before_index >= -30
@@ -612,80 +643,60 @@ def _build_observability_summary(connection: duckdb.DuckDBPyConnection) -> None:
     connection.execute(
         """
         CREATE OR REPLACE TABLE component_observability_summary AS
-        WITH events AS (
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'encounter' AS domain, encounter.encounter_start AS event_date,
-                   encounter.encounter_id AS event_id
+        WITH encounter AS (
+            SELECT
+                analysis.index_event_id,
+                min(encounter.encounter_start) FILTER (
+                    WHERE encounter.encounter_start <= analysis.index_date
+                ) AS first_observed_event_date,
+                count(DISTINCT encounter.encounter_id) FILTER (
+                    WHERE encounter.encounter_start BETWEEN
+                        analysis.index_date - INTERVAL 365 DAY
+                        AND analysis.index_date
+                ) AS event_count
             FROM analysis_glp1_eligibility AS analysis
             JOIN source_encounter AS encounter USING (patient_id)
-            UNION ALL
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'diagnosis', diagnosis.event_datetime,
-                   diagnosis.source_record_hash
-            FROM analysis_glp1_eligibility AS analysis
-            JOIN source_diagnosis AS diagnosis USING (patient_id)
-            UNION ALL
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'lab', lab.event_datetime, lab.source_record_hash
-            FROM analysis_glp1_eligibility AS analysis
-            JOIN source_lab_measurement AS lab USING (patient_id)
-            UNION ALL
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'vital', vital.event_datetime, vital.source_record_hash
-            FROM analysis_glp1_eligibility AS analysis
-            JOIN source_vital_measurement AS vital USING (patient_id)
-            UNION ALL
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'procedure', procedure.event_datetime,
-                   procedure.source_record_hash
-            FROM analysis_glp1_eligibility AS analysis
-            JOIN source_procedure AS procedure USING (patient_id)
-            UNION ALL
-            SELECT analysis.index_event_id, analysis.index_date,
-                   'medication', medication.event_datetime,
-                   medication.source_record_hash
-            FROM analysis_glp1_eligibility AS analysis
-            JOIN source_medication AS medication USING (patient_id)
-        ), aggregate AS (
+            GROUP BY analysis.index_event_id
+        ), combined AS (
             SELECT
-                index_event_id,
-                min(event_date) FILTER (WHERE event_date <= index_date)
-                    AS first_observed_event_date,
-                count(DISTINCT event_id) FILTER (
-                    WHERE domain = 'encounter'
-                      AND event_date BETWEEN index_date - INTERVAL 365 DAY
-                                         AND index_date
-                ) AS encounter_count_365d,
-                count(*) FILTER (
-                    WHERE domain = 'diagnosis'
-                      AND event_date BETWEEN index_date - INTERVAL 730 DAY
-                                         AND index_date
-                ) AS diagnosis_event_count_730d,
-                count(*) FILTER (
-                    WHERE domain = 'lab'
-                      AND event_date BETWEEN index_date - INTERVAL 365 DAY
-                                         AND index_date
-                ) AS lab_event_count_365d,
-                count(*) FILTER (
-                    WHERE domain = 'medication'
-                      AND event_date BETWEEN index_date - INTERVAL 730 DAY
-                                         AND index_date
-                ) AS medication_event_count_730d
-            FROM events
-            GROUP BY index_event_id
+                analysis.index_event_id,
+                analysis.index_date,
+                least(
+                    encounter.first_observed_event_date,
+                    diagnosis.first_observed_event_date,
+                    lab.first_observed_event_date,
+                    vital.first_observed_event_date,
+                    procedure.first_observed_event_date,
+                    medication.first_observed_event_date
+                ) AS first_observed_event_date,
+                coalesce(encounter.event_count, 0) AS encounter_count_365d,
+                coalesce(diagnosis.event_count, 0)
+                    AS diagnosis_event_count_730d,
+                coalesce(lab.event_count, 0) AS lab_event_count_365d,
+                coalesce(medication.event_count, 0)
+                    AS medication_event_count_730d
+            FROM analysis_glp1_eligibility AS analysis
+            LEFT JOIN encounter USING (index_event_id)
+            LEFT JOIN raw_diagnosis_observability AS diagnosis
+                USING (index_event_id)
+            LEFT JOIN raw_labs_observability AS lab USING (index_event_id)
+            LEFT JOIN raw_vitals_observability AS vital USING (index_event_id)
+            LEFT JOIN raw_procedure_observability AS procedure
+                USING (index_event_id)
+            LEFT JOIN raw_medication_observability AS medication
+                USING (index_event_id)
         )
         SELECT
-            analysis.index_event_id,
-            aggregate.first_observed_event_date,
+            index_event_id,
+            first_observed_event_date,
             datediff(
-                'day', aggregate.first_observed_event_date, analysis.index_date
+                'day', first_observed_event_date, index_date
             ) AS lookback_observation_days,
-            aggregate.encounter_count_365d,
-            aggregate.diagnosis_event_count_730d,
-            aggregate.lab_event_count_365d,
-            aggregate.medication_event_count_730d
-        FROM analysis_glp1_eligibility AS analysis
-        LEFT JOIN aggregate USING (index_event_id)
+            encounter_count_365d,
+            diagnosis_event_count_730d,
+            lab_event_count_365d,
+            medication_event_count_730d
+        FROM combined
         """
     )
 

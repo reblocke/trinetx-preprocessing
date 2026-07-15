@@ -45,4 +45,5 @@ pneumonia_lri,diagnosis,ICD10CM,J15,prefix,true,Bacterial pneumonia family,ICD-1
 pneumonia_lri,diagnosis,ICD10CM,J16,prefix,true,Other infectious pneumonia,ICD-10-CM,2026,,,Index context
 pneumonia_lri,diagnosis,ICD10CM,J18,prefix,true,Pneumonia unspecified organism,ICD-10-CM,2026,,,Index context
 cardiac_arrest,diagnosis,ICD10CM,I46,prefix,true,Cardiac arrest family,ICD-10-CM,2026,,,Index context
+major_trauma,diagnosis,ICD10CM,T07,prefix,true,Unspecified multiple injuries,ICD-10-CM,2026,,,Narrow documented major-trauma context seed; low sensitivity and investigator review required
 pregnancy,diagnosis,ICD10CM,O,prefix,true,Pregnancy childbirth and puerperium chapter,ICD-10-CM,2026,,,Broad exclusion context

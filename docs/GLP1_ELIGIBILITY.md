@@ -31,6 +31,12 @@ python -m trinetx_preprocessing.glp1_eligibility validate-export \
   --input /path/to/trinetx_export
 ```
 
+When a restored root contains both a canonical unsplit export and legacy split
+artifacts, discovery selects the nearest canonical file. Headered split files
+remain the fallback when no unsplit source exists. Either a medication export
+or a medication-ingredient export satisfies the medication source contract;
+an exact duplicate split alias is not ingested twice.
+
 Build the additive database and study files:
 
 ```bash
@@ -40,9 +46,14 @@ python -m trinetx_preprocessing.glp1_eligibility build \
   --config config/glp1_eligibility.yml
 ```
 
-An identical rerun reuses the completed output. A different input, config, or
-code state requires `--replace`; replacement preserves the previous output
-until the staged build is complete.
+An identical rerun reuses the completed output. A different input, config,
+parsed concept catalog, supplied export metadata file, or package code state
+requires `--replace`; replacement preserves the previous output until the
+staged build is complete.
+
+Confidential output should normally live outside the repository. A
+repository-local output is accepted only when Git ignores the complete output
+directory, including its staging and replacement siblings.
 
 Long builds publish atomic aggregate progress to a hidden state file adjacent
 to their output directory while artifacts are staged, so the final output tree
@@ -66,13 +77,15 @@ python -m trinetx_preprocessing.glp1_eligibility summarize \
   --database /path/to/output/glp1_eligibility/glp1_hypercapnia.duckdb
 ```
 
-The current build implements source inventory, first-available arterial PaCO2,
-unit-aware pH pairing, hypercapnia sensitivity cohorts, the measured/calculated
-BMI hierarchy, temporal component phenotypes, indication tiers, payer-route
-modeling, GLP-1 order history, long-form source and derived evidence, study
-views, and atomic file publication. The committed synthetic export exercises
-the 20 mandatory issue cases without proprietary data, and the same suite runs
-in GitHub Actions.
+The current build implements source and export-metadata inventory,
+first-observed arterial PaCO2 selection before validity checks, unit-aware pH
+pairing, hypercapnia sensitivity cohorts, the measured/calculated BMI hierarchy,
+concept-independent raw observability, temporal component phenotypes,
+indication tiers, payer-route modeling, medication and ingredient order
+history, all 15 flow stages, long-form source and derived evidence, study views,
+and atomic file publication. The committed synthetic export exercises the 20
+mandatory issue cases without proprietary data, and the same suite runs in
+GitHub Actions.
 
 See `GLP1_DATA_CONTRACT.md`, `GLP1_PHENOTYPES.md`, and
 `GLP1_MIGRATION.md` for the database contract, interpretation boundaries, and

@@ -11,7 +11,7 @@ from ..filesystem import remove_tree_strict, write_text_atomic
 from .monitoring import RunStateWriter, state_path_for_output
 
 BUILD_STATE_FILENAME = "build_workspace.json"
-BUILD_STATE_SCHEMA_VERSION = 1
+BUILD_STATE_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,7 @@ class BuildWorkspace:
     run_id: str
     config_sha256: str
     input_manifest_sha256: str
+    concept_catalog_sha256: str
     git_sha: str
     state: RunStateWriter
 
@@ -39,6 +40,7 @@ def prepare_workspace(
     run_id: str,
     config_sha256: str,
     input_manifest_sha256: str,
+    concept_catalog_sha256: str,
     git_sha: str,
 ) -> BuildWorkspace:
     """Create or validate the deterministic staging directory for a build."""
@@ -52,6 +54,7 @@ def prepare_workspace(
         "run_id": run_id,
         "config_sha256": config_sha256,
         "input_manifest_sha256": input_manifest_sha256,
+        "concept_catalog_sha256": concept_catalog_sha256,
         "git_sha": git_sha,
         "status": "building",
     }
@@ -67,6 +70,7 @@ def prepare_workspace(
             "run_id",
             "config_sha256",
             "input_manifest_sha256",
+            "concept_catalog_sha256",
             "git_sha",
         )
         if any(observed.get(key) != expected[key] for key in identity_keys):
@@ -87,6 +91,7 @@ def prepare_workspace(
         run_id=run_id,
         config_sha256=config_sha256,
         input_manifest_sha256=input_manifest_sha256,
+        concept_catalog_sha256=concept_catalog_sha256,
         git_sha=git_sha,
         state=state,
     )

@@ -22,6 +22,7 @@ def initialize_database(
     inventory: InputInventory,
     catalog: ConceptSetCatalog,
     git_sha: str,
+    concept_catalog_sha256: str,
 ) -> duckdb.DuckDBPyConnection:
     """Create metadata tables in a new or resumable DuckDB database."""
 
@@ -38,8 +39,14 @@ def initialize_database(
     connection.execute("DELETE FROM run_manifest")
     connection.execute(
         """
-        INSERT INTO run_manifest VALUES (
-            ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
+        INSERT INTO run_manifest (
+            run_id, run_started_at, run_completed_at, pipeline_git_sha,
+            schema_version, rule_set_version, labels_as_of,
+            payer_policy_as_of, config_sha256, concept_catalog_sha256,
+            input_root, input_manifest_sha256, study_start, study_end,
+            source_min_date, source_max_date, status, warning_count, error_count
+        ) VALUES (
+            ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
             'building', 0, 0
         )
         """,
@@ -52,6 +59,7 @@ def initialize_database(
             config.labels_as_of.isoformat(),
             config.payer_policy_as_of.isoformat(),
             config.sha256,
+            concept_catalog_sha256,
             str(Path(input_root).resolve()),
             inventory.sha256,
             config.study.study_start.isoformat() if config.study.study_start else None,
@@ -127,6 +135,22 @@ def initialize_database(
         ],
     )
     connection.execute("DELETE FROM build_warning")
+    connection.execute("DELETE FROM unmapped_code_frequency")
+    if inventory.unmapped_code_frequencies:
+        connection.executemany(
+            "INSERT INTO unmapped_code_frequency VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    run_id,
+                    frequency.logical_domain,
+                    frequency.code_system,
+                    frequency.code,
+                    frequency.estimated_count,
+                    frequency.max_error,
+                )
+                for frequency in inventory.unmapped_code_frequencies
+            ],
+        )
     return connection
 
 
@@ -155,6 +179,7 @@ def _create_metadata_schema(connection: duckdb.DuckDBPyConnection) -> None:
             labels_as_of DATE NOT NULL,
             payer_policy_as_of DATE NOT NULL,
             config_sha256 VARCHAR NOT NULL,
+            concept_catalog_sha256 VARCHAR NOT NULL,
             input_root VARCHAR NOT NULL,
             input_manifest_sha256 VARCHAR NOT NULL,
             study_start DATE,
@@ -222,6 +247,18 @@ def _create_metadata_schema(connection: duckdb.DuckDBPyConnection) -> None:
             warning_code VARCHAR NOT NULL,
             message VARCHAR NOT NULL,
             details_json JSON NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS unmapped_code_frequency (
+            run_id VARCHAR NOT NULL,
+            logical_domain VARCHAR NOT NULL,
+            code_system VARCHAR NOT NULL,
+            code VARCHAR NOT NULL,
+            estimated_count UBIGINT NOT NULL,
+            max_error UBIGINT NOT NULL
         )
         """
     )

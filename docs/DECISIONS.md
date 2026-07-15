@@ -997,3 +997,97 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `tests/test_glp1_foundation.py`, `https://loinc.org/1960-4`,
   `https://loinc.org/2703-7`, `https://loinc.org/2708-6`.
+
+### 2026-07-14 — Retain context flags and configure cleaned-view exclusions
+- Date: 2026-07-14
+- Decision: Keep all qualifying primary rows in the existing analysis view and
+  add `analysis_primary_cleaned_obesity_hypercapnia`, whose exclusions are an
+  explicit validated list in configuration. Populate documented context from
+  index-encounter codes and source specimen text rather than constant values.
+- Context: The endpoint requires context flags without silently deleting rows.
+  The initial tables emitted constant false values for several fields and had no
+  configurable cleaned view.
+- Rationale: Separating retained evidence from exclusion policy preserves audit
+  access and permits sensitivity analyses. The first major-trauma seed is
+  intentionally narrow because the broad injury chapter includes minor injury,
+  poisoning, and procedural complications; a validated trauma algorithm remains
+  investigator work.
+- Consequences: Positive flags mean documented seed evidence. Negative flags do
+  not prove absence. Moderate-sedation CPT `99151`-`99157` and the anesthesia
+  service family are treated as index context only when dated no later than the
+  selected PaCO2. The default cleaned view excludes all six configured context
+  fields, but the unfiltered view and encounter table remain unchanged.
+- References: `config/concept_sets/diagnoses.csv`,
+  `config/concept_sets/procedures.csv`, `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `https://www.cms.gov/files/document/02-chapter2-ncci-medicare-policy-manual-2025finalcleanpdf.pdf`,
+  `https://www.cdc.gov/nchs/icd/icd-10-cm/index.html`.
+
+### 2026-07-15 — Fail closed on GLP-1 selection and provenance ambiguity
+- Date: 2026-07-15
+- Decision: Rank the first arterial PaCO2 before validating its value or unit,
+  retain unusable first rows with explicit exclusion reasons, and calculate the
+  encounter maximum from plausible arterial measurements through discharge.
+  Treat the published 50/52 PaCO2 and 27/30/35/40 BMI columns plus arterial
+  primary endpoint as fixed contracts; reject configurations that request
+  unsupported alternatives.
+- Context: Review found that validity filtering promoted later gas values,
+  fixed output columns ignored custom configuration, and the 24-hour table
+  understated encounter maxima.
+- Rationale: Selection and validity are distinct operations. Failing closed is
+  safer than silently changing the index event or accepting configuration that
+  cannot alter the published contract.
+- Consequences: The GLP-1 ruleset advances to `2026-07-15`. Unusable first gas
+  rows remain auditable but do not enter the strict cohort. Alternate thresholds
+  require a future versioned output schema rather than a YAML-only change.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/config.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Separate build identity, evidence, and observability
+- Date: 2026-07-15
+- Decision: Include parsed concept and phenotype-rule content plus
+  package-anchored code content in deterministic build identity. Inventory and
+  hash supplied export metadata. Ingest optional medication-ingredient files
+  into medication evidence, while computing candidate-patient observability
+  from unfiltered raw-domain aggregate scans. Prefer the nearest canonical
+  unsplit source family, use headered chunks only as a fallback, and suppress a
+  medication chunk family only when its schema and total bytes exactly match
+  the selected ingredient family.
+- Context: A changed external concept catalog or code executed from another
+  working directory could reuse stale output. Concept-filtered source tables
+  also made unmatched history appear absent, and discovered ingredient exports
+  were not consumed.
+- Rationale: Build identity must describe every behavior-defining input.
+  Phenotype evidence depends on approved concepts, whereas data observability
+  must not depend on terminology coverage.
+- Consequences: Workspace identity schema advances to version 2. Raw
+  observability adds bounded sequential aggregate scans but stores no additional
+  row-level source copy. Run manifests expose the concept digest and source
+  inventory includes metadata files and hashes. Ingredient-only exports are
+  valid, and restored roots no longer ingest both canonical files and legacy
+  duplicate splits.
+- References: `src/trinetx_preprocessing/glp1_eligibility/concept_sets.py`,
+  `builder.py`, `provenance.py`, `discovery.py`, `ingestion.py`, `workspace.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Publish complete aggregate flow and protect private outputs
+- Date: 2026-07-15
+- Decision: Build all 15 contracted cohort-flow rows only after component
+  phenotypes and payer routes exist. Use bounded source aggregates for the first
+  two stages, one checkpointed domain-wide Space-Saving stream for terminology
+  QA, and reject repository-local output directories unless Git ignores the
+  directory as a whole.
+- Context: The previous flow stopped after five rows, per-file sketch merges
+  lost valid error bounds, and custom repository-local output paths could leave
+  confidential databases or staging trees trackable.
+- Rationale: Aggregate reports must reconcile the actual endpoint, QA bounds
+  must remain truthful, and privacy controls must cover both final and temporary
+  output locations.
+- Consequences: Cohort flow has exactly 15 ordered rows. The final five are
+  parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
+  DuckDB files are ignored by format and unsafe repository-local roots fail
+  before staging starts.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
+  `tests/test_glp1_foundation.py`.

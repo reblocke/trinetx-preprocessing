@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -86,6 +88,30 @@ class ConceptSetCatalog:
         """Return concept sets that must produce at least one aggregate match."""
 
         return tuple(self.phenotype_rules["required_concept_sets"])
+
+    @property
+    def sha256(self) -> str:
+        """Return a canonical digest of all concepts and phenotype rules."""
+
+        concepts = []
+        for concept in self.concepts:
+            row = asdict(concept)
+            row["effective_start"] = (
+                concept.effective_start.isoformat() if concept.effective_start else None
+            )
+            row["effective_end"] = (
+                concept.effective_end.isoformat() if concept.effective_end else None
+            )
+            concepts.append(row)
+        payload = json.dumps(
+            {
+                "concepts": concepts,
+                "phenotype_rules": self.phenotype_rules,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(payload).hexdigest()
 
 
 def load_concept_sets(directory: Path) -> ConceptSetCatalog:

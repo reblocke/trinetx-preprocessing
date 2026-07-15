@@ -6,6 +6,7 @@ from pathlib import Path
 
 import duckdb
 
+from .config import GLP1Config
 from .monitoring import RunStateWriter
 from .provenance import InputInventory
 
@@ -15,6 +16,7 @@ def ingest_core_sources(
     *,
     input_root: Path,
     inventory: InputInventory,
+    config: GLP1Config,
     state: RunStateWriter | None = None,
 ) -> dict[str, int]:
     """Ingest gas-related measurements and candidate patient context once.
@@ -26,6 +28,13 @@ def ingest_core_sources(
 
     root = Path(input_root).resolve()
     _load_source_path_map(connection, root, inventory)
+    if state is not None:
+        state.update(
+            phase="source_cohort_flow",
+            current_domain="encounter",
+            message="Aggregating source-patient and adult encounter flow counts.",
+        )
+    _create_source_cohort_flow_base(connection, root, inventory, config)
     rows: dict[str, int] = {}
 
     if state is not None:
@@ -92,6 +101,51 @@ def ingest_core_sources(
     return rows
 
 
+def build_raw_observability_summaries(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    input_root: Path,
+    inventory: InputInventory,
+    state: RunStateWriter | None = None,
+) -> None:
+    """Aggregate all candidate-patient source history without concept filtering."""
+
+    root = Path(input_root).resolve()
+    if _row_count(connection, "analysis_glp1_eligibility") == 0:
+        for domain in ("diagnosis", "labs", "vitals", "procedure", "medication"):
+            _create_empty_raw_observability(connection, domain)
+        return
+
+    specifications = (
+        ("diagnosis", ("diagnosis",), "date", 730),
+        ("labs", ("labs",), "date", 365),
+        ("vitals", ("vitals",), "date", None),
+        ("procedure", ("procedure",), "date", None),
+        (
+            "medication",
+            ("medication", "medication_ingredient"),
+            "start_date",
+            730,
+        ),
+    )
+    for domain, source_domains, event_column, lookback_days in specifications:
+        if state is not None:
+            state.update(
+                phase="raw_observability",
+                current_domain=domain,
+                message=f"Aggregating unfiltered {domain} history.",
+            )
+        _create_raw_observability(
+            connection,
+            root=root,
+            inventory=inventory,
+            table_domain=domain,
+            source_domains=source_domains,
+            event_column=event_column,
+            lookback_days=lookback_days,
+        )
+
+
 def _update_retained_date_coverage(
     connection: duckdb.DuckDBPyConnection,
 ) -> None:
@@ -141,6 +195,78 @@ def _update_retained_date_coverage(
         """
     )
     connection.execute("DROP TABLE retained_source_date_coverage")
+
+
+def _create_source_cohort_flow_base(
+    connection: duckdb.DuckDBPyConnection,
+    root: Path,
+    inventory: InputInventory,
+    config: GLP1Config,
+) -> None:
+    patient_files = _domain_files(root, inventory, "patient")
+    encounter_files = _domain_files(root, inventory, "encounter")
+    encounter_types = ", ".join(
+        _sql_string(value) for value in config.study.index_encounter_types
+    )
+    start_condition = (
+        "TRUE"
+        if config.study.study_start is None
+        else (
+            "encounter_start::DATE >= DATE "
+            + _sql_string(config.study.study_start.isoformat())
+        )
+    )
+    end_condition = (
+        "TRUE"
+        if config.study.study_end is None
+        else (
+            "encounter_start::DATE <= DATE "
+            + _sql_string(config.study.study_end.isoformat())
+        )
+    )
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE source_cohort_flow_base AS
+        WITH patient_raw AS (
+            SELECT patient_id, try_cast(year_of_birth AS INTEGER) AS year_of_birth
+            FROM {_read_csv_sql(patient_files)}
+        ), patient AS (
+            SELECT patient_id, min(year_of_birth) AS year_of_birth
+            FROM patient_raw
+            WHERE patient_id IS NOT NULL
+            GROUP BY patient_id
+        ), encounter_raw AS (
+            SELECT
+                encounter_id,
+                patient_id,
+                try_cast(start_date AS TIMESTAMP) AS encounter_start,
+                type
+            FROM {_read_csv_sql(encounter_files)}
+        ), adult_candidate AS (
+            SELECT encounter.encounter_id, encounter.patient_id
+            FROM encounter_raw AS encounter
+            JOIN patient USING (patient_id)
+            WHERE encounter.encounter_id IS NOT NULL
+              AND encounter.encounter_start IS NOT NULL
+              AND year(encounter.encounter_start) - patient.year_of_birth
+                    >= {config.study.adult_age_min}
+              AND upper(trim(encounter.type)) IN ({encounter_types})
+              AND {start_condition}
+              AND {end_condition}
+        )
+        SELECT
+            1 AS stage_order,
+            count(*)::BIGINT AS row_count,
+            count(*)::BIGINT AS unique_patient_count
+        FROM patient
+        UNION ALL
+        SELECT
+            2,
+            count(DISTINCT encounter_id)::BIGINT,
+            count(DISTINCT patient_id)::BIGINT
+        FROM adult_candidate
+        """
+    )
 
 
 def _load_source_path_map(
@@ -460,6 +586,7 @@ def _create_medications(
         root=root,
         inventory=inventory,
         domain="medication",
+        source_domains=("medication", "medication_ingredient"),
         table_name="source_medication",
         event_column="start_date",
         names=(
@@ -491,13 +618,15 @@ def _create_patient_concept_source(
     root: Path,
     inventory: InputInventory,
     domain: str,
+    source_domains: tuple[str, ...] | None = None,
     table_name: str,
     event_column: str,
     names: tuple[str, ...],
     extra_projections: tuple[str, ...] = (),
 ) -> None:
-    files = _domain_files(root, inventory, domain)
-    columns = _domain_columns(inventory, domain)
+    selected_domains = source_domains or (domain,)
+    files = _domain_files_for_domains(root, inventory, selected_domains)
+    columns = _domain_columns_for_domains(inventory, selected_domains)
     raw = _read_csv_sql(files)
     available_extra = tuple(
         (
@@ -554,12 +683,102 @@ def _domain_files(
     return files
 
 
+def _domain_files_for_domains(
+    root: Path,
+    inventory: InputInventory,
+    domains: tuple[str, ...],
+) -> tuple[Path, ...]:
+    files = tuple(
+        root / item.source_file
+        for item in inventory.files
+        if item.logical_domain in domains
+    )
+    if not files:
+        raise ValueError(
+            "No inventoried source files for required domain(s): "
+            + ", ".join(domains)
+        )
+    return files
+
+
 def _domain_columns(inventory: InputInventory, domain: str) -> frozenset[str]:
     return frozenset(
         column
         for item in inventory.files
         if item.logical_domain == domain
         for column in item.column_names
+    )
+
+
+def _domain_columns_for_domains(
+    inventory: InputInventory,
+    domains: tuple[str, ...],
+) -> frozenset[str]:
+    return frozenset(
+        column
+        for item in inventory.files
+        if item.logical_domain in domains
+        for column in item.column_names
+    )
+
+
+def _create_raw_observability(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    root: Path,
+    inventory: InputInventory,
+    table_domain: str,
+    source_domains: tuple[str, ...],
+    event_column: str,
+    lookback_days: int | None,
+) -> None:
+    files = _domain_files_for_domains(root, inventory, source_domains)
+    raw = _read_csv_sql(files)
+    count_expression = (
+        "NULL::BIGINT AS event_count"
+        if lookback_days is None
+        else (
+            "count(*) FILTER (WHERE event_datetime BETWEEN "
+            f"analysis.index_date - INTERVAL {lookback_days} DAY "
+            "AND analysis.index_date) AS event_count"
+        )
+    )
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE {_identifier(f"raw_{table_domain}_observability")} AS
+        WITH raw_event AS (
+            SELECT
+                raw."patient_id" AS patient_id,
+                try_cast(raw.{_identifier(event_column)} AS TIMESTAMP)
+                    AS event_datetime
+            FROM {raw} AS raw
+        )
+        SELECT
+            analysis.index_event_id,
+            min(event_datetime) FILTER (
+                WHERE event_datetime <= analysis.index_date
+            ) AS first_observed_event_date,
+            {count_expression}
+        FROM analysis_glp1_eligibility AS analysis
+        JOIN raw_event USING (patient_id)
+        GROUP BY analysis.index_event_id
+        """
+    )
+
+
+def _create_empty_raw_observability(
+    connection: duckdb.DuckDBPyConnection,
+    domain: str,
+) -> None:
+    connection.execute(
+        f"""
+        CREATE OR REPLACE TABLE {_identifier(f"raw_{domain}_observability")} AS
+        SELECT
+            NULL::VARCHAR AS index_event_id,
+            NULL::TIMESTAMP AS first_observed_event_date,
+            NULL::BIGINT AS event_count
+        WHERE FALSE
+        """
     )
 
 

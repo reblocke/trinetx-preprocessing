@@ -4,6 +4,7 @@
 - Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
 - Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
 - GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
+- Current turn: implement all 13 release-relevant GLP-1 findings, verify them locally and synthetically, then obtain clean PR review before any private full build.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -103,6 +104,16 @@
 - Review fixes are pushed as `b30345b`; both PR threads are resolved and a fresh Codex review is pending.
 - Supplemental arterial bicarbonate, PaO2, and oxygen saturation now use versioned LOINC seeds, explicit unit/range validation, and the same deterministic pairing hierarchy as arterial pH. Focused GLP-1 tests pass.
 - The supplemental-gas checkpoint passes `git diff --check`, Ruff, and the full `260`-test suite.
+- Context flags now derive from documented index-encounter arrest, narrow trauma, anesthesia/sedation, postoperative, and specimen evidence. A configurable cleaned primary view excludes selected flags without deleting unfiltered candidates; focused tests pass.
+- Live status check on 2026-07-14 found no legacy, profile, GLP-1 build, DuckDB, notebook, or pytest worker. `/Volumes/LOCKE BOOK` has about `8.2 TiB` free, so execution is not blocked by an older run or storage.
+- Supplemental arterial gases are pushed at `c5c85d8`; context/exclusion and one-pass bounded unmapped-code QA changes are local and under verification.
+- Merge-base review against `8a6e90360718b26595ec60c4eafb59e5d5839b8e` completed with clean `git diff --check`, clean Ruff, and `264` passing tests; semantic review still found release-relevant GLP-1 provenance, cohort-selection, observability, ingredient-ingestion, cohort-flow, and artifact-safety defects plus several configuration/QA edge cases.
+- All seven P1 and six P2 GLP-1 review findings are fixed locally with focused regression coverage: first-gas ordering, concept/code identity, ingredient ingestion, raw observability, output safety, complete cohort flow, sketch bounds, fixed configuration contracts, encounter maxima, and metadata inventory.
+- The committed 20-case production fixture completes in `0.66 s` with `378,355,712` bytes maximum RSS, 19 candidate encounters, 17 patient index events, 14 primary obesity-hypercapnia rows, 651 evidence rows, eight public files, and 15 cohort-flow rows.
+- A header-only BOOK preflight exposed canonical source files mixed with legacy headerless split artifacts. Discovery now selects one nearest canonical family, permits ingredient-only medication exports, and suppresses the exact duplicate medication alias; the repeated BOOK `validate-export` reports 0 errors and 0 warnings across seven clinical files plus 12 metadata files.
+- No private build has started. The final review-fix gate passes `git diff --check`, Ruff, and all `283` tests. A fresh production CLI smoke completed in `1.36 s` with `379,027,456` bytes maximum RSS, 19 candidate encounters, 17 patient index events, 14 primary obesity-hypercapnia rows, 651 evidence rows, zero warnings, eight public files, and all 15 cohort-flow rows.
+- The staging audit caught and fixed an overbroad output ignore that also matched the Python package; repository-local generated outputs remain protected, and a regression test now proves source files are not hidden.
+- Running pytest temporary files directly on the ExFAT validation volume was pathologically metadata-bound (`5` tests in `450 s`); the complete synthetic suite therefore used a bounded `/tmp` basetemp while retaining the uv cache externally.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -111,11 +122,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete context/exclusion and bounded unmapped-code QA implementation without a second full raw-domain scan.
+- Review the verified change scope for confidential-artifact hygiene, then commit and push the 13 review fixes.
 
 ## Next
-- Implement and test supplemental gas features, context/exclusion derivation, and aggregate unmapped-code QA without adding repeated full raw-domain scans.
-- Obtain investigator review of the seed terminology, then preflight and launch the private full build with `status --watch` monitoring.
+- Request a fresh PR #7 Codex review, resolve any actionable findings, then decide whether the monitored private full build is unblocked.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -130,4 +140,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `f2f58ab`; PR #7 has two unresolved P2 review findings under active repair.
+- Branch: `codex/glp1-augmentation` at pushed checkpoint `c5c85d8`; PR #7 review status is being refreshed against the current implementation.

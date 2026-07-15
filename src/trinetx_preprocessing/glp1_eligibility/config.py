@@ -15,6 +15,10 @@ class GLP1ConfigError(ValueError):
     """Raised when the GLP-1 configuration is invalid."""
 
 
+FIXED_PCO2_SENSITIVITY_THRESHOLDS = (50.0, 52.0)
+FIXED_OBESITY_THRESHOLDS = (27.0, 30.0, 35.0, 40.0)
+
+
 @dataclass(frozen=True)
 class StudyConfig:
     """Study dates, encounter scope, and temporal windows."""
@@ -80,6 +84,13 @@ class OutputConfig:
 
 
 @dataclass(frozen=True)
+class ExclusionConfig:
+    """Documented context flags excluded from the cleaned analysis view."""
+
+    cleaned_view_excludes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class GLP1Config:
     """Validated top-level GLP-1 eligibility configuration."""
 
@@ -90,6 +101,7 @@ class GLP1Config:
     study: StudyConfig
     hypercapnia: HypercapniaConfig
     obesity: ObesityConfig
+    exclusions: ExclusionConfig
     output: OutputConfig
     concept_sets_dir: Path
     source_path: Path
@@ -119,6 +131,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
             "study",
             "hypercapnia",
             "obesity",
+            "exclusions",
             "output",
         },
         context="config",
@@ -132,6 +145,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
     study = _load_study(_required_mapping(raw, "study"))
     hypercapnia = _load_hypercapnia(_required_mapping(raw, "hypercapnia"))
     obesity = _load_obesity(_required_mapping(raw, "obesity"))
+    exclusions = _load_exclusions(_required_mapping(raw, "exclusions"))
     output = _load_output(_required_mapping(raw, "output"))
 
     if study.study_start and study.study_end and study.study_start > study.study_end:
@@ -144,6 +158,25 @@ def load_glp1_config(path: Path) -> GLP1Config:
     ):
         raise GLP1ConfigError(
             "Every PCO2 sensitivity threshold must exceed pco2_gt_mm_hg."
+        )
+    if (
+        hypercapnia.pco2_sensitivity_thresholds_mm_hg
+        != FIXED_PCO2_SENSITIVITY_THRESHOLDS
+    ):
+        raise GLP1ConfigError(
+            "hypercapnia.pco2_sensitivity_thresholds_mm_hg must be [50, 52] "
+            "because the published columns are fixed as hypercapnia_ge50 and "
+            "hypercapnia_ge52."
+        )
+    if not hypercapnia.primary_requires_arterial_specimen:
+        raise GLP1ConfigError(
+            "hypercapnia.primary_requires_arterial_specimen must be true for "
+            "the fixed primary endpoint contract."
+        )
+    if obesity.thresholds != FIXED_OBESITY_THRESHOLDS:
+        raise GLP1ConfigError(
+            "obesity.thresholds must be [27, 30, 35, 40] because the published "
+            "BMI threshold columns are fixed."
         )
 
     concept_sets_dir = Path(raw.get("concept_sets_dir", "concept_sets"))
@@ -158,6 +191,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
         study=study,
         hypercapnia=hypercapnia,
         obesity=obesity,
+        exclusions=exclusions,
         output=output,
         concept_sets_dir=concept_sets_dir,
         source_path=config_path,
@@ -353,6 +387,32 @@ def _load_output(raw: dict[str, Any]) -> OutputConfig:
         write_parquet=_required_bool(raw, "write_parquet"),
         write_html_qa=_required_bool(raw, "write_html_qa"),
     )
+
+
+def _load_exclusions(raw: dict[str, Any]) -> ExclusionConfig:
+    allowed = {"cleaned_view_excludes"}
+    _reject_unknown_keys(raw, allowed, context="exclusions")
+    known_flags = {
+        "cardiac_arrest_context",
+        "major_trauma_context",
+        "procedure_sedation_context",
+        "postoperative_context",
+        "implausible_value",
+        "probable_venous_specimen",
+    }
+    configured = tuple(
+        str(value).strip() for value in _required_list(raw, "cleaned_view_excludes")
+    )
+    if len(configured) != len(set(configured)):
+        raise GLP1ConfigError(
+            "exclusions.cleaned_view_excludes may not contain duplicates."
+        )
+    unknown = sorted(set(configured) - known_flags)
+    if unknown:
+        raise GLP1ConfigError(
+            "Unknown cleaned-view exclusion flag(s): " + ", ".join(unknown) + "."
+        )
+    return ExclusionConfig(cleaned_view_excludes=configured)
 
 
 def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:

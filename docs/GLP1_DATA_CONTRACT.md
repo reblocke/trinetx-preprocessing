@@ -21,6 +21,14 @@ The DuckDB database also contains one-row-per-patient
 `cohort_hypercapnia_patient_index`, source inventory and concept-set tables, and
 the six `analysis_*` views described in `GLP1_PHENOTYPES.md`.
 
+`cohort_flow.csv` always contains the 15 ordered endpoint stages: source
+patients, adult candidate encounters, arterial PaCO2, valid units, paired pH,
+strict hypercapnia, post-context exclusions, unique patients, valid BMI, BMI at
+least 30, disease-specific FDA evidence, guideline/society evidence,
+RCT-supported evidence, prior GLP-1 orders, and payer-route classification.
+The final five rows are parallel characterizations of the BMI-at-least-30
+denominator rather than nested clinical exclusions.
+
 Parquet companions and the HTML QA report are enabled by default. Controlled
 builds may disable them with `output.write_parquet` and
 `output.write_html_qa`; DuckDB, cohort flow, data dictionary, and run manifest
@@ -48,8 +56,11 @@ wide results without exposing identifiers in aggregate logs or summaries.
 
 ## Reproducibility and privacy
 
-The run identifier is derived from configuration, input inventory, and git
-state. Identical completed runs are reused; a differing run requires
-`--replace` and is published atomically only after staging succeeds. Real
-databases, Parquet files, manifests, logs, and reports are private generated
-artifacts and must remain untracked.
+The run identifier is derived from configuration, the complete parsed concept
+catalog, input inventory (including supplied export metadata), and code content
+anchored to the installed package or its source checkout. Identical completed
+runs are reused; a differing run requires `--replace` and is published
+atomically only after staging succeeds. Repository-local output is accepted
+only when Git ignores the entire output directory. Real databases, Parquet
+files, manifests, logs, and reports are private generated artifacts and must
+remain untracked.

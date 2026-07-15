@@ -20,6 +20,23 @@ trinetx_preprocessing_scaffold_md.zip
 # Local data (TriNetX exports, PHI)
 /data/
 
+# Confidential GLP-1 generated outputs
+/glp1_eligibility/
+/results/glp1_eligibility/
+/results/**/glp1_eligibility/
+/artifacts/**/glp1_eligibility/
+*.duckdb
+**/glp1_hypercapnia.duckdb
+**/analysis_glp1_eligibility.parquet
+**/eligibility_evidence_long.parquet
+**/cohort_hypercapnia_encounter.parquet
+**/cohort_flow.csv
+**/data_quality_report.html
+**/run_manifest.json
+**/.glp1_eligibility.run-state.json
+**/.glp1_eligibility.build-*/
+**/.glp1_eligibility.previous-*/
+
 # Python
 __pycache__/
 *.pyc

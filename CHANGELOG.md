@@ -14,6 +14,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   GLP-1 order history.
 - Added unit-normalized arterial bicarbonate, PaO2, and oxygen-saturation
   values paired to the selected PaCO2 through the same deterministic hierarchy.
+- Added documented cardiac-arrest, narrow major-trauma, anesthesia/sedation,
+  postoperative, and probable-venous context flags plus a configurable cleaned
+  primary-cohort view that leaves unfiltered candidates intact.
 - Added source and derived long-form evidence, six study analysis views, atomic
   aggregate run monitoring with `status --watch`, and a committed 20-case
   synthetic acceptance fixture.
@@ -21,6 +24,25 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Fixed
+- Ranked the first arterial PaCO2 before unit and plausibility filtering so a
+  later valid result cannot replace an earlier unusable result; encounter
+  maxima now cover valid arterial measurements through encounter discharge.
+- Included concept-set contents and package-anchored code content in build
+  identity, and inventoried supplied export metadata so changed rules, code, or
+  metadata cannot silently reuse stale outputs.
+- Ingested optional medication-ingredient exports and separated raw-domain
+  observability counts from concept matching so incomplete seed terminology is
+  not reported as absent patient history. Discovery now prefers the nearest
+  canonical unsplit source, falls back to supported split files, and suppresses
+  byte-identical legacy medication aliases.
+- Published all 15 contracted cohort-flow stages after phenotype and payer-route
+  derivation, with source-patient and adult-encounter counts computed from the
+  unfiltered export.
+- Made multi-file unmapped-code sketches preserve their error bounds by using a
+  single checkpointed domain stream, and rejected unsupported custom threshold
+  and arterial-specimen configurations instead of silently ignoring them.
+- Rejected repository-local confidential output roots unless Git ignores the
+  entire directory, and added format-specific protection for DuckDB artifacts.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and
