@@ -149,6 +149,7 @@
 - Commit `f40b97c` is pushed, Linux CI passes all `296` tests, and the mixed shallow/nested review thread is resolved.
 - Codex re-review of `f40b97c` found one P2 layout edge case: a sibling flat export directory could be mistaken for one domain folder when the main domain-folder export omitted that domain. The explicit recognized-domain-folder fix is in progress.
 - Multi-directory discovery now accepts only recognized TriNetX domain-folder names; a missing domain cannot be borrowed from a sibling flat export. Ruff, `59` focused tests, and all `298` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `378,224,640` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
+- Commit `e946458` is pushed, Linux CI passes all `298` tests, all PR #7 threads are resolved, and Codex review of that commit found no major issues.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -157,10 +158,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified sibling-flat export-root fix.
+- The GLP-1 engineering and code-review gate is complete; no private build is active.
 
 ## Next
-- Resolve the sibling-flat PR thread, request another Codex review, then decide whether the monitored private full build is unblocked.
+- Obtain investigator approval for expanded terminology, then launch the private full build with aggregate `status --watch` monitoring and external outputs.
 
 ## Open questions (UNCONFIRMED if needed)
 - UNCONFIRMED: which expanded terminology rows the investigator will approve for the first private build. The recovered ticket is pinned as GitHub issue #6 and remains authoritative.
@@ -175,4 +176,4 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation` at pushed checkpoint `f40b97c`; PR #7 has one verified sibling-flat layout fix ready to commit.
+- Branch: `codex/glp1-augmentation` at review-clean pushed checkpoint `e946458`; PR #7 is green with all threads resolved.
