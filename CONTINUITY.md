@@ -161,6 +161,8 @@
 - Codex review of `e1e0b0c` found two unrelated edge cases: date-only repeat PaCO2 at the day-14 boundary and hidden ancestors above an export root. Both are fixed locally with focused regressions; `66` focused tests and Ruff pass.
 - The `5,120 MiB`/two-thread benchmark completed in `1,123.36 s`: production materialization peaked at `4,510.828 MiB` without spill, retained `249,278,373` rows, and had zero unmatched rows. The extra duplicate-hash audit raised authoritative process RSS to `6,268.312 MiB`, 30.3 MiB above the gate, so the locked `4,096 MiB`/one-thread fallback is now canonical and requires one final benchmark.
 - The canonical fallback plus both Codex fixes pass Ruff, `305` tests, and the 20-case production fixture in `0.62 s` with `287,309,824` bytes maximum RSS, unchanged `19/17/14/651` counts, 15 flow stages, eight public files, recorded `4096/1` runtime settings, and no WAL.
+- Commit `ab69010` is pushed; both Codex review threads are resolved. The single allowed `4,096 MiB`/one-thread fallback benchmark is running under `diagnostics/encounter_hash_4096m_1t_ab69010_20260716` with two MARK joins and no blockwise nested loop.
+- The fallback benchmark passed in `753.42 s` with `4,435,574,784` bytes (`4,229.1 MiB`) authoritative maximum RSS, no spill, `249,278,373` retained rows, zero unmatched rows, identical patient/both match categories, two MARK joins, and no nested loop. GitHub CI and Codex review of `ab69010` are clean.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -169,10 +171,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Verify the Codex fixes and canonical `4,096 MiB`/one-thread fallback locally, then run the one allowed fallback encounter benchmark. Preserve both failed workspaces and keep the persistent enhanced monitor active.
+- Archive the failed run state without deleting either workspace, then launch and monitor one fresh detached full build from reviewed commit `ab69010`.
 
 ## Next
-- Evaluate benchmark wall time, RSS, plan shape, match categories, output size, scratch, and free space. Relaunch only if the measured gates pass; otherwise retry once at `4,096 MiB` and `1` thread.
+- Follow the fresh build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 
 ## Open questions (UNCONFIRMED if needed)
 - Runtime policy is locked: benchmark first at `5,120 MiB` and `2` DuckDB threads; if that full encounter benchmark fails for memory, retry once at `4,096 MiB` and `1` thread. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
