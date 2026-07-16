@@ -57,8 +57,8 @@ exclusions:
     - probable_venous_specimen
 
 runtime:
-  duckdb_memory_limit_mib: 5120
-  duckdb_threads: 2
+  duckdb_memory_limit_mib: 4096
+  duckdb_threads: 1
 
 output:
   database_name: glp1_hypercapnia.duckdb

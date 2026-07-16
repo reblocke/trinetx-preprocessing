@@ -686,8 +686,22 @@ def _build_patient_index(
               AND gas.unit_usable
               AND gas.plausible_value
               AND gas.normalized_numeric_value > {threshold}
-              AND gas.event_datetime >= cohort.index_date + INTERVAL {minimum} DAY
-              AND gas.event_datetime <= cohort.index_date + INTERVAL {maximum} DAY
+              AND (
+                    (
+                        gas.timestamp_precision = 'date_only'
+                        AND gas.event_datetime::DATE >=
+                            (cohort.index_date::DATE + INTERVAL {minimum} DAY)::DATE
+                        AND gas.event_datetime::DATE <=
+                            (cohort.index_date::DATE + INTERVAL {maximum} DAY)::DATE
+                    )
+                    OR (
+                        gas.timestamp_precision <> 'date_only'
+                        AND gas.event_datetime >=
+                            cohort.index_date + INTERVAL {minimum} DAY
+                        AND gas.event_datetime <=
+                            cohort.index_date + INTERVAL {maximum} DAY
+                    )
+              )
             ORDER BY gas.event_datetime, gas.source_record_hash
             LIMIT 1
         ) AS repeat ON TRUE

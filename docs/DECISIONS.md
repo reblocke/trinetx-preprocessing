@@ -1125,8 +1125,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 
 ### 2026-07-16 — Bound DuckDB and hash candidate encounter membership
 - Date: 2026-07-16
-- Decision: Configure DuckDB with a default 5,120 MiB memory limit and two
-  threads, record both settings in run provenance, and retain encounter rows by
+- Decision: Configure DuckDB with a default 4,096 MiB memory limit and one
+  thread, record both settings in run provenance, and retain encounter rows by
   membership in deduplicated candidate-patient and candidate-encounter tables.
 - Context: A private full-data build exhausted the former 8 GB DuckDB limit.
   The correlated patient-or-encounter predicate planned as a blockwise nested
@@ -1135,8 +1135,27 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   preserving the original logical OR and duplicate source rows. Explicit
   runtime settings make the measured resource policy reproducible.
 - Consequences: Encounter ingestion no longer uses the pathological nested-loop
-  plan. A full-scale encounter benchmark must pass the 6,238 MiB RSS ceiling
-  before another complete private build is launched.
+  plan. The initial 5,120 MiB/two-thread full benchmark exceeded the 6,238 MiB
+  process ceiling by 30.3 MiB during an additional diagnostic aggregation, so
+  the approved fallback becomes the production default. A second full-scale
+  benchmark must pass before another complete private build is launched.
 - References: `config/glp1_eligibility.yml`,
   `src/trinetx_preprocessing/glp1_eligibility/config.py`, `database.py`,
   `ingestion.py`, `tests/test_glp1_foundation.py`.
+
+### 2026-07-16 — Respect source precision and the selected export root
+- Date: 2026-07-16
+- Decision: Evaluate date-only repeat PaCO2 using inclusive calendar-day
+  lookback bounds while retaining exact timestamp bounds for timestamped rows.
+  Ignore hidden files only below the input root, not hidden ancestors or a
+  caller-selected hidden export root.
+- Context: Review found that a date-only elevated repeat on calendar day 14
+  could precede a noon timestamp boundary and that absolute-path filtering
+  rejected otherwise valid exports staged under a hidden directory.
+- Rationale: Temporal comparisons should reflect source precision, and export
+  discovery should not reinterpret the caller's chosen root based on ancestors.
+- Consequences: Date-only day-14/day-84 repeats remain eligible, timestamped
+  events retain exact bounds, and hidden children remain excluded without
+  hiding a valid root.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `discovery.py`, `tests/test_glp1_foundation.py`.

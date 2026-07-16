@@ -152,8 +152,8 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     assert config.hypercapnia.po2_plausible_max_mm_hg == 800
     assert config.hypercapnia.sao2_plausible_max_percent == 100
     assert "major_trauma_context" in config.exclusions.cleaned_view_excludes
-    assert config.runtime.duckdb_memory_limit_mib == 5120
-    assert config.runtime.duckdb_threads == 2
+    assert config.runtime.duckdb_memory_limit_mib == 4096
+    assert config.runtime.duckdb_threads == 1
     assert "arterial_pco2" in catalog.concept_set_ids
     assert catalog.required_concept_set_ids == (
         "arterial_pco2",
@@ -224,14 +224,14 @@ def test_glp1_config_uses_bounded_runtime_defaults_when_omitted(
     tmp_path: Path,
 ) -> None:
     raw = GLP1_CONFIG.read_text()
-    runtime = "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2\n\n"
+    runtime = "runtime:\n  duckdb_memory_limit_mib: 4096\n  duckdb_threads: 1\n\n"
     path = tmp_path / "config.yml"
     path.write_text(raw.replace(runtime, ""))
 
     config = load_glp1_config(path)
 
-    assert config.runtime.duckdb_memory_limit_mib == 5120
-    assert config.runtime.duckdb_threads == 2
+    assert config.runtime.duckdb_memory_limit_mib == 4096
+    assert config.runtime.duckdb_threads == 1
 
 
 @pytest.mark.parametrize(
@@ -242,11 +242,11 @@ def test_glp1_config_uses_bounded_runtime_defaults_when_omitted(
             "duckdb_memory_limit_mib must be greater than zero",
         ),
         (
-            "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 0",
+            "runtime:\n  duckdb_memory_limit_mib: 4096\n  duckdb_threads: 0",
             "duckdb_threads must be greater than zero",
         ),
         (
-            "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2\n  x: 1",
+            "runtime:\n  duckdb_memory_limit_mib: 4096\n  duckdb_threads: 1\n  x: 1",
             "Unknown runtime configuration key",
         ),
     ),
@@ -257,7 +257,7 @@ def test_glp1_config_rejects_invalid_runtime_settings(
     message: str,
 ) -> None:
     raw = GLP1_CONFIG.read_text()
-    current = "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2"
+    current = "runtime:\n  duckdb_memory_limit_mib: 4096\n  duckdb_threads: 1"
     path = tmp_path / "config.yml"
     path.write_text(raw.replace(current, runtime))
 
@@ -274,6 +274,15 @@ def test_export_discovery_prefers_canonical_unsplit_file(tmp_path: Path) -> None
     split_2.write_text(unsplit.read_text())
 
     discovered = discover_export_files(tmp_path)
+
+    assert [path.name for path in discovered["encounter"]] == ["encounter.csv"]
+
+
+def test_export_discovery_allows_hidden_export_root(tmp_path: Path) -> None:
+    export_root = tmp_path / ".private_export"
+    _write_export(export_root)
+
+    discovered = discover_export_files(export_root)
 
     assert [path.name for path in discovered["encounter"]] == ["encounter.csv"]
 
@@ -892,10 +901,10 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
             SELECT duckdb_memory_limit_mib, duckdb_threads
             FROM run_manifest
             """
-        ).fetchone() == (5120, 2)
+        ).fetchone() == (4096, 1)
         assert connection.execute(
             "SELECT current_setting('memory_limit'), current_setting('threads')"
-        ).fetchone() == ("5.0 GiB", 2)
+        ).fetchone() == ("4.0 GiB", 1)
         mark_database_complete(connection)
         assert connection.execute(
             "SELECT status FROM run_manifest"
@@ -1183,6 +1192,69 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert connection.execute(
             "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p4'"
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_date_only_repeat_pco2_uses_calendar_day_window(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 12:00:00,2024-01-02 12:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 13:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 13:00:00,LOINC,2744-1,7.40,,pH",
+        "p1,e1,2024-01-15,LOINC,2019-8,60,,mmHg",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2023-12-15,LOINC,39156-5,31,,kg/m2",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="synthetic-run",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+        build_core_cohort(
+            connection,
+            config=config,
+            run_id="synthetic-run",
+            git_sha="test-sha",
+        )
+
+        repeat = connection.execute(
+            """
+            SELECT repeat_pco2_date, repeat_pco2_value,
+                   persistent_hypercapnia_14_84d
+            FROM cohort_hypercapnia_patient_index
+            """
+        ).fetchone()
+        assert repeat[0].isoformat() == "2024-01-15T00:00:00"
+        assert repeat[1:] == (60.0, True)
     finally:
         connection.close()
 
@@ -2160,8 +2232,8 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert required == {path.name for path in first.output_paths}
     assert not (output_root / "glp1_hypercapnia.duckdb.wal").exists()
     manifest = json.loads((output_root / "run_manifest.json").read_text())
-    assert manifest["duckdb_memory_limit_mib"] == 5120
-    assert manifest["duckdb_threads"] == 2
+    assert manifest["duckdb_memory_limit_mib"] == 4096
+    assert manifest["duckdb_threads"] == 1
     assert first.counts.patient_index_events == 1
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1

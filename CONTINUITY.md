@@ -156,6 +156,11 @@
 - Read-only inspection of the failed database found `305,395,321` retained lab rows, `2,475,199` gas candidate encounter IDs, and `850,170` distinct candidate patients. `EXPLAIN` confirms the encounter predicate `gas.patient_id = raw.patient_id OR gas.encounter_id = raw.encounter_id` becomes a `BLOCKWISE_NL_JOIN`; separate patient/encounter membership predicates become bounded hash joins. Query redesign is required before another full build.
 - Encounter ingestion now uses deduplicated patient and encounter key tables with two MARK/hash membership predicates. DuckDB runtime defaults are typed at `5,120 MiB` and `2` threads and recorded in both database and JSON run manifests.
 - Local gates pass with `303` tests. The 20-case production fixture completed in `0.66 s` with `307,609,600` bytes maximum RSS, unchanged `19/17/14/651` counts, eight published output paths, recorded `5120/2` runtime settings, and no WAL.
+- Focused commit `e1e0b0c` is pushed and Linux CI passes. A fresh Codex review is requested and acknowledged but has not yet returned.
+- The isolated full-scale encounter benchmark is running from the preserved OOM database under `diagnostics/encounter_hash_5120m_2t_e1e0b0c_20260716`. Its plan has two MARK joins and no `BLOCKWISE_NL_JOIN`; it cannot publish production output or modify either preserved workspace.
+- Codex review of `e1e0b0c` found two unrelated edge cases: date-only repeat PaCO2 at the day-14 boundary and hidden ancestors above an export root. Both are fixed locally with focused regressions; `66` focused tests and Ruff pass.
+- The `5,120 MiB`/two-thread benchmark completed in `1,123.36 s`: production materialization peaked at `4,510.828 MiB` without spill, retained `249,278,373` rows, and had zero unmatched rows. The extra duplicate-hash audit raised authoritative process RSS to `6,268.312 MiB`, 30.3 MiB above the gate, so the locked `4,096 MiB`/one-thread fallback is now canonical and requires one final benchmark.
+- The canonical fallback plus both Codex fixes pass Ruff, `305` tests, and the 20-case production fixture in `0.62 s` with `287,309,824` bytes maximum RSS, unchanged `19/17/14/651` counts, 15 flow stages, eight public files, recorded `4096/1` runtime settings, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -164,7 +169,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Review and publish the focused encounter/runtime checkpoint, then materialize the full encounter stage in a separate external diagnostic database at `5,120 MiB` and `2` threads. Preserve both failed workspaces and keep the persistent enhanced monitor active.
+- Verify the Codex fixes and canonical `4,096 MiB`/one-thread fallback locally, then run the one allowed fallback encounter benchmark. Preserve both failed workspaces and keep the persistent enhanced monitor active.
 
 ## Next
 - Evaluate benchmark wall time, RSS, plan shape, match categories, output size, scratch, and free space. Relaunch only if the measured gates pass; otherwise retry once at `4,096 MiB` and `1` thread.

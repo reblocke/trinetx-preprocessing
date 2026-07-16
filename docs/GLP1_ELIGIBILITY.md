@@ -62,7 +62,7 @@ requires `--replace`; replacement preserves the previous output until the
 staged build is complete.
 
 The `runtime` configuration bounds DuckDB execution. The supported defaults are
-`duckdb_memory_limit_mib: 5120` and `duckdb_threads: 2`; both effective values
+`duckdb_memory_limit_mib: 4096` and `duckdb_threads: 1`; both effective values
 are recorded in the database and JSON run manifests. Lower settings may be used
 for constrained systems, but changing them creates a distinct configured run.
 

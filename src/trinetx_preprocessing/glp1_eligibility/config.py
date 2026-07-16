@@ -94,8 +94,8 @@ class ExclusionConfig:
 class RuntimeConfig:
     """Bounded DuckDB execution settings."""
 
-    duckdb_memory_limit_mib: int = 5120
-    duckdb_threads: int = 2
+    duckdb_memory_limit_mib: int = 4096
+    duckdb_threads: int = 1
 
 
 @dataclass(frozen=True)
@@ -436,12 +436,12 @@ def _load_runtime(raw: Any) -> RuntimeConfig:
         duckdb_memory_limit_mib=(
             _positive_int(raw, "duckdb_memory_limit_mib")
             if "duckdb_memory_limit_mib" in raw
-            else 5120
+            else 4096
         ),
         duckdb_threads=(
             _positive_int(raw, "duckdb_threads")
             if "duckdb_threads" in raw
-            else 2
+            else 1
         ),
     )
 

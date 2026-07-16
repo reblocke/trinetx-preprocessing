@@ -173,7 +173,10 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
         return {name: () for name in discovered}
 
     for path in root.rglob("*"):
-        if not path.is_file() or any(part.startswith(".") for part in path.parts):
+        relative_parts = path.relative_to(root).parts
+        if not path.is_file() or any(
+            part.startswith(".") for part in relative_parts
+        ):
             continue
         matched_clinical = False
         if path.suffix.lower() == ".csv":
