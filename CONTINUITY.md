@@ -151,6 +151,7 @@
 - Multi-directory discovery now accepts only recognized TriNetX domain-folder names; a missing domain cannot be borrowed from a sibling flat export. Ruff, `59` focused tests, and all `298` tests pass. BOOK header-only validation remains clean with seven clinical files, twelve metadata files, and zero errors/warnings. The production fixture completed in `0.61 s` with `378,224,640` bytes maximum RSS and unchanged `19/17/14/651` counts, eight public files, no warnings, and no WAL.
 - Commit `e946458` is pushed, Linux CI passes all `298` tests, all PR #7 threads are resolved, and Codex review of that commit found no major issues.
 - On 2026-07-15, the user approved rule set `2026-07-15` and the current 118-row seed concept catalog for a private exploratory full-data QA build. This approval permits the run but does not validate clinical phenotypes or authorize clinical interpretation before aggregate QA and approved record-level review.
+- The first approved full GLP-1 attempt was terminated with its parent `caffeinate` process exactly `59m12s` after launch, at the command runner's one-hour boundary. The run state remained `running` with no Python exception, crash report, sleep event, or memory-kill record, so this was an orchestration timeout rather than a demonstrated pipeline failure. Its 14 GB hidden DuckDB workspace is preserved externally.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -159,13 +160,13 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Preflight and launch the approved provisional full GLP-1 build on `LOCKE BOOK`; no prior build process is active.
+- Preserve the interrupted attempt and relaunch the same approved build as a one-shot `launchd` job with separate stdout/stderr logs. This removes the command-session lifetime limit without adding automatic restart behavior.
 
 ## Next
-- Monitor the full build with aggregate `status --watch`, inspect PHI-safe QA and unmapped-code evidence, then perform targeted clinical and approved record-level validation before any validity claim.
+- Monitor the detached build through atomic publication, validate its output/provenance contracts, then inspect PHI-safe aggregate terminology, unit, cohort-flow, and observability QA before targeted clinical and approved record-level validation.
 
 ## Open questions (UNCONFIRMED if needed)
-- None blocking launch. Terminology expansion decisions after the provisional build remain UNCONFIRMED and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
+- No execution blocker remains. Terminology expansion decisions after a successful provisional build remain UNCONFIRMED and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -179,3 +180,4 @@
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
 - Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `e946458` is followed only by continuity bookkeeping. PR #7 is green with all threads resolved.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
+- Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
