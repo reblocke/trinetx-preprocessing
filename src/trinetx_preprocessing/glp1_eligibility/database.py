@@ -29,7 +29,10 @@ def initialize_database(
     database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = duckdb.connect(str(database_path))
     connection.execute("SET preserve_insertion_order = false")
-    connection.execute("SET memory_limit = '8GB'")
+    connection.execute(
+        f"SET memory_limit = '{config.runtime.duckdb_memory_limit_mib}MiB'"
+    )
+    connection.execute(f"SET threads = {config.runtime.duckdb_threads}")
     temp_dir = database_path.parent / ".duckdb_tmp"
     temp_dir.mkdir(exist_ok=True)
     connection.execute("SET temp_directory = ?", [str(temp_dir)])
@@ -44,10 +47,11 @@ def initialize_database(
             schema_version, rule_set_version, labels_as_of,
             payer_policy_as_of, config_sha256, concept_catalog_sha256,
             input_root, input_manifest_sha256, study_start, study_end,
-            source_min_date, source_max_date, status, warning_count, error_count
+            source_min_date, source_max_date, status, warning_count, error_count,
+            duckdb_memory_limit_mib, duckdb_threads
         ) VALUES (
             ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
-            'building', 0, 0
+            'building', 0, 0, ?, ?
         )
         """,
         [
@@ -64,6 +68,8 @@ def initialize_database(
             inventory.sha256,
             config.study.study_start.isoformat() if config.study.study_start else None,
             config.study.study_end.isoformat() if config.study.study_end else None,
+            config.runtime.duckdb_memory_limit_mib,
+            config.runtime.duckdb_threads,
         ],
     )
 
@@ -188,9 +194,18 @@ def _create_metadata_schema(connection: duckdb.DuckDBPyConnection) -> None:
             source_max_date TIMESTAMP,
             status VARCHAR NOT NULL,
             warning_count BIGINT NOT NULL,
-            error_count BIGINT NOT NULL
+            error_count BIGINT NOT NULL,
+            duckdb_memory_limit_mib INTEGER,
+            duckdb_threads INTEGER
         )
         """
+    )
+    connection.execute(
+        "ALTER TABLE run_manifest ADD COLUMN IF NOT EXISTS "
+        "duckdb_memory_limit_mib INTEGER"
+    )
+    connection.execute(
+        "ALTER TABLE run_manifest ADD COLUMN IF NOT EXISTS duckdb_threads INTEGER"
     )
     connection.execute(
         """

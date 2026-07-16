@@ -91,6 +91,14 @@ class ExclusionConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeConfig:
+    """Bounded DuckDB execution settings."""
+
+    duckdb_memory_limit_mib: int = 5120
+    duckdb_threads: int = 2
+
+
+@dataclass(frozen=True)
 class GLP1Config:
     """Validated top-level GLP-1 eligibility configuration."""
 
@@ -103,6 +111,7 @@ class GLP1Config:
     obesity: ObesityConfig
     exclusions: ExclusionConfig
     output: OutputConfig
+    runtime: RuntimeConfig
     concept_sets_dir: Path
     source_path: Path
     sha256: str
@@ -133,6 +142,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
             "obesity",
             "exclusions",
             "output",
+            "runtime",
         },
         context="config",
     )
@@ -147,6 +157,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
     obesity = _load_obesity(_required_mapping(raw, "obesity"))
     exclusions = _load_exclusions(_required_mapping(raw, "exclusions"))
     output = _load_output(_required_mapping(raw, "output"))
+    runtime = _load_runtime(raw.get("runtime", {}))
 
     if study.study_start and study.study_end and study.study_start > study.study_end:
         raise GLP1ConfigError("study_start must be on or before study_end.")
@@ -193,6 +204,7 @@ def load_glp1_config(path: Path) -> GLP1Config:
         obesity=obesity,
         exclusions=exclusions,
         output=output,
+        runtime=runtime,
         concept_sets_dir=concept_sets_dir,
         source_path=config_path,
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
@@ -413,6 +425,25 @@ def _load_exclusions(raw: dict[str, Any]) -> ExclusionConfig:
             "Unknown cleaned-view exclusion flag(s): " + ", ".join(unknown) + "."
         )
     return ExclusionConfig(cleaned_view_excludes=configured)
+
+
+def _load_runtime(raw: Any) -> RuntimeConfig:
+    if not isinstance(raw, dict):
+        raise GLP1ConfigError("runtime must be a YAML mapping.")
+    allowed = {"duckdb_memory_limit_mib", "duckdb_threads"}
+    _reject_unknown_keys(raw, allowed, context="runtime")
+    return RuntimeConfig(
+        duckdb_memory_limit_mib=(
+            _positive_int(raw, "duckdb_memory_limit_mib")
+            if "duckdb_memory_limit_mib" in raw
+            else 5120
+        ),
+        duckdb_threads=(
+            _positive_int(raw, "duckdb_threads")
+            if "duckdb_threads" in raw
+            else 2
+        ),
+    )
 
 
 def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:

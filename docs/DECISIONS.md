@@ -1122,3 +1122,21 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   exclusions consistently.
 - References: `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `tests/test_glp1_foundation.py`.
+
+### 2026-07-16 — Bound DuckDB and hash candidate encounter membership
+- Date: 2026-07-16
+- Decision: Configure DuckDB with a default 5,120 MiB memory limit and two
+  threads, record both settings in run provenance, and retain encounter rows by
+  membership in deduplicated candidate-patient and candidate-encounter tables.
+- Context: A private full-data build exhausted the former 8 GB DuckDB limit.
+  The correlated patient-or-encounter predicate planned as a blockwise nested
+  loop over the full encounter export and 2.48 million candidate encounters.
+- Rationale: Separate membership predicates use bounded MARK/hash joins while
+  preserving the original logical OR and duplicate source rows. Explicit
+  runtime settings make the measured resource policy reproducible.
+- Consequences: Encounter ingestion no longer uses the pathological nested-loop
+  plan. A full-scale encounter benchmark must pass the 6,238 MiB RSS ceiling
+  before another complete private build is launched.
+- References: `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/config.py`, `database.py`,
+  `ingestion.py`, `tests/test_glp1_foundation.py`.

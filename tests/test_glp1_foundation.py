@@ -30,7 +30,10 @@ from trinetx_preprocessing.glp1_eligibility.discovery import (
     discover_export_files,
     validate_export,
 )
-from trinetx_preprocessing.glp1_eligibility.ingestion import ingest_core_sources
+from trinetx_preprocessing.glp1_eligibility.ingestion import (
+    _encounter_membership_sql,
+    ingest_core_sources,
+)
 from trinetx_preprocessing.glp1_eligibility.monitoring import (
     RUN_STATE_FILENAME,
     RunStateWriter,
@@ -149,6 +152,8 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     assert config.hypercapnia.po2_plausible_max_mm_hg == 800
     assert config.hypercapnia.sao2_plausible_max_percent == 100
     assert "major_trauma_context" in config.exclusions.cleaned_view_excludes
+    assert config.runtime.duckdb_memory_limit_mib == 5120
+    assert config.runtime.duckdb_threads == 2
     assert "arterial_pco2" in catalog.concept_set_ids
     assert catalog.required_concept_set_ids == (
         "arterial_pco2",
@@ -210,6 +215,51 @@ def test_glp1_config_rejects_unsupported_fixed_contract_options(
 ) -> None:
     path = tmp_path / "config.yml"
     path.write_text(GLP1_CONFIG.read_text().replace(old, new))
+
+    with pytest.raises(GLP1ConfigError, match=message):
+        load_glp1_config(path)
+
+
+def test_glp1_config_uses_bounded_runtime_defaults_when_omitted(
+    tmp_path: Path,
+) -> None:
+    raw = GLP1_CONFIG.read_text()
+    runtime = "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2\n\n"
+    path = tmp_path / "config.yml"
+    path.write_text(raw.replace(runtime, ""))
+
+    config = load_glp1_config(path)
+
+    assert config.runtime.duckdb_memory_limit_mib == 5120
+    assert config.runtime.duckdb_threads == 2
+
+
+@pytest.mark.parametrize(
+    ("runtime", "message"),
+    (
+        (
+            "runtime:\n  duckdb_memory_limit_mib: 0\n  duckdb_threads: 2",
+            "duckdb_memory_limit_mib must be greater than zero",
+        ),
+        (
+            "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 0",
+            "duckdb_threads must be greater than zero",
+        ),
+        (
+            "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2\n  x: 1",
+            "Unknown runtime configuration key",
+        ),
+    ),
+)
+def test_glp1_config_rejects_invalid_runtime_settings(
+    tmp_path: Path,
+    runtime: str,
+    message: str,
+) -> None:
+    raw = GLP1_CONFIG.read_text()
+    current = "runtime:\n  duckdb_memory_limit_mib: 5120\n  duckdb_threads: 2"
+    path = tmp_path / "config.yml"
+    path.write_text(raw.replace(current, runtime))
 
     with pytest.raises(GLP1ConfigError, match=message):
         load_glp1_config(path)
@@ -837,6 +887,15 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
         assert connection.execute(
             "SELECT concept_catalog_sha256 FROM run_manifest"
         ).fetchone() == (catalog.sha256,)
+        assert connection.execute(
+            """
+            SELECT duckdb_memory_limit_mib, duckdb_threads
+            FROM run_manifest
+            """
+        ).fetchone() == (5120, 2)
+        assert connection.execute(
+            "SELECT current_setting('memory_limit'), current_setting('threads')"
+        ).fetchone() == ("5.0 GiB", 2)
         mark_database_complete(connection)
         assert connection.execute(
             "SELECT status FROM run_manifest"
@@ -858,6 +917,9 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
         "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "e_patient,p1,2024-01-03 00:00:00,2024-01-04 00:00:00,IMP,s1",
+        "e1,p_other,2024-01-05 00:00:00,2024-01-06 00:00:00,IMP,s1",
         "e2,p2,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
     )
     _append_rows(
@@ -900,6 +962,18 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
             "SELECT patient_id, encounter_id FROM gas_candidate_id"
         ).fetchall() == [("p1", "e1")]
         assert connection.execute(
+            """
+            SELECT patient_id, encounter_id, count(*)
+            FROM source_encounter
+            GROUP BY patient_id, encounter_id
+            ORDER BY patient_id, encounter_id
+            """
+        ).fetchall() == [
+            ("p1", "e1", 2),
+            ("p1", "e_patient", 1),
+            ("p_other", "e1", 1),
+        ]
+        assert connection.execute(
             "SELECT patient_id FROM source_patient"
         ).fetchall() == [("p1",)]
         assert connection.execute(
@@ -924,6 +998,36 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         assert connection.execute(
             "SELECT warning_count FROM run_manifest"
         ).fetchone() == (1,)
+    finally:
+        connection.close()
+
+
+def test_encounter_membership_uses_hash_mark_joins() -> None:
+    connection = duckdb.connect()
+    try:
+        connection.execute(
+            "CREATE TEMP TABLE gas_candidate_patient (patient_id VARCHAR)"
+        )
+        connection.execute(
+            "CREATE TEMP TABLE gas_candidate_encounter (encounter_id VARCHAR)"
+        )
+        connection.execute(
+            """
+            CREATE TEMP TABLE raw_encounter (
+                patient_id VARCHAR,
+                encounter_id VARCHAR
+            )
+            """
+        )
+
+        plan_rows = connection.execute(
+            "EXPLAIN SELECT * FROM raw_encounter AS raw WHERE "
+            + _encounter_membership_sql()
+        ).fetchall()
+        plan = "\n".join(str(value) for row in plan_rows for value in row)
+
+        assert "BLOCKWISE_NL_JOIN" not in plan
+        assert plan.count("Join Type: MARK") == 2
     finally:
         connection.close()
 
@@ -2055,6 +2159,9 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert required <= {path.name for path in output_root.iterdir()}
     assert required == {path.name for path in first.output_paths}
     assert not (output_root / "glp1_hypercapnia.duckdb.wal").exists()
+    manifest = json.loads((output_root / "run_manifest.json").read_text())
+    assert manifest["duckdb_memory_limit_mib"] == 5120
+    assert manifest["duckdb_threads"] == 2
     assert first.counts.patient_index_events == 1
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1

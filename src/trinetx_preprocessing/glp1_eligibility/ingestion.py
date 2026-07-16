@@ -414,6 +414,22 @@ def _create_encounters(
         "source_id",
     )
     connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE gas_candidate_patient AS
+        SELECT DISTINCT patient_id
+        FROM gas_candidate_id
+        WHERE patient_id IS NOT NULL
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE gas_candidate_encounter AS
+        SELECT DISTINCT encounter_id
+        FROM gas_candidate_id
+        WHERE encounter_id IS NOT NULL
+        """
+    )
+    connection.execute(
         f"""
         CREATE OR REPLACE TABLE source_encounter AS
         SELECT
@@ -427,13 +443,20 @@ def _create_encounters(
         FROM {raw} AS raw
         JOIN source_path_map AS paths
           ON raw.filename = paths.absolute_path
-        WHERE EXISTS (
-            SELECT 1 FROM gas_candidate_id AS gas
-            WHERE gas.patient_id = raw."patient_id"
-               OR gas.encounter_id = raw."encounter_id"
-        )
+        WHERE {_encounter_membership_sql()}
         """
     )
+
+
+def _encounter_membership_sql(raw_alias: str = "raw") -> str:
+    """Return bounded hash-membership predicates for candidate encounters."""
+
+    return f"""(
+        {raw_alias}."patient_id" IN (SELECT patient_id FROM gas_candidate_patient)
+        OR {raw_alias}."encounter_id" IN (
+            SELECT encounter_id FROM gas_candidate_encounter
+        )
+    )"""
 
 
 def _create_patients(

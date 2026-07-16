@@ -56,6 +56,10 @@ exclusions:
     - implausible_value
     - probable_venous_specimen
 
+runtime:
+  duckdb_memory_limit_mib: 5120
+  duckdb_threads: 2
+
 output:
   database_name: glp1_hypercapnia.duckdb
   write_parquet: true

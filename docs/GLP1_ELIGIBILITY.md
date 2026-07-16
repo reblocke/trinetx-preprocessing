@@ -61,6 +61,11 @@ parsed concept catalog, supplied export metadata file, or package code state
 requires `--replace`; replacement preserves the previous output until the
 staged build is complete.
 
+The `runtime` configuration bounds DuckDB execution. The supported defaults are
+`duckdb_memory_limit_mib: 5120` and `duckdb_threads: 2`; both effective values
+are recorded in the database and JSON run manifests. Lower settings may be used
+for constrained systems, but changing them creates a distinct configured run.
+
 Confidential output must live outside every Git worktree. Repository-local
 output is rejected even when ignore rules appear to cover it, because negation
 rules can re-expose selected children. Existing non-directory output paths are

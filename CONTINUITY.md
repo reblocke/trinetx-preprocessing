@@ -152,6 +152,10 @@
 - Commit `e946458` is pushed, Linux CI passes all `298` tests, all PR #7 threads are resolved, and Codex review of that commit found no major issues.
 - On 2026-07-15, the user approved rule set `2026-07-15` and the current 118-row seed concept catalog for a private exploratory full-data QA build. This approval permits the run but does not validate clinical phenotypes or authorize clinical interpretation before aggregate QA and approved record-level review.
 - The first approved full GLP-1 attempt was terminated with its parent `caffeinate` process exactly `59m12s` after launch, at the command runner's one-hour boundary. The run state remained `running` with no Python exception, crash report, sleep event, or memory-kill record, so this was an orchestration timeout rather than a demonstrated pipeline failure. Its 14 GB hidden DuckDB workspace is preserved externally.
+- The detached retry was not time-limited and ran for `16,767.82 s` before failing cleanly during encounter ingestion. DuckDB exhausted its configured 8 GB memory limit while pinning a 256 KiB block (`7.4 GiB/7.4 GiB used`); `/usr/bin/time` recorded `9,426,321,408` bytes maximum RSS and `12,419,312,440` bytes peak memory footprint. No build or monitor process remains active, no final output was published, and the 14 GB retry workspace is preserved externally.
+- Read-only inspection of the failed database found `305,395,321` retained lab rows, `2,475,199` gas candidate encounter IDs, and `850,170` distinct candidate patients. `EXPLAIN` confirms the encounter predicate `gas.patient_id = raw.patient_id OR gas.encounter_id = raw.encounter_id` becomes a `BLOCKWISE_NL_JOIN`; separate patient/encounter membership predicates become bounded hash joins. Query redesign is required before another full build.
+- Encounter ingestion now uses deduplicated patient and encounter key tables with two MARK/hash membership predicates. DuckDB runtime defaults are typed at `5,120 MiB` and `2` threads and recorded in both database and JSON run manifests.
+- Local gates pass with `303` tests. The 20-case production fixture completed in `0.66 s` with `307,609,600` bytes maximum RSS, unchanged `19/17/14/651` counts, eight published output paths, recorded `5120/2` runtime settings, and no WAL.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -160,13 +164,13 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Preserve the interrupted attempt and relaunch the same approved build as a one-shot `launchd` job with separate stdout/stderr logs. This removes the command-session lifetime limit without adding automatic restart behavior.
+- Review and publish the focused encounter/runtime checkpoint, then materialize the full encounter stage in a separate external diagnostic database at `5,120 MiB` and `2` threads. Preserve both failed workspaces and keep the persistent enhanced monitor active.
 
 ## Next
-- Monitor the detached build through atomic publication, validate its output/provenance contracts, then inspect PHI-safe aggregate terminology, unit, cohort-flow, and observability QA before targeted clinical and approved record-level validation.
+- Evaluate benchmark wall time, RSS, plan shape, match categories, output size, scratch, and free space. Relaunch only if the measured gates pass; otherwise retry once at `4,096 MiB` and `1` thread.
 
 ## Open questions (UNCONFIRMED if needed)
-- No execution blocker remains. Terminology expansion decisions after a successful provisional build remain UNCONFIRMED and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
+- Runtime policy is locked: benchmark first at `5,120 MiB` and `2` DuckDB threads; if that full encounter benchmark fails for memory, retry once at `4,096 MiB` and `1` thread. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -181,3 +185,4 @@
 - Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `e946458` is followed only by continuity bookkeeping. PR #7 is green with all threads resolved.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
+- OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
