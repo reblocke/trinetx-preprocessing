@@ -1159,3 +1159,31 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   hiding a valid root.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `discovery.py`, `tests/test_glp1_foundation.py`.
+
+### 2026-07-17 — Reuse bounded membership and partition vital ingestion
+- Date: 2026-07-17
+- Decision: Materialize unique gas-candidate patient and encounter identifiers
+  once, reuse those tables for every retained-domain scan, and compile validated
+  exact, prefix, and regex rules into constant predicates. Exact code sets use
+  bounded `IN` hash membership within each normalized code system. Stage
+  concept-filtered vital rows in 32 patient-hash Parquet partitions, then append
+  each partition after joining only the corresponding candidate-patient bucket.
+- Context: The first 4,096 MiB/one-thread full build passed encounter ingestion
+  but exhausted DuckDB's internal memory while scanning 852,830,801 vital rows.
+  The failed query matched 2.48 million patient/encounter pairs and routed five
+  exact vital codes through a generic correlated concept matcher. Compiling the
+  rules removed that matcher, but direct table materialization still exhausted
+  DuckDB at both 4,096 MiB and 5,120 MiB; the larger trial left insufficient
+  process-RSS headroom below the 6,238 MiB release gate.
+- Rationale: Unique candidate keys and rule-specific predicates preserve source
+  duplicates and overlapping-rule truth values. Partitioned staging scans the
+  slow raw source once while bounding each candidate join and persistent-table
+  append; the existing 4,096 MiB/one-thread runtime remains unchanged.
+- Consequences: Current exact, prefix, and regex plans contain neither blockwise
+  nested-loop nor delimiter joins. Vitals require temporary external Parquet
+  capacity and strict cleanup. The isolated 852,830,801-row benchmark completed
+  in `824.15 s` with `4,248.625 MiB` maximum RSS, retained `178,529,225` rows,
+  and left zero scratch and WAL; another complete build may proceed only after
+  the focused commit passes CI and review.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `tests/test_glp1_foundation.py`, `docs/GLP1_ELIGIBILITY.md`.

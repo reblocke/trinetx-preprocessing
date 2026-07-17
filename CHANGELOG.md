@@ -69,6 +69,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   when required concept sets match no retained source rows.
 - Selected the earliest elevated repeat PaCO2 in the configured persistence
   window so an earlier normal repeat cannot hide later persistent hypercapnia.
+- Reused deduplicated gas-candidate keys across source domains, compiled concept
+  rules into bounded exact/prefix/regex predicates, and staged full-scale vital
+  ingestion through 32 patient-hash Parquet partitions before bounded appends.
 - Honored the VBG sensitivity switch during cohort admission.
 - Made weight-label-only and no-documented-route payer branches reachable when
   disease-specific and Bridge criteria do not apply.

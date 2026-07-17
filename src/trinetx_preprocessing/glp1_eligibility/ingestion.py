@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import duckdb
 
+from ..filesystem import remove_tree_strict
 from .config import GLP1Config
 from .monitoring import RunStateWriter
 from .provenance import InputInventory
+
+_VITAL_INGEST_BUCKET_COUNT = 32
+_VITAL_INGEST_SCRATCH_PREFIX = ".trinetx-glp1-vital-ingest-"
 
 
 def ingest_core_sources(
@@ -45,6 +50,7 @@ def ingest_core_sources(
     )
     _create_gas_candidate_ids(connection)
     rows["gas_candidate_id"] = _row_count(connection, "gas_candidate_id")
+    _create_candidate_membership_tables(connection)
 
     if state is not None:
         state.update(
@@ -352,15 +358,7 @@ def _create_lab_measurements(
         FROM {raw} AS raw
         JOIN source_path_map AS paths
           ON raw.filename = paths.absolute_path
-        WHERE EXISTS (
-            SELECT 1
-            FROM concept_set AS concept
-            WHERE concept.domain = 'lab'
-              AND concept.include
-              AND {_normalized_code_system_sql('raw."code_system"')}
-                    = concept.code_system
-              AND {_concept_match_sql()}
-        )
+        WHERE {_concept_membership_sql(connection, "lab")}
         """
     )
 
@@ -394,6 +392,29 @@ def _create_gas_candidate_ids(connection: duckdb.DuckDBPyConnection) -> None:
     )
 
 
+def _create_candidate_membership_tables(
+    connection: duckdb.DuckDBPyConnection,
+) -> None:
+    """Materialize compact membership keys once for downstream source scans."""
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE gas_candidate_patient AS
+        SELECT DISTINCT patient_id
+        FROM gas_candidate_id
+        WHERE patient_id IS NOT NULL
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE gas_candidate_encounter AS
+        SELECT DISTINCT encounter_id
+        FROM gas_candidate_id
+        WHERE encounter_id IS NOT NULL
+        """
+    )
+
+
 def _create_encounters(
     connection: duckdb.DuckDBPyConnection,
     root: Path,
@@ -412,22 +433,6 @@ def _create_encounters(
         "end_date_derived_by_TriNetX",
         "derived_by_TriNetX",
         "source_id",
-    )
-    connection.execute(
-        """
-        CREATE OR REPLACE TEMP TABLE gas_candidate_patient AS
-        SELECT DISTINCT patient_id
-        FROM gas_candidate_id
-        WHERE patient_id IS NOT NULL
-        """
-    )
-    connection.execute(
-        """
-        CREATE OR REPLACE TEMP TABLE gas_candidate_encounter AS
-        SELECT DISTINCT encounter_id
-        FROM gas_candidate_id
-        WHERE encounter_id IS NOT NULL
-        """
     )
     connection.execute(
         f"""
@@ -457,6 +462,15 @@ def _encounter_membership_sql(raw_alias: str = "raw") -> str:
             SELECT encounter_id FROM gas_candidate_encounter
         )
     )"""
+
+
+def _patient_membership_sql(raw_alias: str = "raw") -> str:
+    """Return bounded membership against unique gas-candidate patients."""
+
+    return (
+        f'{raw_alias}."patient_id" IN '
+        "(SELECT patient_id FROM gas_candidate_patient)"
+    )
 
 
 def _create_patients(
@@ -489,10 +503,7 @@ def _create_patients(
         FROM {raw} AS raw
         JOIN source_path_map AS paths
           ON raw.filename = paths.absolute_path
-        WHERE EXISTS (
-            SELECT 1 FROM gas_candidate_id AS gas
-            WHERE gas.patient_id = raw."patient_id"
-        )
+        WHERE {_patient_membership_sql()}
         """
     )
 
@@ -517,33 +528,112 @@ def _create_vital_measurements(
         "derived_by_TriNetX",
         "source_id",
     )
+    _create_empty_vital_measurement_table(connection, names)
+
+    temp_directory_setting = connection.execute(
+        "SELECT current_setting('temp_directory')"
+    ).fetchone()[0]
+    temp_directory = Path(str(temp_directory_setting)).resolve()
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=_VITAL_INGEST_SCRATCH_PREFIX,
+            dir=temp_directory,
+        )
+    )
+    try:
+        partition_root = scratch / "patient_rows"
+        connection.execute(
+            f"""
+            COPY (
+                SELECT
+                    {_source_projection(columns, names)},
+                    paths.source_file,
+                    hash(raw."patient_id") % {_VITAL_INGEST_BUCKET_COUNT}
+                        AS patient_bucket
+                FROM {raw} AS raw
+                JOIN source_path_map AS paths
+                  ON raw.filename = paths.absolute_path
+                WHERE raw."patient_id" IS NOT NULL
+                  AND {_concept_membership_sql(connection, "vital")}
+            ) TO {_sql_string(str(partition_root))} (
+                FORMAT PARQUET,
+                PARTITION_BY (patient_bucket),
+                COMPRESSION SNAPPY,
+                ROW_GROUP_SIZE 250000
+            )
+            """
+        )
+        _append_candidate_vital_partitions(
+            connection,
+            partition_root=partition_root,
+            names=names,
+        )
+    finally:
+        remove_tree_strict(scratch, context="GLP-1 vital ingestion scratch")
+
+
+def _create_empty_vital_measurement_table(
+    connection: duckdb.DuckDBPyConnection,
+    names: tuple[str, ...],
+) -> None:
+    source_columns = ",\n            ".join(
+        f"{_identifier(name)} VARCHAR" for name in names
+    )
     connection.execute(
         f"""
-        CREATE OR REPLACE TABLE source_vital_measurement AS
-        SELECT
-            {_source_projection(columns, names)},
-            try_cast(raw."date" AS TIMESTAMP) AS event_datetime,
-            paths.source_file,
-            sha256(concat_ws(
-                chr(31), paths.source_file, {_hash_value_sql(columns, names)}
-            )) AS source_record_hash
-        FROM {raw} AS raw
-        JOIN source_path_map AS paths
-          ON raw.filename = paths.absolute_path
-        WHERE EXISTS (
-            SELECT 1 FROM gas_candidate_id AS gas
-            WHERE gas.patient_id = raw."patient_id"
+        CREATE OR REPLACE TABLE source_vital_measurement (
+            {source_columns},
+            event_datetime TIMESTAMP,
+            source_file VARCHAR,
+            source_record_hash VARCHAR
         )
-          AND EXISTS (
-            SELECT 1
-            FROM concept_set AS concept
-            WHERE concept.domain = 'vital'
-              AND concept.include
-              AND {_normalized_code_system_sql('raw."code_system"')}
-                    = concept.code_system
-              AND {_concept_match_sql()}
-          )
         """
+    )
+
+
+def _append_candidate_vital_partitions(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    partition_root: Path,
+    names: tuple[str, ...],
+) -> None:
+    available_columns = frozenset(names)
+    for bucket in range(_VITAL_INGEST_BUCKET_COUNT):
+        partition_directory = partition_root / f"patient_bucket={bucket}"
+        files = _partition_parquet_files(partition_directory)
+        if not files:
+            continue
+        connection.execute(
+            f"""
+            INSERT INTO source_vital_measurement
+            SELECT
+                {_source_projection(available_columns, names)},
+                try_cast(raw."date" AS TIMESTAMP) AS event_datetime,
+                raw.source_file,
+                sha256(concat_ws(
+                    chr(31), raw.source_file,
+                    {_hash_value_sql(available_columns, names)}
+                )) AS source_record_hash
+            FROM {_read_parquet_sql(files)} AS raw
+            WHERE raw."patient_id" IN (
+                SELECT patient_id
+                FROM gas_candidate_patient
+                WHERE hash(patient_id) % {_VITAL_INGEST_BUCKET_COUNT} = {bucket}
+            )
+            """
+        )
+
+
+def _partition_parquet_files(partition_directory: Path) -> tuple[Path, ...]:
+    """Return data files while excluding macOS AppleDouble sidecars."""
+
+    return tuple(
+        sorted(
+            path
+            for path in partition_directory.rglob("*.parquet")
+            if not path.name.startswith("._")
+        )
     )
 
 
@@ -676,19 +766,8 @@ def _create_patient_concept_source(
         FROM {raw} AS raw
         JOIN source_path_map AS paths
           ON raw.filename = paths.absolute_path
-        WHERE EXISTS (
-            SELECT 1 FROM gas_candidate_id AS gas
-            WHERE gas.patient_id = raw."patient_id"
-        )
-          AND EXISTS (
-            SELECT 1
-            FROM concept_set AS concept
-            WHERE concept.domain = {_sql_string(domain)}
-              AND concept.include
-              AND {_normalized_code_system_sql('raw."code_system"')}
-                    = concept.code_system
-              AND {_concept_match_sql()}
-          )
+        WHERE {_patient_membership_sql()}
+          AND {_concept_membership_sql(connection, domain)}
         """
     )
 
@@ -815,6 +894,15 @@ def _read_csv_sql(files: tuple[Path, ...]) -> str:
     )
 
 
+def _read_parquet_sql(files: tuple[Path, ...]) -> str:
+    paths = ", ".join(_sql_string(str(path.resolve())) for path in files)
+    return (
+        "read_parquet(["
+        + paths
+        + "], union_by_name=true, hive_partitioning=false)"
+    )
+
+
 def _source_projection(columns: frozenset[str], names: tuple[str, ...]) -> str:
     return ",\n            ".join(
         f'raw."{name}" AS "{name}"'
@@ -831,17 +919,51 @@ def _hash_value_sql(columns: frozenset[str], names: tuple[str, ...]) -> str:
     )
 
 
-def _concept_match_sql() -> str:
-    return """
-        (
-               (concept.match_type = 'exact'
-                AND upper(trim(raw."code")) = concept.code)
-            OR (concept.match_type = 'prefix'
-                AND starts_with(upper(trim(raw."code")), concept.code))
-            OR (concept.match_type = 'regex'
-                AND regexp_matches(upper(trim(raw."code")), concept.code))
+def _concept_membership_sql(
+    connection: duckdb.DuckDBPyConnection,
+    domain: str,
+    raw_alias: str = "raw",
+) -> str:
+    """Compile concept membership without generic correlation for exact rules."""
+
+    rules = connection.execute(
+        """
+        SELECT code_system, code, match_type
+        FROM concept_set
+        WHERE domain = ? AND include
+        ORDER BY code_system, code, match_type
+        """,
+        [domain],
+    ).fetchall()
+    code_system = _normalized_code_system_sql(f'{raw_alias}."code_system"')
+    code = f'upper(trim({raw_alias}."code"))'
+    predicates: list[str] = []
+    exact_by_system: dict[str, set[str]] = {}
+    for rule_system, rule_code, match_type in rules:
+        if str(match_type) == "exact":
+            exact_by_system.setdefault(str(rule_system), set()).add(str(rule_code))
+    for rule_system in sorted(exact_by_system):
+        rule_codes = ", ".join(
+            _sql_string(rule_code) for rule_code in sorted(exact_by_system[rule_system])
         )
-    """
+        predicates.append(
+            f"({code_system} = {_sql_string(rule_system)} AND {code} IN ({rule_codes}))"
+        )
+    predicates.extend(
+        f"({code_system} = {_sql_string(str(rule_system))} "
+        f"AND starts_with({code}, {_sql_string(str(rule_code))}))"
+        for rule_system, rule_code, match_type in rules
+        if str(match_type) == "prefix"
+    )
+    predicates.extend(
+        f"({code_system} = {_sql_string(str(rule_system))} "
+        f"AND regexp_matches({code}, {_sql_string(str(rule_code))}))"
+        for rule_system, rule_code, match_type in rules
+        if str(match_type) == "regex"
+    )
+    if not predicates:
+        return "FALSE"
+    return "(\n" + "\nOR ".join(predicates) + "\n)"
 
 
 def _normalized_code_system_sql(expression: str) -> str:

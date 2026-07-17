@@ -4,7 +4,7 @@
 - Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
 - Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
 - GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
-- Current turn: implement all 13 release-relevant GLP-1 findings, verify them locally and synthetically, then obtain clean PR review before any private full build.
+- Current turn: finish the bounded full-scale vitals-ingestion correction, verify it locally and against the preserved real-data database, then obtain clean PR review before another private full build.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -163,6 +163,21 @@
 - The canonical fallback plus both Codex fixes pass Ruff, `305` tests, and the 20-case production fixture in `0.62 s` with `287,309,824` bytes maximum RSS, unchanged `19/17/14/651` counts, 15 flow stages, eight public files, recorded `4096/1` runtime settings, and no WAL.
 - Commit `ab69010` is pushed; both Codex review threads are resolved. The single allowed `4,096 MiB`/one-thread fallback benchmark is running under `diagnostics/encounter_hash_4096m_1t_ab69010_20260716` with two MARK joins and no blockwise nested loop.
 - The fallback benchmark passed in `753.42 s` with `4,435,574,784` bytes (`4,229.1 MiB`) authoritative maximum RSS, no spill, `249,278,373` retained rows, zero unmatched rows, identical patient/both match categories, two MARK joins, and no nested loop. GitHub CI and Codex review of `ab69010` are clean.
+- Docs-only commit `57db166` records the benchmark and leaves the worktree clean for provenance. The fresh detached full build launched under screen session `trinetx_glp1_full_57db166`; its first state update inventoried 1 of 19 files. The OOM state/logs were copied to `diagnostics/failed_oom_attempt_archive_20260716`, and both failed workspaces remain intact.
+- The fresh build from clean commit `57db166` completed inventory and processed `557,999,063` source rows, then failed cleanly after `12,906.65 s` during vitals ingestion because DuckDB could not pin a 256 KiB block at its 4 GiB internal limit. Process maximum RSS was `5,885,132,800` bytes, below the 6,238 MiB gate; no final output was published.
+- Failed run `d6712db17ce2d1aa283d6580` is preserved at `.glp1_eligibility.build-d6712db17ce2d1aa283d6580` with a `26,516,140,032`-byte DuckDB database, zero-byte WAL, and aggregate state/log evidence. The build worker is gone; only the persistent monitor remains active.
+- Vitals failure diagnosis found `852,830,801` raw rows in a `61,943,734,420`-byte source, five exact LOINC rules, `850,170` unique candidate patients, and `2,475,199` gas patient/encounter pairs. The failed query used the pair table plus a generic correlated concept matcher.
+- A candidate fix materializes unique patient/encounter keys once and compiles exact concept rules to hash membership while preserving prefix/regex and overlap semantics. Ruff and all `307` tests pass.
+- The initial hash-first vitals diagnostic established bounded RSS (`3,242,819,584` sampled bytes) but was intentionally superseded after scratch reached `88,511,348,736` bytes because its join order no longer represented current code; its status/history and reason record are preserved.
+- Exact concept sets now compile to grouped constant predicates so code filtering occurs at the CSV scan before candidate-patient membership. Authoritative screens `trinetx_glp1_vital_scanfilter_20260717` and `trinetx_glp1_vital_scanfilter_monitor_20260717` are running the full 852.8-million-row benchmark at 4096 MiB/one thread.
+- The scan-filter 4,096 MiB benchmark still exhausted DuckDB's internal buffer after `835.69 s`, despite spilling and holding process maximum RSS to `4,955,045,888` bytes. This leaves measured headroom below the 6,238 MiB process gate, so a 5,120 MiB/one-thread isolated benchmark is the next bounded trial; runtime defaults remain unchanged until it passes.
+- The scan-filter 5,120 MiB/one-thread benchmark also exhausted DuckDB's internal buffer after `832.03 s`; process maximum RSS was `6,088,753,152` bytes, leaving too little headroom below the `6,238 MiB` gate. Increasing DuckDB memory further is rejected.
+- The selected correction stages concept-filtered vital rows into deterministic patient-hash Parquet partitions with one raw CSV scan, then joins one partition at a time to the matching candidate-patient bucket at the existing 4,096 MiB/one-thread setting. This preserves duplicate source rows and source-record hashes while bounding each append.
+- The 32-way implementation passes `310` tests plus Ruff and diff checks on the external ExFAT temp path. An ExFAT-only failure from `._data_0.parquet` AppleDouble files is fixed by excluding sidecars during partition discovery and has a platform-independent regression test.
+- The current production synthetic smoke completed in `0.61 s` with `284,786,688` bytes maximum RSS, unchanged `19/17/14/651` counts, 15 flow stages, runtime `4096/1`, zero warnings, eight public files, and no WAL or vital scratch.
+- The isolated 4,096 MiB/one-thread partitioned vitals benchmark completed all `852,830,801` raw rows in `824.15 s`. It retained `178,529,225` rows for `621,219` patients across the five expected LOINCs; authoritative maximum RSS was `4,455,006,208` bytes (`4,248.625 MiB`), and final scratch and WAL were zero.
+- Final local gates pass with `310` tests, Ruff, and `git diff --check` after the benchmark-backed implementation and documentation updates.
+- The external enhanced monitor now isolates history by worker PID, uses the selected current stderr log for timing, tolerates slow workspace-size probes, and avoids scanning prior workspaces while the run ID is pending. Persistent screen session `trinetx_glp1_enhanced_monitor_20260716` updates aggregate JSON/Markdown/history every 60 seconds without exposing row-level data.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -171,13 +186,15 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Archive the failed run state without deleting either workspace, then launch and monitor one fresh detached full build from reviewed commit `ab69010`.
+- Run final local gates, commit and push the focused vitals correction, wait for CI, and request a targeted GitHub Codex review. Runtime defaults remain 4,096 MiB/one thread; do not delete any failed workspace.
 
 ## Next
-- Follow the fresh build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
+- Address any actionable review finding, then launch one fresh full build only from a clean reviewed commit.
+- Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
+- After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
 
 ## Open questions (UNCONFIRMED if needed)
-- Runtime policy is locked: benchmark first at `5,120 MiB` and `2` DuckDB threads; if that full encounter benchmark fails for memory, retry once at `4,096 MiB` and `1` thread. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
+- No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -193,3 +210,6 @@
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
+- Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.
+- Passing vitals benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/vital_ingestion_partitioned_4096m_1t_57db166_dirty_20260717`.
+- Enhanced monitor screen: `trinetx_glp1_enhanced_monitor_20260716`; status `diagnostics/enhanced_monitor_status.json` and `diagnostics/enhanced_monitor_status.md`; history `diagnostics/enhanced_monitor_history.jsonl`

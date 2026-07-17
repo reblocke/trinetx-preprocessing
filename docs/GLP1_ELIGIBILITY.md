@@ -65,6 +65,15 @@ The `runtime` configuration bounds DuckDB execution. The supported defaults are
 `duckdb_memory_limit_mib: 4096` and `duckdb_threads: 1`; both effective values
 are recorded in the database and JSON run manifests. Lower settings may be used
 for constrained systems, but changing them creates a distinct configured run.
+Source ingestion materializes unique gas-candidate patient and encounter keys
+once and reuses them for bounded hash membership across later domain scans.
+Exact concept rules also use hash membership; validated prefix and regex rules
+compile to constant predicates. This preserves duplicate source records and
+overlapping-rule semantics without building correlated joins over full exports.
+Vital ingestion scans the raw source once into 32 concept-filtered patient-hash
+Parquet partitions under DuckDB's external temp directory, then appends one
+partition after joining only its matching candidate-patient bucket. Scratch is
+removed strictly on success or failure and is recognized by `clean-scratch`.
 
 Confidential output must live outside every Git worktree. Repository-local
 output is rejected even when ignore rules appear to cover it, because negation

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
+import trinetx_preprocessing.glp1_eligibility.ingestion as ingestion_module
 from trinetx_preprocessing.glp1_eligibility.builder import (
     _require_safe_output_location,
     build_glp1_eligibility,
@@ -31,7 +33,11 @@ from trinetx_preprocessing.glp1_eligibility.discovery import (
     validate_export,
 )
 from trinetx_preprocessing.glp1_eligibility.ingestion import (
+    _concept_membership_sql,
+    _create_candidate_membership_tables,
     _encounter_membership_sql,
+    _partition_parquet_files,
+    _patient_membership_sql,
     ingest_core_sources,
 )
 from trinetx_preprocessing.glp1_eligibility.monitoring import (
@@ -941,6 +947,7 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
         "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+        "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
         "p2,e2,2023-12-15,LOINC,39156-5,32,,kg/m2",
     )
 
@@ -986,8 +993,37 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
             "SELECT patient_id FROM source_patient"
         ).fetchall() == [("p1",)]
         assert connection.execute(
-            "SELECT patient_id, value FROM source_vital_measurement"
-        ).fetchall() == [("p1", "36")]
+            """
+            SELECT patient_id, value, count(*), count(DISTINCT source_record_hash)
+            FROM source_vital_measurement
+            GROUP BY patient_id, value
+            """
+        ).fetchall() == [("p1", "36", 2, 1)]
+        expected_vital_hash = hashlib.sha256(
+            "\x1f".join(
+                (
+                    "Vital Signs/vital_signs.csv",
+                    "p1",
+                    "e1",
+                    "2023-12-15",
+                    "LOINC",
+                    "39156-5",
+                    "36",
+                    "",
+                    "kg/m2",
+                    "",
+                    "",
+                )
+            ).encode()
+        ).hexdigest()
+        assert connection.execute(
+            "SELECT DISTINCT source_record_hash FROM source_vital_measurement"
+        ).fetchall() == [(expected_vital_hash,)]
+        assert not list(
+            (tmp_path / ".duckdb_tmp").glob(
+                f"{ingestion_module._VITAL_INGEST_SCRATCH_PREFIX}*"
+            )
+        )
         assert connection.execute(
             """
             SELECT COUNT(*) FROM source_lab_measurement
@@ -1007,6 +1043,112 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         assert connection.execute(
             "SELECT warning_count FROM run_manifest"
         ).fetchone() == (1,)
+    finally:
+        connection.close()
+
+
+def test_vital_ingestion_cleanup_failure_is_not_suppressed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"p1": 36.0})
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="cleanup-failure",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    cleanup_paths: list[Path] = []
+
+    def fail_cleanup(path: Path, *, context: str) -> None:
+        cleanup_paths.append(path)
+        raise OSError(f"{context} failed")
+
+    monkeypatch.setattr(ingestion_module, "remove_tree_strict", fail_cleanup)
+    try:
+        with pytest.raises(OSError, match="GLP-1 vital ingestion scratch failed"):
+            ingest_core_sources(
+                connection,
+                input_root=export_root,
+                inventory=inventory,
+                config=config,
+            )
+        assert len(cleanup_paths) == 1
+        assert cleanup_paths[0].exists()
+    finally:
+        connection.close()
+        for path in cleanup_paths:
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def test_vital_ingestion_preserves_empty_output_schema(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="empty-vitals",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        counts = ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+
+        assert counts["source_vital_measurement"] == 0
+        assert connection.execute(
+            """
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'source_vital_measurement'
+            ORDER BY ordinal_position
+            """
+        ).fetchall()[-3:] == [
+            ("event_datetime", "TIMESTAMP"),
+            ("source_file", "VARCHAR"),
+            ("source_record_hash", "VARCHAR"),
+        ]
+        assert not list(
+            (tmp_path / ".duckdb_tmp").glob(
+                f"{ingestion_module._VITAL_INGEST_SCRATCH_PREFIX}*"
+            )
+        )
     finally:
         connection.close()
 
@@ -1037,6 +1179,128 @@ def test_encounter_membership_uses_hash_mark_joins() -> None:
 
         assert "BLOCKWISE_NL_JOIN" not in plan
         assert plan.count("Join Type: MARK") == 2
+    finally:
+        connection.close()
+
+
+def test_candidate_membership_tables_deduplicate_keys() -> None:
+    connection = duckdb.connect()
+    try:
+        connection.execute(
+            "CREATE TABLE gas_candidate_id (patient_id VARCHAR, encounter_id VARCHAR)"
+        )
+        connection.execute(
+            """
+            INSERT INTO gas_candidate_id VALUES
+                ('p1', 'e1'), ('p1', 'e1'), ('p1', 'e2'),
+                ('p2', NULL), (NULL, 'e3')
+            """
+        )
+
+        _create_candidate_membership_tables(connection)
+
+        assert connection.execute(
+            "SELECT patient_id FROM gas_candidate_patient ORDER BY patient_id"
+        ).fetchall() == [("p1",), ("p2",)]
+        assert connection.execute(
+            "SELECT encounter_id FROM gas_candidate_encounter ORDER BY encounter_id"
+        ).fetchall() == [("e1",), ("e2",), ("e3",)]
+    finally:
+        connection.close()
+
+
+def test_vital_partition_discovery_ignores_appledouble_sidecars(
+    tmp_path: Path,
+) -> None:
+    partition = tmp_path / "patient_bucket=5"
+    partition.mkdir()
+    data_file = partition / "data_0.parquet"
+    data_file.write_bytes(b"PAR1")
+    (partition / "._data_0.parquet").write_bytes(b"appledouble")
+
+    assert _partition_parquet_files(partition) == (data_file,)
+
+
+def test_compiled_concept_membership_preserves_rule_semantics() -> None:
+    connection = duckdb.connect()
+    try:
+        connection.execute(
+            """
+            CREATE TABLE concept_set (
+                domain VARCHAR,
+                include BOOLEAN,
+                match_type VARCHAR,
+                code_system VARCHAR,
+                code VARCHAR
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO concept_set VALUES
+                ('vital', true, 'exact', 'LOINC', '39156-5'),
+                ('vital', true, 'exact', 'LOINC', '39156-5'),
+                ('vital', true, 'prefix', 'LOINC', '391'),
+                ('vital', true, 'prefix', 'ICD10CM', 'J12'),
+                ('vital', true, 'regex', 'LOCAL', '^RX[0-9]+$'),
+                ('vital', false, 'exact', 'LOINC', '99999-9')
+            """
+        )
+        connection.execute(
+            "CREATE TEMP TABLE gas_candidate_patient (patient_id VARCHAR)"
+        )
+        connection.execute("INSERT INTO gas_candidate_patient VALUES ('p1')")
+        connection.execute(
+            """
+            CREATE TEMP TABLE raw_code (
+                row_id INTEGER,
+                patient_id VARCHAR,
+                code_system VARCHAR,
+                code VARCHAR
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO raw_code VALUES
+                (1, 'p1', 'loinc', '39156-5'),
+                (2, 'p1', 'ICD-10-CM', 'J123'),
+                (3, 'p1', 'local', 'rx42'),
+                (4, 'p1', 'LOINC', '99999-9'),
+                (5, 'p2', 'LOINC', '39156-5')
+            """
+        )
+
+        predicate = (
+            _patient_membership_sql("raw")
+            + " AND "
+            + _concept_membership_sql(connection, "vital", "raw")
+        )
+        observed = connection.execute(
+            "SELECT row_id FROM raw_code AS raw WHERE " + predicate + " ORDER BY row_id"
+        ).fetchall()
+
+        assert observed == [(1,), (2,), (3,)]
+
+        mixed_plan_rows = connection.execute(
+            "EXPLAIN SELECT * FROM raw_code AS raw WHERE " + predicate
+        ).fetchall()
+        mixed_plan = "\n".join(str(value) for row in mixed_plan_rows for value in row)
+        assert "LEFT_DELIM_JOIN" not in mixed_plan
+        assert "BLOCKWISE_NL_JOIN" not in mixed_plan
+        assert "concept_set" not in mixed_plan
+
+        connection.execute("DELETE FROM concept_set WHERE match_type != 'exact'")
+        plan_rows = connection.execute(
+            "EXPLAIN SELECT * FROM raw_code AS raw WHERE "
+            + _patient_membership_sql("raw")
+            + " AND "
+            + _concept_membership_sql(connection, "vital", "raw")
+        ).fetchall()
+        plan = "\n".join(str(value) for row in plan_rows for value in row)
+        assert "LEFT_DELIM_JOIN" not in plan
+        assert "BLOCKWISE_NL_JOIN" not in plan
+        assert "concept_set" not in plan
     finally:
         connection.close()
 
