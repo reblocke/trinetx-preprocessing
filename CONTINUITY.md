@@ -177,6 +177,7 @@
 - The current production synthetic smoke completed in `0.61 s` with `284,786,688` bytes maximum RSS, unchanged `19/17/14/651` counts, 15 flow stages, runtime `4096/1`, zero warnings, eight public files, and no WAL or vital scratch.
 - The isolated 4,096 MiB/one-thread partitioned vitals benchmark completed all `852,830,801` raw rows in `824.15 s`. It retained `178,529,225` rows for `621,219` patients across the five expected LOINCs; authoritative maximum RSS was `4,455,006,208` bytes (`4,248.625 MiB`), and final scratch and WAL were zero.
 - Final local gates pass with `310` tests, Ruff, and `git diff --check` after the benchmark-backed implementation and documentation updates.
+- Commit `64aed02` is pushed, GitHub CI passed in `1m26s`, and the targeted GitHub Codex review found no major issues. This is the review-clean behavior checkpoint for the next full build.
 - The external enhanced monitor now isolates history by worker PID, uses the selected current stderr log for timing, tolerates slow workspace-size probes, and avoids scanning prior workspaces while the run ID is pending. Persistent screen session `trinetx_glp1_enhanced_monitor_20260716` updates aggregate JSON/Markdown/history every 60 seconds without exposing row-level data.
 
 ## Done
@@ -186,7 +187,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Run final local gates, commit and push the focused vitals correction, wait for CI, and request a targeted GitHub Codex review. Runtime defaults remain 4,096 MiB/one thread; do not delete any failed workspace.
+- Preflight and launch one fresh full private build from the review-clean vitals correction. Runtime defaults remain 4,096 MiB/one thread; do not delete any failed workspace.
 
 ## Next
 - Address any actionable review finding, then launch one fresh full build only from a clean reviewed commit.
@@ -206,7 +207,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `e946458` is followed only by continuity bookkeeping. PR #7 is green with all threads resolved.
+- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `64aed02`. PR #7 is green with all threads resolved.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
