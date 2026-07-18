@@ -1187,3 +1187,29 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   the focused commit passes CI and review.
 - References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
   `tests/test_glp1_foundation.py`, `docs/GLP1_ELIGIBILITY.md`.
+
+### 2026-07-17 — Bound patient-concept domains and normalize source dates
+- Date: 2026-07-17
+- Decision: Use the reviewed 32-way patient-hash Parquet ingestion strategy for
+  diagnosis, procedure, and medication as well as vitals. Normalize source
+  timestamps through one parser that accepts standard timestamp strings,
+  compact `YYYYMMDD` dates, and compact `YYYYMMDDHHMMSS` timestamps.
+- Context: The next full build passed bounded vitals but exhausted DuckDB's
+  4,096 MiB limit during direct diagnosis CTAS. Its preserved database also
+  showed that restored TriNetX dates use compact `YYYYMMDD`; generic timestamp
+  casts left every retained lab, encounter, vital, and diagnosis event time
+  null despite non-null source date strings.
+- Rationale: The same bounded data structure should protect every large
+  patient-keyed concept source. Temporal cohort and phenotype logic must parse
+  the actual export representation rather than silently treating valid dates as
+  missing.
+- Consequences: Duplicate rows, source-record hashes, public table schemas, and
+  ISO fixture behavior remain unchanged. The isolated 1,272,185,090-row
+  diagnosis benchmark completed in `1,790.82 s`, retained `86,182,713` rows,
+  used `4,417.00 MiB` maximum RSS, and left zero scratch and WAL. Aggregate
+  production probes confirm every distinct non-null retained lab, encounter,
+  vital, and diagnosis date parses under the shared helper. Another complete
+  private build requires clean tests, CI, and review of this checkpoint.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`, `docs/GLP1_ELIGIBILITY.md`.

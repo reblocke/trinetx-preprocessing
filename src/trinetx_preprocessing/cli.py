@@ -194,6 +194,7 @@ SCRATCH_PATH_PREFIXES = (
     ".trinetx-final-patients-",
     ".trinetx-final-prev-vitals-",
     ".trinetx-data-check-ids-",
+    ".trinetx-glp1-concept-ingest-",
     ".trinetx-glp1-vital-ingest-",
 )
 

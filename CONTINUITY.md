@@ -178,7 +178,14 @@
 - The isolated 4,096 MiB/one-thread partitioned vitals benchmark completed all `852,830,801` raw rows in `824.15 s`. It retained `178,529,225` rows for `621,219` patients across the five expected LOINCs; authoritative maximum RSS was `4,455,006,208` bytes (`4,248.625 MiB`), and final scratch and WAL were zero.
 - Final local gates pass with `310` tests, Ruff, and `git diff --check` after the benchmark-backed implementation and documentation updates.
 - Commit `64aed02` is pushed, GitHub CI passed in `1m26s`, and the targeted GitHub Codex review found no major issues. This is the review-clean behavior checkpoint for the next full build.
+- Full build `d3d3401f72b3931b7dfbde14` from clean commit `1cb50ce` passed the former vitals blocker exactly: cumulative rows increased from `557,999,063` to `736,528,288`, matching the `178,529,225`-row isolated benchmark.
+- The same run failed cleanly during diagnosis ingestion after `9,443.78 s` because direct patient-concept CTAS exhausted DuckDB's 4 GiB internal limit. Authoritative maximum RSS was `5,492,850,688` bytes (`5,238.391 MiB`); the 32 GB workspace is preserved with zero WAL, no final output, and no active build worker.
 - The external enhanced monitor now isolates history by worker PID, uses the selected current stderr log for timing, tolerates slow workspace-size probes, and avoids scanning prior workspaces while the run ID is pending. Persistent screen session `trinetx_glp1_enhanced_monitor_20260716` updates aggregate JSON/Markdown/history every 60 seconds without exposing row-level data.
+- Diagnosis, procedure, medication, and vitals now share one immutable source specification and one 32-way patient-hash Parquet ingestion path. Source duplicates, source-record hashes, timestamp columns, and strict cleanup semantics are preserved.
+- Local gates pass with `313` tests. The production 20-case fixture completed in `0.69 s` with `299,155,456` bytes maximum RSS, unchanged `19/17/14/651` counts, zero warnings, eight public files, and no WAL or recognized ingestion scratch.
+- The isolated bounded diagnosis benchmark completed all `1,272,185,090` raw rows in `1,790.82 s`, retained `86,182,713` rows for `693,682` patients, and used `4,631,658,496` bytes (`4,417.00 MiB`) authoritative maximum RSS. Scratch and WAL were zero after completion.
+- Post-benchmark integrity checks exposed a production date-format gap: restored TriNetX dates are compact `YYYYMMDD`, while GLP-1 ingestion used generic timestamp casts. All retained full-scale lab, encounter, vital, and diagnosis timestamps were null even though source date strings were present. No new full build may launch until compact-date normalization is implemented and reviewed.
+- Shared timestamp normalization now accepts ISO values plus compact `YYYYMMDD` and `YYYYMMDDHHMMSS`. Aggregate read-only probes confirm every distinct non-null retained production lab, encounter-start/end, vital, and diagnosis date parses; compact-date cohort-flow, source-table, medication-end, and raw-observability regressions pass.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -187,10 +194,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Preflight and launch one fresh full private build from the review-clean vitals correction. Runtime defaults remain 4,096 MiB/one thread; do not delete any failed workspace.
+- Complete the local diff review, commit and push the bounded-ingestion/date-normalization checkpoint, then wait for CI and targeted Codex review. Runtime defaults remain unchanged; do not delete any failed workspace or benchmark evidence.
 
 ## Next
-- Address any actionable review finding, then launch one fresh full build only from a clean reviewed commit.
+- Run focused/full tests and production aggregate timestamp probes, then commit/push the bounded-ingestion and date-normalization checkpoint, run CI, and request a targeted Codex review before another full build.
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 - After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
 
@@ -213,4 +220,6 @@
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.
 - Passing vitals benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/vital_ingestion_partitioned_4096m_1t_57db166_dirty_20260717`.
+- Passing diagnosis benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/diagnosis_ingestion_partitioned_4096m_1t_1cb50ce_dirty_20260717`.
+- Diagnosis OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d3d3401f72b3931b7dfbde14`; logs `logs/build.4096m1t.1cb50ce.*.log`.
 - Enhanced monitor screen: `trinetx_glp1_enhanced_monitor_20260716`; status `diagnostics/enhanced_monitor_status.json` and `diagnostics/enhanced_monitor_status.md`; history `diagnostics/enhanced_monitor_history.jsonl`

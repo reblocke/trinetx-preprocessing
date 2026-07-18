@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
@@ -12,8 +13,23 @@ from .config import GLP1Config
 from .monitoring import RunStateWriter
 from .provenance import InputInventory
 
-_VITAL_INGEST_BUCKET_COUNT = 32
+_PATIENT_CONCEPT_INGEST_BUCKET_COUNT = 32
+_VITAL_INGEST_BUCKET_COUNT = _PATIENT_CONCEPT_INGEST_BUCKET_COUNT
 _VITAL_INGEST_SCRATCH_PREFIX = ".trinetx-glp1-vital-ingest-"
+_PATIENT_CONCEPT_INGEST_SCRATCH_PREFIX = ".trinetx-glp1-concept-ingest-"
+
+
+@dataclass(frozen=True)
+class _PatientConceptSourceSpec:
+    """Describe one patient-keyed, concept-filtered source table."""
+
+    concept_domain: str
+    source_domains: tuple[str, ...]
+    table_name: str
+    event_column: str
+    source_columns: tuple[str, ...]
+    extra_datetime_columns: tuple[tuple[str, str], ...] = ()
+    scratch_prefix: str = _PATIENT_CONCEPT_INGEST_SCRATCH_PREFIX
 
 
 def ingest_core_sources(
@@ -245,7 +261,7 @@ def _create_source_cohort_flow_base(
             SELECT
                 encounter_id,
                 patient_id,
-                try_cast(start_date AS TIMESTAMP) AS encounter_start,
+                {_timestamp_sql("start_date")} AS encounter_start,
                 type
             FROM {_read_csv_sql(encounter_files)}
         ), adult_candidate AS (
@@ -351,7 +367,7 @@ def _create_lab_measurements(
         CREATE OR REPLACE TABLE source_lab_measurement AS
         SELECT
             {projections},
-            try_cast(raw."date" AS TIMESTAMP) AS event_datetime,
+            {_timestamp_sql('raw."date"')} AS event_datetime,
             paths.source_file,
             sha256(concat_ws(chr(31), paths.source_file, {hash_values}))
                 AS source_record_hash
@@ -439,8 +455,8 @@ def _create_encounters(
         CREATE OR REPLACE TABLE source_encounter AS
         SELECT
             {_source_projection(columns, names)},
-            try_cast(raw."start_date" AS TIMESTAMP) AS encounter_start,
-            try_cast(raw."end_date" AS TIMESTAMP) AS encounter_end,
+            {_timestamp_sql('raw."start_date"')} AS encounter_start,
+            {_timestamp_sql('raw."end_date"')} AS encounter_end,
             paths.source_file,
             sha256(concat_ws(
                 chr(31), paths.source_file, {_hash_value_sql(columns, names)}
@@ -513,116 +529,30 @@ def _create_vital_measurements(
     root: Path,
     inventory: InputInventory,
 ) -> None:
-    files = _domain_files(root, inventory, "vitals")
-    columns = _domain_columns(inventory, "vitals")
-    raw = _read_csv_sql(files)
-    names = (
-        "patient_id",
-        "encounter_id",
-        "date",
-        "code_system",
-        "code",
-        "value",
-        "text_value",
-        "units_of_measure",
-        "derived_by_TriNetX",
-        "source_id",
+    _create_partitioned_patient_concept_source(
+        connection,
+        root=root,
+        inventory=inventory,
+        spec=_PatientConceptSourceSpec(
+            concept_domain="vital",
+            source_domains=("vitals",),
+            table_name="source_vital_measurement",
+            event_column="date",
+            source_columns=(
+                "patient_id",
+                "encounter_id",
+                "date",
+                "code_system",
+                "code",
+                "value",
+                "text_value",
+                "units_of_measure",
+                "derived_by_TriNetX",
+                "source_id",
+            ),
+            scratch_prefix=_VITAL_INGEST_SCRATCH_PREFIX,
+        ),
     )
-    _create_empty_vital_measurement_table(connection, names)
-
-    temp_directory_setting = connection.execute(
-        "SELECT current_setting('temp_directory')"
-    ).fetchone()[0]
-    temp_directory = Path(str(temp_directory_setting)).resolve()
-    temp_directory.mkdir(parents=True, exist_ok=True)
-    scratch = Path(
-        tempfile.mkdtemp(
-            prefix=_VITAL_INGEST_SCRATCH_PREFIX,
-            dir=temp_directory,
-        )
-    )
-    try:
-        partition_root = scratch / "patient_rows"
-        connection.execute(
-            f"""
-            COPY (
-                SELECT
-                    {_source_projection(columns, names)},
-                    paths.source_file,
-                    hash(raw."patient_id") % {_VITAL_INGEST_BUCKET_COUNT}
-                        AS patient_bucket
-                FROM {raw} AS raw
-                JOIN source_path_map AS paths
-                  ON raw.filename = paths.absolute_path
-                WHERE raw."patient_id" IS NOT NULL
-                  AND {_concept_membership_sql(connection, "vital")}
-            ) TO {_sql_string(str(partition_root))} (
-                FORMAT PARQUET,
-                PARTITION_BY (patient_bucket),
-                COMPRESSION SNAPPY,
-                ROW_GROUP_SIZE 250000
-            )
-            """
-        )
-        _append_candidate_vital_partitions(
-            connection,
-            partition_root=partition_root,
-            names=names,
-        )
-    finally:
-        remove_tree_strict(scratch, context="GLP-1 vital ingestion scratch")
-
-
-def _create_empty_vital_measurement_table(
-    connection: duckdb.DuckDBPyConnection,
-    names: tuple[str, ...],
-) -> None:
-    source_columns = ",\n            ".join(
-        f"{_identifier(name)} VARCHAR" for name in names
-    )
-    connection.execute(
-        f"""
-        CREATE OR REPLACE TABLE source_vital_measurement (
-            {source_columns},
-            event_datetime TIMESTAMP,
-            source_file VARCHAR,
-            source_record_hash VARCHAR
-        )
-        """
-    )
-
-
-def _append_candidate_vital_partitions(
-    connection: duckdb.DuckDBPyConnection,
-    *,
-    partition_root: Path,
-    names: tuple[str, ...],
-) -> None:
-    available_columns = frozenset(names)
-    for bucket in range(_VITAL_INGEST_BUCKET_COUNT):
-        partition_directory = partition_root / f"patient_bucket={bucket}"
-        files = _partition_parquet_files(partition_directory)
-        if not files:
-            continue
-        connection.execute(
-            f"""
-            INSERT INTO source_vital_measurement
-            SELECT
-                {_source_projection(available_columns, names)},
-                try_cast(raw."date" AS TIMESTAMP) AS event_datetime,
-                raw.source_file,
-                sha256(concat_ws(
-                    chr(31), raw.source_file,
-                    {_hash_value_sql(available_columns, names)}
-                )) AS source_record_hash
-            FROM {_read_parquet_sql(files)} AS raw
-            WHERE raw."patient_id" IN (
-                SELECT patient_id
-                FROM gas_candidate_patient
-                WHERE hash(patient_id) % {_VITAL_INGEST_BUCKET_COUNT} = {bucket}
-            )
-            """
-        )
 
 
 def _partition_parquet_files(partition_directory: Path) -> tuple[Path, ...]:
@@ -642,24 +572,27 @@ def _create_diagnoses(
     root: Path,
     inventory: InputInventory,
 ) -> None:
-    _create_patient_concept_source(
+    _create_partitioned_patient_concept_source(
         connection,
         root=root,
         inventory=inventory,
-        domain="diagnosis",
-        table_name="source_diagnosis",
-        event_column="date",
-        names=(
-            "patient_id",
-            "encounter_id",
-            "date",
-            "code_system",
-            "code",
-            "principal_diagnosis_indicator",
-            "admitting_diagnosis",
-            "reason_for_visit",
-            "derived_by_TriNetX",
-            "source_id",
+        spec=_PatientConceptSourceSpec(
+            concept_domain="diagnosis",
+            source_domains=("diagnosis",),
+            table_name="source_diagnosis",
+            event_column="date",
+            source_columns=(
+                "patient_id",
+                "encounter_id",
+                "date",
+                "code_system",
+                "code",
+                "principal_diagnosis_indicator",
+                "admitting_diagnosis",
+                "reason_for_visit",
+                "derived_by_TriNetX",
+                "source_id",
+            ),
         ),
     )
 
@@ -669,22 +602,25 @@ def _create_procedures(
     root: Path,
     inventory: InputInventory,
 ) -> None:
-    _create_patient_concept_source(
+    _create_partitioned_patient_concept_source(
         connection,
         root=root,
         inventory=inventory,
-        domain="procedure",
-        table_name="source_procedure",
-        event_column="date",
-        names=(
-            "patient_id",
-            "encounter_id",
-            "date",
-            "code_system",
-            "code",
-            "principal_procedure_indicator",
-            "derived_by_TriNetX",
-            "source_id",
+        spec=_PatientConceptSourceSpec(
+            concept_domain="procedure",
+            source_domains=("procedure",),
+            table_name="source_procedure",
+            event_column="date",
+            source_columns=(
+                "patient_id",
+                "encounter_id",
+                "date",
+                "code_system",
+                "code",
+                "principal_procedure_indicator",
+                "derived_by_TriNetX",
+                "source_id",
+            ),
         ),
     )
 
@@ -694,82 +630,162 @@ def _create_medications(
     root: Path,
     inventory: InputInventory,
 ) -> None:
-    _create_patient_concept_source(
+    _create_partitioned_patient_concept_source(
         connection,
         root=root,
         inventory=inventory,
-        domain="medication",
-        source_domains=("medication", "medication_ingredient"),
-        table_name="source_medication",
-        event_column="start_date",
-        names=(
-            "patient_id",
-            "encounter_id",
-            "unique_id",
-            "code_system",
-            "code",
-            "medication_text",
-            "start_date",
-            "end_date",
-            "order_status",
-            "status",
-            "route",
-            "brand",
-            "strength",
-            "derived_by_TriNetX",
-            "source_id",
-        ),
-        extra_projections=(
-            'try_cast(raw."end_date" AS TIMESTAMP) AS end_datetime',
+        spec=_PatientConceptSourceSpec(
+            concept_domain="medication",
+            source_domains=("medication", "medication_ingredient"),
+            table_name="source_medication",
+            event_column="start_date",
+            source_columns=(
+                "patient_id",
+                "encounter_id",
+                "unique_id",
+                "code_system",
+                "code",
+                "medication_text",
+                "start_date",
+                "end_date",
+                "order_status",
+                "status",
+                "route",
+                "brand",
+                "strength",
+                "derived_by_TriNetX",
+                "source_id",
+            ),
+            extra_datetime_columns=(("end_date", "end_datetime"),),
         ),
     )
 
 
-def _create_patient_concept_source(
+def _create_partitioned_patient_concept_source(
     connection: duckdb.DuckDBPyConnection,
     *,
     root: Path,
     inventory: InputInventory,
-    domain: str,
-    source_domains: tuple[str, ...] | None = None,
-    table_name: str,
-    event_column: str,
-    names: tuple[str, ...],
-    extra_projections: tuple[str, ...] = (),
+    spec: _PatientConceptSourceSpec,
 ) -> None:
-    selected_domains = source_domains or (domain,)
-    files = _domain_files_for_domains(root, inventory, selected_domains)
-    columns = _domain_columns_for_domains(inventory, selected_domains)
+    """Build one concept source with a bounded patient-partitioned join."""
+
+    files = _domain_files_for_domains(root, inventory, spec.source_domains)
+    columns = _domain_columns_for_domains(inventory, spec.source_domains)
     raw = _read_csv_sql(files)
-    available_extra = tuple(
-        (
-            projection
-            if 'raw."end_date"' not in projection or "end_date" in columns
-            else "NULL::TIMESTAMP AS end_datetime"
+    _create_empty_patient_concept_table(connection, spec)
+
+    temp_directory_setting = connection.execute(
+        "SELECT current_setting('temp_directory')"
+    ).fetchone()[0]
+    temp_directory = Path(str(temp_directory_setting)).resolve()
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=f"{spec.scratch_prefix}{spec.concept_domain}-",
+            dir=temp_directory,
         )
-        for projection in extra_projections
     )
-    extra_sql = ""
-    if available_extra:
-        extra_sql = ",\n            " + ",\n            ".join(available_extra)
+    try:
+        partition_root = scratch / "patient_rows"
+        connection.execute(
+            f"""
+            COPY (
+                SELECT
+                    {_source_projection(columns, spec.source_columns)},
+                    paths.source_file,
+                    hash(raw."patient_id") % {_PATIENT_CONCEPT_INGEST_BUCKET_COUNT}
+                        AS patient_bucket
+                FROM {raw} AS raw
+                JOIN source_path_map AS paths
+                  ON raw.filename = paths.absolute_path
+                WHERE raw."patient_id" IS NOT NULL
+                  AND {_concept_membership_sql(connection, spec.concept_domain)}
+            ) TO {_sql_string(str(partition_root))} (
+                FORMAT PARQUET,
+                PARTITION_BY (patient_bucket),
+                COMPRESSION SNAPPY,
+                ROW_GROUP_SIZE 250000
+            )
+            """
+        )
+        _append_candidate_patient_partitions(
+            connection,
+            partition_root=partition_root,
+            spec=spec,
+        )
+    finally:
+        remove_tree_strict(
+            scratch,
+            context=f"GLP-1 {spec.concept_domain} ingestion scratch",
+        )
+
+
+def _create_empty_patient_concept_table(
+    connection: duckdb.DuckDBPyConnection,
+    spec: _PatientConceptSourceSpec,
+) -> None:
+    source_columns = ",\n            ".join(
+        f"{_identifier(name)} VARCHAR" for name in spec.source_columns
+    )
+    extra_datetimes = "".join(
+        f",\n            {_identifier(output_column)} TIMESTAMP"
+        for _, output_column in spec.extra_datetime_columns
+    )
     connection.execute(
         f"""
-        CREATE OR REPLACE TABLE {_identifier(table_name)} AS
-        SELECT
-            {_source_projection(columns, names)},
-            try_cast(raw.{_identifier(event_column)} AS TIMESTAMP)
-                AS event_datetime{extra_sql},
-            paths.source_file,
-            sha256(concat_ws(
-                chr(31), paths.source_file, {_hash_value_sql(columns, names)}
-            )) AS source_record_hash
-        FROM {raw} AS raw
-        JOIN source_path_map AS paths
-          ON raw.filename = paths.absolute_path
-        WHERE {_patient_membership_sql()}
-          AND {_concept_membership_sql(connection, domain)}
+        CREATE OR REPLACE TABLE {_identifier(spec.table_name)} (
+            {source_columns},
+            event_datetime TIMESTAMP{extra_datetimes},
+            source_file VARCHAR,
+            source_record_hash VARCHAR
+        )
         """
     )
+
+
+def _append_candidate_patient_partitions(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    partition_root: Path,
+    spec: _PatientConceptSourceSpec,
+) -> None:
+    available_columns = frozenset(spec.source_columns)
+    datetime_projections = (
+        f"{_timestamp_sql(f'raw.{_identifier(spec.event_column)}')} "
+        "AS event_datetime",
+        *(
+            f"{_timestamp_sql(f'raw.{_identifier(source_column)}')} "
+            f"AS {_identifier(output_column)}"
+            for source_column, output_column in spec.extra_datetime_columns
+        ),
+    )
+    datetime_sql = ",\n                ".join(datetime_projections)
+    for bucket in range(_PATIENT_CONCEPT_INGEST_BUCKET_COUNT):
+        partition_directory = partition_root / f"patient_bucket={bucket}"
+        files = _partition_parquet_files(partition_directory)
+        if not files:
+            continue
+        connection.execute(
+            f"""
+            INSERT INTO {_identifier(spec.table_name)}
+            SELECT
+                {_source_projection(available_columns, spec.source_columns)},
+                {datetime_sql},
+                raw.source_file,
+                sha256(concat_ws(
+                    chr(31), raw.source_file,
+                    {_hash_value_sql(available_columns, spec.source_columns)}
+                )) AS source_record_hash
+            FROM {_read_parquet_sql(files)} AS raw
+            WHERE raw."patient_id" IN (
+                SELECT patient_id
+                FROM gas_candidate_patient
+                WHERE hash(patient_id)
+                    % {_PATIENT_CONCEPT_INGEST_BUCKET_COUNT} = {bucket}
+            )
+            """
+        )
 
 
 def _domain_files(
@@ -851,7 +867,7 @@ def _create_raw_observability(
         WITH raw_event AS (
             SELECT
                 raw."patient_id" AS patient_id,
-                try_cast(raw.{_identifier(event_column)} AS TIMESTAMP)
+                {_timestamp_sql(f'raw.{_identifier(event_column)}')}
                     AS event_datetime
             FROM {raw} AS raw
         )
@@ -970,6 +986,18 @@ def _normalized_code_system_sql(expression: str) -> str:
     return (
         f"regexp_replace(upper(trim({expression})), "
         "'[^A-Z0-9]', '', 'g')"
+    )
+
+
+def _timestamp_sql(expression: str) -> str:
+    """Parse ISO values and compact TriNetX dates without failed first casts."""
+
+    trimmed = f"trim({expression})"
+    return (
+        f"CASE length({trimmed}) "
+        f"WHEN 8 THEN try_strptime({trimmed}, '%Y%m%d') "
+        f"WHEN 14 THEN try_strptime({trimmed}, '%Y%m%d%H%M%S') "
+        f"ELSE try_cast({trimmed} AS TIMESTAMP) END"
     )
 
 

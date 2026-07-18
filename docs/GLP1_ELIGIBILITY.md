@@ -70,10 +70,12 @@ once and reuses them for bounded hash membership across later domain scans.
 Exact concept rules also use hash membership; validated prefix and regex rules
 compile to constant predicates. This preserves duplicate source records and
 overlapping-rule semantics without building correlated joins over full exports.
-Vital ingestion scans the raw source once into 32 concept-filtered patient-hash
-Parquet partitions under DuckDB's external temp directory, then appends one
-partition after joining only its matching candidate-patient bucket. Scratch is
-removed strictly on success or failure and is recognized by `clean-scratch`.
+Vital, diagnosis, procedure, and medication ingestion each scan the raw source
+once into 32 concept-filtered patient-hash Parquet partitions under DuckDB's
+external temp directory, then append one partition after joining only its
+matching candidate-patient bucket. Source timestamps accept both standard ISO
+representations and TriNetX's compact `YYYYMMDD` dates. Scratch is removed
+strictly on success or failure and is recognized by `clean-scratch`.
 
 Confidential output must live outside every Git worktree. Repository-local
 output is rejected even when ignore rules appear to cover it, because negation

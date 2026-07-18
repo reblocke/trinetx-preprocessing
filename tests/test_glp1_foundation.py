@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 import duckdb
@@ -1151,6 +1152,228 @@ def test_vital_ingestion_preserves_empty_output_schema(tmp_path: Path) -> None:
         )
     finally:
         connection.close()
+
+
+def test_partitioned_concept_ingestion_preserves_duplicates_and_timestamps(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"p1": 36.0})
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "p1,e_p1,2023-12-01,ICD10CM,E11.9,P,Y,N",
+        "p1,e_p1,2023-12-01,ICD10CM,E11.9,P,Y,N",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "p1,e_p1,2023-12-02,CPT,95811,P",
+        "p1,e_p1,2023-12-02,CPT,95811,P",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "p1,e_p1,RXNORM,1991302,2023-12-03,oral,Wegovy,2.4mg",
+        "p1,e_p1,RXNORM,1991302,2023-12-03,oral,Wegovy,2.4mg",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="partitioned-concepts",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        counts = ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+
+        assert counts["source_diagnosis"] == 2
+        assert counts["source_procedure"] == 2
+        assert counts["source_medication"] == 2
+        for table_name in (
+            "source_diagnosis",
+            "source_procedure",
+            "source_medication",
+        ):
+            assert connection.execute(
+                f"""
+                SELECT count(*), count(DISTINCT source_record_hash)
+                FROM {table_name}
+                """
+            ).fetchone() == (2, 1)
+        assert connection.execute(
+            """
+            SELECT event_datetime, end_datetime
+            FROM source_medication
+            LIMIT 1
+            """
+        ).fetchone() == (datetime(2023, 12, 3), None)
+        assert not list(
+            (tmp_path / ".duckdb_tmp").glob(
+                f"{ingestion_module._PATIENT_CONCEPT_INGEST_SCRATCH_PREFIX}*"
+            )
+        )
+    finally:
+        connection.close()
+
+
+def test_glp1_build_parses_compact_trinetx_dates_across_domains(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    (export_root / "Medications" / "medication.csv").write_text(
+        "patient_id,encounter_id,code_system,code,start_date,end_date,route,"
+        "brand,strength\n"
+    )
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,20240101,20240102,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,20240101,LOINC,2019-8,55,,mmHg",
+        "p1,e1,20240101,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,20231215,LOINC,39156-5,36,,kg/m2",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "p1,e1,20231201,ICD10CM,E11.9,P,Y,N",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "p1,e1,20231202,CPT,95811,P",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "p1,e1,RXNORM,1991302,20231203,20240201123045,oral,Wegovy,2.4mg",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"),
+        read_only=True,
+    )
+    try:
+        assert connection.execute(
+            "SELECT encounter_start, encounter_end FROM source_encounter"
+        ).fetchone() == (datetime(2024, 1, 1), datetime(2024, 1, 2))
+        expected_event_dates = {
+            "source_lab_measurement": datetime(2024, 1, 1),
+            "source_vital_measurement": datetime(2023, 12, 15),
+            "source_diagnosis": datetime(2023, 12, 1),
+            "source_procedure": datetime(2023, 12, 2),
+            "source_medication": datetime(2023, 12, 3),
+        }
+        for table_name, expected in expected_event_dates.items():
+            assert connection.execute(
+                f"SELECT min(event_datetime) FROM {table_name}"
+            ).fetchone() == (expected,)
+        assert connection.execute(
+            "SELECT end_datetime FROM source_medication"
+        ).fetchone() == (datetime(2024, 2, 1, 12, 30, 45),)
+        assert connection.execute(
+            """
+            SELECT row_count, unique_patient_count
+            FROM cohort_flow
+            WHERE stage = 'adult_candidate_emergency_inpatient_encounters'
+            """
+        ).fetchone() == (1, 1)
+        assert connection.execute(
+            """
+            SELECT first_observed_event_date
+            FROM raw_diagnosis_observability
+            """
+        ).fetchone() == (datetime(2023, 12, 1),)
+        assert connection.execute(
+            """
+            SELECT first_observed_event_date
+            FROM raw_medication_observability
+            """
+        ).fetchone() == (datetime(2023, 12, 3),)
+    finally:
+        connection.close()
+
+
+def test_patient_concept_ingestion_cleanup_failure_is_not_suppressed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"p1": 36.0})
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "p1,e_p1,2023-12-01,ICD10CM,E11.9,P,Y,N",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="concept-cleanup-failure",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    original_remove_tree_strict = ingestion_module.remove_tree_strict
+    cleanup_paths: list[Path] = []
+
+    def fail_diagnosis_cleanup(path: Path, *, context: str) -> None:
+        if context != "GLP-1 diagnosis ingestion scratch":
+            original_remove_tree_strict(path, context=context)
+            return
+        cleanup_paths.append(path)
+        raise OSError(f"{context} failed")
+
+    monkeypatch.setattr(
+        ingestion_module,
+        "remove_tree_strict",
+        fail_diagnosis_cleanup,
+    )
+    try:
+        with pytest.raises(OSError, match="GLP-1 diagnosis ingestion scratch failed"):
+            ingest_core_sources(
+                connection,
+                input_root=export_root,
+                inventory=inventory,
+                config=config,
+            )
+        assert len(cleanup_paths) == 1
+        assert cleanup_paths[0].exists()
+    finally:
+        connection.close()
+        for path in cleanup_paths:
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def test_encounter_membership_uses_hash_mark_joins() -> None:

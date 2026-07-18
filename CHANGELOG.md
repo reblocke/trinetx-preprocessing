@@ -58,6 +58,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   checkpoint DuckDB and fail before publication if a WAL remains.
 - Matched date-only diagnosis and procedure context rows by encounter calendar
   date while retaining exact encounter-bound checks for timestamped rows.
+- Bounded vital, diagnosis, procedure, and medication ingestion with reusable
+  patient-hash Parquet partitions, and normalized compact TriNetX `YYYYMMDD`
+  dates before temporal cohort and phenotype logic.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and
