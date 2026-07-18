@@ -198,6 +198,7 @@
 - Commit `6755aa1` is pushed, Linux CI passes all `316` tests, and targeted GitHub Codex review found no major issues after reviewing that exact commit: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5011074208`.
 - Fresh full build `43ef3d7f4a1441cc4ee5a737` from clean provenance checkpoint `43e3e65` completed inventory, all `906,193,358` retained source rows, terminology/duplicate QA, and core cohort construction, then failed cleanly after `15,820.41 s` while aggregating unfiltered diagnosis observability. DuckDB exhausted its 4 GiB internal buffer; authoritative maximum RSS was `5,830,868,992` bytes, the preserved database is `51,005,894,656` bytes with zero WAL, and no output was published. The build and monitor workers are stopped.
 - Unfiltered observability now streams selected patient/date rows from a separate 512 MiB DuckDB scan connection in one-million-row Arrow batches and merges only index-level aggregates. The isolated 1,272,185,090-row diagnosis benchmark passed in `427.76 s` with `465,829,888` bytes maximum RSS, `59,596` summaries, `12,334,864` qualifying lookback events, and zero row-level scratch.
+- Commit `8ad0d24` is pushed with the bounded observability stream. Local gates pass with `319` tests, Linux CI passed in `1m27s`, the production fixture retains `19/17/14/651` counts and eight public files, and targeted GitHub Codex review found no major issues at that exact commit: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5012304174`. PR #7 has zero unresolved review threads.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -206,10 +207,9 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete local gates, synthetic production smoke, commit/CI, and targeted review for the bounded raw-observability stream.
+- Create a docs-only provenance checkpoint, preflight the external target, and launch the fresh full build at 4,096 MiB/one thread.
 
 ## Next
-- Commit, push, pass CI, and request targeted Codex review of the bounded observability fix before relaunching at 4,096 MiB/one thread.
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 - After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
 
