@@ -19,7 +19,9 @@ CSV files.
 
 The DuckDB database also contains one-row-per-patient
 `cohort_hypercapnia_patient_index`, source inventory and concept-set tables, and
-the six `analysis_*` views described in `GLP1_PHENOTYPES.md`.
+the six `analysis_*` views described in `GLP1_PHENOTYPES.md`. The aggregate
+`source_duplicate_summary` table reports rows beyond the first identical source
+record hash by domain without retaining row examples in QA output.
 
 `cohort_flow.csv` always contains the 15 ordered endpoint stages: source
 patients, adult candidate encounters, arterial PaCO2, valid units, paired pH,
@@ -45,6 +47,8 @@ remain mandatory.
   procedure rows on the selected encounter use encounter calendar-date overlap.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
+- Gas normalization accepts common textual mmHg/pH labels and canonical UCUM
+  `mm[Hg]`/`[pH]` labels; normalized pressure values use `mm Hg`.
 - Nullable indication booleans use `NULL` for indeterminate or unevaluable,
   not `FALSE`.
 

@@ -1037,6 +1037,12 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         ) == ()
         assert connection.execute(
             """
+            SELECT duplicate_rows FROM source_duplicate_summary
+            WHERE domain = 'vital'
+            """
+        ).fetchone() == (1,)
+        assert connection.execute(
+            """
             SELECT matched_rows FROM concept_match_summary
             WHERE concept_set_id = 'bmi'
             """
@@ -1169,7 +1175,9 @@ def test_partitioned_terminology_qa_matches_direct_reduction(
             ('LOINC', '1234-5', 'hash-a'),
             ('LOINC', '1234-5', 'hash-a'),
             ('LOINC', '1234-5', 'hash-b'),
-            ('LOINC', '9999-9', 'hash-c')
+            ('LOINC', '9999-9', 'hash-c'),
+            ('LOINC', '9999-9', NULL),
+            ('LOINC', '9999-9', NULL)
         """
     )
     try:
@@ -1183,6 +1191,19 @@ def test_partitioned_terminology_qa_matches_direct_reduction(
         assert direct == [
             ("other", "lab", 1, False),
             ("overlap", "lab", 2, True),
+        ]
+        direct_duplicates = connection.execute(
+            """
+            SELECT domain, duplicate_rows
+            FROM source_duplicate_summary ORDER BY domain
+            """
+        ).fetchall()
+        assert direct_duplicates == [
+            ("diagnosis", 0),
+            ("lab", 2),
+            ("medication", 0),
+            ("procedure", 0),
+            ("vital", 0),
         ]
 
         monkeypatch.setattr(
@@ -1198,6 +1219,12 @@ def test_partitioned_terminology_qa_matches_direct_reduction(
             """
         ).fetchall()
         assert partitioned == direct
+        assert connection.execute(
+            """
+            SELECT domain, duplicate_rows
+            FROM source_duplicate_summary ORDER BY domain
+            """
+        ).fetchall() == direct_duplicates
         assert not list(
             temp_dir.glob(
                 f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*"
@@ -1838,6 +1865,78 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert connection.execute(
             "SELECT COUNT(*) FROM cohort_hypercapnia_encounter WHERE patient_id = 'p4'"
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_core_cohort_accepts_canonical_ucum_gas_units(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "p1,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e1,p1,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2019-8,55,,mm[Hg]",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2744-1,7.40,,[pH]",
+        "p1,e1,2024-01-01 01:00:00,LOINC,2703-7,75,,mm[Hg]",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "p1,e1,2023-12-15,LOINC,39156-5,36,,kg/m2",
+    )
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="ucum-gas-units",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+        counts = build_core_cohort(
+            connection,
+            config=config,
+            run_id="ucum-gas-units",
+            git_sha="test-sha",
+        )
+
+        assert counts.primary_obesity_hypercapnia == 1
+        assert connection.execute(
+            """
+            SELECT concept_set_id, unit_key, normalized_numeric_value, unit_usable
+            FROM normalized_gas_measurement
+            ORDER BY concept_set_id
+            """
+        ).fetchall() == [
+            ("arterial_pco2", "mm[hg]", 55.0, True),
+            ("arterial_ph", "[ph]", 7.4, True),
+            ("arterial_po2", "mm[hg]", 75.0, True),
+        ]
+        assert connection.execute(
+            """
+            SELECT abg_pco2_mm_hg, abg_ph, abg_po2
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == (55.0, 7.4, 75.0)
     finally:
         connection.close()
 

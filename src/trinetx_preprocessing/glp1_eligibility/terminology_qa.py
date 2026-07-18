@@ -52,6 +52,23 @@ def build_concept_match_summary(
         )
         """
     )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE source_hash_partial (
+            domain VARCHAR,
+            distinct_source_hashes UBIGINT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE source_domain_total (
+            domain VARCHAR PRIMARY KEY,
+            source_rows UBIGINT,
+            null_hash_rows UBIGINT
+        )
+        """
+    )
 
     temp_directory_value = connection.execute(
         "SELECT current_setting('temp_directory')"
@@ -80,6 +97,16 @@ def build_concept_match_summary(
                         f"SELECT count(*) FROM {_identifier(source_table)}"
                     ).fetchone()[0]
                 )
+                null_hash_rows = int(
+                    connection.execute(
+                        f"SELECT count(*) FROM {_identifier(source_table)} "
+                        "WHERE source_record_hash IS NULL"
+                    ).fetchone()[0]
+                )
+                connection.execute(
+                    "INSERT INTO source_domain_total VALUES (?, ?, ?)",
+                    [domain, source_rows, null_hash_rows],
+                )
                 if source_rows <= _DIRECT_CONCEPT_MATCH_MAX_ROWS:
                     _reduce_domain_matches_direct(
                         connection,
@@ -106,6 +133,7 @@ def build_concept_match_summary(
                     )
 
         _materialize_concept_match_summary(connection)
+        _materialize_source_duplicate_summary(connection)
         missing = tuple(
             row[0]
             for row in connection.execute(
@@ -156,6 +184,8 @@ def build_concept_match_summary(
         if scratch.exists():
             remove_tree_strict(scratch, context="GLP-1 terminology QA scratch")
         connection.execute("DROP TABLE IF EXISTS concept_match_partial")
+        connection.execute("DROP TABLE IF EXISTS source_hash_partial")
+        connection.execute("DROP TABLE IF EXISTS source_domain_total")
         connection.execute("DROP TABLE IF EXISTS required_concept_set")
 
 
@@ -195,6 +225,16 @@ def _reduce_domain_matches_direct(
 ) -> None:
     """Reduce a small domain without paying partition I/O overhead."""
 
+    connection.execute(
+        f"""
+        INSERT INTO source_hash_partial
+        SELECT
+            {_sql_string(domain)} AS domain,
+            count(DISTINCT source_record_hash) AS distinct_source_hashes
+        FROM {_identifier(source_table)}
+        """
+    )
+
     matches = _domain_match_rows_sql(
         domain=domain,
         source_table=source_table,
@@ -208,6 +248,7 @@ def _reduce_domain_matches_direct(
             {_sql_string(domain)} AS domain,
             count(DISTINCT source_record_hash) AS matched_rows
         FROM ({matches})
+        WHERE concept_set_id IS NOT NULL
         GROUP BY concept_set_id
         """
     )
@@ -233,12 +274,22 @@ def _reduce_domain_matches(
         parquet_paths = ", ".join(_sql_string(str(path)) for path in files)
         connection.execute(
             f"""
+            INSERT INTO source_hash_partial
+            SELECT
+                {_sql_string(domain)} AS domain,
+                count(DISTINCT source_record_hash) AS distinct_source_hashes
+            FROM read_parquet([{parquet_paths}])
+            """
+        )
+        connection.execute(
+            f"""
             INSERT INTO concept_match_partial
             SELECT
                 concept_set_id,
                 {_sql_string(domain)} AS domain,
                 count(DISTINCT source_record_hash) AS matched_rows
             FROM read_parquet([{parquet_paths}])
+            WHERE concept_set_id IS NOT NULL
             GROUP BY concept_set_id
             """
         )
@@ -261,8 +312,9 @@ def _domain_match_rows_sql(
             concept.concept_set_id,
             source.source_record_hash{bucket_projection}
         FROM {_identifier(source_table)} AS source
-        JOIN concept_set AS concept
+        LEFT JOIN concept_set AS concept
           ON concept.domain = {_sql_string(domain)}
+         AND concept.include
          AND regexp_replace(
                 upper(trim(source.code_system)), '[^A-Z0-9]', '', 'g'
              ) = concept.code_system
@@ -274,8 +326,7 @@ def _domain_match_rows_sql(
              OR (concept.match_type = 'regex'
                  AND regexp_matches(upper(trim(source.code)), concept.code))
          )
-        WHERE concept.include
-          AND source.source_record_hash IS NOT NULL
+        WHERE source.source_record_hash IS NOT NULL
     """
 
 
@@ -302,6 +353,31 @@ def _materialize_concept_match_summary(
         LEFT JOIN totals USING (concept_set_id, domain)
         LEFT JOIN required_concept_set AS required USING (concept_set_id)
         ORDER BY configured.domain, configured.concept_set_id
+        """
+    )
+
+
+def _materialize_source_duplicate_summary(
+    connection: duckdb.DuckDBPyConnection,
+) -> None:
+    connection.execute(
+        """
+        CREATE OR REPLACE TABLE source_duplicate_summary AS
+        WITH distinct_totals AS (
+            SELECT domain, sum(distinct_source_hashes) AS distinct_source_hashes
+            FROM source_hash_partial
+            GROUP BY domain
+        )
+        SELECT
+            total.domain,
+            (
+                total.source_rows
+                - coalesce(distinct_hash.distinct_source_hashes, 0)
+                - CASE WHEN total.null_hash_rows > 0 THEN 1 ELSE 0 END
+            )::UBIGINT AS duplicate_rows
+        FROM source_domain_total AS total
+        LEFT JOIN distinct_totals AS distinct_hash USING (domain)
+        ORDER BY total.domain
         """
     )
 

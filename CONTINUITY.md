@@ -4,7 +4,7 @@
 - Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
 - Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
 - GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
-- Current turn: finish the bounded full-scale vitals-ingestion correction, verify it locally and against the preserved real-data database, then obtain clean PR review before another private full build.
+- Current turn: fix the bounded output duplicate audit and production UCUM gas-unit handling exposed by the latest full build, verify both against its preserved real-data database, then obtain clean PR review before another private full build.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -189,6 +189,12 @@
 - Commit `a0b3d4f` is pushed with the bounded multi-domain ingestion and compact-date correction. Linux CI passed all `313` tests in `1m38s`; targeted GitHub Codex review found no major issues and reviewed that exact commit.
 - Docs-only provenance checkpoint `ec94b76` is pushed and passed Linux CI. Fresh full run `7bd772e11f3b00a1d7ee6e81` cleared every prior ingestion blocker and retained `906,193,358` rows, then failed after `10,390.63 s` in the unbounded cross-domain terminology summary. Maximum RSS was `5,222,383,616` bytes, the `49,557,811,200`-byte database has zero WAL, no output was published, and the workspace is preserved.
 - The exact 32-way domain-sequential terminology reducer passes `315` local tests. Its read-only full-scale benchmark covered all 92 concept sets in `812.81 s` with `4,548,182,016` bytes maximum RSS, zero required-set warnings, and zero residual scratch. The production synthetic smoke retained unchanged `19/17/14/651` counts, 15 flow rows, eight public files, zero warnings/WAL/scratch, and `294,862,848` bytes maximum RSS.
+- Commit `8a0f017` is pushed, Linux CI passes all `315` tests, and targeted GitHub Codex review found no major issues.
+- Full build `80f6e7f2dfb89b12809f8bc5` completed all `906,193,358` retained source rows, exact terminology QA, core cohort construction, and component phenotypes in `15,536.45 s`, then failed cleanly during output materialization because duplicate-source QA grouped hashes across all source domains at once. Maximum RSS was `5,687,459,840` bytes, the `68,101,353,472`-byte DuckDB has zero WAL, and no final output was published.
+- Aggregate inspection also found a production-unit compatibility defect: UCUM `mm[Hg]` and `[pH]` values were retained but not recognized by cohort unit validation, leaving all `866,928` candidate encounters excluded and the analysis/evidence tables empty. The failed workspace and staged outputs are preserved, and no build or monitor process remains active.
+- Exact duplicate-source QA now reduces through the domain hash partitions, and canonical UCUM `mm[Hg]`/`[pH]` gas units normalize identically to existing aliases. Focused tests, Ruff, diff checks, and all `316` tests pass.
+- The full-scale terminology-plus-duplicate benchmark passed all five domains in `863.98 s` with `4,354,719,744` bytes maximum RSS, 92 concept summaries, zero required warnings, exact per-domain duplicate totals, zero scratch, and no source-database writes. Evidence is under `diagnostics/terminology_duplicates_4096m_1t_8a0f017_dirty_20260717`.
+- A downstream rebuild on a copy of the preserved full-scale database passed in `5,578.62 s` with `5,262,934,016` bytes maximum RSS. It produced `20,387,522` usable gas rows, including `11,418,429` UCUM `mm[Hg]` and `5,500,562` UCUM `[pH]` rows; `75,208` primary included encounters; `59,954` analysis rows; `18,727,371` evidence rows; all 15 cohort-flow stages; and all eight public filenames. Output materialization completed in `42.517 s` with exact duplicate QA, zero WAL, and zero recognized scratch. Evidence is under `diagnostics/post_ingestion_ucum_output_4096m_1t_8a0f017_dirty_20260717`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -197,10 +203,9 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the benchmark-backed terminology fix, then require passing CI and a clean targeted Codex review before another full build.
+- Push the reviewed local checkpoint, pass CI, and obtain targeted GitHub Codex review.
 
 ## Next
-- Run focused/full local gates and a full-scale terminology benchmark, then commit, push, pass CI, and obtain a targeted Codex review.
 - Launch a fresh full build from the review-clean checkpoint at 4,096 MiB/one thread.
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 - After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
@@ -229,4 +234,4 @@
 - Diagnosis OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d3d3401f72b3931b7dfbde14`; logs `logs/build.4096m1t.1cb50ce.*.log`.
 - Terminology-QA OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-7bd772e11f3b00a1d7ee6e81`; logs `logs/build.4096m1t.ec94b76.*.log`.
 - Passing terminology benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/terminology_qa_partitioned_4096m_1t_ec94b76_dirty_20260717`.
-- Enhanced monitor screen: `trinetx_glp1_enhanced_monitor_20260716`; status `diagnostics/enhanced_monitor_status.json` and `diagnostics/enhanced_monitor_status.md`; history `diagnostics/enhanced_monitor_history.jsonl`
+- Latest failed output-QA workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-80f6e7f2dfb89b12809f8bc5`; logs `logs/build.4096m1t.8a0f017.*.log`; no build or monitor process remains active.

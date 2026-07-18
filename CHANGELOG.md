@@ -64,6 +64,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Bounded exact terminology-match counts with domain-sequential record-hash
   partitions, preventing full-scale QA from retaining every matched hash in one
   cross-domain aggregate.
+- Reduced exact duplicate-source counts through the same bounded per-domain
+  hash partitions, and taught gas normalization to recognize canonical UCUM
+  `mm[Hg]` and `[pH]` spellings present in production TriNetX exports.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and

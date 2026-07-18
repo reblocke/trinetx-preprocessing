@@ -93,7 +93,9 @@ def _build_normalized_gas(
                     WHEN concept_set_id IN (
                         'arterial_pco2', 'venous_pco2',
                         'unspecified_blood_pco2'
-                    ) AND unit_key IN ('mmhg', 'mm hg', 'mm_hg', 'torr')
+                    ) AND unit_key IN (
+                        'mmhg', 'mm hg', 'mm_hg', 'mm[hg]', 'torr'
+                    )
                     THEN raw_numeric_value
                     WHEN concept_set_id IN (
                         'arterial_pco2', 'venous_pco2',
@@ -101,7 +103,7 @@ def _build_normalized_gas(
                     ) AND unit_key = 'kpa'
                     THEN raw_numeric_value * 7.5006168270417
                     WHEN concept_set_id IN ('arterial_ph', 'venous_ph')
-                         AND unit_key IN ('', 'ph', '1', 'unitless')
+                         AND unit_key IN ('', 'ph', '[ph]', '1', 'unitless')
                     THEN raw_numeric_value
                     WHEN concept_set_id = 'arterial_hco3'
                          AND unit_key IN (
@@ -110,7 +112,9 @@ def _build_normalized_gas(
                          )
                     THEN raw_numeric_value
                     WHEN concept_set_id = 'arterial_po2'
-                         AND unit_key IN ('mmhg', 'mm hg', 'mm_hg', 'torr')
+                         AND unit_key IN (
+                             'mmhg', 'mm hg', 'mm_hg', 'mm[hg]', 'torr'
+                         )
                     THEN raw_numeric_value
                     WHEN concept_set_id = 'arterial_po2' AND unit_key = 'kpa'
                     THEN raw_numeric_value * 7.5006168270417

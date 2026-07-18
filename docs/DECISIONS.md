@@ -1214,6 +1214,32 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
   `tests/test_cli.py`, `docs/GLP1_ELIGIBILITY.md`.
 
+### 2026-07-17 — Bound duplicate QA and recognize canonical UCUM gas units
+- Date: 2026-07-17
+- Decision: Compute exact retained-source duplicate counts while reducing each
+  terminology hash partition, persist the five-row aggregate result, and make
+  output QA read that summary rather than regrouping all retained domains.
+  Recognize lowercase-normalized UCUM `mm[hg]` as mmHg and `[ph]` as pH.
+- Context: A review-clean full build completed all `906,193,358` retained source
+  rows, terminology QA, core cohort construction, and component phenotypes, then
+  exhausted DuckDB's 4,096 MiB limit while grouping source hashes across five
+  domains for the HTML report. Aggregate inspection also showed that production
+  rows use `mm[Hg]` and `[pH]`; the prior alias lists rejected those rows and
+  reduced valid-unit cohort flow to zero.
+- Rationale: Per-domain hash partitions preserve the prior exact duplicate
+  definition while bounding state. UCUM aliases are semantically identical to
+  the already-supported mmHg and pH spellings and belong in normalization, not
+  in source-specific preprocessing.
+- Consequences: Duplicate QA remains exact, including duplicate null-hash groups,
+  and no longer requires a cross-domain source aggregate. Canonical UCUM gas
+  rows can enter the intended cohort after the same plausibility and threshold
+  checks. Full-scale downstream reconstruction and review are required before
+  another complete private build.
+- References: `src/trinetx_preprocessing/glp1_eligibility/terminology_qa.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/outputs.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `tests/test_glp1_foundation.py`.
+
 ### 2026-07-17 — Bound exact terminology coverage reduction
 - Date: 2026-07-17
 - Decision: Reduce terminology matches one source domain at a time. Domains with

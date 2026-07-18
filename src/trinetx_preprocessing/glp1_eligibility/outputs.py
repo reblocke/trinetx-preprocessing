@@ -266,23 +266,9 @@ def _quality_report_html(connection: duckdb.DuckDBPyConnection) -> str:
     ).fetchall()
     duplicate_rows = connection.execute(
         """
-        WITH records AS (
-            SELECT 'lab' AS domain, source_record_hash
-            FROM source_lab_measurement
-            UNION ALL SELECT 'vital', source_record_hash
-            FROM source_vital_measurement
-            UNION ALL SELECT 'diagnosis', source_record_hash
-            FROM source_diagnosis
-            UNION ALL SELECT 'procedure', source_record_hash
-            FROM source_procedure
-            UNION ALL SELECT 'medication', source_record_hash
-            FROM source_medication
-        ), duplicate_groups AS (
-            SELECT domain, source_record_hash, count(*) AS rows
-            FROM records GROUP BY domain, source_record_hash HAVING count(*) > 1
-        )
-        SELECT domain, sum(rows - 1) AS duplicate_rows
-        FROM duplicate_groups GROUP BY domain ORDER BY domain
+        SELECT domain, duplicate_rows
+        FROM source_duplicate_summary
+        ORDER BY domain
         """
     ).fetchall()
     pairing_rows = connection.execute(
