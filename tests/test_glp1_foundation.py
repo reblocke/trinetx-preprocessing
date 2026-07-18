@@ -13,6 +13,7 @@ import duckdb
 import pytest
 
 import trinetx_preprocessing.glp1_eligibility.ingestion as ingestion_module
+import trinetx_preprocessing.glp1_eligibility.terminology_qa as terminology_qa_module
 from trinetx_preprocessing.glp1_eligibility.builder import (
     _require_safe_output_location,
     build_glp1_eligibility,
@@ -1034,6 +1035,17 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         assert build_concept_match_summary(
             connection, catalog.required_concept_set_ids
         ) == ()
+        assert connection.execute(
+            """
+            SELECT matched_rows FROM concept_match_summary
+            WHERE concept_set_id = 'bmi'
+            """
+        ).fetchone() == (1,)
+        assert not list(
+            (tmp_path / ".duckdb_tmp").glob(
+                f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*"
+            )
+        )
         connection.execute("DELETE FROM source_vital_measurement")
         warnings = build_concept_match_summary(
             connection, catalog.required_concept_set_ids
@@ -1044,6 +1056,153 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
         assert connection.execute(
             "SELECT warning_count FROM run_manifest"
         ).fetchone() == (1,)
+    finally:
+        connection.close()
+
+
+def test_terminology_qa_cleanup_failure_is_not_suppressed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    export_root = tmp_path / "export"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"p1": 36.0})
+
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    config = load_glp1_config(GLP1_CONFIG)
+    catalog = load_concept_sets(config.concept_sets_dir)
+    connection = initialize_database(
+        tmp_path / "glp1.duckdb",
+        run_id="terminology-cleanup-failure",
+        input_root=export_root,
+        config=config,
+        inventory=inventory,
+        catalog=catalog,
+        git_sha="test-sha",
+        concept_catalog_sha256=catalog.sha256,
+    )
+    try:
+        ingest_core_sources(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+            config=config,
+        )
+        original_remove = terminology_qa_module.remove_tree_strict
+
+        def fail_lab_cleanup(path: Path, *, context: str) -> None:
+            if context == "GLP-1 terminology QA lab scratch":
+                raise OSError("simulated terminology cleanup failure")
+            original_remove(path, context=context)
+
+        monkeypatch.setattr(
+            terminology_qa_module,
+            "remove_tree_strict",
+            fail_lab_cleanup,
+        )
+        monkeypatch.setattr(
+            terminology_qa_module,
+            "_DIRECT_CONCEPT_MATCH_MAX_ROWS",
+            0,
+        )
+
+        with pytest.raises(OSError, match="simulated terminology cleanup failure"):
+            build_concept_match_summary(
+                connection,
+                catalog.required_concept_set_ids,
+            )
+        assert not list(
+            (tmp_path / ".duckdb_tmp").glob(
+                f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*"
+            )
+        )
+    finally:
+        connection.close()
+
+
+def test_partitioned_terminology_qa_matches_direct_reduction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = duckdb.connect(str(tmp_path / "terminology.duckdb"))
+    temp_dir = tmp_path / "tmp"
+    temp_dir.mkdir()
+    connection.execute("SET temp_directory = ?", [str(temp_dir)])
+    connection.execute(
+        """
+        CREATE TABLE concept_set (
+            concept_set_id VARCHAR,
+            domain VARCHAR,
+            code_system VARCHAR,
+            code VARCHAR,
+            match_type VARCHAR,
+            include BOOLEAN
+        );
+        INSERT INTO concept_set VALUES
+            ('overlap', 'lab', 'LOINC', '1234-5', 'exact', true),
+            ('overlap', 'lab', 'LOINC', '123', 'prefix', true),
+            ('other', 'lab', 'LOINC', '9999-9', 'exact', true);
+        CREATE TABLE run_manifest (run_id VARCHAR, warning_count BIGINT);
+        INSERT INTO run_manifest VALUES ('test-run', 0);
+        CREATE TABLE build_warning (
+            run_id VARCHAR,
+            warning_code VARCHAR,
+            message VARCHAR,
+            details_json JSON
+        );
+        """
+    )
+    for table in terminology_qa_module._SOURCE_TABLE_BY_DOMAIN.values():
+        connection.execute(
+            f"""
+            CREATE TABLE {table} (
+                code_system VARCHAR,
+                code VARCHAR,
+                source_record_hash VARCHAR
+            )
+            """
+        )
+    connection.execute(
+        """
+        INSERT INTO source_lab_measurement VALUES
+            ('LOINC', '1234-5', 'hash-a'),
+            ('LOINC', '1234-5', 'hash-a'),
+            ('LOINC', '1234-5', 'hash-b'),
+            ('LOINC', '9999-9', 'hash-c')
+        """
+    )
+    try:
+        assert build_concept_match_summary(connection, ("overlap",)) == ()
+        direct = connection.execute(
+            """
+            SELECT concept_set_id, domain, matched_rows, required
+            FROM concept_match_summary ORDER BY concept_set_id
+            """
+        ).fetchall()
+        assert direct == [
+            ("other", "lab", 1, False),
+            ("overlap", "lab", 2, True),
+        ]
+
+        monkeypatch.setattr(
+            terminology_qa_module,
+            "_DIRECT_CONCEPT_MATCH_MAX_ROWS",
+            0,
+        )
+        assert build_concept_match_summary(connection, ("overlap",)) == ()
+        partitioned = connection.execute(
+            """
+            SELECT concept_set_id, domain, matched_rows, required
+            FROM concept_match_summary ORDER BY concept_set_id
+            """
+        ).fetchall()
+        assert partitioned == direct
+        assert not list(
+            temp_dir.glob(
+                f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*"
+            )
+        )
     finally:
         connection.close()
 

@@ -129,7 +129,9 @@ def build_glp1_eligibility(
             state=state,
         )
         warnings = build_concept_match_summary(
-            connection, catalog.required_concept_set_ids
+            connection,
+            catalog.required_concept_set_ids,
+            state=state,
         )
         state.update(phase="core_cohort", current_domain=None)
         counts = build_core_cohort(

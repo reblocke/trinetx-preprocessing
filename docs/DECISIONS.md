@@ -1213,3 +1213,25 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
   `tests/test_cli.py`, `docs/GLP1_ELIGIBILITY.md`.
+
+### 2026-07-17 — Bound exact terminology coverage reduction
+- Date: 2026-07-17
+- Decision: Reduce terminology matches one source domain at a time. Domains with
+  at most one million retained rows use a direct exact aggregate; larger domains
+  stage matches into 32 deterministic source-record-hash Parquet partitions and
+  count distinct hashes one partition at a time.
+- Context: Full run `7bd772e11f3b00a1d7ee6e81` completed all source ingestion
+  and retained `906,193,358` rows, then exhausted DuckDB's 4,096 MiB limit while
+  one cross-domain aggregate retained every distinct matched record hash.
+- Rationale: All copies of one source-record hash map to the same partition, so
+  partition counts sum exactly while bounding each distinct-hash set. Processing
+  domains sequentially also releases peak scratch before the next domain. The
+  direct small-domain path avoids imposing partition I/O on tests and fixtures.
+- Consequences: `concept_match_summary` retains its exact de-duplication and
+  overlapping-rule semantics. The read-only full-scale benchmark completed all
+  92 concept sets in `812.81 s` with `4,548,182,016` bytes maximum RSS, zero
+  required-set warnings, and zero residual terminology scratch.
+- References: `src/trinetx_preprocessing/glp1_eligibility/terminology_qa.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`.

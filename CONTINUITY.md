@@ -187,6 +187,8 @@
 - Post-benchmark integrity checks exposed a production date-format gap: restored TriNetX dates are compact `YYYYMMDD`, while GLP-1 ingestion used generic timestamp casts. All retained full-scale lab, encounter, vital, and diagnosis timestamps were null even though source date strings were present. No new full build may launch until compact-date normalization is implemented and reviewed.
 - Shared timestamp normalization now accepts ISO values plus compact `YYYYMMDD` and `YYYYMMDDHHMMSS`. Aggregate read-only probes confirm every distinct non-null retained production lab, encounter-start/end, vital, and diagnosis date parses; compact-date cohort-flow, source-table, medication-end, and raw-observability regressions pass.
 - Commit `a0b3d4f` is pushed with the bounded multi-domain ingestion and compact-date correction. Linux CI passed all `313` tests in `1m38s`; targeted GitHub Codex review found no major issues and reviewed that exact commit.
+- Docs-only provenance checkpoint `ec94b76` is pushed and passed Linux CI. Fresh full run `7bd772e11f3b00a1d7ee6e81` cleared every prior ingestion blocker and retained `906,193,358` rows, then failed after `10,390.63 s` in the unbounded cross-domain terminology summary. Maximum RSS was `5,222,383,616` bytes, the `49,557,811,200`-byte database has zero WAL, no output was published, and the workspace is preserved.
+- The exact 32-way domain-sequential terminology reducer passes `315` local tests. Its read-only full-scale benchmark covered all 92 concept sets in `812.81 s` with `4,548,182,016` bytes maximum RSS, zero required-set warnings, and zero residual scratch. The production synthetic smoke retained unchanged `19/17/14/651` counts, 15 flow rows, eight public files, zero warnings/WAL/scratch, and `294,862,848` bytes maximum RSS.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -195,10 +197,11 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Create and push one docs-only clean provenance checkpoint, wait for its CI check, then preflight and launch the fresh full private build. Runtime defaults remain unchanged; do not delete any failed workspace or benchmark evidence.
+- Commit and push the benchmark-backed terminology fix, then require passing CI and a clean targeted Codex review before another full build.
 
 ## Next
-- After clean review, make one docs-only clean provenance checkpoint and launch a fresh full build from that commit at 4,096 MiB/one thread.
+- Run focused/full local gates and a full-scale terminology benchmark, then commit, push, pass CI, and obtain a targeted Codex review.
+- Launch a fresh full build from the review-clean checkpoint at 4,096 MiB/one thread.
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 - After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
 
@@ -224,4 +227,6 @@
 - Passing vitals benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/vital_ingestion_partitioned_4096m_1t_57db166_dirty_20260717`.
 - Passing diagnosis benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/diagnosis_ingestion_partitioned_4096m_1t_1cb50ce_dirty_20260717`.
 - Diagnosis OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d3d3401f72b3931b7dfbde14`; logs `logs/build.4096m1t.1cb50ce.*.log`.
+- Terminology-QA OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-7bd772e11f3b00a1d7ee6e81`; logs `logs/build.4096m1t.ec94b76.*.log`.
+- Passing terminology benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/terminology_qa_partitioned_4096m_1t_ec94b76_dirty_20260717`.
 - Enhanced monitor screen: `trinetx_glp1_enhanced_monitor_20260716`; status `diagnostics/enhanced_monitor_status.json` and `diagnostics/enhanced_monitor_status.md`; history `diagnostics/enhanced_monitor_history.jsonl`

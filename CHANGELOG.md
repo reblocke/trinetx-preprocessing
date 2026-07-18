@@ -61,6 +61,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Bounded vital, diagnosis, procedure, and medication ingestion with reusable
   patient-hash Parquet partitions, and normalized compact TriNetX `YYYYMMDD`
   dates before temporal cohort and phenotype logic.
+- Bounded exact terminology-match counts with domain-sequential record-hash
+  partitions, preventing full-scale QA from retaining every matched hash in one
+  cross-domain aggregate.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and
