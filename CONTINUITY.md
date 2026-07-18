@@ -186,6 +186,7 @@
 - The isolated bounded diagnosis benchmark completed all `1,272,185,090` raw rows in `1,790.82 s`, retained `86,182,713` rows for `693,682` patients, and used `4,631,658,496` bytes (`4,417.00 MiB`) authoritative maximum RSS. Scratch and WAL were zero after completion.
 - Post-benchmark integrity checks exposed a production date-format gap: restored TriNetX dates are compact `YYYYMMDD`, while GLP-1 ingestion used generic timestamp casts. All retained full-scale lab, encounter, vital, and diagnosis timestamps were null even though source date strings were present. No new full build may launch until compact-date normalization is implemented and reviewed.
 - Shared timestamp normalization now accepts ISO values plus compact `YYYYMMDD` and `YYYYMMDDHHMMSS`. Aggregate read-only probes confirm every distinct non-null retained production lab, encounter-start/end, vital, and diagnosis date parses; compact-date cohort-flow, source-table, medication-end, and raw-observability regressions pass.
+- Commit `a0b3d4f` is pushed with the bounded multi-domain ingestion and compact-date correction. Linux CI passed all `313` tests in `1m38s`; targeted GitHub Codex review found no major issues and reviewed that exact commit.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -194,10 +195,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete the local diff review, commit and push the bounded-ingestion/date-normalization checkpoint, then wait for CI and targeted Codex review. Runtime defaults remain unchanged; do not delete any failed workspace or benchmark evidence.
+- Create and push one docs-only clean provenance checkpoint, wait for its CI check, then preflight and launch the fresh full private build. Runtime defaults remain unchanged; do not delete any failed workspace or benchmark evidence.
 
 ## Next
-- Run focused/full tests and production aggregate timestamp probes, then commit/push the bounded-ingestion and date-normalization checkpoint, run CI, and request a targeted Codex review before another full build.
+- After clean review, make one docs-only clean provenance checkpoint and launch a fresh full build from that commit at 4,096 MiB/one thread.
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
 - After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
 
@@ -215,6 +216,7 @@
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
 - Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `64aed02`. PR #7 is green with all threads resolved.
+- Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
