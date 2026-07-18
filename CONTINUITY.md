@@ -207,7 +207,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Create a docs-only provenance checkpoint, preflight the external target, and launch the fresh full build at 4,096 MiB/one thread.
+- Launch the preflighted fresh full build from clean docs-only provenance checkpoint `8d87b9d` at 4,096 MiB/one thread, with the persistent aggregate monitor and no runtime limit.
 
 ## Next
 - Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
@@ -226,7 +226,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `6755aa1`. PR #7 is green with all threads resolved.
+- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and docs-only provenance checkpoint `8d87b9d`. PR #7 is green with all threads resolved.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
