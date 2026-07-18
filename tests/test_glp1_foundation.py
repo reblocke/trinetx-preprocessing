@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 import pytest
 
 import trinetx_preprocessing.glp1_eligibility.ingestion as ingestion_module
@@ -1558,6 +1559,138 @@ def test_patient_concept_ingestion_cleanup_failure_is_not_suppressed(
         assert cleanup_paths[0].exists()
     finally:
         connection.close()
+        for path in cleanup_paths:
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def test_raw_observability_streaming_preserves_event_counts(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    temp_root = tmp_path / "duckdb-temp"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "selected,e1,20231201,LOCAL,UNMAPPED,,,,",
+        "selected,e1,20231201,LOCAL,UNMAPPED,,,,",
+        "selected,e2,20240201,LOCAL,UNMAPPED,,,,",
+        "selected,e3,20250101,LOCAL,UNMAPPED,,,,",
+        "not_selected,e4,20231201,LOCAL,UNMAPPED,,,,",
+    )
+    report = validate_export(export_root)
+    inventory = build_input_inventory(export_root, report)
+    connection = duckdb.connect(str(tmp_path / "observability.duckdb"))
+    temp_root.mkdir()
+    connection.execute(f"SET temp_directory = '{temp_root}'")
+    connection.execute(
+        """
+        CREATE TABLE analysis_glp1_eligibility (
+            index_event_id VARCHAR,
+            patient_id VARCHAR,
+            index_date TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO analysis_glp1_eligibility VALUES
+            ('index-1', 'selected', TIMESTAMP '2024-01-01'),
+            ('index-2', 'selected', TIMESTAMP '2024-06-01'),
+            ('index-3', 'no-history', TIMESTAMP '2024-06-01')
+        """
+    )
+    try:
+        ingestion_module.build_raw_observability_summaries(
+            connection,
+            input_root=export_root,
+            inventory=inventory,
+        )
+
+        assert connection.execute(
+            """
+            SELECT index_event_id, first_observed_event_date, event_count
+            FROM raw_diagnosis_observability
+            ORDER BY index_event_id
+            """
+        ).fetchall() == [
+            ("index-1", datetime(2023, 12, 1), 2),
+            ("index-2", datetime(2023, 12, 1), 3),
+        ]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM raw_labs_observability"
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_raw_observability_arrow_batches_are_strictly_bounded(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "diagnosis.csv"
+    source.write_text(
+        "patient_id,date,code\n"
+        "selected,20230101,A\n"
+        "not-selected,20230102,B\n"
+        "selected,20230103,C\n"
+        "selected,20230104,D\n"
+        "selected,20230105,E\n"
+        "selected,20230106,F\n"
+    )
+    with ingestion_module._raw_observability_batch_reader(
+        (source,),
+        event_column="date",
+        selected_patient_ids=pa.array(["selected"]),
+        temp_directory=tmp_path / "duckdb-temp",
+        row_target=2,
+    ) as reader:
+        batches = tuple(reader)
+
+    assert [batch.num_rows for batch in batches] == [2, 2, 1]
+    assert pa.Table.from_batches(list(batches)).column("event_value").to_pylist() == [
+        "20230101",
+        "20230103",
+        "20230104",
+        "20230105",
+        "20230106",
+    ]
+
+
+def test_raw_observability_scan_cleanup_failure_is_not_suppressed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "diagnosis.csv"
+    source.write_text("patient_id,date\nselected,20230101\n")
+    original_remove_tree_strict = ingestion_module.remove_tree_strict
+    cleanup_paths: list[Path] = []
+
+    def fail_observability_cleanup(path: Path, *, context: str) -> None:
+        if context != "GLP-1 raw observability scan scratch":
+            original_remove_tree_strict(path, context=context)
+            return
+        cleanup_paths.append(path)
+        raise OSError(f"{context} failed")
+
+    monkeypatch.setattr(
+        ingestion_module,
+        "remove_tree_strict",
+        fail_observability_cleanup,
+    )
+    try:
+        with pytest.raises(
+            OSError,
+            match="GLP-1 raw observability scan scratch failed",
+        ):
+            with ingestion_module._raw_observability_batch_reader(
+                (source,),
+                event_column="date",
+                selected_patient_ids=pa.array(["selected"]),
+                temp_directory=tmp_path / "duckdb-temp",
+            ) as reader:
+                tuple(reader)
+        assert len(cleanup_paths) == 1
+        assert cleanup_paths[0].exists()
+    finally:
         for path in cleanup_paths:
             shutil.rmtree(path, ignore_errors=True)
 

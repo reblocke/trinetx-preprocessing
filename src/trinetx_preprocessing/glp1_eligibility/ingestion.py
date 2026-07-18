@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 
 from ..filesystem import remove_tree_strict
 from .config import GLP1Config
@@ -17,6 +20,9 @@ _PATIENT_CONCEPT_INGEST_BUCKET_COUNT = 32
 _VITAL_INGEST_BUCKET_COUNT = _PATIENT_CONCEPT_INGEST_BUCKET_COUNT
 _VITAL_INGEST_SCRATCH_PREFIX = ".trinetx-glp1-vital-ingest-"
 _PATIENT_CONCEPT_INGEST_SCRATCH_PREFIX = ".trinetx-glp1-concept-ingest-"
+_RAW_OBSERVABILITY_SCRATCH_PREFIX = ".trinetx-glp1-observability-scan-"
+_RAW_OBSERVABILITY_BATCH_ROW_TARGET = 1_000_000
+_RAW_OBSERVABILITY_SCAN_MEMORY_MIB = 512
 
 
 @dataclass(frozen=True)
@@ -138,34 +144,56 @@ def build_raw_observability_summaries(
             _create_empty_raw_observability(connection, domain)
         return
 
-    specifications = (
-        ("diagnosis", ("diagnosis",), "date", 730),
-        ("labs", ("labs",), "date", 365),
-        ("vitals", ("vitals",), "date", None),
-        ("procedure", ("procedure",), "date", None),
-        (
-            "medication",
-            ("medication", "medication_ingredient"),
-            "start_date",
-            730,
-        ),
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE raw_observability_index AS
+        SELECT
+            index_event_id,
+            patient_id,
+            index_date
+        FROM analysis_glp1_eligibility
+        WHERE patient_id IS NOT NULL
+        """
     )
-    for domain, source_domains, event_column, lookback_days in specifications:
-        if state is not None:
-            state.update(
-                phase="raw_observability",
-                current_domain=domain,
-                message=f"Aggregating unfiltered {domain} history.",
-            )
-        _create_raw_observability(
-            connection,
-            root=root,
-            inventory=inventory,
-            table_domain=domain,
-            source_domains=source_domains,
-            event_column=event_column,
-            lookback_days=lookback_days,
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE raw_observability_patient AS
+        SELECT DISTINCT patient_id
+        FROM raw_observability_index
+        """
+    )
+    try:
+        specifications = (
+            ("diagnosis", ("diagnosis",), "date", 730),
+            ("labs", ("labs",), "date", 365),
+            ("vitals", ("vitals",), "date", None),
+            ("procedure", ("procedure",), "date", None),
+            (
+                "medication",
+                ("medication", "medication_ingredient"),
+                "start_date",
+                730,
+            ),
         )
+        for domain, source_domains, event_column, lookback_days in specifications:
+            if state is not None:
+                state.update(
+                    phase="raw_observability",
+                    current_domain=domain,
+                    message=f"Aggregating unfiltered {domain} history.",
+                )
+            _create_raw_observability(
+                connection,
+                root=root,
+                inventory=inventory,
+                table_domain=domain,
+                source_domains=source_domains,
+                event_column=event_column,
+                lookback_days=lookback_days,
+            )
+    finally:
+        connection.execute("DROP TABLE IF EXISTS raw_observability_patient")
+        connection.execute("DROP TABLE IF EXISTS raw_observability_index")
 
 
 def _update_retained_date_coverage(
@@ -851,37 +879,162 @@ def _create_raw_observability(
     lookback_days: int | None,
 ) -> None:
     files = _domain_files_for_domains(root, inventory, source_domains)
-    raw = _read_csv_sql(files)
+    output_table = _identifier(f"raw_{table_domain}_observability")
+    _create_empty_raw_observability(connection, table_domain)
+    event_datetime_expression = _timestamp_sql("raw.event_value")
     count_expression = (
         "NULL::BIGINT AS event_count"
         if lookback_days is None
         else (
-            "count(*) FILTER (WHERE event_datetime BETWEEN "
+            f"count(*) FILTER (WHERE {event_datetime_expression} BETWEEN "
             f"analysis.index_date - INTERVAL {lookback_days} DAY "
             "AND analysis.index_date) AS event_count"
         )
     )
+    merged_count_expression = (
+        "NULL::BIGINT AS event_count"
+        if lookback_days is None
+        else "sum(event_count)::BIGINT AS event_count"
+    )
+    selected_patient_ids = pa.array(
+        tuple(
+            row[0]
+            for row in connection.execute(
+                "SELECT patient_id FROM raw_observability_patient"
+            ).fetchall()
+        ),
+        type=pa.string(),
+    )
     connection.execute(
         f"""
-        CREATE OR REPLACE TABLE {_identifier(f"raw_{table_domain}_observability")} AS
-        WITH raw_event AS (
-            SELECT
-                raw."patient_id" AS patient_id,
-                {_timestamp_sql(f'raw.{_identifier(event_column)}')}
-                    AS event_datetime
-            FROM {raw} AS raw
-        )
-        SELECT
-            analysis.index_event_id,
-            min(event_datetime) FILTER (
-                WHERE event_datetime <= analysis.index_date
-            ) AS first_observed_event_date,
-            {count_expression}
-        FROM analysis_glp1_eligibility AS analysis
-        JOIN raw_event USING (patient_id)
-        GROUP BY analysis.index_event_id
+        CREATE OR REPLACE TEMP TABLE raw_observability_accumulator AS
+        SELECT * FROM {output_table} WHERE FALSE
         """
     )
+    try:
+        temp_directory_setting = connection.execute(
+            "SELECT current_setting('temp_directory')"
+        ).fetchone()[0]
+        with _raw_observability_batch_reader(
+            files,
+            event_column=event_column,
+            selected_patient_ids=selected_patient_ids,
+            temp_directory=Path(str(temp_directory_setting)).resolve(),
+        ) as reader:
+            for batch in reader:
+                connection.register(
+                    "raw_observability_batch",
+                    pa.Table.from_batches([batch]),
+                )
+                try:
+                    connection.execute(
+                        f"""
+                        CREATE OR REPLACE TEMP TABLE raw_observability_partial AS
+                        SELECT
+                            analysis.index_event_id,
+                            min({event_datetime_expression}) FILTER (
+                                WHERE {event_datetime_expression}
+                                    <= analysis.index_date
+                            ) AS first_observed_event_date,
+                            {count_expression}
+                        FROM raw_observability_index AS analysis
+                        JOIN raw_observability_batch AS raw USING (patient_id)
+                        GROUP BY analysis.index_event_id
+                        """
+                    )
+                finally:
+                    connection.unregister("raw_observability_batch")
+                connection.execute(
+                    f"""
+                    CREATE OR REPLACE TEMP TABLE raw_observability_merged AS
+                    SELECT
+                        index_event_id,
+                        min(first_observed_event_date)
+                            AS first_observed_event_date,
+                        {merged_count_expression}
+                    FROM (
+                        SELECT * FROM raw_observability_accumulator
+                        UNION ALL
+                        SELECT * FROM raw_observability_partial
+                    )
+                    GROUP BY index_event_id
+                    """
+                )
+                connection.execute("DELETE FROM raw_observability_accumulator")
+                connection.execute(
+                    """
+                    INSERT INTO raw_observability_accumulator
+                    SELECT * FROM raw_observability_merged
+                    """
+                )
+        connection.execute(
+            f"INSERT INTO {output_table} SELECT * FROM raw_observability_accumulator"
+        )
+    finally:
+        connection.execute("DROP TABLE IF EXISTS raw_observability_merged")
+        connection.execute("DROP TABLE IF EXISTS raw_observability_partial")
+        connection.execute("DROP TABLE IF EXISTS raw_observability_accumulator")
+
+
+@contextmanager
+def _raw_observability_batch_reader(
+    files: tuple[Path, ...],
+    *,
+    event_column: str,
+    selected_patient_ids: pa.Array,
+    temp_directory: Path,
+    row_target: int = _RAW_OBSERVABILITY_BATCH_ROW_TARGET,
+) -> Iterator[pa.RecordBatchReader]:
+    """Stream selected raw patient/date rows through a bounded connection."""
+
+    if row_target < 1:
+        raise ValueError("row_target must be at least 1")
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=_RAW_OBSERVABILITY_SCRATCH_PREFIX,
+            dir=temp_directory,
+        )
+    )
+    scan_connection = duckdb.connect()
+    reader: pa.RecordBatchReader | None = None
+    try:
+        scan_connection.execute("SET preserve_insertion_order = false")
+        scan_connection.execute(
+            f"SET memory_limit = '{_RAW_OBSERVABILITY_SCAN_MEMORY_MIB}MiB'"
+        )
+        scan_connection.execute("SET threads = 1")
+        scan_connection.execute("SET temp_directory = ?", [str(scratch)])
+        scan_connection.register(
+            "raw_observability_patient",
+            pa.table({"patient_id": selected_patient_ids}),
+        )
+        raw = _read_csv_sql(files)
+        reader = scan_connection.execute(
+            f"""
+            SELECT
+                raw."patient_id" AS patient_id,
+                raw.{_identifier(event_column)} AS event_value
+            FROM {raw} AS raw
+            WHERE raw."patient_id" IS NOT NULL
+              AND raw."patient_id" IN (
+                  SELECT patient_id FROM raw_observability_patient
+              )
+            """
+        ).to_arrow_reader(row_target)
+        yield reader
+    finally:
+        if reader is not None:
+            reader.close()
+        try:
+            scan_connection.unregister("raw_observability_patient")
+        except duckdb.InvalidInputException:
+            pass
+        scan_connection.close()
+        remove_tree_strict(
+            scratch,
+            context="GLP-1 raw observability scan scratch",
+        )
 
 
 def _create_empty_raw_observability(

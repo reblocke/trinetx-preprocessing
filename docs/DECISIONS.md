@@ -1261,3 +1261,27 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
   `tests/test_cli.py`.
+
+### 2026-07-18 — Stream unfiltered observability in bounded record batches
+- Date: 2026-07-18
+- Decision: Scan each raw observability domain through a separate 512 MiB,
+  one-thread DuckDB connection and consume selected analysis-patient rows as
+  Arrow record batches capped at one million rows. Reduce each batch against
+  the index-event table, then merge only the bounded aggregate state.
+- Context: Full build `43ef3d7f4a1441cc4ee5a737` completed all retained source
+  rows, terminology QA, and core cohort construction, then exhausted DuckDB's
+  4,096 MiB internal buffer while directly joining and grouping the 1.27
+  billion-row diagnosis export. Two partitioned Parquet variants also exhausted
+  that buffer during their 22 GB selected-row materialization.
+- Rationale: Observability must include unmapped raw events, preserve duplicate
+  row counts, and support multiple index dates per patient. Streaming the
+  existing DuckDB CSV parser retains its `null_padding` input behavior while
+  eliminating both the unbounded aggregate and row-level materialization.
+- Consequences: The production diagnosis benchmark completed in `427.76 s`,
+  produced `59,596` index summaries and `12,334,864` qualifying lookback events,
+  used `465,829,888` bytes maximum RSS, and left no row-level scratch. The scan
+  connection's temporary directory is still cleaned strictly and is recognized
+  by `clean-scratch` after interrupted runs.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`.

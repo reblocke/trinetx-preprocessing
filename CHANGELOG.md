@@ -67,6 +67,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Reduced exact duplicate-source counts through the same bounded per-domain
   hash partitions, and taught gas normalization to recognize canonical UCUM
   `mm[Hg]` and `[pH]` spellings present in production TriNetX exports.
+- Streamed unfiltered observability through a bounded DuckDB Arrow reader and
+  million-row partial reductions, avoiding a full-domain join/group and large
+  row-level scratch while preserving duplicate event counts and index-specific
+  lookback windows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
 - Applied configured lookback windows to baseline diagnosis, procedure, and
