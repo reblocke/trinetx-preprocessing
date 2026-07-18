@@ -195,6 +195,7 @@
 - Exact duplicate-source QA now reduces through the domain hash partitions, and canonical UCUM `mm[Hg]`/`[pH]` gas units normalize identically to existing aliases. Focused tests, Ruff, diff checks, and all `316` tests pass.
 - The full-scale terminology-plus-duplicate benchmark passed all five domains in `863.98 s` with `4,354,719,744` bytes maximum RSS, 92 concept summaries, zero required warnings, exact per-domain duplicate totals, zero scratch, and no source-database writes. Evidence is under `diagnostics/terminology_duplicates_4096m_1t_8a0f017_dirty_20260717`.
 - A downstream rebuild on a copy of the preserved full-scale database passed in `5,578.62 s` with `5,262,934,016` bytes maximum RSS. It produced `20,387,522` usable gas rows, including `11,418,429` UCUM `mm[Hg]` and `5,500,562` UCUM `[pH]` rows; `75,208` primary included encounters; `59,954` analysis rows; `18,727,371` evidence rows; all 15 cohort-flow stages; and all eight public filenames. Output materialization completed in `42.517 s` with exact duplicate QA, zero WAL, and zero recognized scratch. Evidence is under `diagnostics/post_ingestion_ucum_output_4096m_1t_8a0f017_dirty_20260717`.
+- Commit `6755aa1` is pushed, Linux CI passes all `316` tests, and targeted GitHub Codex review found no major issues after reviewing that exact commit: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5011074208`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -203,7 +204,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Push the reviewed local checkpoint, pass CI, and obtain targeted GitHub Codex review.
+- Create a clean docs-only provenance checkpoint, then launch the fresh full build at 4,096 MiB/one thread.
 
 ## Next
 - Launch a fresh full build from the review-clean checkpoint at 4,096 MiB/one thread.
@@ -223,7 +224,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `64aed02`. PR #7 is green with all threads resolved.
+- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `6755aa1`. PR #7 is green with all threads resolved.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
