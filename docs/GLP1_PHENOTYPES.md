@@ -33,9 +33,10 @@ records their version and source rows in DuckDB.
   anesthesia/sedation, postoperative, implausible-value, and probable-venous
   context flags. `analysis_primary_cleaned_obesity_hypercapnia` applies only the
   flags named in `exclusions.cleaned_view_excludes`; the unfiltered primary view
-  remains available. The narrow trauma and procedure seeds require investigator
-  review and should not be interpreted as proof that an unflagged event lacked
-  those contexts.
+  remains available. Procedure timing is exact for timestamped ABGs; date-only
+  ABGs include same-calendar-day anesthesia/sedation. The narrow trauma and
+  procedure seeds require investigator review and should not be interpreted as
+  proof that an unflagged event lacked those contexts.
 
 ## Component and indication semantics
 

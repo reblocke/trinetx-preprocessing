@@ -97,6 +97,11 @@ def build_component_source_summaries(
 
 
 def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
+    procedure_at_or_before_abg = (
+        "procedure.event_datetime <= cohort.abg_datetime OR "
+        "(cohort.abg_timestamp_precision = 'date_only' AND "
+        "procedure.event_datetime::DATE = cohort.abg_datetime::DATE)"
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE index_diagnosis_context AS
@@ -140,11 +145,11 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
                 concept.concept_set_id IN (
                     'procedural_sedation', 'anesthesia_procedure'
                 )
-                AND procedure.event_datetime <= cohort.abg_datetime
+                AND ({procedure_at_or_before_abg})
             ) AS procedure_sedation_context,
             bool_or(
                 concept.concept_set_id = 'anesthesia_procedure'
-                AND procedure.event_datetime <= cohort.abg_datetime
+                AND ({procedure_at_or_before_abg})
             ) AS postoperative_context
         FROM cohort_hypercapnia_encounter AS cohort
         JOIN source_procedure AS procedure

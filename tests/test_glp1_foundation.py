@@ -2303,6 +2303,13 @@ def test_core_cohort_scopes_reused_encounter_ids_to_patient(tmp_path: Path) -> N
             ("shared_one", 55.0, 55.0),
             ("shared_two", 65.0, 65.0),
         ]
+        assert connection.execute(
+            """
+            SELECT row_count, unique_patient_count
+            FROM cohort_flow
+            WHERE stage = 'adult_candidate_emergency_inpatient_encounters'
+            """
+        ).fetchone() == (2, 2)
     finally:
         connection.close()
 
@@ -3767,6 +3774,59 @@ def test_date_only_context_rows_match_same_encounter_date(tmp_path: Path) -> Non
             FROM analysis_glp1_eligibility
             """
         ).fetchone() == (True, True, True, True, True)
+        assert connection.execute(
+            "SELECT count(*) FROM analysis_primary_cleaned_obesity_hypercapnia"
+        ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_date_only_abg_includes_same_day_timestamped_procedure_context(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "date_only_abg,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_date_only_abg,date_only_abg,2024-01-01 12:00:00,"
+        "2024-01-02 12:00:00,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "date_only_abg,e_date_only_abg,2024-01-01,LOINC,2019-8,55,,mmHg",
+        "date_only_abg,e_date_only_abg,2024-01-01,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "date_only_abg,e_date_only_abg,2023-12-15,LOINC,39156-5,31,,kg/m2",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "date_only_abg,e_date_only_abg,2024-01-01 13:00:00,CPT,99152,",
+        "date_only_abg,e_date_only_abg,2024-01-01 13:30:00,CPT,00100,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT abg_timestamp_precision, procedure_sedation_context,
+                   postoperative_context
+            FROM cohort_hypercapnia_encounter
+            """
+        ).fetchone() == ("date_only", True, True)
         assert connection.execute(
             "SELECT count(*) FROM analysis_primary_cleaned_obesity_hypercapnia"
         ).fetchone() == (0,)

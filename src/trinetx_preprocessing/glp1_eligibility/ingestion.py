@@ -313,7 +313,7 @@ def _create_source_cohort_flow_base(
         UNION ALL
         SELECT
             2,
-            count(DISTINCT encounter_id)::BIGINT,
+            count(DISTINCT (patient_id, encounter_id))::BIGINT,
             count(DISTINCT patient_id)::BIGINT
         FROM adult_candidate
         """

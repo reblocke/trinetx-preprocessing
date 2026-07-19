@@ -239,6 +239,8 @@
 - The corrected clinical ruleset is versioned `2026-07-19` in both runtime config and phenotype rules. The completed `71ef56f` monitor reported `completed/complete` with no alerts and was stopped cleanly; no GLP-1 build or monitor process remains active.
 - Exact-head review of `b04a028` found two additional P2 defects: encounter-level gas reductions did not include `patient_id` in every key, and future non-GLP-1 medication rows could enter baseline evidence. Both focused regressions pass after scoping encounter reductions by `(patient_id, encounter_id)` and reserving post-index retention for GLP-1 follow-up.
 - The adjacent fixes pass `git diff --check`, Ruff, all `334` tests in `342.49 s`, and a production synthetic build in `0.81 s` with `293,437,440` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight files. Twenty-two recognized pytest artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
+- Exact-head review of `86444c2` found two more adjacent P2 cases: cohort-flow stage 2 still counted bare encounter IDs, and date-only ABGs did not treat later same-day timestamped anesthesia/sedation rows as at-or-before the index gas. Composite flow counting and precision-aware procedure context now pass focused regressions; the full gate is pending.
+- These corrections pass `git diff --check`, Ruff, all `335` tests in `350.99 s`, and a production synthetic build in `0.80 s` with `293,797,888` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight files. Twenty-two recognized pytest artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -247,7 +249,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the two adjacent review fixes, resolve both threads, and request another exact-head Codex review.
+- Commit and push composite cohort-flow counting plus date-only ABG procedure context, resolve both threads, and re-review.
 
 ## Next
 - Pass local/CI/review gates, then regenerate exact-head full-data clinical evidence and final bookkeeping.

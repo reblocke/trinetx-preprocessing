@@ -1380,18 +1380,22 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 ### 2026-07-19 — Scope encounter and medication evidence temporally
 - Date: 2026-07-19
 - Decision: Treat `(patient_id, encounter_id)` as the source encounter key for
-  every gas reduction and retain post-index medication rows only for GLP-1
-  follow-up endpoints.
+  candidate-flow counting and every gas reduction, retain post-index medication
+  rows only for GLP-1 follow-up endpoints, and compare procedure context to a
+  date-only ABG by calendar day.
 - Context: Exact-head review found that reused encounter identifiers could
   collapse gas rows across patients. It also found that the medication
   lookback predicate supplied only a lower bound, allowing future non-GLP-1
   orders to enter baseline component evidence.
 - Rationale: Source encounter identifiers are not guaranteed globally unique,
   and baseline medication evidence must not contain post-index exposure.
-- Consequences: Cohort rows and encounter maxima remain patient-scoped even
-  when identifiers collide. Future antihypertensive, opioid, and other
-  non-GLP-1 orders are absent from baseline evidence; GLP-1 follow-up flags
-  retain their precision-aware windows.
+- Consequences: Cohort-flow denominators, cohort rows, and encounter maxima
+  remain patient-scoped even when identifiers collide. Future antihypertensive,
+  opioid, and other non-GLP-1 orders are absent from baseline evidence; GLP-1
+  follow-up flags retain their precision-aware windows. Same-day timestamped
+  anesthesia/sedation is retained when the selected ABG has date-only
+  precision, while timestamped ABGs retain exact ordering.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #7.

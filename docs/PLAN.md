@@ -21,7 +21,7 @@ changing the released 36-file preprocessing pipeline.
 
 ## Current status
 
-Implementation and synthetic verification are complete with 334 passing tests.
+Implementation and synthetic verification are complete with 335 passing tests.
 The latest completed corrected full-data build from reviewed commit `71ef56f`
 completed all phases in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the
 6,238 MiB gate. Exactly eight outputs were published with zero warnings,
@@ -32,11 +32,11 @@ from the provisional build. Complete semantic fingerprints also match the
 preserved corrected diagnostic output across all 14,631,872 evidence rows.
 
 Final review found fixed-label threshold, remote cirrhosis, reused encounter
-identifier, and future non-GLP-1 baseline-evidence defects. Their focused
-corrections pass the complete synthetic suite. The remaining engineering gates
-are CI/Codex review and a fresh full-data build from the corrected head.
-Investigator terminology expansion and private record-level clinical
-validation remain separate requirements before clinical use.
+identifier, future non-GLP-1 baseline-evidence, and date-only procedure-context
+defects. Their focused corrections pass the complete local suite. The remaining
+engineering gates are CI/Codex review and a fresh full-data build from the
+corrected head. Investigator terminology expansion and private record-level
+clinical validation remain separate requirements before clinical use.
 
 ## Definition of done
 

@@ -41,11 +41,12 @@ remain mandatory.
 - `index_event_id` is the deterministic analytic key. The wide table has
   exactly one row per key and the patient-index table has one row per patient.
 - Source encounter identifiers are scoped by patient. Encounter de-duplication,
-  first-gas selection, encounter maxima, and downstream joins use the composite
-  `(patient_id, encounter_id)` key.
+  cohort-flow counting, first-gas selection, encounter maxima, and downstream
+  joins use the composite `(patient_id, encounter_id)` key.
 - Baseline phenotype inputs are constrained to each row's `index_date`.
 - Index-context fields use only the selected encounter window and are separated
-  from pre-index history.
+  from pre-index history. Procedures at or before a timestamped ABG use exact
+  time ordering; a date-only ABG includes procedures on the same calendar day.
 - Timestamped context rows use exact encounter bounds. Date-only diagnosis and
   procedure rows on the selected encounter use encounter calendar-date overlap;
   date-only encounter ends include their complete calendar day.
