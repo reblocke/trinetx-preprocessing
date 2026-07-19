@@ -1371,8 +1371,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Non-45 primary thresholds fail configuration validation.
   Remote cirrhosis can remove a previously assigned noncirrhotic MASH
   indication. The clinical ruleset advances to `2026-07-19`. The `71ef56f`
-  full run remains valid resource and publication evidence but must be
-  regenerated for final clinical semantics.
+  full run remains valid resource and publication evidence. Exact-head build
+  `c62cc473ccfff9d2b697af6b` at `e7bf01a` supersedes it as clinical evidence;
+  aggregate comparison attributes 191 changed analysis rows to the all-history
+  cirrhosis correction without changing index-event keys or cohort counts.
 - References: `src/trinetx_preprocessing/glp1_eligibility/config.py`,
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #7.

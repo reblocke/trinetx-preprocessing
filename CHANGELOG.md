@@ -24,15 +24,17 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Completed a reviewed full-data GLP-1 build from commit `71ef56f` in
-  20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the 6,238 MiB
-  gate. The build atomically published exactly the eight contracted analytic
-  files with zero warnings, errors, WAL files, recognized scratch artifacts, or
-  residual AppleDouble sidecars.
-- Verified order-independent semantic fingerprints for all 59,954 analysis
-  rows, 1,320,409 candidate encounters, and 14,631,872 evidence rows against
-  the preserved corrected diagnostic build, with no non-provenance difference.
-- Full-data aggregate comparison preserves all 59,954 index-event keys,
+- Completed the reviewed exact-head full-data GLP-1 build from commit
+  `e7bf01a` in 20,891.76 seconds with 4,950,032,384 bytes maximum RSS, below
+  the 6,238 MiB gate. The build atomically published exactly the eight
+  contracted analytic files with zero warnings, errors, WAL files, recognized
+  scratch artifacts, hidden workspaces, or residual AppleDouble sidecars.
+- Preserved all 59,954 index-event keys, 1,320,409 candidate encounters, 9,527
+  strict primary rows, payer-route counts, and cohort-flow counts relative to
+  the reviewed `71ef56f` baseline. The corrected all-history cirrhosis rule
+  changed 191 analysis rows; corrected evidence retention added 9,193 diagnosis
+  rows and removed 2,612,789 post-index non-GLP-1 medication rows.
+- The earlier provisional-to-reviewed aggregate comparison preserves all 59,954 index-event keys,
   1,320,409 hypercapnia candidate encounters, and 9,527 strict primary rows.
   Corrected phenotype windows, date precision, code-only obesity, blood-pressure
   units, and source-traceable gas evidence intentionally change downstream

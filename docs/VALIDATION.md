@@ -142,43 +142,38 @@ Before release:
 
 ## GLP-1 additive full-data evidence
 
-The latest completed corrected additive GLP-1 build from reviewed commit `71ef56f`
-completed in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS. It used
-the supported 4,096 MiB/one-thread DuckDB configuration and atomically
-published exactly the eight public files. The terminal validation gate found
-zero warnings, errors, WAL files, recognized scratch artifacts, AppleDouble
-sidecars, blank data-dictionary descriptions, or missing required concept
-matches. External free space remained about 7.52 TiB.
+The reviewed exact-head additive GLP-1 build from commit `e7bf01a` completed in
+20,891.76 seconds with 4,950,032,384 bytes maximum RSS. It used the supported
+4,096 MiB/one-thread DuckDB configuration and atomically published exactly the
+eight public files. The terminal validation gate found zero warnings, errors,
+WAL files, recognized scratch artifacts, AppleDouble sidecars, hidden
+workspaces, blank data-dictionary descriptions, or missing required concept
+matches. External free space remained about 7.46 TiB.
 
 The final run contains 59,954 analysis rows, 1,320,409 candidate encounters,
-9,527 strict primary rows, 14,631,872 evidence rows, and all 15 cohort-flow
-stages. Order-independent semantic fingerprints for the complete analysis,
-candidate-encounter, and evidence tables match the preserved `00e24a9`
-corrected diagnostic build after excluding only run provenance. The analysis
-schema, all index-event keys, and every non-provenance analysis value also
-match exactly.
+9,527 strict primary rows, 12,028,276 evidence rows, and all 15 cohort-flow
+stages. Parquet, DuckDB, command-summary, and flow counts agree. Every paired
+PaCO2 and arterial-pH evidence row retains its raw value, raw unit, normalized
+value, and source-record hash.
 
-This run remains the current performance and publication-contract baseline.
-It predates the subsequent review corrections that make cirrhosis an
-all-history exclusion for noncirrhotic MASH, scope encounter reductions by
-patient, and exclude future non-GLP-1 rows from baseline medication evidence,
-so it is not final clinical-output evidence for the corrected head. The
-fixed-threshold validation does not alter the default configuration's output;
-the behavior corrections require a fresh full-data build after code review.
-
-The PHI-safe comparison of this corrected behavior against the preserved
-provisional build records:
+The PHI-safe comparison against the preserved reviewed `71ef56f` build records:
 
 - 59,954 shared index-event keys, with zero baseline-only or corrected-only
   keys;
-- unchanged 1,320,409 candidate encounters and 9,527 strict primary rows;
-- 14,631,872 corrected evidence rows, a reduction of 4,095,499 driven mainly by
-  phenotype-specific measurement windows, partially offset by source-traceable
-  paired-pH and corrected diagnosis, procedure, medication, and derived
-  evidence;
-- 12,378 code-only obesity rows represented by the added `dx_obesity` field;
-- 29,841 rows with at least one non-provenance semantic change after excluding
-  the global compact-date gas-pairing label correction.
+- unchanged 1,320,409 candidate encounters, 9,527 strict primary rows,
+  payer-route counts, and cohort-flow counts;
+- 191 analysis rows changed by the all-history cirrhosis correction, affecting
+  `dx_cirrhosis`, `cirrhosis_status`, and a suppressed small number of
+  `mash_f2_f3_status` rows;
+- 12,028,276 evidence rows, a net reduction of 2,603,596 comprising 9,193
+  additional diagnosis rows and 2,612,789 removed post-index non-GLP-1
+  medication rows;
+- no full-data key/count effect from patient-scoped encounter reductions or
+  precision-aware date-only procedure context.
+
+The earlier `71ef56f` run remains a valid independent resource and
+publication-contract baseline. The `e7bf01a` run supersedes it as clinical
+output evidence for the corrected ruleset dated `2026-07-19`.
 
 The aggregate JSON and Markdown reports remain external and untracked. No
 identifiers or row examples are emitted. Full-data computational validation does

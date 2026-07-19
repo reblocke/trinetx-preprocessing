@@ -125,31 +125,28 @@ before clinical use.
 
 ## Full-data validation
 
-The latest completed corrected build from reviewed commit `71ef56f` completed against the
-restored full export with the supported 4,096 MiB/one-thread DuckDB settings.
-It completed in 20,284.53 seconds, used 5,012,209,664 bytes maximum RSS, and
-atomically published exactly eight contracted files with zero warnings, errors,
-WAL files, recognized scratch artifacts, AppleDouble sidecars, or hidden build
-workspace.
+The latest completed corrected build from reviewed commit `e7bf01a` completed
+against the restored full export with the supported 4,096 MiB/one-thread DuckDB
+settings. It completed in 20,891.76 seconds, used 4,950,032,384 bytes maximum
+RSS, and atomically published exactly eight contracted files with zero warnings,
+errors, WAL files, recognized scratch artifacts, AppleDouble sidecars, or
+hidden build workspace.
 
 Aggregate-only validation reported 1,320,409 candidate hypercapnia encounters,
 59,954 patient index events, 9,527 strict primary obesity-hypercapnia rows, and
-14,631,872 evidence rows. All 59,954 index-event keys match the earlier
-provisional build; candidate and strict-primary counts are unchanged. The
-corrected build adds `dx_obesity`, represents 12,378 rows as code-only obesity,
-and records all compact-date gas pairings as date-only rather than exact-time
-pairings. PaCO2 and paired-pH evidence each contain 59,954 source-traceable rows
-with raw and normalized values and units.
+12,028,276 evidence rows. PaCO2 and paired-pH evidence each contain 59,954
+source-traceable rows with raw and normalized values and units. Parquet,
+DuckDB, command-summary, and cohort-flow counts agree across all 15 stages.
 
-Order-independent semantic fingerprints for the complete analysis,
-candidate-encounter, and evidence tables match the preserved corrected
-diagnostic build after excluding only run provenance. No schema, index-event
-key, row-count, or non-provenance analysis-value difference remains.
-
-This build remains valid performance and publication-contract evidence, but it
-predates the all-history cirrhosis, patient-scoped encounter reduction, and
-post-index non-GLP-1 medication-evidence corrections. Final clinical-output
-evidence for the corrected head requires another reviewed full-data build.
+Compared with the preserved reviewed `71ef56f` build, all index-event keys and
+candidate, strict-primary, payer-route, and cohort-flow counts are unchanged.
+The all-history cirrhosis correction changes 191 analysis rows. The corrected
+evidence boundary adds 9,193 diagnosis rows and removes 2,612,789 post-index
+non-GLP-1 medication rows. Patient-scoped encounter reductions and
+precision-aware date-only procedure context produce no additional full-data
+key/count changes. The prior run remains valid performance and
+publication-contract evidence; this build supersedes it as corrected clinical
+output evidence.
 
 These results establish computational completion and aggregate consistency.
 They do not replace the investigator terminology review and private record-level

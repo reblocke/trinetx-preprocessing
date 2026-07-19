@@ -22,21 +22,24 @@ changing the released 36-file preprocessing pipeline.
 ## Current status
 
 Implementation and synthetic verification are complete with 335 passing tests.
-The latest completed corrected full-data build from reviewed commit `71ef56f`
-completed all phases in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the
+The reviewed exact-head full-data build from commit `e7bf01a` completed all
+phases in 20,891.76 seconds with 4,950,032,384 bytes maximum RSS, below the
 6,238 MiB gate. Exactly eight outputs were published with zero warnings,
-errors, WAL files, recognized scratch artifacts, or AppleDouble sidecars.
-Aggregate validation passes every automated check and preserves all 59,954
-index-event keys, 1,320,409 candidate encounters, and 9,527 strict primary rows
-from the provisional build. Complete semantic fingerprints also match the
-preserved corrected diagnostic output across all 14,631,872 evidence rows.
+errors, WAL files, recognized scratch artifacts, hidden workspaces, or
+AppleDouble sidecars. Aggregate validation passes every automated check and
+contains 59,954 index-event rows, 1,320,409 candidate encounters, 9,527 strict
+primary rows, and 12,028,276 evidence rows.
 
-Final review found fixed-label threshold, remote cirrhosis, reused encounter
-identifier, future non-GLP-1 baseline-evidence, and date-only procedure-context
-defects. Their focused corrections pass the complete local suite. The remaining
-engineering gates are CI/Codex review and a fresh full-data build from the
-corrected head. Investigator terminology expansion and private record-level
-clinical validation remain separate requirements before clinical use.
+Relative to the preserved reviewed `71ef56f` baseline, the exact-head build
+retains every index-event key and all candidate, primary, payer-route, and
+cohort-flow counts. The all-history cirrhosis correction changes 191 analysis
+rows. Corrected evidence retention adds 9,193 diagnosis rows and removes
+2,612,789 post-index non-GLP-1 medication rows. Composite encounter and
+date-only procedure-context corrections do not change the full-data key or
+count contracts. The remaining engineering gate is a final Codex review of the
+evidence-doc commit. Investigator terminology expansion and private
+record-level clinical validation remain separate requirements before clinical
+use.
 
 ## Definition of done
 
