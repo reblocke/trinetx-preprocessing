@@ -142,7 +142,7 @@ Before release:
 
 ## GLP-1 additive full-data evidence
 
-The reviewed exact-head additive GLP-1 build from commit `e7bf01a` completed in
+The reviewed parent-implementation additive GLP-1 build from commit `e7bf01a` completed in
 20,891.76 seconds with 4,950,032,384 bytes maximum RSS. It used the supported
 4,096 MiB/one-thread DuckDB configuration and atomically published exactly the
 eight public files. The terminal validation gate found zero warnings, errors,
@@ -172,8 +172,17 @@ The PHI-safe comparison against the preserved reviewed `71ef56f` build records:
   precision-aware date-only procedure context.
 
 The earlier `71ef56f` run remains a valid independent resource and
-publication-contract baseline. The `e7bf01a` run supersedes it as clinical
-output evidence for the corrected ruleset dated `2026-07-19`.
+publication-contract baseline. The `e7bf01a` run verifies the subsequent
+cirrhosis, encounter, medication, and procedure-context corrections but is
+parent-implementation evidence rather than evidence for the current docs head.
+Ruleset `2026-07-19.1` additionally preserves source precision for the CKD
+90-day persistence boundary; a fresh reviewed full-data run is required before
+final clinical-output acceptance.
+
+A read-only aggregate probe of the parent database found 29,635 index events
+with low eGFR and 13,553 persistent cases under both the date-reduced and
+precision-aware calculations, with zero classifications changing. Exact-head
+execution remains required because the implementation and run identity changed.
 
 The aggregate JSON and Markdown reports remain external and untracked. No
 identifiers or row examples are emitted. Full-data computational validation does

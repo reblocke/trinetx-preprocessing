@@ -78,6 +78,32 @@ def inclusive_followup_start_sql(
     )"""
 
 
+def minimum_separation_sql(
+    start_datetime: str,
+    start_precision: str,
+    end_datetime: str,
+    end_precision: str,
+    minimum_days: int,
+) -> str:
+    """Return a minimum interval test that preserves source date precision."""
+
+    if minimum_days < 0:
+        raise ValueError("minimum_days must be nonnegative")
+    return f"""(
+        {start_datetime} IS NOT NULL
+        AND {end_datetime} IS NOT NULL
+        AND CASE
+            WHEN ({start_precision}) = 'date_only'
+              OR ({end_precision}) = 'date_only'
+            THEN datediff(
+                'day', {start_datetime}::DATE, {end_datetime}::DATE
+            ) >= {minimum_days}
+            ELSE {end_datetime} >=
+                {start_datetime} + INTERVAL {minimum_days} DAY
+        END
+    )"""
+
+
 def inclusive_datetime_end_sql(
     end_datetime: str,
     precision: str,

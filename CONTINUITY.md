@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
-- Current turn: publish exact-head full-data evidence for `e7bf01a`, obtain one final GitHub Codex review of the evidence commit, and close the additive GLP-1 implementation handoff.
+- Current turn: fix the final CKD precision review finding, obtain clean CI/Codex review, then regenerate exact-head full-data evidence and close the additive GLP-1 implementation handoff.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -241,10 +241,14 @@
 - The adjacent fixes pass `git diff --check`, Ruff, all `334` tests in `342.49 s`, and a production synthetic build in `0.81 s` with `293,437,440` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight files. Twenty-two recognized pytest artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
 - Exact-head review of `86444c2` found two more adjacent P2 cases: cohort-flow stage 2 still counted bare encounter IDs, and date-only ABGs did not treat later same-day timestamped anesthesia/sedation rows as at-or-before the index gas. Composite flow counting and precision-aware procedure context now pass focused regressions; the full gate is pending.
 - These corrections pass `git diff --check`, Ruff, all `335` tests in `350.99 s`, and a production synthetic build in `0.80 s` with `293,797,888` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight files. Twenty-two recognized pytest artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
-- Commit `e7bf01a` is pushed, Linux CI passed, all PR threads are resolved, and exact-head Codex review found no major issues: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5016519202`.
+- Commit `e7bf01a` is pushed, Linux CI passed, all prior PR threads are resolved, and implementation-head Codex review found no major issues: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5016519202`.
 - Full build `c62cc473ccfff9d2b697af6b` from clean reviewed commit `e7bf01a` completed in `20,891.76 s` (`5h48m12s`) with `4,950,032,384` bytes (`4,720.719 MiB`) maximum RSS. It published exactly eight files totaling `70,299,624,782` bytes and retained about `7.46 TiB` external free space.
 - Terminal aggregate validation passes every hard gate: exact code/ruleset identity, zero warnings/errors, all required concepts matched, 15 flow stages, complete data dictionary and gas traceability, consistent Parquet/database/summary counts, and zero WAL, hidden workspace, recognized scratch, AppleDouble sidecar, screen, build, or monitor residue.
 - Relative to reviewed baseline `71ef56f`, all `59,954` index-event keys, `1,320,409` candidate encounters, `9,527` strict primary rows, payer routes, and cohort-flow counts are unchanged. All-history cirrhosis changes `191` analysis rows; evidence changes by `+9,193` diagnosis rows and `-2,612,789` post-index non-GLP-1 medication rows, for `12,028,276` final evidence rows.
+- Exact-head review of evidence commit `1aaee0a` found one behavior defect and one bookkeeping defect: CKD persistence discarded timestamp precision before its 90-day test, and the parent `e7bf01a` build was labeled as evidence for the docs-only head. The completed run remains valid parent-implementation evidence but becomes stale for final clinical semantics once CKD precision is fixed.
+- Ruleset `2026-07-19.1` now requires 90 elapsed days for timestamped low-eGFR pairs and uses the inclusive 90-calendar-day boundary when either endpoint is date-only. Focused helper and end-to-end phenotype regressions pass while preserving the public CKD fields.
+- The narrow CKD fix passes `git diff --check`, Ruff, all `97` GLP-1 foundation tests, and all `336` repository tests in `38.21 s`. The production synthetic build completed in `0.69 s` with `300,007,424` bytes maximum RSS, unchanged `19/17/14/685` counts, exactly eight files, zero warnings/errors, and no WAL or scratch.
+- A PHI-safe read-only probe of the parent database found `29,635` index events with low eGFR and `13,553` persistent cases under both old and precision-aware calculations, with zero changed classifications. Exact-head full execution remains required for provenance.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -253,10 +257,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the exact-head full-data evidence documentation.
+- Commit and push the precision-aware CKD fix and corrected parent-evidence labeling, resolve both exact-head review threads, and request re-review.
 
 ## Next
-- Request and pass one final GitHub Codex review of the evidence-doc head, then prepare the implementation handoff without modifying the frozen Milestone 2 pipeline.
+- Push and obtain clean CI/Codex review, then regenerate exact-head full-data evidence and repeat terminal validation before the implementation handoff.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -280,8 +284,8 @@
 - Aggregate provisional comparison: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/manifests/aggregate_delta_vs_e832e4a.json` and `.md`.
 - Final reviewed output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/glp1_eligibility`; run ID `445770a7abe7c2b0af335091`.
 - Final validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/full_build_validation_71ef56f.json`; semantic comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/aggregate_delta_vs_00e24a9.json` and `.md`.
-- Exact-head clinical output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/glp1_eligibility`; run ID `c62cc473ccfff9d2b697af6b`.
-- Exact-head validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/terminal_validation.json`; aggregate comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/aggregate_delta_vs_71ef56f.json` and `.md`.
+- Parent-implementation clinical output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/glp1_eligibility`; run ID `c62cc473ccfff9d2b697af6b`.
+- Parent-implementation validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/terminal_validation.json`; aggregate comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/aggregate_delta_vs_71ef56f.json` and `.md`.
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.

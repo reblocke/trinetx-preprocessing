@@ -24,7 +24,7 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Completed the reviewed exact-head full-data GLP-1 build from commit
+- Completed the reviewed parent-implementation full-data GLP-1 build from commit
   `e7bf01a` in 20,891.76 seconds with 4,950,032,384 bytes maximum RSS, below
   the 6,238 MiB gate. The build atomically published exactly the eight
   contracted analytic files with zero warnings, errors, WAL files, recognized
@@ -60,6 +60,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Treated same-calendar-day timestamped anesthesia/sedation procedures as
   at-or-before a date-only selected ABG while retaining exact ordering for
   timestamped ABGs.
+- Preserved low-eGFR source precision when testing CKD persistence: timestamped
+  measurements require at least 90 elapsed days, while a date-only endpoint
+  uses the inclusive 90-calendar-day boundary.
 - Ranked the first arterial PaCO2 before unit and plausibility filtering so a
   later valid result cannot replace an earlier unusable result; encounter
   maxima now cover valid arterial measurements through encounter discharge.

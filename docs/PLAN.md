@@ -21,8 +21,8 @@ changing the released 36-file preprocessing pipeline.
 
 ## Current status
 
-Implementation and synthetic verification are complete with 335 passing tests.
-The reviewed exact-head full-data build from commit `e7bf01a` completed all
+Implementation and synthetic verification are complete with 336 passing tests.
+The reviewed parent-implementation full-data build from commit `e7bf01a` completed all
 phases in 20,891.76 seconds with 4,950,032,384 bytes maximum RSS, below the
 6,238 MiB gate. Exactly eight outputs were published with zero warnings,
 errors, WAL files, recognized scratch artifacts, hidden workspaces, or
@@ -30,16 +30,27 @@ AppleDouble sidecars. Aggregate validation passes every automated check and
 contains 59,954 index-event rows, 1,320,409 candidate encounters, 9,527 strict
 primary rows, and 12,028,276 evidence rows.
 
-Relative to the preserved reviewed `71ef56f` baseline, the exact-head build
+Relative to the preserved reviewed `71ef56f` baseline, the parent build
 retains every index-event key and all candidate, primary, payer-route, and
 cohort-flow counts. The all-history cirrhosis correction changes 191 analysis
 rows. Corrected evidence retention adds 9,193 diagnosis rows and removes
 2,612,789 post-index non-GLP-1 medication rows. Composite encounter and
 date-only procedure-context corrections do not change the full-data key or
-count contracts. The remaining engineering gate is a final Codex review of the
-evidence-doc commit. Investigator terminology expansion and private
+count contracts.
+
+Final evidence review found that CKD persistence discarded timestamp precision
+before applying its 90-day test. Ruleset `2026-07-19.1` now requires 90 elapsed
+days for timestamped measurements and uses inclusive calendar-day boundaries
+only when an endpoint is date-only. The remaining engineering gates are the
+complete local/CI/Codex review sequence and a fresh full-data build from the
+reviewed source head. Investigator terminology expansion and private
 record-level clinical validation remain separate requirements before clinical
 use.
+
+A read-only aggregate probe of the parent database found 29,635 index events
+with low eGFR and 13,553 persistent cases under both calculations, with zero
+classification changes. This supports low expected output impact but does not
+replace exact-head execution provenance.
 
 ## Definition of done
 

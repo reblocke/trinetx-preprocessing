@@ -99,6 +99,8 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
             lab.egfr_minimum,
             lab.egfr_low_first_date,
             lab.egfr_low_last_date,
+            coalesce(lab.egfr_persistent_lt60, FALSE)
+                AS egfr_persistent_lt60,
             lab.uacr_latest,
             lab.ahi_rei_value,
             lab.ahi_rei_date,
@@ -160,7 +162,7 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
         WITH status AS (
             SELECT
                 analysis.*,
-                feature.* EXCLUDE (index_event_id),
+                feature.* EXCLUDE (index_event_id, egfr_persistent_lt60),
                 feature.dx_t2d AS t2d_documented,
                 feature.diabetes_range_a1c_dates >= 2 AS t2d_probable,
                 CASE
@@ -195,11 +197,7 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
                     OR feature.dx_pad OR feature.proc_lower_revascularization
                 ) AS established_cvd_any_status,
                 CASE
-                    WHEN feature.egfr_low_first_date IS NOT NULL
-                     AND datediff(
-                         'day', feature.egfr_low_first_date,
-                         feature.egfr_low_last_date
-                     ) >= 90 THEN 'met'
+                    WHEN feature.egfr_persistent_lt60 THEN 'met'
                     WHEN feature.dx_ckd_any OR feature.dx_eskd THEN 'met'
                     ELSE 'indeterminate'
                 END AS ckd_any_status,
@@ -211,18 +209,10 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
                 CASE
                     WHEN feature.dx_ckd_stage_3a_plus OR feature.dx_eskd
                     THEN 'met'
-                    WHEN feature.egfr_low_first_date IS NOT NULL
-                     AND datediff(
-                         'day', feature.egfr_low_first_date,
-                         feature.egfr_low_last_date
-                     ) >= 90 THEN 'met'
+                    WHEN feature.egfr_persistent_lt60 THEN 'met'
                     ELSE 'indeterminate'
                 END AS ckd_stage_3a_plus_status,
-                feature.egfr_low_first_date IS NOT NULL
-                    AND datediff(
-                        'day', feature.egfr_low_first_date,
-                        feature.egfr_low_last_date
-                    ) >= 90 AS egfr_persistent_lt60,
+                feature.egfr_persistent_lt60 AS egfr_persistent_lt60,
                 glp1_status(feature.dx_osa) AS osa_any_status,
                 CASE
                     WHEN feature.ahi_rei_value >= 15 THEN 'met'

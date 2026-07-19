@@ -1371,10 +1371,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Non-45 primary thresholds fail configuration validation.
   Remote cirrhosis can remove a previously assigned noncirrhotic MASH
   indication. The clinical ruleset advances to `2026-07-19`. The `71ef56f`
-  full run remains valid resource and publication evidence. Exact-head build
-  `c62cc473ccfff9d2b697af6b` at `e7bf01a` supersedes it as clinical evidence;
-  aggregate comparison attributes 191 changed analysis rows to the all-history
-  cirrhosis correction without changing index-event keys or cohort counts.
+  full run remains valid resource and publication evidence. Parent build
+  `c62cc473ccfff9d2b697af6b` at `e7bf01a` validates the cirrhosis correction;
+  aggregate comparison attributes 191 changed analysis rows to all-history
+  cirrhosis without changing index-event keys or cohort counts.
 - References: `src/trinetx_preprocessing/glp1_eligibility/config.py`,
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #7.
@@ -1400,4 +1400,27 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
   `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #7.
+
+### 2026-07-19 — Preserve source precision for CKD persistence
+- Date: 2026-07-19
+- Decision: Require low-eGFR measurements with timestamp precision to be at
+  least 90 elapsed days apart. If either endpoint is date-only, use the
+  inclusive 90-calendar-day boundary. Keep the public first/last eGFR date
+  columns and `egfr_persistent_lt60` field unchanged.
+- Context: Exact-head review found that reducing both low-eGFR endpoints to
+  `DATE` before comparison could qualify two timestamped measurements that
+  fell on dates 90 days apart but were slightly less than 90 elapsed days
+  apart.
+- Rationale: Timestamped measurements support exact interval arithmetic;
+  date-only measurements do not, so their uncertainty should follow the same
+  inclusive calendar-day policy used by other temporal boundaries.
+- Consequences: The internal lab reducer retains endpoint timestamps and source
+  precision only long enough to materialize the existing persistence boolean.
+  The clinical ruleset advances to `2026-07-19.1`. The `e7bf01a` build remains
+  valid parent-implementation and resource evidence but is stale for final
+  clinical semantics; final acceptance requires another reviewed full-data run.
+- References: `src/trinetx_preprocessing/glp1_eligibility/sql_helpers.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #7.

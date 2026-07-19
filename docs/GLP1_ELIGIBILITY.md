@@ -125,7 +125,7 @@ before clinical use.
 
 ## Full-data validation
 
-The latest completed corrected build from reviewed commit `e7bf01a` completed
+The latest completed parent-implementation build from reviewed commit `e7bf01a` completed
 against the restored full export with the supported 4,096 MiB/one-thread DuckDB
 settings. It completed in 20,891.76 seconds, used 4,950,032,384 bytes maximum
 RSS, and atomically published exactly eight contracted files with zero warnings,
@@ -145,7 +145,10 @@ evidence boundary adds 9,193 diagnosis rows and removes 2,612,789 post-index
 non-GLP-1 medication rows. Patient-scoped encounter reductions and
 precision-aware date-only procedure context produce no additional full-data
 key/count changes. The prior run remains valid performance and
-publication-contract evidence; this build supersedes it as corrected clinical
+publication-contract evidence. Review of the evidence commit subsequently
+found that CKD persistence discarded timestamp precision before its 90-day
+test. Ruleset `2026-07-19.1` corrects that boundary while preserving the public
+schema; a fresh reviewed full-data build remains required for final clinical
 output evidence.
 
 These results establish computational completion and aggregate consistency.

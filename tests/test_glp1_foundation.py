@@ -64,6 +64,7 @@ from trinetx_preprocessing.glp1_eligibility.provenance import (
 )
 from trinetx_preprocessing.glp1_eligibility.sql_helpers import (
     inclusive_lookback_start_sql,
+    minimum_separation_sql,
     timestamp_precision_sql,
 )
 from trinetx_preprocessing.glp1_eligibility.terminology_qa import (
@@ -204,12 +205,47 @@ def test_inclusive_lookback_start_preserves_date_precision() -> None:
         connection.close()
 
 
+def test_minimum_separation_preserves_date_precision() -> None:
+    connection = duckdb.connect()
+    try:
+        predicate = minimum_separation_sql(
+            "first_datetime",
+            "first_precision",
+            "last_datetime",
+            "last_precision",
+            90,
+        )
+        rows = connection.execute(
+            f"""
+            SELECT first_precision, last_precision, {predicate}
+            FROM (VALUES
+                (TIMESTAMP '2023-10-03 02:00:00', 'timestamp',
+                 TIMESTAMP '2024-01-01 00:00:00', 'timestamp'),
+                (TIMESTAMP '2023-10-03 02:00:00', 'date_only',
+                 TIMESTAMP '2024-01-01 00:00:00', 'timestamp'),
+                (TIMESTAMP '2023-10-03 00:00:00', 'timestamp',
+                 TIMESTAMP '2024-01-01 00:00:00', 'timestamp')
+            ) AS source(
+                first_datetime, first_precision,
+                last_datetime, last_precision
+            )
+            """
+        ).fetchall()
+        assert rows == [
+            ("timestamp", "timestamp", False),
+            ("date_only", "timestamp", True),
+            ("timestamp", "timestamp", True),
+        ]
+    finally:
+        connection.close()
+
+
 def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     config = load_glp1_config(GLP1_CONFIG)
     catalog = load_concept_sets(config.concept_sets_dir)
 
     assert config.schema_version == "1.0"
-    assert config.rule_set_version == "2026-07-19"
+    assert config.rule_set_version == "2026-07-19.1"
     assert catalog.phenotype_rules["rule_set_version"] == config.rule_set_version
     assert config.study.study_start is None
     assert config.study.index_encounter_types == ("EMER", "IMP")
@@ -2542,6 +2578,8 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         "htn_two",
         "ckd_single",
         "ckd_persistent",
+        "ckd_date_boundary",
+        "ckd_timestamp_short",
         "osa_code",
         "osa_ahi",
         "antipsychotic_only",
@@ -2583,6 +2621,14 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
             "mL/min/1.73m2",
             "ckd_persistent,e_ckd_persistent,2023-12-01,LOINC,77147-7,50,,"
             "mL/min/1.73m2",
+            "ckd_date_boundary,e_ckd_date_boundary,2023-10-03,LOINC,77147-7,"
+            "45,,mL/min/1.73m2",
+            "ckd_date_boundary,e_ckd_date_boundary,2024-01-01,LOINC,77147-7,"
+            "50,,mL/min/1.73m2",
+            "ckd_timestamp_short,e_ckd_timestamp_short,2023-10-03 02:00:00,"
+            "LOINC,77147-7,45,,mL/min/1.73m2",
+            "ckd_timestamp_short,e_ckd_timestamp_short,2024-01-01 00:00:00,"
+            "LOINC,77147-7,50,,mL/min/1.73m2",
             "osa_ahi,e_osa_ahi,2023-12-01,LOINC,69990-9,20,,events/hour",
         )
     )
@@ -2643,6 +2689,8 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         assert by_patient["htn_two"][2:4] == ("met", "met")
         assert by_patient["ckd_single"][4:6] == (False, "indeterminate")
         assert by_patient["ckd_persistent"][4:6] == (True, "met")
+        assert by_patient["ckd_date_boundary"][4:6] == (True, "met")
+        assert by_patient["ckd_timestamp_short"][4:6] == (False, "indeterminate")
         assert by_patient["osa_code"][6:9] == (
             "met",
             "indeterminate",

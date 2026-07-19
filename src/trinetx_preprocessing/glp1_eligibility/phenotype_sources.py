@@ -10,6 +10,7 @@ from .sql_helpers import (
     inclusive_followup_end_sql,
     inclusive_followup_start_sql,
     inclusive_lookback_start_sql,
+    minimum_separation_sql,
     raw_date_is_date_only_sql,
     timestamp_precision_sql,
 )
@@ -427,6 +428,13 @@ def _build_lab_summary(
         "index_date",
         SLEEP_STUDY_LOOKBACK_DAYS,
     )
+    egfr_persistent = minimum_separation_sql(
+        "egfr_low_first_datetime",
+        "egfr_low_first_precision",
+        "egfr_low_last_datetime",
+        "egfr_low_last_precision",
+        90,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_lab_evidence AS
@@ -477,8 +485,9 @@ def _build_lab_summary(
         """
     )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE component_lab_summary AS
+        WITH reduced AS (
         SELECT
             index_event_id,
             first(
@@ -509,6 +518,34 @@ def _build_lab_summary(
             max(event_datetime::DATE)
                 FILTER (WHERE concept_set_id = 'egfr'
                         AND normalized_numeric_value < 60) AS egfr_low_last_date,
+            first(
+                event_datetime
+                ORDER BY event_datetime, source_record_hash
+            )
+                FILTER (WHERE concept_set_id = 'egfr'
+                        AND normalized_numeric_value < 60)
+                AS egfr_low_first_datetime,
+            first(
+                event_datetime_precision
+                ORDER BY event_datetime, source_record_hash
+            )
+                FILTER (WHERE concept_set_id = 'egfr'
+                        AND normalized_numeric_value < 60)
+                AS egfr_low_first_precision,
+            first(
+                event_datetime
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
+                FILTER (WHERE concept_set_id = 'egfr'
+                        AND normalized_numeric_value < 60)
+                AS egfr_low_last_datetime,
+            first(
+                event_datetime_precision
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
+                FILTER (WHERE concept_set_id = 'egfr'
+                        AND normalized_numeric_value < 60)
+                AS egfr_low_last_precision,
             first(
                 normalized_numeric_value
                 ORDER BY event_datetime DESC, source_record_hash DESC
@@ -560,6 +597,15 @@ def _build_lab_summary(
                 FILTER (WHERE concept_set_id = 'platelets') AS platelets_latest
         FROM component_lab_evidence
         GROUP BY index_event_id
+        )
+        SELECT * EXCLUDE (
+            egfr_low_first_datetime,
+            egfr_low_first_precision,
+            egfr_low_last_datetime,
+            egfr_low_last_precision
+        ),
+            {egfr_persistent} AS egfr_persistent_lt60
+        FROM reduced
         """
     )
 
