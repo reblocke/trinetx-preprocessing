@@ -207,6 +207,9 @@
 - The correction gate passes `git diff --check`, Ruff, and all `324` tests in `326.01 s`. A production CLI smoke completed in `0.75 s` with `295,239,680` bytes maximum RSS, 19 candidate encounters, 17 patient index events, 14 strict primary rows, 668 evidence rows, all eight public files, and zero warnings.
 - Final test-scratch cleanup deleted only 44 recognized external pytest artifacts (`114,844` bytes) and 54 recognized `/tmp` artifacts (`186` bytes); the external pytest tree, `/tmp`, and GLP-1 review temp root all rechecked at zero. No build, monitor, pytest, or cleanup process remains active.
 - Correction commit `1334360` is pushed on PR #7 after the staged payload was confirmed free of private or generated artifacts. A fresh GitHub Codex review is the active gate before another full build.
+- GitHub Codex review of branch head `340b623` returned three P2 findings: date-only encounter ends were not inclusive for later same-day timestamped events, paired arterial pH lacked a source row in published evidence, and blood pressure used a hard-coded 180-day lookback instead of the configured measurement window. All three are accepted for a focused follow-up.
+- All three review findings are fixed locally through a shared precision-aware encounter-end bound, a distinct source-traceable paired-pH evidence row, and configured BP measurement lookback. Focused regressions, `git diff --check`, Ruff, and all `324` tests pass in `33.92 s`.
+- The production synthetic build completed in `0.65 s` with `293,158,912` bytes maximum RSS, 19 candidate encounters, 17 index events, 14 strict primary rows, 685 evidence rows (including 17 paired-pH source rows), 15 flow stages, eight public files, zero warnings, zero blank dictionary descriptions, and no WAL. Test scratch deleted only 22 recognized artifacts (`78` bytes) and rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -215,10 +218,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Request and monitor a fresh GitHub Codex review of correction commit `1334360` on PR #7.
+- Inspect and commit the verified three-finding PR follow-up.
 
 ## Next
-- Resolve any actionable PR findings and rerun affected local gates, then run one fresh full build from the review-clean code and update aggregate evidence.
+- Push the follow-up, resolve the three review threads, request re-review, then run one fresh full build from the review-clean code and update aggregate evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

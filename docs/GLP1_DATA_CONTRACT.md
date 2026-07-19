@@ -44,7 +44,8 @@ remain mandatory.
 - Index-context fields use only the selected encounter window and are separated
   from pre-index history.
 - Timestamped context rows use exact encounter bounds. Date-only diagnosis and
-  procedure rows on the selected encounter use encounter calendar-date overlap.
+  procedure rows on the selected encounter use encounter calendar-date overlap;
+  date-only encounter ends include their complete calendar day.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
 - Gas normalization accepts common textual mmHg/pH labels and canonical UCUM
@@ -58,7 +59,9 @@ remain mandatory.
 lab, vital, and medication domains plus one derived row for each canonical
 status and each non-null indication. `rule_id`, `component`, `status`,
 `certainty`, temporal fields, and source provenance allow a reviewer to trace
-wide results without exposing identifiers in aggregate logs or summaries.
+wide results without exposing identifiers in aggregate logs or summaries. The
+strict hypercapnia evidence includes distinct source-traceable PaCO2 and paired
+arterial pH rows.
 
 ## Reproducibility and privacy
 

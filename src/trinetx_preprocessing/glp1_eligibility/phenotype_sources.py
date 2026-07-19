@@ -5,7 +5,7 @@ from __future__ import annotations
 import duckdb
 
 from .config import GLP1Config
-from .sql_helpers import raw_date_is_date_only_sql
+from .sql_helpers import inclusive_datetime_end_sql, raw_date_is_date_only_sql
 
 DIAGNOSIS_COMPONENTS = (
     "obesity",
@@ -84,7 +84,7 @@ def build_component_source_summaries(
     _build_index_context(connection)
     _build_normalized_component_labs(connection)
     _build_lab_summary(connection, config)
-    _build_blood_pressure_summary(connection)
+    _build_blood_pressure_summary(connection, config)
     _build_medication_evidence(connection, config)
     _build_observability_summary(connection)
 
@@ -517,7 +517,9 @@ def _build_lab_summary(
 
 def _build_blood_pressure_summary(
     connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
 ) -> None:
+    measurement_lookback = config.study.measurement_lookback_days
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_bp_evidence AS
@@ -540,9 +542,10 @@ def _build_blood_pressure_summary(
             vital.source_record_hash
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_vital_measurement AS vital
-          ON vital.patient_id = analysis.patient_id
+         ON vital.patient_id = analysis.patient_id
          AND vital.event_datetime <= analysis.index_date
-         AND vital.event_datetime >= analysis.index_date - INTERVAL 180 DAY
+         AND vital.event_datetime >=
+             analysis.index_date - INTERVAL {measurement_lookback} DAY
         LEFT JOIN glp1_encounter AS encounter
           ON encounter.patient_id = vital.patient_id
          AND encounter.encounter_id = vital.encounter_id
@@ -784,9 +787,10 @@ def _encounter_context_window_sql(
 ) -> str:
     """Match precise timestamps or date-only events within encounter dates."""
 
-    encounter_end = (
-        "coalesce(cohort.encounter_end, "
-        "cohort.encounter_start + INTERVAL 1 DAY)"
+    encounter_end = inclusive_datetime_end_sql(
+        "cohort.encounter_end",
+        "cohort.encounter_end_precision",
+        "cohort.encounter_start + INTERVAL 1 DAY",
     )
     return f"""(
         {event_datetime} BETWEEN cohort.encounter_start AND {encounter_end}

@@ -20,3 +20,19 @@ def timestamp_precision_sql(expression: str) -> str:
         f"CASE WHEN {raw_date_is_date_only_sql(expression)} "
         "THEN 'date_only' ELSE 'timestamp' END"
     )
+
+
+def inclusive_datetime_end_sql(
+    end_datetime: str,
+    precision: str,
+    fallback: str,
+) -> str:
+    """Return an inclusive timestamp bound that respects date-only end values."""
+
+    return (
+        "CASE "
+        f"WHEN {end_datetime} IS NULL THEN {fallback} "
+        f"WHEN {precision} = 'date_only' THEN "
+        f"{end_datetime} + INTERVAL 1 DAY - INTERVAL 1 MICROSECOND "
+        f"ELSE {end_datetime} END"
+    )

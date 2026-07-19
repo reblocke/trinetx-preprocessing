@@ -83,6 +83,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   measured BMI threshold views, normalized blood pressure only from recognized
   pressure units, and preserved raw gas and blood-pressure values and units in
   long-form evidence.
+- Preserved date-only encounter-end precision for inclusive same-day bounds,
+  published the paired arterial pH source row required for strict hypercapnia,
+  and applied the configured measurement lookback to blood pressure.
 - Included dirty tracked and untracked source content in the deterministic run
   identity so locally modified builds cannot reuse clean-code outputs.
 - Honored the Parquet and HTML output switches and emitted aggregate warnings

@@ -1464,14 +1464,16 @@ def test_glp1_build_parses_compact_trinetx_dates_across_domains(
         export_root / "Lab Results" / "lab_results.csv",
         "p1,e1,20240101,LOINC,2019-8,55,,mmHg",
         "p1,e1,20240101,LOINC,2744-1,7.40,,pH",
+        "p1,e1,20240102120000,LOINC,2019-8,60,,mmHg",
     )
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
-        "p1,e1,20231215,LOINC,39156-5,36,,kg/m2",
+        "p1,e1,20240102120000,LOINC,39156-5,36,,kg/m2",
     )
     _append_rows(
         export_root / "Diagnosis" / "diagnosis.csv",
         "p1,e1,20231201,ICD10CM,E11.9,P,Y,N",
+        "p1,e1,20240102120000,ICD10CM,I46.9,P,Y,N",
     )
     _append_rows(
         export_root / "Procedure" / "procedure.csv",
@@ -1494,11 +1496,18 @@ def test_glp1_build_parses_compact_trinetx_dates_across_domains(
     )
     try:
         assert connection.execute(
-            "SELECT encounter_start, encounter_end FROM source_encounter"
-        ).fetchone() == (datetime(2024, 1, 1), datetime(2024, 1, 2))
+            """
+            SELECT encounter_start, encounter_end, encounter_end_precision
+            FROM source_encounter
+            """
+        ).fetchone() == (
+            datetime(2024, 1, 1),
+            datetime(2024, 1, 2),
+            "date_only",
+        )
         expected_event_dates = {
             "source_lab_measurement": datetime(2024, 1, 1),
-            "source_vital_measurement": datetime(2023, 12, 15),
+            "source_vital_measurement": datetime(2024, 1, 2, 12),
             "source_diagnosis": datetime(2023, 12, 1),
             "source_procedure": datetime(2023, 12, 2),
             "source_medication": datetime(2023, 12, 3),
@@ -1517,6 +1526,18 @@ def test_glp1_build_parses_compact_trinetx_dates_across_domains(
             FROM cohort_hypercapnia_encounter
             """
         ).fetchone() == ("date_only", "same_date_date_only", None)
+        assert connection.execute(
+            """
+            SELECT maximum_pco2_in_encounter, cardiac_arrest_context
+            FROM cohort_hypercapnia_encounter
+            """
+        ).fetchone() == (60.0, True)
+        assert connection.execute(
+            """
+            SELECT bmi_value, bmi_source
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == (36.0, "measured_index_encounter")
         assert connection.execute(
             """
             SELECT row_count, unique_patient_count
@@ -1961,7 +1982,7 @@ def test_core_cohort_uses_first_arterial_result_and_keeps_sensitivities(
         assert counts.hypercapnia_encounters == 3
         assert counts.patient_index_events == 1
         assert counts.primary_obesity_hypercapnia == 1
-        assert counts.evidence_rows == 2
+        assert counts.evidence_rows == 3
         primary = connection.execute(
             """
             SELECT patient_id, abg_pco2_mm_hg, abg_ph,
@@ -2112,6 +2133,26 @@ def test_core_cohort_accepts_canonical_ucum_gas_units(tmp_path: Path) -> None:
             WHERE rule_id = 'primary_hypercapnia'
             """
         ).fetchone() == ("LOINC", 55.0, None, "mm[Hg]", 55.0, "mm Hg")
+        paired_ph = connection.execute(
+            """
+            SELECT code_system, code, raw_numeric_value, raw_text_value,
+                   raw_unit, normalized_numeric_value, normalized_unit,
+                   source_file, source_record_hash
+            FROM eligibility_evidence_long
+            WHERE rule_id = 'paired_arterial_ph'
+            """
+        ).fetchone()
+        assert paired_ph[:7] == (
+            "LOINC",
+            "2744-1",
+            7.4,
+            None,
+            "[pH]",
+            7.4,
+            "pH",
+        )
+        assert paired_ph[7]
+        assert paired_ph[8]
     finally:
         connection.close()
 
@@ -2740,12 +2781,12 @@ def test_blood_pressure_normalizes_units_and_rejects_unknown_units(
     _append_primary_cases(export_root, {"bp": 31})
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
-        "e_bp_amb,bp,2023-12-01,2023-12-01,AMB,s1",
+        "e_bp_amb,bp,2023-05-01,2023-05-01,AMB,s1",
     )
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
-        "bp,e_bp_amb,2023-12-01,LOINC,8480-6,20,,kPa",
-        "bp,e_bp_amb,2023-12-01,LOINC,8462-4,12,,kPa",
+        "bp,e_bp_amb,2023-05-01,LOINC,8480-6,20,,kPa",
+        "bp,e_bp_amb,2023-05-01,LOINC,8462-4,12,,kPa",
         "bp,e_bp_amb,2023-12-20,LOINC,8480-6,200,,widgets",
     )
 

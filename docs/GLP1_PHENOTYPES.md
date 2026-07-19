@@ -55,8 +55,8 @@ records their version and source rows in DuckDB.
   measurements and treatment components; code-only evidence is represented at
   lower certainty.
 - Blood pressure accepts recognized mmHg aliases or converts kPa before
-  plausibility filtering. Raw values and units remain distinct from normalized
-  mmHg evidence.
+  plausibility filtering and uses the configured measurement lookback. Raw
+  values and units remain distinct from normalized mmHg evidence.
 - FDA, guideline/society, and randomized-trial tiers remain separate. Payer
   routes are hypothetical clinical-route categories, not coverage decisions.
 - An EHR medication order is not evidence that medication was dispensed or

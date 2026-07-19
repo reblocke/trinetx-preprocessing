@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import duckdb
 
 from .config import GLP1Config
-from .sql_helpers import timestamp_precision_sql
+from .sql_helpers import inclusive_datetime_end_sql, timestamp_precision_sql
 
 
 @dataclass(frozen=True)
@@ -201,6 +201,11 @@ def _build_hypercapnia_encounters(
     )
 
     include_vbg = "TRUE" if hypercapnia.include_vbg_secondary_cohort else "FALSE"
+    encounter_end_bound = inclusive_datetime_end_sql(
+        "encounter.encounter_end",
+        "encounter.encounter_end_precision",
+        "encounter.encounter_start + INTERVAL 1 DAY",
+    )
     connection.execute(
         """
         CREATE OR REPLACE TEMP TABLE glp1_encounter AS
@@ -274,7 +279,7 @@ def _build_hypercapnia_encounters(
         """
     )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TEMP TABLE arterial_pco2_max AS
         SELECT
             encounter.encounter_id,
@@ -288,17 +293,11 @@ def _build_hypercapnia_encounters(
           AND gas.plausible_value
           AND (
                 gas.event_datetime BETWEEN encounter.encounter_start
-                    AND coalesce(
-                        encounter.encounter_end,
-                        encounter.encounter_start + INTERVAL 1 DAY
-                    )
+                    AND {encounter_end_bound}
              OR (
                     gas.timestamp_precision = 'date_only'
                 AND gas.event_datetime::DATE BETWEEN encounter.encounter_start::DATE
-                    AND coalesce(
-                        encounter.encounter_end,
-                        encounter.encounter_start + INTERVAL 1 DAY
-                    )::DATE
+                    AND ({encounter_end_bound})::DATE
              )
           )
         GROUP BY encounter.encounter_id
@@ -510,6 +509,7 @@ def _build_hypercapnia_encounters(
                 encounter.type AS encounter_type,
                 encounter.encounter_start,
                 encounter.encounter_end,
+                encounter.encounter_end_precision,
                 encounter.encounter_start AS index_date,
                 try_cast(patient.year_of_birth AS INTEGER) AS year_of_birth,
                 year(encounter.encounter_start)
@@ -856,6 +856,11 @@ def _build_analysis_table(
 ) -> None:
     obesity = config.obesity
     fallback = str(obesity.same_encounter_fallback).upper()
+    encounter_end_bound = inclusive_datetime_end_sql(
+        "cohort.encounter_end",
+        "cohort.encounter_end_precision",
+        "cohort.index_date + INTERVAL 1 DAY",
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TEMP TABLE bmi_candidate AS
@@ -915,10 +920,7 @@ def _build_analysis_table(
          AND bmi.concept_set_id = 'bmi'
          AND bmi.plausible_value
          AND bmi.event_datetime > cohort.index_date
-         AND bmi.event_datetime <= coalesce(
-                cohort.encounter_end,
-                cohort.index_date + INTERVAL 1 DAY
-             )
+         AND bmi.event_datetime <= {encounter_end_bound}
         WHERE {fallback}
         """
     )
@@ -1069,6 +1071,45 @@ def _build_evidence_table(
                 AS provenance_json
         FROM analysis_glp1_eligibility AS analysis
         JOIN cohort_hypercapnia_patient_index AS cohort USING (index_event_id)
+        UNION ALL
+        SELECT
+            {_sql_string(run_id)},
+            analysis.index_event_id,
+            analysis.patient_id,
+            'paired_arterial_ph',
+            'cohort',
+            'hypercapnia',
+            'paired_arterial_ph',
+            'met',
+            'strict',
+            ph.event_datetime,
+            'lab',
+            'source_lab_measurement',
+            ph.source_file,
+            ph.source_record_hash,
+            analysis.encounter_id,
+            ph.code_system,
+            ph.code,
+            'Arterial pH',
+            try_cast(ph.lab_result_num_val AS DOUBLE),
+            ph.lab_result_text_val,
+            ph.units_of_measure,
+            ph.normalized_numeric_value,
+            ph.normalized_unit,
+            datediff('day', analysis.index_date, ph.event_datetime),
+            ph.event_datetime <= analysis.index_date,
+            1,
+            json_object(
+                'pairing_method', ph.pairing_method,
+                'pairing_quality', ph.pairing_quality,
+                'reference_pco2_source_record_hash',
+                cohort.abg_source_record_hash
+            )
+        FROM analysis_glp1_eligibility AS analysis
+        JOIN cohort_hypercapnia_patient_index AS cohort USING (index_event_id)
+        JOIN paired_arterial_measurement AS ph
+          ON ph.reference_source_record_hash = cohort.abg_source_record_hash
+         AND ph.concept_set_id = 'arterial_ph'
         UNION ALL
         SELECT
             {_sql_string(run_id)},

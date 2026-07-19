@@ -15,6 +15,7 @@ from ..filesystem import remove_tree_strict
 from .config import GLP1Config
 from .monitoring import RunStateWriter
 from .provenance import InputInventory
+from .sql_helpers import timestamp_precision_sql
 
 _PATIENT_CONCEPT_INGEST_BUCKET_COUNT = 32
 _VITAL_INGEST_BUCKET_COUNT = _PATIENT_CONCEPT_INGEST_BUCKET_COUNT
@@ -485,6 +486,8 @@ def _create_encounters(
             {_source_projection(columns, names)},
             {_timestamp_sql('raw."start_date"')} AS encounter_start,
             {_timestamp_sql('raw."end_date"')} AS encounter_end,
+            {timestamp_precision_sql('raw."end_date"')}
+                AS encounter_end_precision,
             paths.source_file,
             sha256(concat_ws(
                 chr(31), paths.source_file, {_hash_value_sql(columns, names)}
