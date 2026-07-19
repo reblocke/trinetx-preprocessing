@@ -125,7 +125,7 @@ before clinical use.
 
 ## Full-data validation
 
-The final corrected build from reviewed commit `71ef56f` completed against the
+The latest completed corrected build from reviewed commit `71ef56f` completed against the
 restored full export with the supported 4,096 MiB/one-thread DuckDB settings.
 It completed in 20,284.53 seconds, used 5,012,209,664 bytes maximum RSS, and
 atomically published exactly eight contracted files with zero warnings, errors,
@@ -145,6 +145,10 @@ Order-independent semantic fingerprints for the complete analysis,
 candidate-encounter, and evidence tables match the preserved corrected
 diagnostic build after excluding only run provenance. No schema, index-event
 key, row-count, or non-provenance analysis-value difference remains.
+
+This build remains valid performance and publication-contract evidence, but it
+predates the all-history cirrhosis correction. Final clinical-output evidence
+for the corrected head requires another reviewed full-data build.
 
 These results establish computational completion and aggregate consistency.
 They do not replace the investigator terminology review and private record-level

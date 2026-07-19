@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
-- Current turn: finalize the fresh full-data evidence from exact-head commit `71ef56f`, push the evidence bookkeeping, and obtain one final GitHub Codex review.
+- Current turn: close the two exact-head review findings after evidence commit `3b5952e`, obtain clean CI/Codex review, then regenerate final clinical evidence from the reviewed ruleset.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -234,6 +234,9 @@
 - Commit `71ef56f` is pushed; Linux CI passed Ruff and all `331` tests in `1m46s`, both review threads are resolved, exact-head Codex review found no major issues, and PR #7 has zero unresolved threads.
 - Final full build `445770a7abe7c2b0af335091` from clean reviewed commit `71ef56f` completed in `20,284.53 s` (`5h38m04s`) with `5,012,209,664` bytes maximum RSS. It atomically published exactly eight files, retained about `7.52 TiB` external free space, and finished with zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, or hidden build workspace.
 - All terminal validation checks pass. Order-independent semantic fingerprints match the preserved `00e24a9` corrected build across `59,954` analysis rows, `1,320,409` candidate encounters, and `14,631,872` evidence rows; schema, key sets, counts, and non-provenance analysis values have zero differences.
+- Final Codex review of evidence commit `3b5952e` found two valid P2 issues: custom primary PaCO2 thresholds can conflict with fixed `gt45` output labels, and cirrhosis older than the general lookback can be missed when excluding cirrhotic MASH. The `71ef56f` run remains valid resource/publication evidence but is stale for final clinical semantics once the cirrhosis fix lands.
+- Both findings are fixed locally. The focused GLP-1 foundation gate and the complete gate pass; the latter includes `git diff --check`, Ruff, and all `332` tests in `343.45 s` on the external temp/cache path. The post-ruleset production synthetic build completed in `0.73 s` with `292,831,232` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight outputs. Twenty-two recognized pytest scratch artifacts (`57,422` bytes) were deleted; external temp and `/tmp` rechecked at zero.
+- The corrected clinical ruleset is versioned `2026-07-19` in both runtime config and phenotype rules. The completed `71ef56f` monitor reported `completed/complete` with no alerts and was stopped cleanly; no GLP-1 build or monitor process remains active.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -242,10 +245,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Run repository bookkeeping gates, commit and push the final evidence record, and request exact-head Codex review on PR #7.
+- Commit and push the two review fixes, resolve both threads, and obtain clean CI plus exact-head Codex review.
 
 ## Next
-- Address only actionable final review findings; otherwise prepare the GLP-1 endpoint handoff without changing the private evidence bundle.
+- Pass local/CI/review gates, then regenerate exact-head full-data clinical evidence and final bookkeeping.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

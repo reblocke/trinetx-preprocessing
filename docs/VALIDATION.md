@@ -142,7 +142,7 @@ Before release:
 
 ## GLP-1 additive full-data evidence
 
-The final corrected additive GLP-1 build from reviewed commit `71ef56f`
+The latest completed corrected additive GLP-1 build from reviewed commit `71ef56f`
 completed in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS. It used
 the supported 4,096 MiB/one-thread DuckDB configuration and atomically
 published exactly the eight public files. The terminal validation gate found
@@ -157,6 +157,13 @@ candidate-encounter, and evidence tables match the preserved `00e24a9`
 corrected diagnostic build after excluding only run provenance. The analysis
 schema, all index-event keys, and every non-provenance analysis value also
 match exactly.
+
+This run remains the current performance and publication-contract baseline.
+It predates the subsequent review correction that makes cirrhosis an
+all-history exclusion for noncirrhotic MASH, so it is not final clinical-output
+evidence for the corrected head. The fixed-threshold validation does not alter
+the default configuration's output; the cirrhosis correction requires a fresh
+full-data build after code review.
 
 The PHI-safe comparison of this corrected behavior against the preserved
 provisional build records:

@@ -24,7 +24,7 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Completed the final reviewed full-data GLP-1 build from commit `71ef56f` in
+- Completed a reviewed full-data GLP-1 build from commit `71ef56f` in
   20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the 6,238 MiB
   gate. The build atomically published exactly the eight contracted analytic
   files with zero warnings, errors, WAL files, recognized scratch artifacts, or
@@ -45,6 +45,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Excluded source modification times from deterministic input identity while
   retaining them in the provenance inventory, so byte-identical copied or
   restored exports reuse the same run without hiding source metadata.
+- Pinned the primary PaCO2 threshold to 45 mm Hg because the public endpoint,
+  analysis columns, and cohort-flow labels are explicitly fixed as `gt45`.
+- Evaluated cirrhosis over all available pre-index diagnosis history so remote
+  cirrhosis cannot be misclassified as noncirrhotic MASH after the general
+  diagnosis lookback expires.
 - Ranked the first arterial PaCO2 before unit and plausibility filtering so a
   later valid result cannot replace an earlier unusable result; encounter
   maxima now cover valid arterial measurements through encounter discharge.

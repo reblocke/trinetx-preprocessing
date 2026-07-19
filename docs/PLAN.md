@@ -21,9 +21,9 @@ changing the released 36-file preprocessing pipeline.
 
 ## Current status
 
-Implementation and synthetic verification are complete with 331 passing tests.
-The final corrected full-data build from reviewed commit `71ef56f` completed all
-phases in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the
+Implementation and synthetic verification are complete with 332 passing tests.
+The latest completed corrected full-data build from reviewed commit `71ef56f`
+completed all phases in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the
 6,238 MiB gate. Exactly eight outputs were published with zero warnings,
 errors, WAL files, recognized scratch artifacts, or AppleDouble sidecars.
 Aggregate validation passes every automated check and preserves all 59,954
@@ -31,10 +31,13 @@ index-event keys, 1,320,409 candidate encounters, and 9,527 strict primary rows
 from the provisional build. Complete semantic fingerprints also match the
 preserved corrected diagnostic output across all 14,631,872 evidence rows.
 
-The remaining engineering gate is a final exact-head GitHub Codex review of the
-documentation/evidence checkpoint. Investigator terminology expansion and
-private record-level clinical validation remain separate requirements before
-clinical use.
+Final review found that the fixed `gt45` labels did not reject custom primary
+thresholds and that remote cirrhosis diagnoses could expire before the
+noncirrhotic MASH exclusion. Focused corrections pass the GLP-1 foundation
+suite. The remaining engineering gates are full local/CI/Codex review and a
+fresh full-data build from the corrected head. Investigator terminology
+expansion and private record-level clinical validation remain separate
+requirements before clinical use.
 
 ## Definition of done
 

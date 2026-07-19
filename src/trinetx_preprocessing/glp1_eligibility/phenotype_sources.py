@@ -52,7 +52,7 @@ DIAGNOSIS_COMPONENTS = (
 )
 
 ALL_HISTORY_DIAGNOSIS_COMPONENTS = frozenset(
-    {"prior_mi", "ischemic_stroke", "pad", "symptomatic_pad"}
+    {"cirrhosis", "prior_mi", "ischemic_stroke", "pad", "symptomatic_pad"}
 )
 
 PROCEDURE_COMPONENTS = (

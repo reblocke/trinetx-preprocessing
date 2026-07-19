@@ -209,6 +209,8 @@ def test_default_glp1_config_and_concept_sets_are_valid() -> None:
     catalog = load_concept_sets(config.concept_sets_dir)
 
     assert config.schema_version == "1.0"
+    assert config.rule_set_version == "2026-07-19"
+    assert catalog.phenotype_rules["rule_set_version"] == config.rule_set_version
     assert config.study.study_start is None
     assert config.study.index_encounter_types == ("EMER", "IMP")
     assert config.obesity.thresholds == (27.0, 30.0, 35.0, 40.0)
@@ -258,6 +260,11 @@ def test_glp1_config_rejects_threshold_not_above_primary(tmp_path: Path) -> None
             "pco2_sensitivity_thresholds_mm_hg: [50, 52]",
             "pco2_sensitivity_thresholds_mm_hg: [60, 70]",
             r"must be \[50, 52\]",
+        ),
+        (
+            "pco2_gt_mm_hg: 45",
+            "pco2_gt_mm_hg: 49",
+            "must be 45",
         ),
         (
             "primary_requires_arterial_specimen: true",
@@ -3242,7 +3249,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
         "mash_f2,e_mash_f2,2023-12-01,ICD10CM,K75.81,,,,",
         "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
         "ICD10CM,K75.81,,,,",
-        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2020-01-01,"
         "ICD10CM,K74.60,,,,",
         "mash_unstaged,e_mash_unstaged,2023-12-01,ICD10CM,K75.81,,,,",
     )
@@ -3271,6 +3278,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
             """
             SELECT patient_id, mash_f2_f3_status, mash_f2_f3_certainty,
                    fibrosis_stage, fibrosis_method,
+                   cirrhosis_status,
                    ind_fda_noncirrhotic_mash_f2_f3
             FROM analysis_glp1_eligibility
             """
@@ -3281,6 +3289,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
             "strict",
             "F2",
             "biopsy",
+            "indeterminate",
             True,
         )
         assert by_patient["mash_f3_cirrhosis"] == (
@@ -3288,6 +3297,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
             "strict",
             "F3",
             "biopsy",
+            "met",
             None,
         )
         assert by_patient["mash_unstaged"] == (
@@ -3295,6 +3305,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
             "not_applicable",
             None,
             None,
+            "indeterminate",
             None,
         )
     finally:

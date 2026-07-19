@@ -15,6 +15,7 @@ class GLP1ConfigError(ValueError):
     """Raised when the GLP-1 configuration is invalid."""
 
 
+FIXED_PRIMARY_PCO2_THRESHOLD = 45.0
 FIXED_PCO2_SENSITIVITY_THRESHOLDS = (50.0, 52.0)
 FIXED_OBESITY_THRESHOLDS = (27.0, 30.0, 35.0, 40.0)
 
@@ -163,6 +164,11 @@ def load_glp1_config(path: Path) -> GLP1Config:
         raise GLP1ConfigError("study_start must be on or before study_end.")
     if hypercapnia.ph_max <= hypercapnia.acute_acidemia_ph_lt:
         raise GLP1ConfigError("ph_max must be greater than acute_acidemia_ph_lt.")
+    if hypercapnia.pco2_gt_mm_hg != FIXED_PRIMARY_PCO2_THRESHOLD:
+        raise GLP1ConfigError(
+            "hypercapnia.pco2_gt_mm_hg must be 45 because the published "
+            "primary endpoint and cohort-flow labels are fixed as gt45."
+        )
     if any(
         threshold <= hypercapnia.pco2_gt_mm_hg
         for threshold in hypercapnia.pco2_sensitivity_thresholds_mm_hg

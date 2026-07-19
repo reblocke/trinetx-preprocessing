@@ -1355,3 +1355,24 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/glp1_eligibility/workspace.py`,
   `src/trinetx_preprocessing/glp1_eligibility/provenance.py`,
   `tests/test_glp1_foundation.py`.
+
+### 2026-07-19 — Fix the primary threshold contract and cirrhosis horizon
+- Date: 2026-07-19
+- Decision: Require `hypercapnia.pco2_gt_mm_hg` to equal 45 because the public
+  endpoint labels are fixed, and evaluate cirrhosis over all available
+  pre-index diagnosis history when classifying noncirrhotic MASH.
+- Context: Exact-head review found that a custom threshold could produce
+  `gt45`-labeled outputs using another cutoff. It also found that cirrhosis
+  older than the general diagnosis lookback could disappear even though the
+  MASH indication explicitly requires no cirrhosis.
+- Rationale: Configuration must not contradict fixed public labels, and an
+  elapsed general history window cannot establish that a patient is
+  noncirrhotic when older positive evidence exists.
+- Consequences: Non-45 primary thresholds fail configuration validation.
+  Remote cirrhosis can remove a previously assigned noncirrhotic MASH
+  indication. The clinical ruleset advances to `2026-07-19`. The `71ef56f`
+  full run remains valid resource and publication evidence but must be
+  regenerated for final clinical semantics.
+- References: `src/trinetx_preprocessing/glp1_eligibility/config.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #7.

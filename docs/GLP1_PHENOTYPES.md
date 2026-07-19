@@ -54,8 +54,8 @@ records their version and source rows in DuckDB.
 - Laboratory-only CKD requires persistent low eGFR on measurements separated by
   at least 90 days.
 - Strict noncirrhotic MASH requires MASH, structured F2/F3 fibrosis staging,
-  and no cirrhosis. FIB-4 is retained as a derived analytic value but does not
-  create strict staging.
+  and no cirrhosis across all available pre-index diagnosis history. FIB-4 is
+  retained as a derived analytic value but does not create strict staging.
 - Strict HFpEF and uncontrolled-hypertension branches require their structured
   measurements and treatment components; code-only evidence is represented at
   lower certainty.
