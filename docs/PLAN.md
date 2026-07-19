@@ -1,44 +1,49 @@
-# Corrected Pipeline Release Plan
+# GLP-1 Augmentation Completion Plan
 
-Refactor Milestone 1 completed historical replication and remains frozen at the
-`refactor-milestone-1` tag. Post-milestone work intentionally corrects known
-notebook defects under `docs/SPEC.md` while preserving the public 36-file,
-534-column output contract.
+Refactor Milestones 1 and 2 remain immutable fallbacks. The current branch adds
+the independent GLP-1 eligibility database specified by GitHub issue #6 without
+changing the released 36-file preprocessing pipeline.
 
 ## Implementation milestones
 
-1. Specify corrected clinical and reduction semantics.
-2. Replace regex-centric definitions with typed exact/prefix/numeric rules.
-3. Retain code-system and unit metadata and report aggregate rule rejections.
-4. Validate encounter-setting conflicts and derive diagnosis-or-lab screening.
-5. Build compact RFS and feature candidates during each domain's single scan.
-6. Use bounded Parquet partitions and a fail-closed work manifest.
-7. Reuse patient-partitioned feature/history indexes across all 18 cohorts.
-8. Remove the unsupported shell splitter and maintain the Python CLI path.
-9. Pass local, corrected staged, full profile, aggregate delta, and holistic
-   review gates; document the strict source-conflict acceptance decision.
-10. Release `0.2.0` as `v0.2.0` and `refactor-milestone-2` without changing
-    Milestone 1 tags.
+1. Validate split and unsplit export discovery, metadata inventory, and source
+   headers without loading confidential rows.
+2. Fingerprint package code, configuration, concepts, phenotype rules, export
+   metadata, and clinical inputs in a deterministic run identity.
+3. Stream full source domains through bounded DuckDB and patient-hash Parquet
+   paths while preserving source provenance and duplicate-row QA.
+4. Build hypercapnia cohorts, paired gas evidence, BMI, temporal phenotypes,
+   indication tiers, payer routes, observability, and all 15 flow stages.
+5. Publish the eight-file database/Parquet/report contract atomically with
+   aggregate status monitoring and strict scratch/WAL cleanup.
+6. Pass synthetic acceptance, local and Linux CI gates, exact-head Codex review,
+   a full-data build, and a PHI-safe aggregate comparison.
 
 ## Current status
 
-Implementation, local tests, staged tiers, holistic review, the review-clean
-full profile, output hashes, scratch cleanup, and the aggregate-only Milestone 1
-delta are complete. All measured correctness, time, memory, disk, and public
-output-contract gates pass. Release acceptance uses deterministic non-strict
-resolution for the 286 source encounter-setting conflicts; strict mode remains
-fail-closed for workflows that require upstream conflict adjudication. The
-remaining work is GitHub release bookkeeping.
+Implementation and synthetic verification are complete with 329 passing tests.
+The corrected full-data build from commit `00e24a9` completed all phases in
+20,247.71 seconds with 5,342,773,248 bytes maximum RSS, below the 6,238 MiB gate.
+All eight outputs were published with zero warnings, errors, WAL files, or
+recognized scratch artifacts. Aggregate validation passes every automated
+check and preserves all 59,954 index-event keys, 1,320,409 candidate encounters,
+and 9,527 strict primary rows from the provisional build.
+
+The remaining engineering gate is a final exact-head GitHub Codex review of the
+documentation/evidence checkpoint. Investigator terminology expansion and
+private record-level clinical validation remain separate requirements before
+clinical use.
 
 ## Definition of done
 
-- Every corrected invariant in `docs/SPEC.md` has focused synthetic coverage.
-- Strict and non-strict encounter conflict behavior is deterministic.
-- All 36 final CSVs retain exact ordered schema and stable filenames.
-- Profiling proves one sequential domain scan, bounded memory, at least 25%
-  total wall-time improvement, and at least 50% final-assembly improvement.
-- Peak RSS is at most 6,238 MB and external free space remains above 100 GiB.
-- A PHI-safe aggregate report explains changes from Milestone 1 without row
-  examples or identifiers.
-- Local and GitHub reviews are clean, package version is `0.2.0`, and both
-  `v0.2.0` and `refactor-milestone-2` identify the reviewed release commit.
+- All synthetic acceptance and temporal boundary tests pass locally and in CI.
+- The full export is processed once per source stage with bounded memory and
+  maximum RSS no greater than 6,238 MiB.
+- All eight contracted public outputs publish atomically with complete run,
+  source, concept, duplicate, cohort-flow, and data-dictionary provenance.
+- Full-data validation reports no warnings, errors, WAL files, scratch,
+  AppleDouble sidecars, missing required concepts, or output-count
+  inconsistencies.
+- A PHI-safe aggregate report explains changes from the preserved provisional
+  build without identifiers or row examples.
+- The final branch head has clean local, CI, and GitHub Codex reviews.

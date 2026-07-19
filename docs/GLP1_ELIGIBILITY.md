@@ -122,3 +122,24 @@ See `GLP1_DATA_CONTRACT.md`, `GLP1_PHENOTYPES.md`, and
 relationship to the historical notebooks. Concept files and high-risk
 phenotypes still require investigator terminology and record-level validation
 before clinical use.
+
+## Full-data validation
+
+The review-clean corrected build from commit `00e24a9` completed against the
+restored full export with the supported 4,096 MiB/one-thread DuckDB settings.
+It completed in 20,247.71 seconds, used 5,342,773,248 bytes maximum RSS, and
+published all eight contracted files with zero warnings, errors, WAL files, or
+recognized scratch artifacts.
+
+Aggregate-only validation reported 1,320,409 candidate hypercapnia encounters,
+59,954 patient index events, 9,527 strict primary obesity-hypercapnia rows, and
+14,631,872 evidence rows. All 59,954 index-event keys match the earlier
+provisional build; candidate and strict-primary counts are unchanged. The
+corrected build adds `dx_obesity`, represents 12,378 rows as code-only obesity,
+and records all compact-date gas pairings as date-only rather than exact-time
+pairings. PaCO2 and paired-pH evidence each contain 59,954 source-traceable rows
+with raw and normalized values and units.
+
+These results establish computational completion and aggregate consistency.
+They do not replace the investigator terminology review and private record-level
+validation required before clinical use.

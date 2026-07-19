@@ -139,3 +139,30 @@ Before release:
 - local holistic review and GitHub Codex review have no unresolved actionable
   correctness, security, privacy, or performance findings;
 - the aggregate Milestone 1 delta report is PHI-safe and external-only.
+
+## GLP-1 additive full-data evidence
+
+The corrected additive GLP-1 build from commit `00e24a9` completed in
+20,247.71 seconds with 5,342,773,248 bytes maximum RSS. It used the supported
+4,096 MiB/one-thread DuckDB configuration and published all eight public files
+atomically. The terminal validation gate found zero warnings, errors, WAL
+files, recognized scratch artifacts, AppleDouble sidecars, blank data-dictionary
+descriptions, or missing required concept matches.
+
+The PHI-safe comparison against the preserved provisional build records:
+
+- 59,954 shared index-event keys, with zero baseline-only or corrected-only
+  keys;
+- unchanged 1,320,409 candidate encounters and 9,527 strict primary rows;
+- 14,631,872 corrected evidence rows, a reduction of 4,095,499 driven mainly by
+  phenotype-specific measurement windows, partially offset by source-traceable
+  paired-pH and corrected diagnosis, procedure, medication, and derived
+  evidence;
+- 12,378 code-only obesity rows represented by the added `dx_obesity` field;
+- 29,841 rows with at least one non-provenance semantic change after excluding
+  the global compact-date gas-pairing label correction.
+
+The aggregate JSON and Markdown reports remain external and untracked. No
+identifiers or row examples are emitted. Full-data computational validation does
+not remove the separate investigator terminology and private record-review
+requirements described in `docs/GLP1_ELIGIBILITY.md`.

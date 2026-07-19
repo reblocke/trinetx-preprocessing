@@ -23,6 +23,17 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Added a locked GitHub Actions gate that runs Ruff and the complete synthetic
   pytest suite on Python 3.11.
 
+### Changed
+- Completed a clean full-data build of the corrected GLP-1 pipeline in
+  20,247.71 seconds with 5,342,773,248 bytes maximum RSS, below the 6,238 MiB
+  gate. The build published all eight contracted outputs with zero warnings,
+  errors, WAL files, or recognized scratch artifacts.
+- Full-data aggregate comparison preserves all 59,954 index-event keys,
+  1,320,409 hypercapnia candidate encounters, and 9,527 strict primary rows.
+  Corrected phenotype windows, date precision, code-only obesity, blood-pressure
+  units, and source-traceable gas evidence intentionally change downstream
+  phenotype and evidence values.
+
 ### Fixed
 - Ranked the first arterial PaCO2 before unit and plausibility filtering so a
   later valid result cannot replace an earlier unusable result; encounter

@@ -227,6 +227,10 @@
 - Exact-head review of `233e98e` found one adjacent P2: date-only orders on the index calendar day were excluded from post-index follow-up because its lower bound still used an exact timestamp comparison. A shared precision-aware follow-up start now uses the inclusive index calendar day for date-only orders while timestamped orders remain strictly after the index instant.
 - The day-zero correction passes its focused regression, `git diff --check`, Ruff, and all `329` tests in `242.52 s`. The production synthetic build completed in `0.79 s` with `292,880,384` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH source rows, all 15 flow stages, eight contracted outputs, zero warnings, zero blank dictionary descriptions, and no WAL or scratch. Test scratch deleted only 22 recognized artifacts (`57,422` bytes) and rechecked at zero.
 - Commit `5e66242` is pushed, Linux CI passed in `1m32s`, all PR threads are resolved, and exact-head Codex review found no major issues: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5013822919`.
+- Fresh full build `9b5d5190570c2c20873cfc64` from clean provenance commit `00e24a9` completed and atomically published all eight GLP-1 outputs in `20,247.71 s` (`5h37m28s`). Maximum RSS was `5,342,773,248` bytes (`5,095.266 MiB`), below the `6,238 MiB` gate; output footprint was `70,691,848,192` bytes.
+- Terminal aggregate validation passes every check: zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, missing required concepts, blank data-dictionary descriptions, or database/Parquet/summary count disagreements. No build, monitor, screen, or pytest process remains active.
+- The corrected output retains all `59,954` provisional index-event keys, `1,320,409` candidate encounters, and `9,527` strict primary rows. It adds `dx_obesity`, represents `12,378` rows as code-only obesity, labels all compact-date gas pairings as date-only, and has `29,841` rows with another semantic change. Evidence rows decreased from `18,727,371` to `14,631,872`, primarily from corrected phenotype-specific measurement windows.
+- Final bookkeeping gates pass: `git diff --check`, Ruff, and all `329` tests in `241.67 s` with external temp/cache. Only 22 recognized pytest scratch artifacts (`57,422` bytes) were deleted, and external temp plus `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -235,10 +239,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Record the review-clean provenance checkpoint and preflight the unused corrected full-run root without modifying the preserved successful baseline.
+- Finalize aggregate-only bookkeeping for the completed corrected full build, run local gates, and push the evidence checkpoint.
 
 ## Next
-- Launch the detached corrected full build under the unused external run root and monitor it through terminal validation, aggregate QA, and milestone comparison.
+- Request an exact-head GitHub Codex review on PR #7 and address any actionable finding narrowly before final handoff.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -257,6 +261,9 @@
 - Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and full-build provenance checkpoint `e832e4a`. PR #7 is green with all prior threads resolved.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
+- Corrected full output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/glp1_eligibility`; run ID `9b5d5190570c2c20873cfc64`.
+- Corrected full validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/manifests/full_build_validation_00e24a9.json`.
+- Aggregate provisional comparison: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/manifests/aggregate_delta_vs_e832e4a.json` and `.md`.
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.
