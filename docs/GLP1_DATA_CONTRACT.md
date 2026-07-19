@@ -40,6 +40,9 @@ remain mandatory.
 
 - `index_event_id` is the deterministic analytic key. The wide table has
   exactly one row per key and the patient-index table has one row per patient.
+- Source encounter identifiers are scoped by patient. Encounter de-duplication,
+  first-gas selection, encounter maxima, and downstream joins use the composite
+  `(patient_id, encounter_id)` key.
 - Baseline phenotype inputs are constrained to each row's `index_date`.
 - Index-context fields use only the selected encounter window and are separated
   from pre-index history.
@@ -51,7 +54,8 @@ remain mandatory.
   end dates remain active through the end of their reported calendar day.
   Post-index medication windows use the exact index instant and endpoints for
   timestamped rows, and inclusive index-day and endpoint calendar dates for
-  date-only rows.
+  date-only rows. Only GLP-1 orders are retained after index; non-GLP-1
+  medication components and source evidence are baseline-only.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
 - Gas normalization accepts common textual mmHg/pH labels and canonical UCUM

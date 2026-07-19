@@ -736,11 +736,18 @@ def _build_medication_evidence(
          AND concept.include
          AND {_code_system_sql('medication.code_system')} = concept.code_system
          AND {_concept_match_sql('medication.code')}
-        WHERE {in_lookback}
+        WHERE (
+                medication.event_datetime <= analysis.index_date
+                AND (
+                    starts_with(concept.concept_set_id, 'glp1_')
+                    OR {in_lookback}
+                )
+              )
            OR (
                 starts_with(concept.concept_set_id, 'glp1_')
-                AND medication.event_datetime <= analysis.index_date
-           )
+                AND {after_index}
+                AND {in_followup}
+              )
         """
     )
     connection.execute(

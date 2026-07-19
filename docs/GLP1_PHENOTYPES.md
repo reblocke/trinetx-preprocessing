@@ -10,7 +10,8 @@ records their version and source rows in DuckDB.
   first 24 hours of an adult emergency or inpatient encounter. Selection occurs
   before unit and plausibility checks; an unusable first result is retained with
   an explicit exclusion reason and a later result is not promoted into its
-  place.
+  place. Every encounter-scoped reduction uses `(patient_id, encounter_id)`
+  because source encounter identifiers are not assumed globally unique.
 - Strict hypercapnia requires PaCO2 greater than 45 mm Hg and paired pH at or
   below 7.45. Pressure units are normalized explicitly; total CO2 LOINC
   `2026-3` cannot create a PaCO2 candidate.
@@ -49,6 +50,9 @@ records their version and source rows in DuckDB.
   post-index order flags use the exact index instant for timestamped rows and
   the inclusive index calendar day for date-only rows, with the same
   precision-aware endpoint convention.
+- Non-GLP-1 medication components and source evidence are limited to the
+  baseline/active-at-index window. Post-index retention is reserved for GLP-1
+  follow-up order endpoints.
 - Strict OSA requires AHI/REI evidence; an OSA code without severity remains
   indeterminate for the strict indication.
 - Laboratory-only CKD requires persistent low eGFR on measurements separated by

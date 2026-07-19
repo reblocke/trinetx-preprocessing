@@ -2247,6 +2247,66 @@ def test_core_cohort_accepts_canonical_ucum_gas_units(tmp_path: Path) -> None:
         connection.close()
 
 
+def test_core_cohort_scopes_reused_encounter_ids_to_patient(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "shared_one,F,White,Not Hispanic or Latino,1970,,",
+        "shared_two,M,White,Not Hispanic or Latino,1975,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "shared_encounter,shared_one,2024-01-01 00:00:00,"
+        "2024-01-02 00:00:00,IMP,s1",
+        "shared_encounter,shared_two,2024-01-01 00:00:00,"
+        "2024-01-02 00:00:00,IMP,s2",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "shared_one,shared_encounter,2024-01-01 01:00:00,"
+        "LOINC,2019-8,55,,mmHg",
+        "shared_one,shared_encounter,2024-01-01 01:00:00,"
+        "LOINC,2744-1,7.40,,pH",
+        "shared_two,shared_encounter,2024-01-01 01:00:00,"
+        "LOINC,2019-8,65,,mmHg",
+        "shared_two,shared_encounter,2024-01-01 01:00:00,"
+        "LOINC,2744-1,7.35,,pH",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "shared_one,shared_encounter,2023-12-15,LOINC,39156-5,31,,kg/m2",
+        "shared_two,shared_encounter,2023-12-15,LOINC,39156-5,32,,kg/m2",
+    )
+
+    result = build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    assert result.counts.hypercapnia_encounters == 2
+    assert result.counts.patient_index_events == 2
+    assert result.counts.primary_obesity_hypercapnia == 2
+
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT patient_id, abg_pco2_mm_hg, maximum_pco2_in_encounter
+            FROM cohort_hypercapnia_encounter
+            ORDER BY patient_id
+            """
+        ).fetchall() == [
+            ("shared_one", 55.0, 55.0),
+            ("shared_two", 65.0, 65.0),
+        ]
+    finally:
+        connection.close()
+
+
 def test_date_only_repeat_pco2_uses_calendar_day_window(tmp_path: Path) -> None:
     export_root = tmp_path / "export"
     _write_export(export_root)
@@ -2688,6 +2748,59 @@ def test_medication_ingredients_and_unmapped_raw_history_are_observable(
         assert connection.execute(
             "SELECT COUNT(*) FROM source_medication WHERE patient_id = 'unmapped'"
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_future_non_glp_medications_are_not_baseline_evidence(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"future_medication": 31})
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "future_medication,e_future_medication,RXNORM,29046,2024-01-15,"
+        "oral,Lisinopril,10mg",
+        "future_medication,e_future_medication,RXNORM,1991302,2024-01-15,"
+        "subcutaneous,Wegovy,2.4mg",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT active_antihypertensive_ingredient_count,
+                   glp1_new_order_30d
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'future_medication'
+            """
+        ).fetchone() == (0, True)
+        assert connection.execute(
+            """
+            SELECT concept_set_id, ordered_pre_index, ordered_post_index
+            FROM medication_component_evidence
+            ORDER BY concept_set_id
+            """
+        ).fetchall() == [("glp1_semaglutide", False, True)]
+        assert connection.execute(
+            """
+            SELECT rule_id
+            FROM eligibility_evidence_long
+            WHERE patient_id = 'future_medication'
+              AND rule_id IN (
+                  'source:antihypertensive_lisinopril',
+                  'source:glp1_semaglutide'
+              )
+            ORDER BY rule_id
+            """
+        ).fetchall() == [("source:glp1_semaglutide",)]
     finally:
         connection.close()
 

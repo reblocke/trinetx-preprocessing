@@ -147,8 +147,9 @@ diagnostic build after excluding only run provenance. No schema, index-event
 key, row-count, or non-provenance analysis-value difference remains.
 
 This build remains valid performance and publication-contract evidence, but it
-predates the all-history cirrhosis correction. Final clinical-output evidence
-for the corrected head requires another reviewed full-data build.
+predates the all-history cirrhosis, patient-scoped encounter reduction, and
+post-index non-GLP-1 medication-evidence corrections. Final clinical-output
+evidence for the corrected head requires another reviewed full-data build.
 
 These results establish computational completion and aggregate consistency.
 They do not replace the investigator terminology review and private record-level

@@ -50,6 +50,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Evaluated cirrhosis over all available pre-index diagnosis history so remote
   cirrhosis cannot be misclassified as noncirrhotic MASH after the general
   diagnosis lookback expires.
+- Scoped encounter de-duplication, first gas selection, and encounter PaCO2
+  maxima by both patient and encounter so reused encounter identifiers cannot
+  mix clinical rows across patients.
+- Excluded post-index non-GLP-1 orders from baseline medication components and
+  source evidence while retaining precision-aware GLP-1 follow-up orders.
 - Ranked the first arterial PaCO2 before unit and plausibility filtering so a
   later valid result cannot replace an earlier unusable result; encounter
   maxima now cover valid arterial measurements through encounter discharge.

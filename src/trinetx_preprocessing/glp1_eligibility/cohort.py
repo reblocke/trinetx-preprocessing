@@ -218,7 +218,7 @@ def _build_hypercapnia_encounters(
             SELECT
                 encounter.*,
                 row_number() OVER (
-                    PARTITION BY encounter_id
+                    PARTITION BY patient_id, encounter_id
                     ORDER BY encounter_start, source_record_hash
                 ) AS observed_order
             FROM source_encounter AS encounter
@@ -273,7 +273,7 @@ def _build_hypercapnia_encounters(
             SELECT
                 gas.*,
                 row_number() OVER (
-                    PARTITION BY encounter_id
+                    PARTITION BY patient_id, encounter_id
                     ORDER BY event_datetime, source_record_hash
                 ) AS result_order
             FROM gas_in_index_window AS gas
@@ -286,6 +286,7 @@ def _build_hypercapnia_encounters(
         f"""
         CREATE OR REPLACE TEMP TABLE arterial_pco2_max AS
         SELECT
+            encounter.patient_id,
             encounter.encounter_id,
             max(gas.normalized_numeric_value) AS maximum_pco2
         FROM glp1_encounter AS encounter
@@ -304,7 +305,7 @@ def _build_hypercapnia_encounters(
                     AND ({encounter_end_bound})::DATE
              )
           )
-        GROUP BY encounter.encounter_id
+        GROUP BY encounter.patient_id, encounter.encounter_id
         """
     )
     connection.execute(
@@ -315,7 +316,7 @@ def _build_hypercapnia_encounters(
             SELECT
                 gas.*,
                 row_number() OVER (
-                    PARTITION BY encounter_id
+                    PARTITION BY patient_id, encounter_id
                     ORDER BY event_datetime, source_record_hash
                 ) AS result_order
             FROM gas_in_index_window AS gas
@@ -667,7 +668,7 @@ def _build_hypercapnia_encounters(
             LEFT JOIN arterial_supplemental AS supplemental
               ON supplemental.reference_source_record_hash =
                  arterial.source_record_hash
-            LEFT JOIN arterial_pco2_max AS maximum USING (encounter_id)
+            LEFT JOIN arterial_pco2_max AS maximum USING (patient_id, encounter_id)
             LEFT JOIN first_venous_pco2 AS venous USING (patient_id, encounter_id)
             WHERE arterial.source_record_hash IS NOT NULL
                OR (

@@ -237,6 +237,8 @@
 - Final Codex review of evidence commit `3b5952e` found two valid P2 issues: custom primary PaCO2 thresholds can conflict with fixed `gt45` output labels, and cirrhosis older than the general lookback can be missed when excluding cirrhotic MASH. The `71ef56f` run remains valid resource/publication evidence but is stale for final clinical semantics once the cirrhosis fix lands.
 - Both findings are fixed locally. The focused GLP-1 foundation gate and the complete gate pass; the latter includes `git diff --check`, Ruff, and all `332` tests in `343.45 s` on the external temp/cache path. The post-ruleset production synthetic build completed in `0.73 s` with `292,831,232` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight outputs. Twenty-two recognized pytest scratch artifacts (`57,422` bytes) were deleted; external temp and `/tmp` rechecked at zero.
 - The corrected clinical ruleset is versioned `2026-07-19` in both runtime config and phenotype rules. The completed `71ef56f` monitor reported `completed/complete` with no alerts and was stopped cleanly; no GLP-1 build or monitor process remains active.
+- Exact-head review of `b04a028` found two additional P2 defects: encounter-level gas reductions did not include `patient_id` in every key, and future non-GLP-1 medication rows could enter baseline evidence. Both focused regressions pass after scoping encounter reductions by `(patient_id, encounter_id)` and reserving post-index retention for GLP-1 follow-up.
+- The adjacent fixes pass `git diff --check`, Ruff, all `334` tests in `342.49 s`, and a production synthetic build in `0.81 s` with `293,437,440` bytes maximum RSS, unchanged `19/17/14/685` counts, zero warnings, and exactly eight files. Twenty-two recognized pytest artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -245,7 +247,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the two review fixes, resolve both threads, and obtain clean CI plus exact-head Codex review.
+- Commit and push the two adjacent review fixes, resolve both threads, and request another exact-head Codex review.
 
 ## Next
 - Pass local/CI/review gates, then regenerate exact-head full-data clinical evidence and final bookkeeping.

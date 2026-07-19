@@ -159,11 +159,12 @@ schema, all index-event keys, and every non-provenance analysis value also
 match exactly.
 
 This run remains the current performance and publication-contract baseline.
-It predates the subsequent review correction that makes cirrhosis an
-all-history exclusion for noncirrhotic MASH, so it is not final clinical-output
-evidence for the corrected head. The fixed-threshold validation does not alter
-the default configuration's output; the cirrhosis correction requires a fresh
-full-data build after code review.
+It predates the subsequent review corrections that make cirrhosis an
+all-history exclusion for noncirrhotic MASH, scope encounter reductions by
+patient, and exclude future non-GLP-1 rows from baseline medication evidence,
+so it is not final clinical-output evidence for the corrected head. The
+fixed-threshold validation does not alter the default configuration's output;
+the behavior corrections require a fresh full-data build after code review.
 
 The PHI-safe comparison of this corrected behavior against the preserved
 provisional build records:
