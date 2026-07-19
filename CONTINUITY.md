@@ -249,6 +249,7 @@
 - Ruleset `2026-07-19.1` now requires 90 elapsed days for timestamped low-eGFR pairs and uses the inclusive 90-calendar-day boundary when either endpoint is date-only. Focused helper and end-to-end phenotype regressions pass while preserving the public CKD fields.
 - The narrow CKD fix passes `git diff --check`, Ruff, all `97` GLP-1 foundation tests, and all `336` repository tests in `38.21 s`. The production synthetic build completed in `0.69 s` with `300,007,424` bytes maximum RSS, unchanged `19/17/14/685` counts, exactly eight files, zero warnings/errors, and no WAL or scratch.
 - A PHI-safe read-only probe of the parent database found `29,635` index events with low eGFR and `13,553` persistent cases under both old and precision-aware calculations, with zero changed classifications. Exact-head full execution remains required for provenance.
+- Commit `1033418` contains the precision-aware CKD fix and corrected parent-evidence labeling and is pushed. Both review findings are answered and their GitHub threads are resolved; exact-head CI/re-review is the remaining launch gate.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -257,10 +258,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the precision-aware CKD fix and corrected parent-evidence labeling, resolve both exact-head review threads, and request re-review.
+- Obtain green CI and a clean Codex review for the pushed CKD correction, then freeze that reviewed commit as the fresh full-build provenance head.
 
 ## Next
-- Push and obtain clean CI/Codex review, then regenerate exact-head full-data evidence and repeat terminal validation before the implementation handoff.
+- Regenerate full-data evidence from the reviewed head, monitor it to completion, repeat terminal and aggregate validation, then commit the final evidence ledger and request one final exact-head review.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
