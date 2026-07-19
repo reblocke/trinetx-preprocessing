@@ -25,7 +25,9 @@ records their version and source rows in DuckDB.
   They do not define cohort membership. The current LOINC seeds and broad
   plausibility bounds require investigator review before interpretation.
 - BMI follows measured BMI, then measured weight/height calculation, within the
-  configured pre-index hierarchy. Missing BMI remains indeterminate.
+  configured pre-index hierarchy. A qualifying obesity diagnosis with no BMI is
+  represented separately as `code_only`; it does not satisfy a measured BMI
+  threshold or enter the strict BMI >=30 primary view.
 - Candidate and primary tables retain documented arrest, trauma,
   anesthesia/sedation, postoperative, implausible-value, and probable-venous
   context flags. `analysis_primary_cleaned_obesity_hypercapnia` applies only the
@@ -36,9 +38,12 @@ records their version and source rows in DuckDB.
 
 ## Component and indication semantics
 
-- Diagnosis, procedure, laboratory, vital, and medication evidence is limited
-  to each row's configured lookback and index date unless a field explicitly
-  represents index context or post-index GLP-1 orders.
+- Chronic diagnosis and routine measurement evidence uses its configured
+  lookback. MI, stroke, PAD, revascularization, bariatric, and liver-staging
+  history uses all available pre-index data; AHI/REI uses five years; kidney and
+  cardiac measurements use the general history window; structured fibrosis
+  staging uses all prior data. GLP-1 `ever ordered` uses all pre-index orders,
+  while active-at-index medication components retain the medication window.
 - Strict OSA requires AHI/REI evidence; an OSA code without severity remains
   indeterminate for the strict indication.
 - Laboratory-only CKD requires persistent low eGFR on measurements separated by
@@ -49,6 +54,9 @@ records their version and source rows in DuckDB.
 - Strict HFpEF and uncontrolled-hypertension branches require their structured
   measurements and treatment components; code-only evidence is represented at
   lower certainty.
+- Blood pressure accepts recognized mmHg aliases or converts kPa before
+  plausibility filtering. Raw values and units remain distinct from normalized
+  mmHg evidence.
 - FDA, guideline/society, and randomized-trial tiers remain separate. Payer
   routes are hypothetical clinical-route categories, not coverage decisions.
 - An EHR medication order is not evidence that medication was dispensed or

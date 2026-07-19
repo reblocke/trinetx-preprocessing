@@ -5,8 +5,10 @@ from __future__ import annotations
 import duckdb
 
 from .config import GLP1Config
+from .sql_helpers import raw_date_is_date_only_sql
 
 DIAGNOSIS_COMPONENTS = (
+    "obesity",
     "type_2_diabetes",
     "prediabetes",
     "prior_mi",
@@ -42,6 +44,10 @@ DIAGNOSIS_COMPONENTS = (
     "pregnancy",
 )
 
+ALL_HISTORY_DIAGNOSIS_COMPONENTS = frozenset(
+    {"prior_mi", "ischemic_stroke", "pad", "symptomatic_pad"}
+)
+
 PROCEDURE_COMPONENTS = (
     "echocardiography",
     "polysomnography",
@@ -54,6 +60,17 @@ PROCEDURE_COMPONENTS = (
     "bariatric_surgery",
     "lower_extremity_revascularization",
 )
+
+ALL_HISTORY_PROCEDURE_COMPONENTS = frozenset(
+    {
+        "bariatric_surgery",
+        "liver_biopsy",
+        "lower_extremity_revascularization",
+        "transient_elastography",
+    }
+)
+
+SLEEP_STUDY_LOOKBACK_DAYS = 5 * 365
 
 
 def build_component_source_summaries(
@@ -171,6 +188,10 @@ def _build_diagnosis_evidence(
     config: GLP1Config,
 ) -> None:
     lookback = config.study.lookback_days
+    all_history = ", ".join(
+        _sql_string(component)
+        for component in sorted(ALL_HISTORY_DIAGNOSIS_COMPONENTS)
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE diagnosis_component_evidence AS
@@ -186,13 +207,14 @@ def _build_diagnosis_evidence(
         JOIN source_diagnosis AS diagnosis
          ON diagnosis.patient_id = analysis.patient_id
          AND diagnosis.event_datetime <= analysis.index_date
-         AND diagnosis.event_datetime >=
-             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'diagnosis'
          AND concept.include
          AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
          AND {_concept_match_sql('diagnosis.code')}
+        WHERE concept.concept_set_id IN ({all_history})
+           OR diagnosis.event_datetime >=
+              analysis.index_date - INTERVAL {lookback} DAY
         """
     )
     expressions = ",\n            ".join(
@@ -215,6 +237,10 @@ def _build_procedure_evidence(
     config: GLP1Config,
 ) -> None:
     lookback = config.study.lookback_days
+    all_history = ", ".join(
+        _sql_string(component)
+        for component in sorted(ALL_HISTORY_PROCEDURE_COMPONENTS)
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE procedure_component_evidence AS
@@ -230,13 +256,14 @@ def _build_procedure_evidence(
         JOIN source_procedure AS procedure
          ON procedure.patient_id = analysis.patient_id
          AND procedure.event_datetime <= analysis.index_date
-         AND procedure.event_datetime >=
-             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
          AND {_code_system_sql('procedure.code_system')} = concept.code_system
          AND {_concept_match_sql('procedure.code')}
+        WHERE concept.concept_set_id IN ({all_history})
+           OR procedure.event_datetime >=
+              analysis.index_date - INTERVAL {lookback} DAY
         """
     )
     expressions = ",\n            ".join(
@@ -359,9 +386,11 @@ def _build_lab_summary(
     config: GLP1Config,
 ) -> None:
     measurement_lookback = config.study.measurement_lookback_days
+    history_lookback = config.study.lookback_days
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_lab_evidence AS
+        WITH candidate AS (
         SELECT
             analysis.index_event_id,
             analysis.index_date,
@@ -373,10 +402,27 @@ def _build_lab_summary(
         JOIN normalized_component_lab AS lab
           ON lab.patient_id = analysis.patient_id
          AND lab.event_datetime <= analysis.index_date
-         AND lab.event_datetime >=
-             analysis.index_date - INTERVAL {measurement_lookback} DAY
         WHERE lab.normalized_numeric_value IS NOT NULL
            OR lab.fibrosis_stage_value IS NOT NULL
+        )
+        SELECT *
+        FROM candidate
+        WHERE concept_set_id = 'fibrosis_stage'
+           OR (
+                concept_set_id = 'ahi'
+                AND days_before_index <= {SLEEP_STUDY_LOOKBACK_DAYS}
+           )
+           OR (
+                concept_set_id IN ('egfr', 'uacr', 'lvef', 'bnp', 'nt_probnp')
+                AND days_before_index <= {history_lookback}
+           )
+           OR (
+                concept_set_id NOT IN (
+                    'ahi', 'egfr', 'uacr', 'lvef', 'bnp', 'nt_probnp',
+                    'fibrosis_stage'
+                )
+                AND days_before_index <= {measurement_lookback}
+           )
         """
     )
     connection.execute(
@@ -475,6 +521,7 @@ def _build_blood_pressure_summary(
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_bp_evidence AS
+        WITH matched AS (
         SELECT
             analysis.index_event_id,
             analysis.index_date,
@@ -486,7 +533,8 @@ def _build_blood_pressure_summary(
             vital.text_value,
             vital.units_of_measure,
             vital.event_datetime,
-            try_cast(vital.value AS DOUBLE) AS numeric_value,
+            try_cast(vital.value AS DOUBLE) AS raw_numeric_value,
+            lower(trim(coalesce(vital.units_of_measure, ''))) AS unit_key,
             encounter.type AS encounter_type,
             vital.source_file,
             vital.source_record_hash
@@ -495,15 +543,31 @@ def _build_blood_pressure_summary(
           ON vital.patient_id = analysis.patient_id
          AND vital.event_datetime <= analysis.index_date
          AND vital.event_datetime >= analysis.index_date - INTERVAL 180 DAY
-        LEFT JOIN source_encounter AS encounter
-          ON encounter.encounter_id = vital.encounter_id
+        LEFT JOIN glp1_encounter AS encounter
+          ON encounter.patient_id = vital.patient_id
+         AND encounter.encounter_id = vital.encounter_id
         JOIN concept_set AS concept
           ON concept.domain = 'vital'
          AND concept.include
          AND concept.concept_set_id IN ('systolic_bp', 'diastolic_bp')
          AND {_code_system_sql('vital.code_system')} = concept.code_system
          AND {_concept_match_sql('vital.code')}
-        WHERE try_cast(vital.value AS DOUBLE) BETWEEN 30 AND 300
+        ), normalized AS (
+            SELECT
+                *,
+                CASE
+                    WHEN unit_key IN (
+                        'mmhg', 'mm hg', 'mm_hg', 'mm[hg]', 'torr'
+                    ) THEN raw_numeric_value
+                    WHEN unit_key = 'kpa'
+                    THEN raw_numeric_value * 7.5006168270417
+                    ELSE NULL
+                END AS normalized_numeric_value
+            FROM matched
+        )
+        SELECT *
+        FROM normalized
+        WHERE normalized_numeric_value BETWEEN 30 AND 300
         """
     )
     connection.execute(
@@ -516,20 +580,23 @@ def _build_blood_pressure_summary(
                     ORDER BY CASE WHEN upper(trim(encounter_type)) = 'AMB'
                                       THEN 0 ELSE 1 END,
                              event_datetime DESC,
-                             source_record_hash
+                             source_record_hash DESC
                 ) AS result_order
             FROM component_bp_evidence
         )
         SELECT
             index_event_id,
-            max(numeric_value) FILTER (
+            max(normalized_numeric_value) FILTER (
                 WHERE concept_set_id = 'systolic_bp' AND result_order = 1
             ) AS latest_sbp,
-            max(numeric_value) FILTER (
+            max(normalized_numeric_value) FILTER (
                 WHERE concept_set_id = 'diastolic_bp' AND result_order = 1
             ) AS latest_dbp,
             max(event_datetime) FILTER (WHERE result_order = 1) AS latest_bp_date,
-            arg_max(encounter_type, event_datetime)
+            first(
+                encounter_type
+                ORDER BY event_datetime DESC, source_record_hash DESC
+            )
                 FILTER (WHERE result_order = 1) AS latest_bp_setting
         FROM ranked
         GROUP BY index_event_id
@@ -555,8 +622,11 @@ def _build_medication_evidence(
             datediff('day', medication.event_datetime, analysis.index_date)
                 AS days_before_index,
             medication.event_datetime <= analysis.index_date
-                AND medication.event_datetime >=
-                    analysis.index_date - INTERVAL {lookback} DAY
+                AND (
+                    starts_with(concept.concept_set_id, 'glp1_')
+                    OR medication.event_datetime >=
+                       analysis.index_date - INTERVAL {lookback} DAY
+                )
                 AS ordered_pre_index,
             medication.event_datetime <= analysis.index_date
                 AND medication.event_datetime >=
@@ -573,13 +643,17 @@ def _build_medication_evidence(
          ON medication.patient_id = analysis.patient_id
          AND medication.event_datetime <=
              analysis.index_date + INTERVAL {followup} DAY
-         AND medication.event_datetime >=
-             analysis.index_date - INTERVAL {lookback} DAY
         JOIN concept_set AS concept
           ON concept.domain = 'medication'
          AND concept.include
          AND {_code_system_sql('medication.code_system')} = concept.code_system
          AND {_concept_match_sql('medication.code')}
+        WHERE medication.event_datetime >=
+                  analysis.index_date - INTERVAL {lookback} DAY
+           OR (
+                starts_with(concept.concept_set_id, 'glp1_')
+                AND medication.event_datetime <= analysis.index_date
+           )
         """
     )
     connection.execute(
@@ -717,7 +791,7 @@ def _encounter_context_window_sql(
     return f"""(
         {event_datetime} BETWEEN cohort.encounter_start AND {encounter_end}
         OR (
-            NOT contains(trim(coalesce({raw_date}, '')), ':')
+            {raw_date_is_date_only_sql(raw_date)}
             AND {event_datetime}::DATE BETWEEN cohort.encounter_start::DATE
                 AND {encounter_end}::DATE
         )

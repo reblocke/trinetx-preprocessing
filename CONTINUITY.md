@@ -4,7 +4,7 @@
 - Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
 - Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
 - GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
-- Current turn: fix the bounded output duplicate audit and production UCUM gas-unit handling exposed by the latest full build, verify both against its preserved real-data database, then obtain clean PR review before another private full build.
+- Current turn: correct the actionable findings from the holistic full-output audit, pass local review gates, and obtain a fresh GitHub Codex review before regenerating full evidence.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -199,6 +199,13 @@
 - Fresh full build `43ef3d7f4a1441cc4ee5a737` from clean provenance checkpoint `43e3e65` completed inventory, all `906,193,358` retained source rows, terminology/duplicate QA, and core cohort construction, then failed cleanly after `15,820.41 s` while aggregating unfiltered diagnosis observability. DuckDB exhausted its 4 GiB internal buffer; authoritative maximum RSS was `5,830,868,992` bytes, the preserved database is `51,005,894,656` bytes with zero WAL, and no output was published. The build and monitor workers are stopped.
 - Unfiltered observability now streams selected patient/date rows from a separate 512 MiB DuckDB scan connection in one-million-row Arrow batches and merges only index-level aggregates. The isolated 1,272,185,090-row diagnosis benchmark passed in `427.76 s` with `465,829,888` bytes maximum RSS, `59,596` summaries, `12,334,864` qualifying lookback events, and zero row-level scratch.
 - Commit `8ad0d24` is pushed with the bounded observability stream. Local gates pass with `319` tests, Linux CI passed in `1m27s`, the production fixture retains `19/17/14/651` counts and eight public files, and targeted GitHub Codex review found no major issues at that exact commit: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5012304174`. PR #7 has zero unresolved review threads.
+- Fresh full build `c079bac38d0f9ad4c297e559` from clean provenance commit `e832e4a` completed and atomically published all eight public outputs in `19,338.23 s` (`5h22m18s`). Authoritative maximum RSS was `5,051,383,808` bytes (`4,817.375 MiB`), below the `6,238 MiB` gate; output footprint was `70,623,690,752` bytes, WAL was zero, and recognized scratch rechecked at zero.
+- Full output counts are `1,320,409` hypercapnia encounter candidates, `59,954` patient index events, `9,527` primary obesity-hypercapnia rows, and `18,727,371` evidence rows. All 15 cohort-flow stages are present, all three required concept sets matched, UCUM `mm[Hg]` and `[pH]` are usable, the data dictionary has no blank descriptions, and Parquet/database/summary counts agree.
+- Final local gates pass at the full-build checkpoint: `git diff --check`, Ruff, and `319` tests in `226.56 s`. The post-test scratch inventory deleted only 22 known pytest artifacts (`57,422` bytes) and rechecked at zero. No build or monitor process remains active.
+- The holistic full-output audit found five actionable issues: compact date-only values were treated as timestamps, explicit all-history phenotypes were truncated, diagnosis-only obesity was unused, blood pressure lacked unit-safe normalization, and long gas evidence overwrote raw values/units. The successful `e832e4a` build remains a valid performance baseline but is stale as release evidence once these behavior fixes are applied.
+- Focused corrections preserve the strict measured-BMI cohort while adding code-only obesity, apply phenotype-specific windows, normalize BP units, and retain raw gas/BP evidence. The audit also found 214 patients with a later clean event, but issue #6 explicitly requires the earliest primary event; context therefore remains a cleaned-view exclusion rather than triggering reselection.
+- The correction gate passes `git diff --check`, Ruff, and all `324` tests in `326.01 s`. A production CLI smoke completed in `0.75 s` with `295,239,680` bytes maximum RSS, 19 candidate encounters, 17 patient index events, 14 strict primary rows, 668 evidence rows, all eight public files, and zero warnings.
+- Final test-scratch cleanup deleted only 44 recognized external pytest artifacts (`114,844` bytes) and 54 recognized `/tmp` artifacts (`186` bytes); the external pytest tree, `/tmp`, and GLP-1 review temp root all rechecked at zero. No build, monitor, pytest, or cleanup process remains active.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -207,11 +214,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Launch the preflighted fresh full build from clean docs-only provenance checkpoint `8d87b9d` at 4,096 MiB/one thread, with the persistent aggregate monitor and no runtime limit.
+- Inspect the complete correction diff, stage only intended public files, and create the review checkpoint commit.
 
 ## Next
-- Follow that build through atomic publication, validate eight public files and provenance, require zero WAL/scratch, and inspect aggregate terminology, unit, observability, warning, and cohort-flow QA.
-- After the full-run evidence passes, run the local holistic review/gates, commit and push any evidence bookkeeping, then request a fresh GitHub Codex review on PR #7. Do not request release review from a failed or incomplete build.
+- Push the correction checkpoint, request and resolve a fresh GitHub Codex review on PR #7, then run one fresh full build from the review-clean code and update aggregate evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -226,7 +232,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
-- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and docs-only provenance checkpoint `8d87b9d`. PR #7 is green with all threads resolved.
+- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and full-build provenance checkpoint `e832e4a`. PR #7 is green with all prior threads resolved.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
@@ -240,3 +246,6 @@
 - Latest failed output-QA workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-80f6e7f2dfb89b12809f8bc5`; logs `logs/build.4096m1t.8a0f017.*.log`; no build or monitor process remains active.
 - Raw-observability OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-43ef3d7f4a1441cc4ee5a737`; logs `logs/build.4096m1t.43e3e65.*.log`; monitor evidence under `diagnostics/enhanced_monitor_*`; no build or monitor process remains active.
 - Passing streaming diagnosis-observability benchmark: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/diagnostics/raw_observability_diagnosis_streaming_4096m_1t_43e3e65_dirty_20260718`.
+- Successful full output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`; run ID `c079bac38d0f9ad4c297e559`.
+- Full build logs: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/logs/build.4096m1t.e832e4a.stdout.log` and `.stderr.log`.
+- Aggregate validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/manifests/full_build_validation_e832e4a.json`; final status/summary and zero-scratch reports are in the same `manifests/` directory.

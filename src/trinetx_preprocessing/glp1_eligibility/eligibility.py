@@ -48,6 +48,7 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
         CREATE OR REPLACE TEMP TABLE glp1_component_feature AS
         SELECT
             analysis.index_event_id,
+            {dx('obesity')} AS dx_obesity,
             {dx('type_2_diabetes')} AS dx_t2d,
             {dx('prediabetes')} AS dx_prediabetes,
             {dx('prior_mi')} AS dx_prior_mi,
@@ -433,6 +434,14 @@ def _build_wide_analysis(connection: duckdb.DuckDBPyConnection) -> None:
         )
         SELECT *
         FROM aggregate_tiers
+        """
+    )
+    connection.execute(
+        """
+        UPDATE analysis_glp1_eligibility_next
+        SET obesity_status = 'met',
+            obesity_certainty = 'code_only'
+        WHERE NOT bmi_valid AND dx_obesity
         """
     )
     _add_tier_aggregates_and_routes(connection)

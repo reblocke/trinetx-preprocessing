@@ -1285,3 +1285,30 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
   `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
   `tests/test_cli.py`.
+
+### 2026-07-17 — Correct temporal precision and historical phenotype selection
+- Date: 2026-07-17
+- Decision: Classify ISO and compact source dates by their actual precision and
+  apply the endpoint's phenotype-specific history windows. Keep diagnosis-only
+  obesity at `code_only`, normalize blood pressure only from recognized units,
+  and preserve raw gas and blood-pressure evidence fields. Continue selecting
+  the earliest primary qualifying encounter before cleaned-view exclusions.
+- Context: A full-output audit found that compact date-only gases were treated
+  as exact timestamps and explicit all-history fields were truncated by general
+  lookback windows. Aggregate review also found 12,378 missing-BMI patients with
+  retained obesity diagnosis evidence and showed that source blood-pressure
+  units were overwritten in evidence.
+- Rationale: Temporal comparisons must respect source precision, fields named
+  as history or `ever ordered` must use the complete available pre-index record,
+  and diagnosis-only obesity remains analytically useful without fabricating a
+  BMI threshold. Although 214 patients had a later clean qualifying event,
+  reselecting it would conflict with issue #6's explicit earliest-primary-event
+  estimand; context remains a cleaned-view exclusion.
+- Consequences: The successful `e832e4a` full build remains a performance and
+  audit baseline but is stale as release evidence. The GLP-1 ruleset advances to
+  `2026-07-17`; local and full real-data validation must be regenerated after
+  review. Strict measured-BMI cohort membership is unchanged by diagnosis-only
+  obesity.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `phenotype_sources.py`, `eligibility.py`, `evidence.py`,
+  `tests/test_glp1_foundation.py`, GitHub issue #6.

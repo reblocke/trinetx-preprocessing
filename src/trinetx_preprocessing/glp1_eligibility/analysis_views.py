@@ -37,7 +37,7 @@ def _build_primary_view(connection: duckdb.DuckDBPyConnection) -> None:
         SELECT * EXCLUDE (
             bmi_source_file, bmi_source_record_hash,
             abg_source_file, abg_source_record_hash,
-            dx_t2d, dx_prediabetes, dx_prior_mi, dx_ischemic_stroke,
+            dx_obesity, dx_t2d, dx_prediabetes, dx_prior_mi, dx_ischemic_stroke,
             dx_pad, dx_symptomatic_pad, dx_ckd_any, dx_ckd_stage_3a_plus,
             dx_eskd, dx_osa, dx_mash, dx_masld, dx_liver_fibrosis,
             dx_cirrhosis, dx_heart_failure, dx_hfpef, dx_hypertension,

@@ -60,6 +60,9 @@ from trinetx_preprocessing.glp1_eligibility.provenance import (
     current_git_sha,
     deterministic_run_id,
 )
+from trinetx_preprocessing.glp1_eligibility.sql_helpers import (
+    timestamp_precision_sql,
+)
 from trinetx_preprocessing.glp1_eligibility.terminology_qa import (
     build_concept_match_summary,
 )
@@ -147,6 +150,30 @@ def _append_primary_cases(root: Path, bmi_by_patient: dict[str, float]) -> None:
         )
     _append_rows(root / "Lab Results" / "lab_results.csv", *lab_rows)
     _append_rows(root / "Vital Signs" / "vital_signs.csv", *vital_rows)
+
+
+def test_timestamp_precision_distinguishes_compact_dates_and_timestamps() -> None:
+    connection = duckdb.connect()
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT raw_value, {timestamp_precision_sql('raw_value')}
+            FROM (VALUES
+                ('20240101'),
+                ('2024-01-01'),
+                ('20240101123045'),
+                ('2024-01-01 12:30:45')
+            ) AS source(raw_value)
+            """
+        ).fetchall()
+        assert rows == [
+            ("20240101", "date_only"),
+            ("2024-01-01", "date_only"),
+            ("20240101123045", "timestamp"),
+            ("2024-01-01 12:30:45", "timestamp"),
+        ]
+    finally:
+        connection.close()
 
 
 def test_default_glp1_config_and_concept_sets_are_valid() -> None:
@@ -1485,6 +1512,13 @@ def test_glp1_build_parses_compact_trinetx_dates_across_domains(
         ).fetchone() == (datetime(2024, 2, 1, 12, 30, 45),)
         assert connection.execute(
             """
+            SELECT abg_timestamp_precision, abg_pairing_method,
+                   abg_pairing_time_difference_minutes
+            FROM cohort_hypercapnia_encounter
+            """
+        ).fetchone() == ("date_only", "same_date_date_only", None)
+        assert connection.execute(
+            """
             SELECT row_count, unique_patient_count
             FROM cohort_flow
             WHERE stage = 'adult_candidate_emergency_inpatient_encounters'
@@ -2070,6 +2104,14 @@ def test_core_cohort_accepts_canonical_ucum_gas_units(tmp_path: Path) -> None:
             FROM analysis_glp1_eligibility
             """
         ).fetchone() == (55.0, 7.4, 75.0)
+        assert connection.execute(
+            """
+            SELECT code_system, raw_numeric_value, raw_text_value, raw_unit,
+                   normalized_numeric_value, normalized_unit
+            FROM eligibility_evidence_long
+            WHERE rule_id = 'primary_hypercapnia'
+            """
+        ).fetchone() == ("LOINC", 55.0, None, "mm[Hg]", 55.0, "mm Hg")
     finally:
         connection.close()
 
@@ -2259,6 +2301,7 @@ def test_first_arterial_gas_is_selected_before_unit_and_plausibility_filters(
             """
             SELECT patient_id, abg_pco2_raw, abg_pco2_mm_hg,
                    maximum_pco2_in_encounter, implausible_value,
+                   pco2_only_sensitivity_case,
                    primary_cohort_exclusion_reason
             FROM cohort_hypercapnia_encounter
             ORDER BY patient_id
@@ -2271,6 +2314,7 @@ def test_first_arterial_gas_is_selected_before_unit_and_plausibility_filters(
                 None,
                 60.0,
                 True,
+                False,
                 "first_arterial_pco2_unit_unusable",
             ),
             (
@@ -2279,6 +2323,7 @@ def test_first_arterial_gas_is_selected_before_unit_and_plausibility_filters(
                 500.0,
                 60.0,
                 True,
+                False,
                 "first_arterial_pco2_implausible",
             ),
         ]
@@ -2516,7 +2561,7 @@ def test_medication_ingredients_and_unmapped_raw_history_are_observable(
         connection.close()
 
 
-def test_component_history_excludes_events_before_configured_lookbacks(
+def test_component_history_uses_contract_specific_lookback_windows(
     tmp_path: Path,
 ) -> None:
     export_root = tmp_path / "export"
@@ -2576,16 +2621,166 @@ def test_component_history_excludes_events_before_configured_lookbacks(
             0,
             False,
             None,
-            None,
-            None,
-            None,
-            None,
+            50.0,
+            20.0,
+            55.0,
+            "F2",
             False,
-            False,
-            False,
-            False,
-            False,
+            True,
+            True,
+            True,
+            True,
         )
+    finally:
+        connection.close()
+
+
+def test_explicit_history_components_use_all_pre_index_data(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"all_history": 31})
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "all_history,e_all_history,2020-01-01,ICD10CM,I25.2,,,,",
+        "all_history,e_all_history,2020-01-02,ICD10CM,I70.211,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "all_history,e_all_history,2020-01-03,CPT,37220,",
+        "all_history,e_all_history,2020-01-04,CPT,43775,",
+    )
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "all_history,e_all_history,RXNORM,1991302,2020-01-05,oral,Wegovy,2.4mg",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        row = connection.execute(
+            """
+            SELECT prior_mi_status, symptomatic_pad_status,
+                   established_cvd_any_status, bariatric_surgery_history,
+                   glp1_ever_ordered_pre_index, glp1_first_order_date
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone()
+        assert row[:-1] == ("met", "met", "met", True, True)
+        assert row[-1] == datetime(2020, 1, 5)
+    finally:
+        connection.close()
+
+
+def test_diagnosis_only_obesity_is_code_only_not_measured_eligibility(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_rows(
+        export_root / "Patient" / "patient.csv",
+        "code_only,F,White,Not Hispanic or Latino,1970,,",
+    )
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_code_only,code_only,2024-01-01,2024-01-02,IMP,s1",
+    )
+    _append_rows(
+        export_root / "Lab Results" / "lab_results.csv",
+        "code_only,e_code_only,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "code_only,e_code_only,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "code_only,e_code_only,2023-12-01,ICD10CM,E66.9,,,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT obesity_status, obesity_certainty, bmi_valid, bmi_ge30
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone() == ("met", "code_only", False, None)
+        assert connection.execute(
+            "SELECT count(*) FROM analysis_primary_obesity_hypercapnia"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            """
+            SELECT status, certainty
+            FROM eligibility_evidence_long
+            WHERE rule_id = 'status:obesity_status'
+            """
+        ).fetchone() == ("met", "code_only")
+    finally:
+        connection.close()
+
+
+def test_blood_pressure_normalizes_units_and_rejects_unknown_units(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"bp": 31})
+    _append_rows(
+        export_root / "Encounter" / "encounter.csv",
+        "e_bp_amb,bp,2023-12-01,2023-12-01,AMB,s1",
+    )
+    _append_rows(
+        export_root / "Vital Signs" / "vital_signs.csv",
+        "bp,e_bp_amb,2023-12-01,LOINC,8480-6,20,,kPa",
+        "bp,e_bp_amb,2023-12-01,LOINC,8462-4,12,,kPa",
+        "bp,e_bp_amb,2023-12-20,LOINC,8480-6,200,,widgets",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        summary = connection.execute(
+            """
+            SELECT latest_sbp, latest_dbp, latest_bp_setting
+            FROM analysis_glp1_eligibility
+            """
+        ).fetchone()
+        assert summary[0] == pytest.approx(150.012336540834)
+        assert summary[1] == pytest.approx(90.0074019245004)
+        assert summary[2] == "AMB"
+        assert connection.execute(
+            "SELECT count(*) FROM component_bp_evidence"
+        ).fetchone() == (2,)
+        evidence = connection.execute(
+            """
+            SELECT raw_numeric_value, raw_unit, normalized_numeric_value,
+                   normalized_unit
+            FROM eligibility_evidence_long
+            WHERE rule_id = 'source:systolic_bp'
+            """
+        ).fetchone()
+        assert evidence[:2] == (20.0, "kPa")
+        assert evidence[2] == pytest.approx(150.012336540834)
+        assert evidence[3] == "mm Hg"
     finally:
         connection.close()
 
@@ -3009,6 +3204,56 @@ def test_date_only_context_rows_match_same_encounter_date(tmp_path: Path) -> Non
         assert connection.execute(
             "SELECT count(*) FROM analysis_primary_cleaned_obesity_hypercapnia"
         ).fetchone() == (0,)
+    finally:
+        connection.close()
+
+
+def test_compact_timestamp_context_respects_encounter_time_bounds(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"date_only": 31, "timestamped": 31})
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_rows = encounter_path.read_text().splitlines()
+    encounter_path.write_text(
+        "\n".join(
+            [encounter_rows[0]]
+            + [
+                row.replace(
+                    "2024-01-01 00:00:00,2024-01-02 00:00:00",
+                    "2024-01-01 12:00:00,2024-01-02 12:00:00",
+                )
+                for row in encounter_rows[1:]
+            ]
+        )
+        + "\n"
+    )
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_path.write_text(lab_path.read_text().replace("01:00:00", "13:00:00"))
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "date_only,e_date_only,20240101,ICD10CM,I46.9,,,,",
+        "timestamped,e_timestamped,20240101080000,ICD10CM,I46.9,,,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        assert connection.execute(
+            """
+            SELECT patient_id, cardiac_arrest_context
+            FROM cohort_hypercapnia_encounter
+            ORDER BY patient_id
+            """
+        ).fetchall() == [("date_only", True), ("timestamped", False)]
     finally:
         connection.close()
 

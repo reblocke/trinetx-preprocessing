@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import duckdb
 
 from .config import GLP1Config
+from .sql_helpers import timestamp_precision_sql
 
 
 @dataclass(frozen=True)
@@ -60,11 +61,7 @@ def _build_normalized_gas(
                 concept.concept_set_id,
                 try_cast(lab.lab_result_num_val AS DOUBLE) AS raw_numeric_value,
                 lower(trim(coalesce(lab.units_of_measure, ''))) AS unit_key,
-                CASE
-                    WHEN regexp_full_match(trim(lab.date), '\\d{{4}}-\\d{{2}}-\\d{{2}}')
-                    THEN 'date_only'
-                    ELSE 'timestamp'
-                END AS timestamp_precision
+                {timestamp_precision_sql('lab.date')} AS timestamp_precision
             FROM source_lab_measurement AS lab
             JOIN concept_set AS concept
               ON concept.domain = 'lab'
@@ -341,17 +338,26 @@ def _build_hypercapnia_encounters(
                          AND arterial.panel_id != ''
                          AND arterial.panel_id = candidate.panel_id)
                     ) THEN 'same_specimen_or_panel'
-                    WHEN arterial.event_datetime = candidate.event_datetime
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND arterial.event_datetime = candidate.event_datetime
                     THEN 'exact_timestamp'
-                    WHEN abs(datediff(
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND abs(datediff(
                         'minute', arterial.event_datetime, candidate.event_datetime
                     )) <= {pair_minutes}
                     THEN 'nearest_within_tolerance'
                     ELSE 'same_date_date_only'
                 END AS pairing_method,
-                abs(datediff(
-                    'minute', arterial.event_datetime, candidate.event_datetime
-                )) AS pairing_time_difference_minutes,
+                CASE
+                    WHEN arterial.timestamp_precision = 'date_only'
+                      OR candidate.timestamp_precision = 'date_only'
+                    THEN NULL
+                    ELSE abs(datediff(
+                        'minute', arterial.event_datetime, candidate.event_datetime
+                    ))
+                END AS pairing_time_difference_minutes,
                 CASE
                     WHEN (
                         (arterial.specimen_id IS NOT NULL
@@ -362,9 +368,13 @@ def _build_hypercapnia_encounters(
                          AND arterial.panel_id != ''
                          AND arterial.panel_id = candidate.panel_id)
                     ) THEN 'highest'
-                    WHEN arterial.event_datetime = candidate.event_datetime
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND arterial.event_datetime = candidate.event_datetime
                     THEN 'high'
-                    WHEN abs(datediff(
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND abs(datediff(
                         'minute', arterial.event_datetime, candidate.event_datetime
                     )) <= {pair_minutes}
                     THEN 'moderate'
@@ -380,8 +390,12 @@ def _build_hypercapnia_encounters(
                          AND arterial.panel_id != ''
                          AND arterial.panel_id = candidate.panel_id)
                     ) THEN 1
-                    WHEN arterial.event_datetime = candidate.event_datetime THEN 2
-                    WHEN abs(datediff(
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND arterial.event_datetime = candidate.event_datetime THEN 2
+                    WHEN arterial.timestamp_precision = 'timestamp'
+                     AND candidate.timestamp_precision = 'timestamp'
+                     AND abs(datediff(
                         'minute', arterial.event_datetime, candidate.event_datetime
                     )) <= {pair_minutes} THEN 3
                     ELSE 4
@@ -406,10 +420,18 @@ def _build_hypercapnia_encounters(
                          AND arterial.panel_id != ''
                          AND arterial.panel_id = candidate.panel_id)
                     )
-                 OR arterial.event_datetime = candidate.event_datetime
-                 OR abs(datediff(
+                 OR (
+                        arterial.timestamp_precision = 'timestamp'
+                    AND candidate.timestamp_precision = 'timestamp'
+                    AND arterial.event_datetime = candidate.event_datetime
+                 )
+                 OR (
+                        arterial.timestamp_precision = 'timestamp'
+                    AND candidate.timestamp_precision = 'timestamp'
+                    AND abs(datediff(
                         'minute', arterial.event_datetime, candidate.event_datetime
                     )) <= {pair_minutes}
+                 )
                  OR (
                         {str(hypercapnia.allow_date_only_pairing).upper()}
                     AND (
@@ -499,6 +521,7 @@ def _build_hypercapnia_encounters(
                 patient.month_year_death,
                 arterial.event_datetime AS abg_datetime,
                 arterial.lab_result_num_val AS abg_pco2_raw,
+                arterial.lab_result_text_val AS abg_pco2_raw_text,
                 arterial.units_of_measure AS abg_pco2_raw_unit,
                 arterial.normalized_numeric_value AS abg_pco2_mm_hg,
                 arterial.code AS abg_pco2_code,
@@ -554,7 +577,9 @@ def _build_hypercapnia_encounters(
                     FALSE
                 ) AS compensated_hypercapnia,
                 coalesce(
-                    arterial.normalized_numeric_value > {pco2_threshold}
+                    arterial.unit_usable
+                    AND arterial.plausible_value
+                    AND arterial.normalized_numeric_value > {pco2_threshold}
                     AND arterial.paired_ph_value IS NULL,
                     FALSE
                 ) AS pco2_only_sensitivity_case,
@@ -1028,12 +1053,12 @@ def _build_evidence_table(
             analysis.abg_source_file AS source_file,
             analysis.abg_source_record_hash AS source_record_hash,
             analysis.encounter_id AS source_encounter_id,
-            'LOINC' AS code_system,
+            cohort.abg_pco2_code_system AS code_system,
             analysis.abg_pco2_code AS code,
             'Arterial PCO2' AS code_description,
-            analysis.abg_pco2_mm_hg AS raw_numeric_value,
-            NULL::VARCHAR AS raw_text_value,
-            'mm Hg' AS raw_unit,
+            try_cast(cohort.abg_pco2_raw AS DOUBLE) AS raw_numeric_value,
+            cohort.abg_pco2_raw_text AS raw_text_value,
+            cohort.abg_pco2_raw_unit AS raw_unit,
             analysis.abg_pco2_mm_hg AS normalized_numeric_value,
             'mm Hg' AS normalized_unit,
             datediff('day', analysis.index_date, analysis.abg_datetime)
@@ -1043,6 +1068,7 @@ def _build_evidence_table(
             json_object('pairing_method', analysis.abg_pairing_method)
                 AS provenance_json
         FROM analysis_glp1_eligibility AS analysis
+        JOIN cohort_hypercapnia_patient_index AS cohort USING (index_event_id)
         UNION ALL
         SELECT
             {_sql_string(run_id)},

@@ -57,7 +57,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   Existing non-directory output paths also fail before Git probing. Builds now
   checkpoint DuckDB and fail before publication if a WAL remains.
 - Matched date-only diagnosis and procedure context rows by encounter calendar
-  date while retaining exact encounter-bound checks for timestamped rows.
+  date while retaining exact encounter-bound checks for timestamped rows,
+  including compact `YYYYMMDD` and `YYYYMMDDHHMMSS` source representations.
 - Bounded vital, diagnosis, procedure, and medication ingestion with reusable
   patient-hash Parquet partitions, and normalized compact TriNetX `YYYYMMDD`
   dates before temporal cohort and phenotype logic.
@@ -73,9 +74,15 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   lookback windows.
 - Excluded specimen-unspecified PCO2 from the VBG-only sensitivity cohort while
   retaining it as non-qualifying source evidence.
-- Applied configured lookback windows to baseline diagnosis, procedure, and
-  medication evidence, including open-ended active medication records, and
-  applied the measurement-specific window to every baseline lab phenotype.
+- Applied phenotype-specific temporal windows: all available pre-index history
+  for MI, stroke, PAD, revascularization, bariatric and liver-staging history;
+  five years for AHI/REI; the general history window for kidney and cardiac
+  measurements; and all prior structured fibrosis staging. Pre-index GLP-1
+  order history is no longer truncated by the active-medication window.
+- Represented diagnosis-only obesity as `code_only` without promoting it into
+  measured BMI threshold views, normalized blood pressure only from recognized
+  pressure units, and preserved raw gas and blood-pressure values and units in
+  long-form evidence.
 - Included dirty tracked and untracked source content in the deterministic run
   identity so locally modified builds cannot reuse clean-code outputs.
 - Honored the Parquet and HTML output switches and emitted aggregate warnings

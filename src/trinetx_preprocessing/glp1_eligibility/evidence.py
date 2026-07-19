@@ -70,6 +70,7 @@ PROBABLE_CERTAINTY = (
 
 
 STATUS_RULES = (
+    StatusRule("obesity_status", "obesity", "obesity_certainty"),
     StatusRule("t2d_status", "type_2_diabetes", "t2d_certainty"),
     StatusRule("prediabetes_status", "prediabetes", DEFAULT_CERTAINTY),
     StatusRule("prior_mi_status", "prior_mi", CODE_CERTAINTY),
@@ -277,8 +278,8 @@ def _append_blood_pressure_evidence(
             evidence.event_datetime, 'vital', 'source_vital_measurement',
             evidence.source_file, evidence.source_record_hash,
             evidence.encounter_id, evidence.code_system, evidence.code,
-            NULL, evidence.numeric_value, evidence.text_value,
-            evidence.units_of_measure, evidence.numeric_value, 'mm Hg',
+            NULL, evidence.raw_numeric_value, evidence.text_value,
+            evidence.units_of_measure, evidence.normalized_numeric_value, 'mm Hg',
             datediff('day', analysis.index_date, evidence.event_datetime), TRUE,
             row_number() OVER (
                 PARTITION BY evidence.index_event_id, evidence.concept_set_id
