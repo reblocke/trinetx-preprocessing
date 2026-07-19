@@ -206,6 +206,7 @@
 - Focused corrections preserve the strict measured-BMI cohort while adding code-only obesity, apply phenotype-specific windows, normalize BP units, and retain raw gas/BP evidence. The audit also found 214 patients with a later clean event, but issue #6 explicitly requires the earliest primary event; context therefore remains a cleaned-view exclusion rather than triggering reselection.
 - The correction gate passes `git diff --check`, Ruff, and all `324` tests in `326.01 s`. A production CLI smoke completed in `0.75 s` with `295,239,680` bytes maximum RSS, 19 candidate encounters, 17 patient index events, 14 strict primary rows, 668 evidence rows, all eight public files, and zero warnings.
 - Final test-scratch cleanup deleted only 44 recognized external pytest artifacts (`114,844` bytes) and 54 recognized `/tmp` artifacts (`186` bytes); the external pytest tree, `/tmp`, and GLP-1 review temp root all rechecked at zero. No build, monitor, pytest, or cleanup process remains active.
+- Correction commit `1334360` is pushed on PR #7 after the staged payload was confirmed free of private or generated artifacts. A fresh GitHub Codex review is the active gate before another full build.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -214,10 +215,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Inspect the complete correction diff, stage only intended public files, and create the review checkpoint commit.
+- Request and monitor a fresh GitHub Codex review of correction commit `1334360` on PR #7.
 
 ## Next
-- Push the correction checkpoint, request and resolve a fresh GitHub Codex review on PR #7, then run one fresh full build from the review-clean code and update aggregate evidence.
+- Resolve any actionable PR findings and rerun affected local gates, then run one fresh full build from the review-clean code and update aggregate evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
