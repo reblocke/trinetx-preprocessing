@@ -527,7 +527,10 @@ def _build_lab_summary(
                 AS egfr_low_first_datetime,
             first(
                 event_datetime_precision
-                ORDER BY event_datetime, source_record_hash
+                ORDER BY
+                    event_datetime,
+                    event_datetime_precision <> 'date_only',
+                    source_record_hash
             )
                 FILTER (WHERE concept_set_id = 'egfr'
                         AND normalized_numeric_value < 60)
@@ -541,7 +544,10 @@ def _build_lab_summary(
                 AS egfr_low_last_datetime,
             first(
                 event_datetime_precision
-                ORDER BY event_datetime DESC, source_record_hash DESC
+                ORDER BY
+                    event_datetime DESC,
+                    event_datetime_precision <> 'date_only',
+                    source_record_hash DESC
             )
                 FILTER (WHERE concept_set_id = 'egfr'
                         AND normalized_numeric_value < 60)

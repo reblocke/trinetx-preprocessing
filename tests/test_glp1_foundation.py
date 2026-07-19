@@ -2580,6 +2580,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         "ckd_persistent",
         "ckd_date_boundary",
         "ckd_timestamp_short",
+        "ckd_tied_last_precision",
         "osa_code",
         "osa_ahi",
         "antipsychotic_only",
@@ -2629,6 +2630,12 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
             "LOINC,77147-7,45,,mL/min/1.73m2",
             "ckd_timestamp_short,e_ckd_timestamp_short,2024-01-01 00:00:00,"
             "LOINC,77147-7,50,,mL/min/1.73m2",
+            "ckd_tied_last_precision,e_ckd_tied_last_precision,"
+            "2023-10-03 02:00:00,LOINC,77147-7,45,,mL/min/1.73m2",
+            "ckd_tied_last_precision,e_ckd_tied_last_precision,2024-01-01,"
+            "LOINC,77147-7,50,,mL/min/1.73m2",
+            "ckd_tied_last_precision,e_ckd_tied_last_precision,"
+            "2024-01-01 00:00:00,LOINC,77147-7,50,,mL/min/1.73m2",
             "osa_ahi,e_osa_ahi,2023-12-01,LOINC,69990-9,20,,events/hour",
         )
     )
@@ -2691,6 +2698,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         assert by_patient["ckd_persistent"][4:6] == (True, "met")
         assert by_patient["ckd_date_boundary"][4:6] == (True, "met")
         assert by_patient["ckd_timestamp_short"][4:6] == (False, "indeterminate")
+        assert by_patient["ckd_tied_last_precision"][4:6] == (True, "met")
         assert by_patient["osa_code"][6:9] == (
             "met",
             "indeterminate",

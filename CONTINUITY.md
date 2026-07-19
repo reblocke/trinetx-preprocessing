@@ -250,6 +250,8 @@
 - The narrow CKD fix passes `git diff --check`, Ruff, all `97` GLP-1 foundation tests, and all `336` repository tests in `38.21 s`. The production synthetic build completed in `0.69 s` with `300,007,424` bytes maximum RSS, unchanged `19/17/14/685` counts, exactly eight files, zero warnings/errors, and no WAL or scratch.
 - A PHI-safe read-only probe of the parent database found `29,635` index events with low eGFR and `13,553` persistent cases under both old and precision-aware calculations, with zero changed classifications. Exact-head full execution remains required for provenance.
 - Commit `1033418` contains the precision-aware CKD fix and corrected parent-evidence labeling and is pushed. Both review findings are answered and their GitHub threads are resolved; exact-head CI/re-review is the remaining launch gate.
+- Exact-head review of `875fa8f` found one adjacent P2 edge case: tied date-only and timestamped low-eGFR endpoint rows could inherit timestamp precision from an arbitrary source-record hash. Endpoint reduction now prioritizes date-only precision only on an exact datetime tie.
+- The tied-endpoint correction passes `git diff --check`, Ruff, all `97` GLP-1 foundation tests, and all `336` repository tests in `268.19 s`. The production synthetic build completed in `0.80 s` with `299,237,376` bytes maximum RSS, unchanged `19/17/14/685` counts, exactly eight files, zero warnings, and no WAL or scratch. Twenty-two pytest scratch artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -258,10 +260,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Obtain green CI and a clean Codex review for the pushed CKD correction, then freeze that reviewed commit as the fresh full-build provenance head.
+- Commit and push the tied-endpoint precision fix, resolve its review thread, and obtain green CI plus a clean exact-head Codex review.
 
 ## Next
-- Regenerate full-data evidence from the reviewed head, monitor it to completion, repeat terminal and aggregate validation, then commit the final evidence ledger and request one final exact-head review.
+- Freeze the review-clean commit as provenance, launch the prepared full run under `full_final_875fa8f_20260719` after repinning its commit guard, monitor it to completion, then repeat terminal and aggregate validation.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -287,6 +289,7 @@
 - Final validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/full_build_validation_71ef56f.json`; semantic comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/aggregate_delta_vs_00e24a9.json` and `.md`.
 - Parent-implementation clinical output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/glp1_eligibility`; run ID `c62cc473ccfff9d2b697af6b`.
 - Parent-implementation validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/terminal_validation.json`; aggregate comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/aggregate_delta_vs_71ef56f.json` and `.md`.
+- Prepared current-evidence run root: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_875fa8f_20260719`; launch remains gated on the next exact-head review and its commit guard will be repinned before execution.
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.
