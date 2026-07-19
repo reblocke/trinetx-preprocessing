@@ -142,14 +142,24 @@ Before release:
 
 ## GLP-1 additive full-data evidence
 
-The corrected additive GLP-1 build from commit `00e24a9` completed in
-20,247.71 seconds with 5,342,773,248 bytes maximum RSS. It used the supported
-4,096 MiB/one-thread DuckDB configuration and published all eight public files
-atomically. The terminal validation gate found zero warnings, errors, WAL
-files, recognized scratch artifacts, AppleDouble sidecars, blank data-dictionary
-descriptions, or missing required concept matches.
+The final corrected additive GLP-1 build from reviewed commit `71ef56f`
+completed in 20,284.53 seconds with 5,012,209,664 bytes maximum RSS. It used
+the supported 4,096 MiB/one-thread DuckDB configuration and atomically
+published exactly the eight public files. The terminal validation gate found
+zero warnings, errors, WAL files, recognized scratch artifacts, AppleDouble
+sidecars, blank data-dictionary descriptions, or missing required concept
+matches. External free space remained about 7.52 TiB.
 
-The PHI-safe comparison against the preserved provisional build records:
+The final run contains 59,954 analysis rows, 1,320,409 candidate encounters,
+9,527 strict primary rows, 14,631,872 evidence rows, and all 15 cohort-flow
+stages. Order-independent semantic fingerprints for the complete analysis,
+candidate-encounter, and evidence tables match the preserved `00e24a9`
+corrected diagnostic build after excluding only run provenance. The analysis
+schema, all index-event keys, and every non-provenance analysis value also
+match exactly.
+
+The PHI-safe comparison of this corrected behavior against the preserved
+provisional build records:
 
 - 59,954 shared index-event keys, with zero baseline-only or corrected-only
   keys;

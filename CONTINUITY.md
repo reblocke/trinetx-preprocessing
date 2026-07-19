@@ -1,10 +1,8 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Publish the reviewed corrected pipeline as immutable `refactor-milestone-2` / `v0.2.0`, then begin the supplied GLP-1 implementation ticket on a new post-milestone branch.
-- Milestone 2 success requires the corrected clinical invariants, 36-file/534-column public output contract, local and staged tests, fresh BOOK profile, aggregate-only delta evidence, explicit conflict policy, clean review, tags, and GitHub release.
-- GLP-1 work must augment the existing database creation only; existing outputs and behavior remain intact unless the ticket explicitly adds versioned fields or artifacts.
-- Current turn: correct the actionable findings from the holistic full-output audit, pass local review gates, and obtain a fresh GitHub Codex review before regenerating full evidence.
+- Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
+- Current turn: finalize the fresh full-data evidence from exact-head commit `71ef56f`, push the evidence bookkeeping, and obtain one final GitHub Codex review.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -233,6 +231,9 @@
 - Final bookkeeping gates pass: `git diff --check`, Ruff, and all `329` tests in `241.67 s` with external temp/cache. Only 22 recognized pytest scratch artifacts (`57,422` bytes) were deleted, and external temp plus `/tmp` rechecked at zero.
 - Final exact-head Codex review of `6ade6b2` found two actionable P2 issues: `build_workspace.json` is published as a ninth visible output despite the eight-file contract, and source mtimes incorrectly participate in the deterministic input identity. Both findings are accepted; their `src/` fixes make the `00e24a9` full run stale as exact-head release evidence.
 - Both review fixes are implemented locally. Ninety-two focused foundation tests and all `331` tests pass locally and with external temp/cache (`240.72 s`); a production synthetic build publishes exactly eight physical files, and an mtime-only source change reuses the same run ID and output. The external test gate created only 22 recognized scratch artifacts (`57,422` bytes); they were deleted and external temp plus `/tmp` rechecked at zero.
+- Commit `71ef56f` is pushed; Linux CI passed Ruff and all `331` tests in `1m46s`, both review threads are resolved, exact-head Codex review found no major issues, and PR #7 has zero unresolved threads.
+- Final full build `445770a7abe7c2b0af335091` from clean reviewed commit `71ef56f` completed in `20,284.53 s` (`5h38m04s`) with `5,012,209,664` bytes maximum RSS. It atomically published exactly eight files, retained about `7.52 TiB` external free space, and finished with zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, or hidden build workspace.
+- All terminal validation checks pass. Order-independent semantic fingerprints match the preserved `00e24a9` corrected build across `59,954` analysis rows, `1,320,409` candidate encounters, and `14,631,872` evidence rows; schema, key sets, counts, and non-provenance analysis values have zero differences.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -241,10 +242,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Complete the external-temp local gate, commit and push the review fixes, and obtain clean CI plus exact-head Codex review.
+- Run repository bookkeeping gates, commit and push the final evidence record, and request exact-head Codex review on PR #7.
 
 ## Next
-- Launch one final fresh full-data build from the review-clean fix commit and regenerate aggregate validation evidence.
+- Address only actionable final review findings; otherwise prepare the GLP-1 endpoint handoff without changing the private evidence bundle.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -266,6 +267,8 @@
 - Corrected full output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/glp1_eligibility`; run ID `9b5d5190570c2c20873cfc64`.
 - Corrected full validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/manifests/full_build_validation_00e24a9.json`.
 - Aggregate provisional comparison: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/manifests/aggregate_delta_vs_e832e4a.json` and `.md`.
+- Final reviewed output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/glp1_eligibility`; run ID `445770a7abe7c2b0af335091`.
+- Final validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/full_build_validation_71ef56f.json`; semantic comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/aggregate_delta_vs_00e24a9.json` and `.md`.
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.

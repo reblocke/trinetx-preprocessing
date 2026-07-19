@@ -1349,7 +1349,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Successful output directories contain exactly eight public
   files. Failed publication remains resumable, and byte-identical restored
   exports can reuse completed outputs while still recording observed mtimes.
-  Full-data release evidence generated before this change must be regenerated.
+  Final full build `445770a7abe7c2b0af335091` at `71ef56f` confirmed the
+  eight-file physical contract, stable semantic output fingerprints, zero WAL
+  and recognized scratch, and a `5,012,209,664`-byte maximum RSS.
 - References: `src/trinetx_preprocessing/glp1_eligibility/workspace.py`,
   `src/trinetx_preprocessing/glp1_eligibility/provenance.py`,
   `tests/test_glp1_foundation.py`.

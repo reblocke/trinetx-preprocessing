@@ -24,12 +24,14 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Completed a clean full-data build of the corrected GLP-1 pipeline in
-  20,247.71 seconds with 5,342,773,248 bytes maximum RSS, below the 6,238 MiB
-  gate. The build produced all eight contracted analytic outputs with zero
-  warnings, errors, WAL files, or recognized scratch artifacts. A subsequent
-  publication-contract review found one additional internal workspace manifest;
-  that run remains diagnostic evidence but must be repeated after the fix below.
+- Completed the final reviewed full-data GLP-1 build from commit `71ef56f` in
+  20,284.53 seconds with 5,012,209,664 bytes maximum RSS, below the 6,238 MiB
+  gate. The build atomically published exactly the eight contracted analytic
+  files with zero warnings, errors, WAL files, recognized scratch artifacts, or
+  residual AppleDouble sidecars.
+- Verified order-independent semantic fingerprints for all 59,954 analysis
+  rows, 1,320,409 candidate encounters, and 14,631,872 evidence rows against
+  the preserved corrected diagnostic build, with no non-provenance difference.
 - Full-data aggregate comparison preserves all 59,954 index-event keys,
   1,320,409 hypercapnia candidate encounters, and 9,527 strict primary rows.
   Corrected phenotype windows, date precision, code-only obesity, blood-pressure
