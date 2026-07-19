@@ -211,6 +211,9 @@
 - All three review findings are fixed locally through a shared precision-aware encounter-end bound, a distinct source-traceable paired-pH evidence row, and configured BP measurement lookback. Focused regressions, `git diff --check`, Ruff, and all `324` tests pass in `33.92 s`.
 - The production synthetic build completed in `0.65 s` with `293,158,912` bytes maximum RSS, 19 candidate encounters, 17 index events, 14 strict primary rows, 685 evidence rows (including 17 paired-pH source rows), 15 flow stages, eight public files, zero warnings, zero blank dictionary descriptions, and no WAL. Test scratch deleted only 22 recognized artifacts (`78` bytes) and rechecked at zero.
 - Follow-up commit `fe41501` is pushed on PR #7; each finding has a direct fix reply and all three review threads are resolved. Fresh re-review is the remaining gate before a full-data rebuild.
+- Re-review of `8582835` returned one adjacent P2 finding: date-only blood-pressure rows exactly on the configured lookback calendar-day boundary could be excluded when the index timestamp is later than midnight. The finding is accepted for a precision-aware BP boundary follow-up.
+- The BP boundary follow-up preserves exact elapsed-time bounds for timestamped readings and uses inclusive calendar-day bounds only for date-only source values. Its focused regression, `git diff --check`, Ruff, and all `324` tests pass in `33.38 s`.
+- The production synthetic build completed in `0.68 s` with `295,403,520` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -219,10 +222,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Request and monitor GitHub Codex re-review of follow-up commit `fe41501`.
+- Commit and push the verified BP boundary follow-up, then resolve its PR review thread.
 
 ## Next
-- If re-review is clean, launch one fresh full build from the reviewed code and update aggregate evidence; otherwise address findings first.
+- Request a fresh Codex review of the exact pushed head; if clean, launch one fresh full build and update aggregate evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

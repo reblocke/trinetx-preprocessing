@@ -1291,11 +1291,11 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Decision: Classify ISO and compact source dates by their actual precision and
   apply the endpoint's phenotype-specific history windows. Keep diagnosis-only
   obesity at `code_only`, normalize blood pressure only from recognized units,
-  apply its configured measurement window, and preserve raw gas and
-  blood-pressure evidence fields. Treat date-only encounter ends as inclusive
-  calendar days and publish the paired pH source row required by strict
-  hypercapnia. Continue selecting the earliest primary qualifying encounter
-  before cleaned-view exclusions.
+  apply its configured measurement window using calendar-day boundaries for
+  date-only readings, and preserve raw gas and blood-pressure evidence fields.
+  Treat date-only encounter ends as inclusive calendar days and publish the
+  paired pH source row required by strict hypercapnia. Continue selecting the
+  earliest primary qualifying encounter before cleaned-view exclusions.
 - Context: A full-output audit found that compact date-only gases were treated
   as exact timestamps and explicit all-history fields were truncated by general
   lookback windows. Aggregate review also found 12,378 missing-BMI patients with

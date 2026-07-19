@@ -544,8 +544,16 @@ def _build_blood_pressure_summary(
         JOIN source_vital_measurement AS vital
          ON vital.patient_id = analysis.patient_id
          AND vital.event_datetime <= analysis.index_date
-         AND vital.event_datetime >=
-             analysis.index_date - INTERVAL {measurement_lookback} DAY
+         AND (
+                vital.event_datetime >=
+                    analysis.index_date - INTERVAL {measurement_lookback} DAY
+             OR (
+                    {raw_date_is_date_only_sql('vital.date')}
+                AND vital.event_datetime::DATE >=
+                    (analysis.index_date::DATE
+                     - INTERVAL {measurement_lookback} DAY)::DATE
+             )
+         )
         LEFT JOIN glp1_encounter AS encounter
           ON encounter.patient_id = vital.patient_id
          AND encounter.encounter_id = vital.encounter_id

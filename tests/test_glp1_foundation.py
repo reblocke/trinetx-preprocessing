@@ -2779,14 +2779,28 @@ def test_blood_pressure_normalizes_units_and_rejects_unknown_units(
     output_root = tmp_path / "output" / "glp1_eligibility"
     _write_export(export_root)
     _append_primary_cases(export_root, {"bp": 31})
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_path.write_text(
+        encounter_path.read_text().replace(
+            "e_bp,bp,2024-01-01 00:00:00,2024-01-02 00:00:00",
+            "e_bp,bp,2024-01-01 12:00:00,2024-01-02 12:00:00",
+        )
+    )
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_path.write_text(
+        lab_path.read_text().replace(
+            "bp,e_bp,2024-01-01 01:00:00",
+            "bp,e_bp,2024-01-01 13:00:00",
+        )
+    )
     _append_rows(
-        export_root / "Encounter" / "encounter.csv",
-        "e_bp_amb,bp,2023-05-01,2023-05-01,AMB,s1",
+        encounter_path,
+        "e_bp_amb,bp,20230101,20230101,AMB,s1",
     )
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
-        "bp,e_bp_amb,2023-05-01,LOINC,8480-6,20,,kPa",
-        "bp,e_bp_amb,2023-05-01,LOINC,8462-4,12,,kPa",
+        "bp,e_bp_amb,20230101,LOINC,8480-6,20,,kPa",
+        "bp,e_bp_amb,20230101,LOINC,8462-4,12,,kPa",
         "bp,e_bp_amb,2023-12-20,LOINC,8480-6,200,,widgets",
     )
 
