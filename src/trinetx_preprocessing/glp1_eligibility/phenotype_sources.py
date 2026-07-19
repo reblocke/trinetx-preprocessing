@@ -8,6 +8,7 @@ from .config import GLP1Config
 from .sql_helpers import (
     inclusive_datetime_end_sql,
     inclusive_followup_end_sql,
+    inclusive_followup_start_sql,
     inclusive_lookback_start_sql,
     raw_date_is_date_only_sql,
     timestamp_precision_sql,
@@ -679,6 +680,11 @@ def _build_medication_evidence(
         "analysis.index_date",
         followup,
     )
+    after_index = inclusive_followup_start_sql(
+        "medication.event_datetime",
+        start_precision,
+        "analysis.index_date",
+    )
     in_30_day_followup = inclusive_followup_end_sql(
         "event_datetime",
         timestamp_precision_sql("start_date"),
@@ -719,8 +725,7 @@ def _build_medication_evidence(
                 AND (medication.end_datetime IS NULL
                      OR {medication_end} >= analysis.index_date)
                 AS active_at_index,
-            medication.event_datetime > analysis.index_date
-                AND {in_followup}
+            {after_index} AND {in_followup}
                 AS ordered_post_index
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_medication AS medication

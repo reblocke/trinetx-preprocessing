@@ -89,7 +89,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   rows and calendar-day bounds for date-only diagnosis, procedure, laboratory,
   BMI, blood pressure, medication, and observability rows. Date-only medication
   ends remain active through their complete calendar day, and GLP-1 follow-up
-  flags use exact endpoints for timestamped orders.
+  flags use exact starts/endpoints for timestamped orders and inclusive
+  calendar dates for date-only orders.
 - Included dirty tracked and untracked source content in the deterministic run
   identity so locally modified builds cannot reuse clean-code outputs.
 - Honored the Parquet and HTML output switches and emitted aggregate warnings

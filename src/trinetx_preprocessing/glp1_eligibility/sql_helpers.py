@@ -62,6 +62,22 @@ def inclusive_followup_end_sql(
     )"""
 
 
+def inclusive_followup_start_sql(
+    event_datetime: str,
+    precision: str,
+    index_datetime: str,
+) -> str:
+    """Return a post-index lower bound that preserves source date precision."""
+
+    return f"""(
+        {event_datetime} > {index_datetime}
+        OR (
+            ({precision}) = 'date_only'
+            AND {event_datetime}::DATE >= {index_datetime}::DATE
+        )
+    )"""
+
+
 def inclusive_datetime_end_sql(
     end_datetime: str,
     precision: str,

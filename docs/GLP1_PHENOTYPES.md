@@ -46,7 +46,9 @@ records their version and source rows in DuckDB.
   while active-at-index medication components retain the medication window.
   Timestamped rows use exact lookback bounds; date-only rows use inclusive
   calendar-day bounds, date-only medication ends include the reported day, and
-  post-index order flags apply the same precision-aware endpoint convention.
+  post-index order flags use the exact index instant for timestamped rows and
+  the inclusive index calendar day for date-only rows, with the same
+  precision-aware endpoint convention.
 - Strict OSA requires AHI/REI evidence; an OSA code without severity remains
   indeterminate for the strict indication.
 - Laboratory-only CKD requires persistent low eGFR on measurements separated by

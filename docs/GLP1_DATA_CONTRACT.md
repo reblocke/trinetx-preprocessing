@@ -49,8 +49,9 @@ remain mandatory.
 - Configured lookback starts use exact elapsed-time bounds for timestamped rows
   and inclusive calendar-day bounds for date-only rows. Date-only medication
   end dates remain active through the end of their reported calendar day.
-  Post-index medication windows likewise use exact timestamp endpoints and
-  inclusive date-only calendar-day endpoints.
+  Post-index medication windows use the exact index instant and endpoints for
+  timestamped rows, and inclusive index-day and endpoint calendar dates for
+  date-only rows.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
 - Gas normalization accepts common textual mmHg/pH labels and canonical UCUM

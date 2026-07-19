@@ -2803,7 +2803,13 @@ def test_glp1_followup_boundaries_respect_start_precision(tmp_path: Path) -> Non
     export_root = tmp_path / "export"
     output_root = tmp_path / "output" / "glp1_eligibility"
     _write_export(export_root)
-    patients = ("followup_date", "followup_timestamp")
+    patients = (
+        "followup_date",
+        "followup_timestamp",
+        "same_day_date",
+        "same_day_timestamp_before",
+        "same_day_timestamp_after",
+    )
     _append_primary_cases(export_root, {patient: 31 for patient in patients})
 
     encounter_path = export_root / "Encounter" / "encounter.csv"
@@ -2829,6 +2835,12 @@ def test_glp1_followup_boundaries_respect_start_precision(tmp_path: Path) -> Non
         "subcutaneous,Wegovy,2.4mg",
         "followup_timestamp,e_followup_timestamp,RXNORM,1991302,"
         "2024-01-31 13:00:00,subcutaneous,Wegovy,2.4mg",
+        "same_day_date,e_same_day_date,RXNORM,1991302,20240101,"
+        "subcutaneous,Wegovy,2.4mg",
+        "same_day_timestamp_before,e_same_day_timestamp_before,RXNORM,1991302,"
+        "2024-01-01 11:00:00,subcutaneous,Wegovy,2.4mg",
+        "same_day_timestamp_after,e_same_day_timestamp_after,RXNORM,1991302,"
+        "2024-01-01 13:00:00,subcutaneous,Wegovy,2.4mg",
     )
 
     build_glp1_eligibility(
@@ -2851,6 +2863,9 @@ def test_glp1_followup_boundaries_respect_start_precision(tmp_path: Path) -> Non
         assert rows == [
             ("followup_date", True, True, True),
             ("followup_timestamp", False, True, True),
+            ("same_day_date", True, True, True),
+            ("same_day_timestamp_after", True, True, True),
+            ("same_day_timestamp_before", False, False, False),
         ]
     finally:
         connection.close()

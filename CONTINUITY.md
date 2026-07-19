@@ -223,6 +223,9 @@
 - Commit `a707a72` is pushed, Linux CI passed in `1m39s`, and both review threads are resolved. Re-review found one remaining P2: post-index GLP-1 30/90/365-day flags still used calendar-day `datediff` for timestamped orders.
 - Post-index medication endpoints now use a shared precision-aware upper bound. A focused regression proves a date-only day-30 order qualifies while a timestamped order one hour beyond the exact day-30 cutoff does not. `git diff --check`, Ruff, and all `329` tests pass in `36.45 s`.
 - The production synthetic build completed in `0.72 s` with `293,158,912` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, all 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
+- Commit `233e98e` is pushed, Linux CI passed in `1m46s`, and its review thread is resolved.
+- Exact-head review of `233e98e` found one adjacent P2: date-only orders on the index calendar day were excluded from post-index follow-up because its lower bound still used an exact timestamp comparison. A shared precision-aware follow-up start now uses the inclusive index calendar day for date-only orders while timestamped orders remain strictly after the index instant.
+- The day-zero correction passes its focused regression, `git diff --check`, Ruff, and all `329` tests in `242.52 s`. The production synthetic build completed in `0.79 s` with `292,880,384` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH source rows, all 15 flow stages, eight contracted outputs, zero warnings, zero blank dictionary descriptions, and no WAL or scratch. Test scratch deleted only 22 recognized artifacts (`57,422` bytes) and rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -231,10 +234,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the post-index medication boundary follow-up, then resolve its review thread.
+- Commit and push the date-only follow-up day-zero correction, resolve the review thread, and obtain a clean exact-head Codex review before launching the corrected full build.
 
 ## Next
-- Push and resolve the two review findings, obtain a clean Codex review of the exact head, then launch one fresh full build and update aggregate evidence.
+- Record the review-clean provenance checkpoint, launch the detached corrected full build under the unused external run root, and monitor it through terminal validation.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
