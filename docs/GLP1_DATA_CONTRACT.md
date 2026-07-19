@@ -46,6 +46,9 @@ remain mandatory.
 - Timestamped context rows use exact encounter bounds. Date-only diagnosis and
   procedure rows on the selected encounter use encounter calendar-date overlap;
   date-only encounter ends include their complete calendar day.
+- Configured lookback starts use exact elapsed-time bounds for timestamped rows
+  and inclusive calendar-day bounds for date-only rows. Date-only medication
+  end dates remain active through the end of their reported calendar day.
 - Dates, raw/normalized values, units, source file, source record hash, and
   source encounter are preserved where the export supplies them.
 - Gas normalization accepts common textual mmHg/pH labels and canonical UCUM

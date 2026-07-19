@@ -214,6 +214,9 @@
 - Re-review of `8582835` returned one adjacent P2 finding: date-only blood-pressure rows exactly on the configured lookback calendar-day boundary could be excluded when the index timestamp is later than midnight. The finding is accepted for a precision-aware BP boundary follow-up.
 - The BP boundary follow-up preserves exact elapsed-time bounds for timestamped readings and uses inclusive calendar-day bounds only for date-only source values. Its focused regression, `git diff --check`, Ruff, and all `324` tests pass in `33.38 s`.
 - The production synthetic build completed in `0.68 s` with `295,403,520` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
+- Commit `33e99dd` is pushed, Linux CI passed in `1m37s`, and the BP review thread is resolved. Re-review found the same date-precision class in diagnosis/procedure lookback starts and medication start/end bounds.
+- One shared precision-aware lookback helper now covers diagnosis, procedure, measured/calculated BMI, blood pressure, medication, raw observability, and encounter-count boundaries. Date-only medication ends use an inclusive end-of-day bound. Eight targeted temporal/history tests, `git diff --check`, Ruff, and all `327` tests pass in `35.48 s`.
+- The production synthetic build completed in `0.70 s` with `293,765,120` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, all 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -222,10 +225,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the verified BP boundary follow-up, then resolve its PR review thread.
+- Commit and push the shared date-precision correction, then resolve both review threads.
 
 ## Next
-- Request a fresh Codex review of the exact pushed head; if clean, launch one fresh full build and update aggregate evidence.
+- Push and resolve the two review findings, obtain a clean Codex review of the exact head, then launch one fresh full build and update aggregate evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

@@ -5,7 +5,12 @@ from __future__ import annotations
 import duckdb
 
 from .config import GLP1Config
-from .sql_helpers import inclusive_datetime_end_sql, raw_date_is_date_only_sql
+from .sql_helpers import (
+    inclusive_datetime_end_sql,
+    inclusive_lookback_start_sql,
+    raw_date_is_date_only_sql,
+    timestamp_precision_sql,
+)
 
 DIAGNOSIS_COMPONENTS = (
     "obesity",
@@ -192,6 +197,12 @@ def _build_diagnosis_evidence(
         _sql_string(component)
         for component in sorted(ALL_HISTORY_DIAGNOSIS_COMPONENTS)
     )
+    in_lookback = inclusive_lookback_start_sql(
+        "diagnosis.event_datetime",
+        timestamp_precision_sql("diagnosis.date"),
+        "analysis.index_date",
+        lookback,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE diagnosis_component_evidence AS
@@ -213,8 +224,7 @@ def _build_diagnosis_evidence(
          AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
          AND {_concept_match_sql('diagnosis.code')}
         WHERE concept.concept_set_id IN ({all_history})
-           OR diagnosis.event_datetime >=
-              analysis.index_date - INTERVAL {lookback} DAY
+           OR {in_lookback}
         """
     )
     expressions = ",\n            ".join(
@@ -241,6 +251,12 @@ def _build_procedure_evidence(
         _sql_string(component)
         for component in sorted(ALL_HISTORY_PROCEDURE_COMPONENTS)
     )
+    in_lookback = inclusive_lookback_start_sql(
+        "procedure.event_datetime",
+        timestamp_precision_sql("procedure.date"),
+        "analysis.index_date",
+        lookback,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE procedure_component_evidence AS
@@ -262,8 +278,7 @@ def _build_procedure_evidence(
          AND {_code_system_sql('procedure.code_system')} = concept.code_system
          AND {_concept_match_sql('procedure.code')}
         WHERE concept.concept_set_id IN ({all_history})
-           OR procedure.event_datetime >=
-              analysis.index_date - INTERVAL {lookback} DAY
+           OR {in_lookback}
         """
     )
     expressions = ",\n            ".join(
@@ -520,6 +535,12 @@ def _build_blood_pressure_summary(
     config: GLP1Config,
 ) -> None:
     measurement_lookback = config.study.measurement_lookback_days
+    in_lookback = inclusive_lookback_start_sql(
+        "vital.event_datetime",
+        timestamp_precision_sql("vital.date"),
+        "analysis.index_date",
+        measurement_lookback,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_bp_evidence AS
@@ -544,16 +565,7 @@ def _build_blood_pressure_summary(
         JOIN source_vital_measurement AS vital
          ON vital.patient_id = analysis.patient_id
          AND vital.event_datetime <= analysis.index_date
-         AND (
-                vital.event_datetime >=
-                    analysis.index_date - INTERVAL {measurement_lookback} DAY
-             OR (
-                    {raw_date_is_date_only_sql('vital.date')}
-                AND vital.event_datetime::DATE >=
-                    (analysis.index_date::DATE
-                     - INTERVAL {measurement_lookback} DAY)::DATE
-             )
-         )
+         AND {in_lookback}
         LEFT JOIN glp1_encounter AS encounter
           ON encounter.patient_id = vital.patient_id
          AND encounter.encounter_id = vital.encounter_id
@@ -621,6 +633,17 @@ def _build_medication_evidence(
 ) -> None:
     lookback = config.study.medication_lookback_days
     followup = config.study.followup_days
+    in_lookback = inclusive_lookback_start_sql(
+        "medication.event_datetime",
+        timestamp_precision_sql("medication.start_date"),
+        "analysis.index_date",
+        lookback,
+    )
+    medication_end = inclusive_datetime_end_sql(
+        "medication.end_datetime",
+        timestamp_precision_sql("medication.end_date"),
+        "NULL",
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE medication_component_evidence AS
@@ -635,15 +658,13 @@ def _build_medication_evidence(
             medication.event_datetime <= analysis.index_date
                 AND (
                     starts_with(concept.concept_set_id, 'glp1_')
-                    OR medication.event_datetime >=
-                       analysis.index_date - INTERVAL {lookback} DAY
+                    OR {in_lookback}
                 )
                 AS ordered_pre_index,
             medication.event_datetime <= analysis.index_date
-                AND medication.event_datetime >=
-                    analysis.index_date - INTERVAL {lookback} DAY
+                AND {in_lookback}
                 AND (medication.end_datetime IS NULL
-                     OR medication.end_datetime >= analysis.index_date)
+                     OR {medication_end} >= analysis.index_date)
                 AS active_at_index,
             medication.event_datetime > analysis.index_date
                 AND medication.event_datetime <=
@@ -659,8 +680,7 @@ def _build_medication_evidence(
          AND concept.include
          AND {_code_system_sql('medication.code_system')} = concept.code_system
          AND {_concept_match_sql('medication.code')}
-        WHERE medication.event_datetime >=
-                  analysis.index_date - INTERVAL {lookback} DAY
+        WHERE {in_lookback}
            OR (
                 starts_with(concept.concept_set_id, 'glp1_')
                 AND medication.event_datetime <= analysis.index_date
@@ -721,8 +741,14 @@ def _build_medication_evidence(
 
 
 def _build_observability_summary(connection: duckdb.DuckDBPyConnection) -> None:
+    encounter_in_lookback = inclusive_lookback_start_sql(
+        "encounter.encounter_start",
+        timestamp_precision_sql("encounter.start_date"),
+        "analysis.index_date",
+        365,
+    )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE component_observability_summary AS
         WITH encounter AS (
             SELECT
@@ -731,9 +757,8 @@ def _build_observability_summary(connection: duckdb.DuckDBPyConnection) -> None:
                     WHERE encounter.encounter_start <= analysis.index_date
                 ) AS first_observed_event_date,
                 count(DISTINCT encounter.encounter_id) FILTER (
-                    WHERE encounter.encounter_start BETWEEN
-                        analysis.index_date - INTERVAL 365 DAY
-                        AND analysis.index_date
+                    WHERE encounter.encounter_start <= analysis.index_date
+                      AND {encounter_in_lookback}
                 ) AS event_count
             FROM analysis_glp1_eligibility AS analysis
             JOIN source_encounter AS encounter USING (patient_id)

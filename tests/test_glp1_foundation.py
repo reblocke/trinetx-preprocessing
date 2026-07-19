@@ -61,6 +61,7 @@ from trinetx_preprocessing.glp1_eligibility.provenance import (
     deterministic_run_id,
 )
 from trinetx_preprocessing.glp1_eligibility.sql_helpers import (
+    inclusive_lookback_start_sql,
     timestamp_precision_sql,
 )
 from trinetx_preprocessing.glp1_eligibility.terminology_qa import (
@@ -172,6 +173,31 @@ def test_timestamp_precision_distinguishes_compact_dates_and_timestamps() -> Non
             ("20240101123045", "timestamp"),
             ("2024-01-01 12:30:45", "timestamp"),
         ]
+    finally:
+        connection.close()
+
+
+def test_inclusive_lookback_start_preserves_date_precision() -> None:
+    connection = duckdb.connect()
+    try:
+        predicate = inclusive_lookback_start_sql(
+            "event_datetime",
+            "precision",
+            "index_datetime",
+            365,
+        )
+        rows = connection.execute(
+            f"""
+            SELECT precision, {predicate}
+            FROM (VALUES
+                (TIMESTAMP '2023-01-01 00:00:00', 'date_only',
+                 TIMESTAMP '2024-01-01 12:00:00'),
+                (TIMESTAMP '2023-01-01 00:00:00', 'timestamp',
+                 TIMESTAMP '2024-01-01 12:00:00')
+            ) AS source(event_datetime, precision, index_datetime)
+            """
+        ).fetchall()
+        assert rows == [("date_only", True), ("timestamp", False)]
     finally:
         connection.close()
 
@@ -2672,6 +2698,163 @@ def test_component_history_uses_contract_specific_lookback_windows(
             True,
             True,
         )
+    finally:
+        connection.close()
+
+
+def test_date_only_history_and_medication_boundaries_are_inclusive(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    medication_path = export_root / "Medications" / "medication.csv"
+    medication_path.write_text(
+        "patient_id,encounter_id,code_system,code,start_date,end_date,route,"
+        "brand,strength\n"
+    )
+    _append_primary_cases(export_root, {"boundary": 31})
+
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_path.write_text(
+        encounter_path.read_text().replace(
+            "e_boundary,boundary,2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00",
+            "e_boundary,boundary,2024-01-01 12:00:00,"
+            "2024-01-02 12:00:00",
+        )
+    )
+    _append_rows(
+        encounter_path,
+        "e_boundary_old,boundary,20230101,20230101,AMB,s1",
+    )
+
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_path.write_text(
+        lab_path.read_text().replace(
+            "boundary,e_boundary,2024-01-01 01:00:00",
+            "boundary,e_boundary,2024-01-01 13:00:00",
+        )
+    )
+    _append_rows(
+        lab_path,
+        "boundary,e_boundary_old,20230101,LOINC,99999-9,1,,mg/dL",
+    )
+
+    vital_path = export_root / "Vital Signs" / "vital_signs.csv"
+    vital_path.write_text(
+        vital_path.read_text().replace(
+            "boundary,e_boundary,2023-12-15,LOINC,39156-5,31,,kg/m2",
+            "boundary,e_boundary_old,20230101,LOINC,39156-5,31,,kg/m2",
+        )
+    )
+    _append_rows(
+        export_root / "Diagnosis" / "diagnosis.csv",
+        "boundary,e_boundary_old,20220101,ICD10CM,E11.9,,,,",
+        "boundary,e_boundary_old,2022-01-01 00:00:00,ICD10CM,G47.33,,,,",
+    )
+    _append_rows(
+        export_root / "Procedure" / "procedure.csv",
+        "boundary,e_boundary_old,20220101,CPT,95811,",
+    )
+    _append_rows(
+        medication_path,
+        "boundary,e_boundary_old,RXNORM,29046,20220101,20240101,oral,,",
+        "boundary,e_boundary_old,RXNORM,17767,20220101,"
+        "2024-01-01 00:00:00,oral,,",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        row = connection.execute(
+            """
+            SELECT bmi_value, bmi_source, t2d_status, osa_any_status,
+                   pap_evidence, active_antihypertensive_ingredient_count,
+                   encounter_count_365d, diagnosis_event_count_730d,
+                   lab_event_count_365d, medication_event_count_730d
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'boundary'
+            """
+        ).fetchone()
+        assert row == (
+            31.0,
+            "measured_pre_index",
+            "met",
+            "indeterminate",
+            True,
+            1,
+            2,
+            1,
+            1,
+            2,
+        )
+    finally:
+        connection.close()
+
+
+def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
+    tmp_path: Path,
+) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    _append_primary_cases(export_root, {"calculated_boundary": 31})
+
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_path.write_text(
+        encounter_path.read_text().replace(
+            "e_calculated_boundary,calculated_boundary,2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00",
+            "e_calculated_boundary,calculated_boundary,2024-01-01 12:00:00,"
+            "2024-01-02 12:00:00",
+        )
+    )
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_path.write_text(
+        lab_path.read_text().replace(
+            "calculated_boundary,e_calculated_boundary,2024-01-01 01:00:00",
+            "calculated_boundary,e_calculated_boundary,2024-01-01 13:00:00",
+        )
+    )
+    vital_path = export_root / "Vital Signs" / "vital_signs.csv"
+    bmi_row = (
+        "calculated_boundary,e_calculated_boundary,2023-12-15,"
+        "LOINC,39156-5,31,,kg/m2\n"
+    )
+    vital_path.write_text(vital_path.read_text().replace(bmi_row, ""))
+    _append_rows(
+        vital_path,
+        "calculated_boundary,e_calculated_boundary,20230101,"
+        "LOINC,29463-7,93,,kg",
+        "calculated_boundary,e_calculated_boundary,20230101,"
+        "LOINC,8302-2,1.73,,m",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        bmi_value, bmi_source = connection.execute(
+            """
+            SELECT bmi_value, bmi_source
+            FROM analysis_glp1_eligibility
+            WHERE patient_id = 'calculated_boundary'
+            """
+        ).fetchone()
+        assert bmi_value == pytest.approx(93 / (1.73**2))
+        assert bmi_source == "calculated_height_weight"
     finally:
         connection.close()
 

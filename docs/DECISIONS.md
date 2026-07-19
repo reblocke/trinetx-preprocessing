@@ -1291,16 +1291,20 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Decision: Classify ISO and compact source dates by their actual precision and
   apply the endpoint's phenotype-specific history windows. Keep diagnosis-only
   obesity at `code_only`, normalize blood pressure only from recognized units,
-  apply its configured measurement window using calendar-day boundaries for
-  date-only readings, and preserve raw gas and blood-pressure evidence fields.
-  Treat date-only encounter ends as inclusive calendar days and publish the
-  paired pH source row required by strict hypercapnia. Continue selecting the
-  earliest primary qualifying encounter before cleaned-view exclusions.
+  and preserve raw gas and blood-pressure evidence fields. Apply exact
+  elapsed-time lookback bounds to timestamped rows and inclusive calendar-day
+  bounds to date-only diagnosis, procedure, BMI, blood-pressure, medication,
+  and observability rows. Treat date-only encounter and medication ends as
+  inclusive calendar days and publish the paired pH source row required by
+  strict hypercapnia. Continue selecting the earliest primary qualifying
+  encounter before cleaned-view exclusions.
 - Context: A full-output audit found that compact date-only gases were treated
   as exact timestamps and explicit all-history fields were truncated by general
   lookback windows. Aggregate review also found 12,378 missing-BMI patients with
   retained obesity diagnosis evidence and showed that source blood-pressure
-  units were overwritten in evidence.
+  units were overwritten in evidence. Follow-up review found that exact
+  timestamp bounds also excluded date-only rows on configured lookback days and
+  made date-only medications ending on the index day appear inactive.
 - Rationale: Temporal comparisons must respect source precision, fields named
   as history or `ever ordered` must use the complete available pre-index record,
   and diagnosis-only obesity remains analytically useful without fabricating a
@@ -1313,5 +1317,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   review. Strict measured-BMI cohort membership is unchanged by diagnosis-only
   obesity.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
-  `phenotype_sources.py`, `eligibility.py`, `evidence.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/sql_helpers.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/evidence.py`,
   `tests/test_glp1_foundation.py`, GitHub issue #6.

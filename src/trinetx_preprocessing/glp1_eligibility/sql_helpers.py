@@ -22,6 +22,26 @@ def timestamp_precision_sql(expression: str) -> str:
     )
 
 
+def inclusive_lookback_start_sql(
+    event_datetime: str,
+    precision: str,
+    index_datetime: str,
+    lookback_days: int,
+) -> str:
+    """Return a lookback lower bound that preserves source date precision."""
+
+    if lookback_days < 0:
+        raise ValueError("lookback_days must be nonnegative")
+    return f"""(
+        {event_datetime} >= {index_datetime} - INTERVAL {lookback_days} DAY
+        OR (
+            ({precision}) = 'date_only'
+            AND {event_datetime}::DATE >=
+                ({index_datetime}::DATE - INTERVAL {lookback_days} DAY)::DATE
+        )
+    )"""
+
+
 def inclusive_datetime_end_sql(
     end_datetime: str,
     precision: str,

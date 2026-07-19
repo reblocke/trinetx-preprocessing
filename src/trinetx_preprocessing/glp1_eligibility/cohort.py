@@ -7,7 +7,11 @@ from dataclasses import dataclass
 import duckdb
 
 from .config import GLP1Config
-from .sql_helpers import inclusive_datetime_end_sql, timestamp_precision_sql
+from .sql_helpers import (
+    inclusive_datetime_end_sql,
+    inclusive_lookback_start_sql,
+    timestamp_precision_sql,
+)
 
 
 @dataclass(frozen=True)
@@ -814,12 +818,18 @@ def _build_normalized_anthropometrics(
         """
     )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TEMP TABLE calculated_bmi AS
         SELECT
             weight.patient_id,
             weight.encounter_id,
             greatest(weight.event_datetime, height.event_datetime) AS event_datetime,
+            CASE
+                WHEN {timestamp_precision_sql('weight.date')} = 'date_only'
+                  OR {timestamp_precision_sql('height.date')} = 'date_only'
+                THEN 'date_only'
+                ELSE 'timestamp'
+            END AS event_datetime_precision,
             weight.normalized_numeric_value
                 / power(height.normalized_numeric_value, 2) AS bmi_value,
             weight.normalized_numeric_value AS weight_kg,
@@ -861,6 +871,18 @@ def _build_analysis_table(
         "cohort.encounter_end_precision",
         "cohort.index_date + INTERVAL 1 DAY",
     )
+    measured_bmi_in_lookback = inclusive_lookback_start_sql(
+        "bmi.event_datetime",
+        timestamp_precision_sql("bmi.date"),
+        "cohort.index_date",
+        obesity.bmi_pre_index_days,
+    )
+    calculated_bmi_in_lookback = inclusive_lookback_start_sql(
+        "calculated.event_datetime",
+        "calculated.event_datetime_precision",
+        "cohort.index_date",
+        obesity.bmi_pre_index_days,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TEMP TABLE bmi_candidate AS
@@ -880,9 +902,8 @@ def _build_analysis_table(
           ON bmi.patient_id = cohort.patient_id
          AND bmi.concept_set_id = 'bmi'
          AND bmi.plausible_value
-         AND bmi.event_datetime BETWEEN
-             cohort.index_date - INTERVAL {obesity.bmi_pre_index_days} DAY
-             AND cohort.index_date
+         AND bmi.event_datetime <= cohort.index_date
+         AND {measured_bmi_in_lookback}
         UNION ALL
         SELECT
             cohort.index_event_id,
@@ -898,9 +919,8 @@ def _build_analysis_table(
         FROM cohort_hypercapnia_patient_index AS cohort
         JOIN calculated_bmi AS calculated
           ON calculated.patient_id = cohort.patient_id
-         AND calculated.event_datetime BETWEEN
-             cohort.index_date - INTERVAL {obesity.bmi_pre_index_days} DAY
-             AND cohort.index_date
+         AND calculated.event_datetime <= cohort.index_date
+         AND {calculated_bmi_in_lookback}
         UNION ALL
         SELECT
             cohort.index_event_id,

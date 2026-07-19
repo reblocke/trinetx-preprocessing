@@ -85,8 +85,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   long-form evidence.
 - Preserved date-only encounter-end precision for inclusive same-day bounds,
   published the paired arterial pH source row required for strict hypercapnia,
-  and applied the configured measurement lookback to blood pressure, including
-  calendar-day boundaries for date-only readings.
+  and applied configured history windows with exact bounds for timestamped
+  rows and calendar-day bounds for date-only diagnosis, procedure, BMI, blood
+  pressure, medication, and observability rows. Date-only medication ends now
+  remain active through their complete calendar day.
 - Included dirty tracked and untracked source content in the deterministic run
   identity so locally modified builds cannot reuse clean-code outputs.
 - Honored the Parquet and HTML output switches and emitted aggregate warnings

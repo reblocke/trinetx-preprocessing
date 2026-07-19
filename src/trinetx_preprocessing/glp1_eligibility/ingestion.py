@@ -15,7 +15,7 @@ from ..filesystem import remove_tree_strict
 from .config import GLP1Config
 from .monitoring import RunStateWriter
 from .provenance import InputInventory
-from .sql_helpers import timestamp_precision_sql
+from .sql_helpers import inclusive_lookback_start_sql, timestamp_precision_sql
 
 _PATIENT_CONCEPT_INGEST_BUCKET_COUNT = 32
 _VITAL_INGEST_BUCKET_COUNT = _PATIENT_CONCEPT_INGEST_BUCKET_COUNT
@@ -885,15 +885,20 @@ def _create_raw_observability(
     output_table = _identifier(f"raw_{table_domain}_observability")
     _create_empty_raw_observability(connection, table_domain)
     event_datetime_expression = _timestamp_sql("raw.event_value")
-    count_expression = (
-        "NULL::BIGINT AS event_count"
-        if lookback_days is None
-        else (
-            f"count(*) FILTER (WHERE {event_datetime_expression} BETWEEN "
-            f"analysis.index_date - INTERVAL {lookback_days} DAY "
-            "AND analysis.index_date) AS event_count"
+    if lookback_days is None:
+        count_expression = "NULL::BIGINT AS event_count"
+    else:
+        in_lookback = inclusive_lookback_start_sql(
+            event_datetime_expression,
+            timestamp_precision_sql("raw.event_value"),
+            "analysis.index_date",
+            lookback_days,
         )
-    )
+        count_expression = (
+            "count(*) FILTER (WHERE "
+            f"{event_datetime_expression} <= analysis.index_date "
+            f"AND {in_lookback}) AS event_count"
+        )
     merged_count_expression = (
         "NULL::BIGINT AS event_count"
         if lookback_days is None

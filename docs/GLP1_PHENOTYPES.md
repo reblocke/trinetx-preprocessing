@@ -44,6 +44,8 @@ records their version and source rows in DuckDB.
   cardiac measurements use the general history window; structured fibrosis
   staging uses all prior data. GLP-1 `ever ordered` uses all pre-index orders,
   while active-at-index medication components retain the medication window.
+  Timestamped rows use exact lookback bounds; date-only rows use inclusive
+  calendar-day bounds, and date-only medication ends include the reported day.
 - Strict OSA requires AHI/REI evidence; an OSA code without severity remains
   indeterminate for the strict indication.
 - Laboratory-only CKD requires persistent low eGFR on measurements separated by
@@ -55,9 +57,8 @@ records their version and source rows in DuckDB.
   measurements and treatment components; code-only evidence is represented at
   lower certainty.
 - Blood pressure accepts recognized mmHg aliases or converts kPa before
-  plausibility filtering and uses the configured measurement lookback, with
-  calendar-day boundaries for date-only readings. Raw values and units remain
-  distinct from normalized mmHg evidence.
+  plausibility filtering and uses the configured measurement lookback. Raw
+  values and units remain distinct from normalized mmHg evidence.
 - FDA, guideline/society, and randomized-trial tiers remain separate. Payer
   routes are hypothetical clinical-route categories, not coverage decisions.
 - An EHR medication order is not evidence that medication was dispensed or
