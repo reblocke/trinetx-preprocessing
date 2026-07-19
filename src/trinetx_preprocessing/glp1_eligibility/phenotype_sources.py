@@ -7,6 +7,7 @@ import duckdb
 from .config import GLP1Config
 from .sql_helpers import (
     inclusive_datetime_end_sql,
+    inclusive_followup_end_sql,
     inclusive_lookback_start_sql,
     raw_date_is_date_only_sql,
     timestamp_precision_sql,
@@ -671,6 +672,31 @@ def _build_medication_evidence(
         timestamp_precision_sql("medication.end_date"),
         "NULL",
     )
+    start_precision = timestamp_precision_sql("medication.start_date")
+    in_followup = inclusive_followup_end_sql(
+        "medication.event_datetime",
+        start_precision,
+        "analysis.index_date",
+        followup,
+    )
+    in_30_day_followup = inclusive_followup_end_sql(
+        "event_datetime",
+        timestamp_precision_sql("start_date"),
+        "index_date",
+        30,
+    )
+    in_90_day_followup = inclusive_followup_end_sql(
+        "event_datetime",
+        timestamp_precision_sql("start_date"),
+        "index_date",
+        90,
+    )
+    in_365_day_followup = inclusive_followup_end_sql(
+        "event_datetime",
+        timestamp_precision_sql("start_date"),
+        "index_date",
+        365,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE medication_component_evidence AS
@@ -694,14 +720,12 @@ def _build_medication_evidence(
                      OR {medication_end} >= analysis.index_date)
                 AS active_at_index,
             medication.event_datetime > analysis.index_date
-                AND medication.event_datetime <=
-                    analysis.index_date + INTERVAL {followup} DAY
+                AND {in_followup}
                 AS ordered_post_index
         FROM analysis_glp1_eligibility AS analysis
         JOIN source_medication AS medication
          ON medication.patient_id = analysis.patient_id
-         AND medication.event_datetime <=
-             analysis.index_date + INTERVAL {followup} DAY
+         AND {in_followup}
         JOIN concept_set AS concept
           ON concept.domain = 'medication'
          AND concept.include
@@ -715,7 +739,7 @@ def _build_medication_evidence(
         """
     )
     connection.execute(
-        """
+        f"""
         CREATE OR REPLACE TABLE medication_component_summary AS
         SELECT
             index_event_id,
@@ -755,11 +779,11 @@ def _build_medication_evidence(
             ) FILTER (
                 WHERE active_at_index AND starts_with(concept_set_id, 'glp1_')
             ) AS glp1_product_at_index,
-            bool_or(ordered_post_index AND days_before_index >= -30
+            bool_or(ordered_post_index AND {in_30_day_followup}
                     AND starts_with(concept_set_id, 'glp1_')) AS glp1_new_order_30d,
-            bool_or(ordered_post_index AND days_before_index >= -90
+            bool_or(ordered_post_index AND {in_90_day_followup}
                     AND starts_with(concept_set_id, 'glp1_')) AS glp1_new_order_90d,
-            bool_or(ordered_post_index AND days_before_index >= -365
+            bool_or(ordered_post_index AND {in_365_day_followup}
                     AND starts_with(concept_set_id, 'glp1_')) AS glp1_new_order_365d
         FROM medication_component_evidence
         GROUP BY index_event_id

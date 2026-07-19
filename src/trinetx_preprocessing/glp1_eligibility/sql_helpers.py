@@ -42,6 +42,26 @@ def inclusive_lookback_start_sql(
     )"""
 
 
+def inclusive_followup_end_sql(
+    event_datetime: str,
+    precision: str,
+    index_datetime: str,
+    followup_days: int,
+) -> str:
+    """Return a follow-up upper bound that preserves source date precision."""
+
+    if followup_days < 0:
+        raise ValueError("followup_days must be nonnegative")
+    return f"""(
+        {event_datetime} <= {index_datetime} + INTERVAL {followup_days} DAY
+        OR (
+            ({precision}) = 'date_only'
+            AND {event_datetime}::DATE <=
+                ({index_datetime}::DATE + INTERVAL {followup_days} DAY)::DATE
+        )
+    )"""
+
+
 def inclusive_datetime_end_sql(
     end_datetime: str,
     precision: str,

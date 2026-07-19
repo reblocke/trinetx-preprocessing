@@ -1297,9 +1297,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   medication, and observability rows. Calculated BMI inherits precision from
   its latest component, with date-only ties remaining date-only. Treat
   date-only encounter and medication ends as inclusive calendar days and
-  publish the paired pH source row required by strict hypercapnia. Continue
-  selecting the earliest primary qualifying encounter before cleaned-view
-  exclusions.
+  use precision-aware endpoints for post-index medication orders. Publish the
+  paired pH source row required by strict hypercapnia. Continue selecting the
+  earliest primary qualifying encounter before cleaned-view exclusions.
 - Context: A full-output audit found that compact date-only gases were treated
   as exact timestamps and explicit all-history fields were truncated by general
   lookback windows. Aggregate review also found 12,378 missing-BMI patients with
@@ -1309,7 +1309,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   made date-only medications ending on the index day appear inactive. A second
   review found that calculated BMI used the less-precise component even when it
   was not the latest and that lab `datediff` windows over-included timestamped
-  boundary rows.
+  boundary rows. Final follow-up review found the same `datediff` over-inclusion
+  in 30/90/365-day post-index GLP-1 order flags.
 - Rationale: Temporal comparisons must respect source precision, fields named
   as history or `ever ordered` must use the complete available pre-index record,
   and diagnosis-only obesity remains analytically useful without fabricating a

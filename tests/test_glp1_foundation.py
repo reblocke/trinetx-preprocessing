@@ -2799,6 +2799,63 @@ def test_date_only_history_and_medication_boundaries_are_inclusive(
         connection.close()
 
 
+def test_glp1_followup_boundaries_respect_start_precision(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    patients = ("followup_date", "followup_timestamp")
+    _append_primary_cases(export_root, {patient: 31 for patient in patients})
+
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_text = encounter_path.read_text()
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_text = lab_path.read_text()
+    for patient in patients:
+        encounter_text = encounter_text.replace(
+            f"e_{patient},{patient},2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00",
+            f"e_{patient},{patient},2024-01-01 12:00:00,"
+            "2024-01-02 12:00:00",
+        )
+        lab_text = lab_text.replace(
+            f"{patient},e_{patient},2024-01-01 01:00:00",
+            f"{patient},e_{patient},2024-01-01 13:00:00",
+        )
+    encounter_path.write_text(encounter_text)
+    lab_path.write_text(lab_text)
+    _append_rows(
+        export_root / "Medications" / "medication.csv",
+        "followup_date,e_followup_date,RXNORM,1991302,20240131,"
+        "subcutaneous,Wegovy,2.4mg",
+        "followup_timestamp,e_followup_timestamp,RXNORM,1991302,"
+        "2024-01-31 13:00:00,subcutaneous,Wegovy,2.4mg",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        rows = connection.execute(
+            """
+            SELECT patient_id, glp1_new_order_30d,
+                   glp1_new_order_90d, glp1_new_order_365d
+            FROM analysis_glp1_eligibility
+            ORDER BY patient_id
+            """
+        ).fetchall()
+        assert rows == [
+            ("followup_date", True, True, True),
+            ("followup_timestamp", False, True, True),
+        ]
+    finally:
+        connection.close()
+
+
 def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
     tmp_path: Path,
 ) -> None:
