@@ -226,6 +226,7 @@
 - Commit `233e98e` is pushed, Linux CI passed in `1m46s`, and its review thread is resolved.
 - Exact-head review of `233e98e` found one adjacent P2: date-only orders on the index calendar day were excluded from post-index follow-up because its lower bound still used an exact timestamp comparison. A shared precision-aware follow-up start now uses the inclusive index calendar day for date-only orders while timestamped orders remain strictly after the index instant.
 - The day-zero correction passes its focused regression, `git diff --check`, Ruff, and all `329` tests in `242.52 s`. The production synthetic build completed in `0.79 s` with `292,880,384` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH source rows, all 15 flow stages, eight contracted outputs, zero warnings, zero blank dictionary descriptions, and no WAL or scratch. Test scratch deleted only 22 recognized artifacts (`57,422` bytes) and rechecked at zero.
+- Commit `5e66242` is pushed, Linux CI passed in `1m32s`, all PR threads are resolved, and exact-head Codex review found no major issues: `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5013822919`.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -234,10 +235,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the date-only follow-up day-zero correction, resolve the review thread, and obtain a clean exact-head Codex review before launching the corrected full build.
+- Record the review-clean provenance checkpoint and preflight the unused corrected full-run root without modifying the preserved successful baseline.
 
 ## Next
-- Record the review-clean provenance checkpoint, launch the detached corrected full build under the unused external run root, and monitor it through terminal validation.
+- Launch the detached corrected full build under the unused external run root and monitor it through terminal validation, aggregate QA, and milestone comparison.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -252,6 +253,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
 - Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
+- Review-clean corrected behavior checkpoint: `5e66242`; exact-head Codex result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5013822919`.
 - Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and full-build provenance checkpoint `e832e4a`. PR #7 is green with all prior threads resolved.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
