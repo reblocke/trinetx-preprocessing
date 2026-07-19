@@ -402,6 +402,24 @@ def _build_lab_summary(
 ) -> None:
     measurement_lookback = config.study.measurement_lookback_days
     history_lookback = config.study.lookback_days
+    measurement_in_lookback = inclusive_lookback_start_sql(
+        "event_datetime",
+        "event_datetime_precision",
+        "index_date",
+        measurement_lookback,
+    )
+    history_in_lookback = inclusive_lookback_start_sql(
+        "event_datetime",
+        "event_datetime_precision",
+        "index_date",
+        history_lookback,
+    )
+    sleep_study_in_lookback = inclusive_lookback_start_sql(
+        "event_datetime",
+        "event_datetime_precision",
+        "index_date",
+        SLEEP_STUDY_LOOKBACK_DAYS,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE component_lab_evidence AS
@@ -411,6 +429,7 @@ def _build_lab_summary(
             analysis.index_date,
             lab.* EXCLUDE (event_datetime),
             lab.event_datetime,
+            {timestamp_precision_sql('lab.date')} AS event_datetime_precision,
             datediff('day', lab.event_datetime, analysis.index_date)
                 AS days_before_index
         FROM analysis_glp1_eligibility AS analysis
@@ -419,29 +438,39 @@ def _build_lab_summary(
          AND lab.event_datetime <= analysis.index_date
         WHERE lab.normalized_numeric_value IS NOT NULL
            OR lab.fibrosis_stage_value IS NOT NULL
+        ), windowed AS (
+            SELECT *,
+                {measurement_in_lookback} AS in_measurement_lookback,
+                {history_in_lookback} AS in_history_lookback,
+                {sleep_study_in_lookback} AS in_sleep_study_lookback
+            FROM candidate
         )
-        SELECT *
-        FROM candidate
+        SELECT * EXCLUDE (
+            in_measurement_lookback,
+            in_history_lookback,
+            in_sleep_study_lookback
+        )
+        FROM windowed
         WHERE concept_set_id = 'fibrosis_stage'
            OR (
                 concept_set_id = 'ahi'
-                AND days_before_index <= {SLEEP_STUDY_LOOKBACK_DAYS}
+                AND in_sleep_study_lookback
            )
            OR (
                 concept_set_id IN ('egfr', 'uacr', 'lvef', 'bnp', 'nt_probnp')
-                AND days_before_index <= {history_lookback}
+                AND in_history_lookback
            )
            OR (
                 concept_set_id NOT IN (
                     'ahi', 'egfr', 'uacr', 'lvef', 'bnp', 'nt_probnp',
                     'fibrosis_stage'
                 )
-                AND days_before_index <= {measurement_lookback}
+                AND in_measurement_lookback
            )
         """
     )
     connection.execute(
-        f"""
+        """
         CREATE OR REPLACE TABLE component_lab_summary AS
         SELECT
             index_event_id,
@@ -449,12 +478,10 @@ def _build_lab_summary(
                 normalized_numeric_value
                 ORDER BY event_datetime DESC, source_record_hash DESC
             )
-                FILTER (WHERE concept_set_id = 'hba1c'
-                        AND days_before_index <= {measurement_lookback})
+                FILTER (WHERE concept_set_id = 'hba1c')
                 AS a1c_latest,
             max(event_datetime)
-                FILTER (WHERE concept_set_id = 'hba1c'
-                        AND days_before_index <= {measurement_lookback})
+                FILTER (WHERE concept_set_id = 'hba1c')
                 AS a1c_latest_date,
             count(DISTINCT event_datetime::DATE)
                 FILTER (WHERE concept_set_id = 'hba1c'

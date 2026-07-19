@@ -2805,35 +2805,44 @@ def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
     export_root = tmp_path / "export"
     output_root = tmp_path / "output" / "glp1_eligibility"
     _write_export(export_root)
-    _append_primary_cases(export_root, {"calculated_boundary": 31})
+    patients = ("calculated_boundary", "calculated_timestamp")
+    _append_primary_cases(export_root, {patient: 31 for patient in patients})
 
     encounter_path = export_root / "Encounter" / "encounter.csv"
-    encounter_path.write_text(
-        encounter_path.read_text().replace(
-            "e_calculated_boundary,calculated_boundary,2024-01-01 00:00:00,"
+    encounter_text = encounter_path.read_text()
+    for patient in patients:
+        encounter_text = encounter_text.replace(
+            f"e_{patient},{patient},2024-01-01 00:00:00,"
             "2024-01-02 00:00:00",
-            "e_calculated_boundary,calculated_boundary,2024-01-01 12:00:00,"
+            f"e_{patient},{patient},2024-01-01 12:00:00,"
             "2024-01-02 12:00:00",
         )
-    )
+    encounter_path.write_text(encounter_text)
     lab_path = export_root / "Lab Results" / "lab_results.csv"
-    lab_path.write_text(
-        lab_path.read_text().replace(
-            "calculated_boundary,e_calculated_boundary,2024-01-01 01:00:00",
-            "calculated_boundary,e_calculated_boundary,2024-01-01 13:00:00",
+    lab_text = lab_path.read_text()
+    for patient in patients:
+        lab_text = lab_text.replace(
+            f"{patient},e_{patient},2024-01-01 01:00:00",
+            f"{patient},e_{patient},2024-01-01 13:00:00",
         )
-    )
+    lab_path.write_text(lab_text)
     vital_path = export_root / "Vital Signs" / "vital_signs.csv"
-    bmi_row = (
-        "calculated_boundary,e_calculated_boundary,2023-12-15,"
-        "LOINC,39156-5,31,,kg/m2\n"
-    )
-    vital_path.write_text(vital_path.read_text().replace(bmi_row, ""))
+    vital_text = vital_path.read_text()
+    for patient in patients:
+        vital_text = vital_text.replace(
+            f"{patient},e_{patient},2023-12-15,LOINC,39156-5,31,,kg/m2\n",
+            "",
+        )
+    vital_path.write_text(vital_text)
     _append_rows(
         vital_path,
         "calculated_boundary,e_calculated_boundary,20230101,"
         "LOINC,29463-7,93,,kg",
         "calculated_boundary,e_calculated_boundary,20230101,"
+        "LOINC,8302-2,1.73,,m",
+        "calculated_timestamp,e_calculated_timestamp,2023-01-01 00:00:00,"
+        "LOINC,29463-7,93,,kg",
+        "calculated_timestamp,e_calculated_timestamp,20221231,"
         "LOINC,8302-2,1.73,,m",
     )
 
@@ -2846,15 +2855,81 @@ def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
         str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
     )
     try:
-        bmi_value, bmi_source = connection.execute(
+        rows = connection.execute(
             """
-            SELECT bmi_value, bmi_source
+            SELECT patient_id, bmi_value, bmi_source
             FROM analysis_glp1_eligibility
-            WHERE patient_id = 'calculated_boundary'
+            ORDER BY patient_id
             """
-        ).fetchone()
-        assert bmi_value == pytest.approx(93 / (1.73**2))
-        assert bmi_source == "calculated_height_weight"
+        ).fetchall()
+        by_patient = {
+            patient_id: (bmi_value, bmi_source)
+            for patient_id, bmi_value, bmi_source in rows
+        }
+        assert by_patient["calculated_boundary"][0] == pytest.approx(
+            93 / (1.73**2)
+        )
+        assert by_patient["calculated_boundary"][1] == "calculated_height_weight"
+        assert by_patient["calculated_timestamp"] == (None, None)
+    finally:
+        connection.close()
+
+
+def test_lab_lookback_boundaries_respect_source_precision(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    output_root = tmp_path / "output" / "glp1_eligibility"
+    _write_export(export_root)
+    patients = ("lab_date", "lab_timestamp")
+    _append_primary_cases(export_root, {patient: 31 for patient in patients})
+
+    encounter_path = export_root / "Encounter" / "encounter.csv"
+    encounter_text = encounter_path.read_text()
+    lab_path = export_root / "Lab Results" / "lab_results.csv"
+    lab_text = lab_path.read_text()
+    for patient in patients:
+        encounter_text = encounter_text.replace(
+            f"e_{patient},{patient},2024-01-01 00:00:00,"
+            "2024-01-02 00:00:00",
+            f"e_{patient},{patient},2024-01-01 12:00:00,"
+            "2024-01-02 12:00:00",
+        )
+        lab_text = lab_text.replace(
+            f"{patient},e_{patient},2024-01-01 01:00:00",
+            f"{patient},e_{patient},2024-01-01 13:00:00",
+        )
+    encounter_path.write_text(encounter_text)
+    lab_path.write_text(lab_text)
+    _append_rows(
+        lab_path,
+        "lab_date,e_lab_date,20230101,LOINC,4548-4,6.5,,%",
+        "lab_date,e_lab_date,20220101,LOINC,77147-7,45,,mL/min/1.73m2",
+        "lab_timestamp,e_lab_timestamp,2023-01-01 00:00:00,"
+        "LOINC,4548-4,6.5,,%",
+        "lab_timestamp,e_lab_timestamp,2022-01-01 00:00:00,"
+        "LOINC,77147-7,45,,mL/min/1.73m2",
+    )
+
+    build_glp1_eligibility(
+        input_root=export_root,
+        output_dir=output_root,
+        config_path=GLP1_CONFIG,
+    )
+    connection = duckdb.connect(
+        str(output_root / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        rows = connection.execute(
+            """
+            SELECT patient_id, a1c_latest, egfr_latest,
+                   lab_event_count_365d
+            FROM analysis_glp1_eligibility
+            ORDER BY patient_id
+            """
+        ).fetchall()
+        assert rows == [
+            ("lab_date", 6.5, 45.0, 1),
+            ("lab_timestamp", None, None, 0),
+        ]
     finally:
         connection.close()
 

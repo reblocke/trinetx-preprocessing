@@ -217,6 +217,9 @@
 - Commit `33e99dd` is pushed, Linux CI passed in `1m37s`, and the BP review thread is resolved. Re-review found the same date-precision class in diagnosis/procedure lookback starts and medication start/end bounds.
 - One shared precision-aware lookback helper now covers diagnosis, procedure, measured/calculated BMI, blood pressure, medication, raw observability, and encounter-count boundaries. Date-only medication ends use an inclusive end-of-day bound. Eight targeted temporal/history tests, `git diff --check`, Ruff, and all `327` tests pass in `35.48 s`.
 - The production synthetic build completed in `0.70 s` with `293,765,120` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, all 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
+- Commit `82c90b7` is pushed, Linux CI passed in `1m45s`, and both review threads are resolved. Re-review found two final adjacent P2 cases: calculated-BMI precision followed any date-only component instead of the latest component, and lab `datediff` windows over-included timestamped boundary rows.
+- Calculated BMI now inherits precision from its latest height/weight component, with date-only ties remaining date-only. Lab measurement, history, and sleep-study windows use the shared precision-aware predicate. Four focused regressions, `git diff --check`, Ruff, and all `328` tests pass in `39.49 s`.
+- The production synthetic build completed in `0.71 s` with `292,126,720` bytes maximum RSS, unchanged `19/17/14/685` counts, 17 paired-pH evidence rows, all 15 flow stages, zero warnings/errors, no blank dictionary descriptions, and no WAL. Scratch cleanup deleted only 22 known pytest artifacts (`78` bytes) and rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -225,7 +228,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the shared date-precision correction, then resolve both review threads.
+- Commit and push the calculated-BMI and lab-boundary follow-up, then resolve both review threads.
 
 ## Next
 - Push and resolve the two review findings, obtain a clean Codex review of the exact head, then launch one fresh full build and update aggregate evidence.

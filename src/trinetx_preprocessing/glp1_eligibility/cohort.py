@@ -825,6 +825,10 @@ def _build_normalized_anthropometrics(
             weight.encounter_id,
             greatest(weight.event_datetime, height.event_datetime) AS event_datetime,
             CASE
+                WHEN weight.event_datetime > height.event_datetime
+                THEN {timestamp_precision_sql('weight.date')}
+                WHEN height.event_datetime > weight.event_datetime
+                THEN {timestamp_precision_sql('height.date')}
                 WHEN {timestamp_precision_sql('weight.date')} = 'date_only'
                   OR {timestamp_precision_sql('height.date')} = 'date_only'
                 THEN 'date_only'

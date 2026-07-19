@@ -1293,18 +1293,23 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   obesity at `code_only`, normalize blood pressure only from recognized units,
   and preserve raw gas and blood-pressure evidence fields. Apply exact
   elapsed-time lookback bounds to timestamped rows and inclusive calendar-day
-  bounds to date-only diagnosis, procedure, BMI, blood-pressure, medication,
-  and observability rows. Treat date-only encounter and medication ends as
-  inclusive calendar days and publish the paired pH source row required by
-  strict hypercapnia. Continue selecting the earliest primary qualifying
-  encounter before cleaned-view exclusions.
+  bounds to date-only diagnosis, procedure, laboratory, BMI, blood-pressure,
+  medication, and observability rows. Calculated BMI inherits precision from
+  its latest component, with date-only ties remaining date-only. Treat
+  date-only encounter and medication ends as inclusive calendar days and
+  publish the paired pH source row required by strict hypercapnia. Continue
+  selecting the earliest primary qualifying encounter before cleaned-view
+  exclusions.
 - Context: A full-output audit found that compact date-only gases were treated
   as exact timestamps and explicit all-history fields were truncated by general
   lookback windows. Aggregate review also found 12,378 missing-BMI patients with
   retained obesity diagnosis evidence and showed that source blood-pressure
   units were overwritten in evidence. Follow-up review found that exact
   timestamp bounds also excluded date-only rows on configured lookback days and
-  made date-only medications ending on the index day appear inactive.
+  made date-only medications ending on the index day appear inactive. A second
+  review found that calculated BMI used the less-precise component even when it
+  was not the latest and that lab `datediff` windows over-included timestamped
+  boundary rows.
 - Rationale: Temporal comparisons must respect source precision, fields named
   as history or `ever ordered` must use the complete available pre-index record,
   and diagnosis-only obesity remains analytically useful without fabricating a
