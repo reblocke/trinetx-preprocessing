@@ -98,7 +98,7 @@ def prepare_workspace(
 
 
 def publish_workspace(workspace: BuildWorkspace, *, replace: bool = False) -> None:
-    """Atomically publish a complete staging directory."""
+    """Atomically publish a complete staging directory without internal state."""
 
     manifest_path = workspace.staging_dir / BUILD_STATE_FILENAME
     payload = json.loads(manifest_path.read_text())
@@ -118,8 +118,12 @@ def publish_workspace(workspace: BuildWorkspace, *, replace: bool = False) -> No
             remove_tree_strict(backup, context="Stale GLP-1 output backup")
         os.replace(workspace.output_dir, backup)
     try:
+        manifest_path.unlink()
+        manifest_path.with_name(f"._{manifest_path.name}").unlink(missing_ok=True)
         os.replace(workspace.staging_dir, workspace.output_dir)
     except Exception:
+        if workspace.staging_dir.exists() and not manifest_path.exists():
+            write_text_atomic(manifest_path, json.dumps(payload, indent=2) + "\n")
         if backup is not None and backup.exists() and not workspace.output_dir.exists():
             os.replace(backup, workspace.output_dir)
         raise

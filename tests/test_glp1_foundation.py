@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import replace
@@ -15,6 +16,7 @@ import pytest
 
 import trinetx_preprocessing.glp1_eligibility.ingestion as ingestion_module
 import trinetx_preprocessing.glp1_eligibility.terminology_qa as terminology_qa_module
+import trinetx_preprocessing.glp1_eligibility.workspace as workspace_module
 from trinetx_preprocessing.glp1_eligibility.builder import (
     _require_safe_output_location,
     build_glp1_eligibility,
@@ -686,6 +688,30 @@ def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -
     assert encounter_inventory.source_file == "Encounter/encounter.csv"
 
 
+def test_input_inventory_identity_ignores_source_mtime(tmp_path: Path) -> None:
+    _write_export(tmp_path)
+    source = tmp_path / "Encounter" / "encounter.csv"
+    report = validate_export(tmp_path)
+
+    first = build_input_inventory(tmp_path, report)
+    first_source = next(
+        item for item in first.files if item.logical_domain == "encounter"
+    )
+    stat = source.stat()
+    os.utime(
+        source,
+        ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000),
+    )
+    second = build_input_inventory(tmp_path, validate_export(tmp_path))
+    second_source = next(
+        item for item in second.files if item.logical_domain == "encounter"
+    )
+
+    assert second_source.source_mtime_ns != first_source.source_mtime_ns
+    assert second_source.source_file_sha256 == first_source.source_file_sha256
+    assert second.sha256 == first.sha256
+
+
 def test_export_metadata_is_inventoried_and_invalidates_input_identity(
     tmp_path: Path,
 ) -> None:
@@ -914,8 +940,39 @@ def test_workspace_publishes_atomically_and_status_uses_stable_sibling(
     publish_workspace(workspace)
 
     assert (output / "artifact.txt").read_text() == "complete"
+    assert not (output / workspace_module.BUILD_STATE_FILENAME).exists()
     assert not workspace.staging_dir.exists()
     assert read_run_state(output).status == "completed"
+
+
+def test_workspace_restores_manifest_after_publication_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "glp1_eligibility"
+    workspace = prepare_workspace(
+        output,
+        run_id="run-1",
+        config_sha256="config-hash",
+        input_manifest_sha256="input-hash",
+        concept_catalog_sha256="catalog-hash",
+        git_sha="git-hash",
+    )
+    manifest = workspace.staging_dir / workspace_module.BUILD_STATE_FILENAME
+    original_replace = workspace_module.os.replace
+
+    def fail_publication(source: Path, destination: Path) -> None:
+        if Path(source) == workspace.staging_dir and Path(destination) == output:
+            raise OSError("synthetic publication failure")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(workspace_module.os, "replace", fail_publication)
+
+    with pytest.raises(OSError, match="synthetic publication failure"):
+        publish_workspace(workspace)
+
+    assert workspace.staging_dir.is_dir()
+    assert json.loads(manifest.read_text())["status"] == "complete"
+    assert not output.exists()
 
 
 def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
@@ -3736,7 +3793,13 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
         "data_quality_report.html",
         "run_manifest.json",
     }
-    assert required <= {path.name for path in output_root.iterdir()}
+    visible_files = {
+        path.name
+        for path in output_root.iterdir()
+        if path.is_file() and not path.name.startswith(".")
+    }
+    assert visible_files == required
+    assert not (output_root / workspace_module.BUILD_STATE_FILENAME).exists()
     assert required == {path.name for path in first.output_paths}
     assert not (output_root / "glp1_hypercapnia.duckdb.wal").exists()
     manifest = json.loads((output_root / "run_manifest.json").read_text())

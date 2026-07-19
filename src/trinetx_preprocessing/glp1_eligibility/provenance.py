@@ -54,6 +54,13 @@ class SourceFileInventory:
 
         return asdict(self)
 
+    def identity_dict(self) -> dict[str, object]:
+        """Return content-derived fields used for deterministic input identity."""
+
+        payload = self.to_dict()
+        payload.pop("source_mtime_ns")
+        return payload
+
 
 @dataclass(frozen=True)
 class InputInventory:
@@ -170,7 +177,7 @@ def build_input_inventory(
         sorted(inventory, key=lambda item: (item.logical_domain, item.source_file))
     )
     serialized = json.dumps(
-        [item.to_dict() for item in ordered],
+        [item.identity_dict() for item in ordered],
         sort_keys=True,
         separators=(",", ":"),
     ).encode()

@@ -231,6 +231,8 @@
 - Terminal aggregate validation passes every check: zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, missing required concepts, blank data-dictionary descriptions, or database/Parquet/summary count disagreements. No build, monitor, screen, or pytest process remains active.
 - The corrected output retains all `59,954` provisional index-event keys, `1,320,409` candidate encounters, and `9,527` strict primary rows. It adds `dx_obesity`, represents `12,378` rows as code-only obesity, labels all compact-date gas pairings as date-only, and has `29,841` rows with another semantic change. Evidence rows decreased from `18,727,371` to `14,631,872`, primarily from corrected phenotype-specific measurement windows.
 - Final bookkeeping gates pass: `git diff --check`, Ruff, and all `329` tests in `241.67 s` with external temp/cache. Only 22 recognized pytest scratch artifacts (`57,422` bytes) were deleted, and external temp plus `/tmp` rechecked at zero.
+- Final exact-head Codex review of `6ade6b2` found two actionable P2 issues: `build_workspace.json` is published as a ninth visible output despite the eight-file contract, and source mtimes incorrectly participate in the deterministic input identity. Both findings are accepted; their `src/` fixes make the `00e24a9` full run stale as exact-head release evidence.
+- Both review fixes are implemented locally. Ninety-two focused foundation tests and all `331` tests pass locally and with external temp/cache (`240.72 s`); a production synthetic build publishes exactly eight physical files, and an mtime-only source change reuses the same run ID and output. The external test gate created only 22 recognized scratch artifacts (`57,422` bytes); they were deleted and external temp plus `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -239,10 +241,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Finalize aggregate-only bookkeeping for the completed corrected full build, run local gates, and push the evidence checkpoint.
+- Complete the external-temp local gate, commit and push the review fixes, and obtain clean CI plus exact-head Codex review.
 
 ## Next
-- Request an exact-head GitHub Codex review on PR #7 and address any actionable finding narrowly before final handoff.
+- Launch one final fresh full-data build from the review-clean fix commit and regenerate aggregate validation evidence.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

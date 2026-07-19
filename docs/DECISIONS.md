@@ -1332,3 +1332,24 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
   `src/trinetx_preprocessing/glp1_eligibility/evidence.py`,
   `tests/test_glp1_foundation.py`, GitHub issue #6.
+
+### 2026-07-18 — Separate private build state from public and content identity
+- Date: 2026-07-18
+- Decision: Remove `build_workspace.json` immediately before atomically
+  publishing a completed GLP-1 output tree and restore it if publication fails.
+  Retain source modification times in the inventory but exclude them from the
+  deterministic input digest.
+- Context: Exact-head review found that the internal resumability manifest was
+  published as a ninth visible file and that copying an otherwise byte-identical
+  export changed its run ID solely because the filesystem mtime changed.
+- Rationale: Build state is private orchestration metadata, not part of the
+  eight-file analytic contract. Content hashes, relative paths, sizes, schemas,
+  and row counts already identify the input; mtime is useful provenance but not
+  content identity.
+- Consequences: Successful output directories contain exactly eight public
+  files. Failed publication remains resumable, and byte-identical restored
+  exports can reuse completed outputs while still recording observed mtimes.
+  Full-data release evidence generated before this change must be regenerated.
+- References: `src/trinetx_preprocessing/glp1_eligibility/workspace.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/provenance.py`,
+  `tests/test_glp1_foundation.py`.

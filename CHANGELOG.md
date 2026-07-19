@@ -26,8 +26,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 ### Changed
 - Completed a clean full-data build of the corrected GLP-1 pipeline in
   20,247.71 seconds with 5,342,773,248 bytes maximum RSS, below the 6,238 MiB
-  gate. The build published all eight contracted outputs with zero warnings,
-  errors, WAL files, or recognized scratch artifacts.
+  gate. The build produced all eight contracted analytic outputs with zero
+  warnings, errors, WAL files, or recognized scratch artifacts. A subsequent
+  publication-contract review found one additional internal workspace manifest;
+  that run remains diagnostic evidence but must be repeated after the fix below.
 - Full-data aggregate comparison preserves all 59,954 index-event keys,
   1,320,409 hypercapnia candidate encounters, and 9,527 strict primary rows.
   Corrected phenotype windows, date precision, code-only obesity, blood-pressure
@@ -35,6 +37,12 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   phenotype and evidence values.
 
 ### Fixed
+- Removed the internal build-workspace manifest before atomic publication while
+  restoring it if publication fails, so completed builds contain exactly the
+  eight contracted public files without weakening resumability.
+- Excluded source modification times from deterministic input identity while
+  retaining them in the provenance inventory, so byte-identical copied or
+  restored exports reuse the same run without hiding source metadata.
 - Ranked the first arterial PaCO2 before unit and plausibility filtering so a
   later valid result cannot replace an earlier unusable result; encounter
   maxima now cover valid arterial measurements through encounter discharge.
