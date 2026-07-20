@@ -256,6 +256,7 @@
 - Terminal validation passes every contract, provenance, consistency, traceability, memory, publication, and hygiene check. Final inventory has zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, hidden build workspaces, active processes, or screen sessions.
 - PHI-safe aggregate comparison to reviewed parent build `e7bf01a` is exact: all `59,954` analysis keys, `1,320,409` candidate encounters, `9,527` strict primary rows, and `12,028,276` evidence rows match; schemas, key sets, table counts, non-provenance analysis values, and all three semantic fingerprints have zero differences.
 - Final documentation gate passes `git diff --check`, Ruff, and all `336` tests in `259.58 s`. Twenty-two recognized pytest scratch artifacts (`57,422` bytes) were deleted; the external temp root and `/tmp` rechecked at zero.
+- Evidence commit `087d9f7` is pushed, Linux CI passed in `1m47s`, final Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5019341036`), and PR #7 has zero unresolved review threads.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -264,10 +265,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Refresh exact-head evidence docs, run documentation/local hygiene gates, commit and push the evidence-only change, then request a fresh Codex review.
+- The additive GLP-1 implementation, exact-head full-data evidence, local/CI gates, and final evidence review are complete; prepare the final handoff.
 
 ## Next
-- Inspect and resolve any final review findings. If review is clean, close the GLP-1 implementation handoff; terminology expansion and private record review remain separate clinical-use work.
+- Treat investigator terminology expansion and private record-level validation as separate clinical-use work; neither is required to preserve the completed additive software endpoint.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
