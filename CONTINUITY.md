@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
-- Current turn: finalize exact-head full-data evidence, commit the evidence-only bookkeeping, and close the additive GLP-1 implementation handoff after a fresh Codex review.
+- Current turn: the additive GLP-1 endpoint and its exact-head evidence are complete; preserve the reviewed handoff and keep terminology expansion and private record review as separate clinical-use work.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
