@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
-- Current turn: fix the final CKD precision review finding, obtain clean CI/Codex review, then regenerate exact-head full-data evidence and close the additive GLP-1 implementation handoff.
+- Current turn: finalize exact-head full-data evidence, commit the evidence-only bookkeeping, and close the additive GLP-1 implementation handoff after a fresh Codex review.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -252,6 +252,10 @@
 - Commit `1033418` contains the precision-aware CKD fix and corrected parent-evidence labeling and is pushed. Both review findings are answered and their GitHub threads are resolved; exact-head CI/re-review is the remaining launch gate.
 - Exact-head review of `875fa8f` found one adjacent P2 edge case: tied date-only and timestamped low-eGFR endpoint rows could inherit timestamp precision from an arbitrary source-record hash. Endpoint reduction now prioritizes date-only precision only on an exact datetime tie.
 - The tied-endpoint correction passes `git diff --check`, Ruff, all `97` GLP-1 foundation tests, and all `336` repository tests in `268.19 s`. The production synthetic build completed in `0.80 s` with `299,237,376` bytes maximum RSS, unchanged `19/17/14/685` counts, exactly eight files, zero warnings, and no WAL or scratch. Twenty-two pytest scratch artifacts (`57,422` bytes) were deleted and external temp plus `/tmp` rechecked at zero.
+- Commit `459cbda` is pushed and Linux CI is green. Full build `2e5954a266757ecaeaeb44c0` from that clean behavior head completed in `20,941.55 s` (`5h49m02s`) with `5,635,293,184` bytes maximum RSS and atomically published exactly eight files totaling `70,294,437,888` bytes.
+- Terminal validation passes every contract, provenance, consistency, traceability, memory, publication, and hygiene check. Final inventory has zero warnings/errors, WAL, recognized scratch, AppleDouble sidecars, hidden build workspaces, active processes, or screen sessions.
+- PHI-safe aggregate comparison to reviewed parent build `e7bf01a` is exact: all `59,954` analysis keys, `1,320,409` candidate encounters, `9,527` strict primary rows, and `12,028,276` evidence rows match; schemas, key sets, table counts, non-provenance analysis values, and all three semantic fingerprints have zero differences.
+- Final documentation gate passes `git diff --check`, Ruff, and all `336` tests in `259.58 s`. Twenty-two recognized pytest scratch artifacts (`57,422` bytes) were deleted; the external temp root and `/tmp` rechecked at zero.
 
 ## Done
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
@@ -260,10 +264,10 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 
 ## Now
-- Commit and push the tied-endpoint precision fix, resolve its review thread, and obtain green CI plus a clean exact-head Codex review.
+- Refresh exact-head evidence docs, run documentation/local hygiene gates, commit and push the evidence-only change, then request a fresh Codex review.
 
 ## Next
-- Freeze the review-clean commit as provenance, launch the prepared full run under `full_final_875fa8f_20260719` after repinning its commit guard, monitor it to completion, then repeat terminal and aggregate validation.
+- Inspect and resolve any final review findings. If review is clean, close the GLP-1 implementation handoff; terminology expansion and private record review remain separate clinical-use work.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -289,7 +293,8 @@
 - Final validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/full_build_validation_71ef56f.json`; semantic comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_20260719/manifests/aggregate_delta_vs_00e24a9.json` and `.md`.
 - Parent-implementation clinical output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/glp1_eligibility`; run ID `c62cc473ccfff9d2b697af6b`.
 - Parent-implementation validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/terminal_validation.json`; aggregate comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_e7bf01a_20260719/manifests/aggregate_delta_vs_71ef56f.json` and `.md`.
-- Prepared current-evidence run root: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_875fa8f_20260719`; launch remains gated on the next exact-head review and its commit guard will be repinned before execution.
+- Exact-head clinical output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_459cbda_20260719/glp1_eligibility`; run ID `2e5954a266757ecaeaeb44c0`.
+- Exact-head validation: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_459cbda_20260719/manifests/terminal_validation.json`; aggregate comparison `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_459cbda_20260719/manifests/aggregate_delta_vs_e7bf01a.json` and `.md`; scratch evidence `manifests/scratch_cleanup_final.json`.
 - Interrupted workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-ad1b219038d61464cad757e2`
 - OOM workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-22e8f8d4517d5ebf927a11ae`
 - Failed current-code workspace: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/.glp1_eligibility.build-d6712db17ce2d1aa283d6580`; no build worker remains active.

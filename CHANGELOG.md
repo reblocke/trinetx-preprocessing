@@ -24,11 +24,15 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Completed the reviewed parent-implementation full-data GLP-1 build from commit
-  `e7bf01a` in 20,891.76 seconds with 4,950,032,384 bytes maximum RSS, below
+- Completed the exact behavior-head full-data GLP-1 build from commit
+  `459cbda` in 20,941.55 seconds with 5,635,293,184 bytes maximum RSS, below
   the 6,238 MiB gate. The build atomically published exactly the eight
   contracted analytic files with zero warnings, errors, WAL files, recognized
   scratch artifacts, hidden workspaces, or residual AppleDouble sidecars.
+- Matched the reviewed `e7bf01a` parent build exactly across all 59,954
+  analysis rows, 1,320,409 candidate encounters, and 12,028,276 evidence rows:
+  schemas, key sets, table counts, non-provenance analysis values, and all
+  three order-independent semantic fingerprints are unchanged.
 - Preserved all 59,954 index-event keys, 1,320,409 candidate encounters, 9,527
   strict primary rows, payer-route counts, and cohort-flow counts relative to
   the reviewed `71ef56f` baseline. The corrected all-history cirrhosis rule

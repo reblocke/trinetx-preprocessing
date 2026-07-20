@@ -142,13 +142,13 @@ Before release:
 
 ## GLP-1 additive full-data evidence
 
-The reviewed parent-implementation additive GLP-1 build from commit `e7bf01a` completed in
-20,891.76 seconds with 4,950,032,384 bytes maximum RSS. It used the supported
+The exact behavior-head additive GLP-1 build from commit `459cbda` completed in
+20,941.55 seconds with 5,635,293,184 bytes maximum RSS. It used the supported
 4,096 MiB/one-thread DuckDB configuration and atomically published exactly the
 eight public files. The terminal validation gate found zero warnings, errors,
 WAL files, recognized scratch artifacts, AppleDouble sidecars, hidden
 workspaces, blank data-dictionary descriptions, or missing required concept
-matches. External free space remained about 7.46 TiB.
+matches. External free space remained about 7.40 TiB.
 
 The final run contains 59,954 analysis rows, 1,320,409 candidate encounters,
 9,527 strict primary rows, 12,028,276 evidence rows, and all 15 cohort-flow
@@ -172,17 +172,18 @@ The PHI-safe comparison against the preserved reviewed `71ef56f` build records:
   precision-aware date-only procedure context.
 
 The earlier `71ef56f` run remains a valid independent resource and
-publication-contract baseline. The `e7bf01a` run verifies the subsequent
-cirrhosis, encounter, medication, and procedure-context corrections but is
-parent-implementation evidence rather than evidence for the current docs head.
-Ruleset `2026-07-19.1` additionally preserves source precision for the CKD
-90-day persistence boundary; a fresh reviewed full-data run is required before
-final clinical-output acceptance.
+publication-contract baseline. The `e7bf01a` run verifies the cirrhosis,
+encounter, medication, and procedure-context corrections. The exact-head
+`459cbda` run additionally validates ruleset `2026-07-19.1` CKD source-precision
+handling. Direct aggregate comparison between `459cbda` and `e7bf01a` found
+zero schema, key-set, table-count, non-provenance analysis-value, or semantic
+fingerprint differences across 59,954 analysis rows, 1,320,409 candidate
+encounters, and 12,028,276 evidence rows.
 
-A read-only aggregate probe of the parent database found 29,635 index events
-with low eGFR and 13,553 persistent cases under both the date-reduced and
-precision-aware calculations, with zero classifications changing. Exact-head
-execution remains required because the implementation and run identity changed.
+The exact-head run root is
+`/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_459cbda_20260719`.
+Its terminal validation, aggregate JSON/Markdown comparison, and final scratch
+inventory are under `manifests/` and remain external and untracked.
 
 The aggregate JSON and Markdown reports remain external and untracked. No
 identifiers or row examples are emitted. Full-data computational validation does

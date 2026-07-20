@@ -1417,9 +1417,11 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   inclusive calendar-day policy used by other temporal boundaries.
 - Consequences: The internal lab reducer retains endpoint timestamps and source
   precision only long enough to materialize the existing persistence boolean.
-  The clinical ruleset advances to `2026-07-19.1`. The `e7bf01a` build remains
-  valid parent-implementation and resource evidence but is stale for final
-  clinical semantics; final acceptance requires another reviewed full-data run.
+  The clinical ruleset advances to `2026-07-19.1`. Exact-head full build
+  `2e5954a266757ecaeaeb44c0` at `459cbda` completed within resource gates and
+  matched the `e7bf01a` parent build with zero non-provenance semantic output
+  differences, confirming that the precision correction affects no rows in the
+  current full export.
 - References: `src/trinetx_preprocessing/glp1_eligibility/sql_helpers.py`,
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
