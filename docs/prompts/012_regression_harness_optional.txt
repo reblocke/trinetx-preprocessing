@@ -1,0 +1,82 @@
+    # Milestone 012 — Regression harness (optional, real-data capable but test-safe)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-012
+    Objective: Add a golden-master regression harness that can compare refactor outputs to legacy outputs when real data is available, without making tests depend on it.
+
+    Scope
+    - Add optional commands/scripts that can run on `data/` and write to `artifacts/`.
+- Do not commit any real outputs or data.
+- Unit tests should cover normalization + hashing utilities only.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Implement output normalization + hashing:
+   - Module: `src/trinetx_preprocessing/regression.py`
+   - Provide:
+     - `normalize_table(df) -> df` (sort columns/rows deterministically)
+     - `hash_table(df) -> str` (stable hash)
+     - `hash_csv(path) -> str`
+3. Add CLI subcommands:
+   - `baseline --config path --out artifacts/baseline` (runs refactor pipeline and stores hashes)
+   - `compare --config path --baseline artifacts/baseline` (re-runs and compares hashes)
+   - If legacy pipeline can be run headlessly, add a `legacy-baseline` command; otherwise document manual baseline steps.
+4. Add docs:
+   - Update `docs/VALIDATION.md` with the intended workflow for real-data regression.
+   - Add a privacy warning in `docs/SECURITY_PRIVACY.md` if not already present.
+5. Tests:
+   - Unit tests for normalize/hash functions using small DataFrames.
+   - No tests should read `data/` or require baseline artifacts.
+6. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing baseline --help
+./.venv/bin/python -m trinetx_preprocessing compare --help
+```
+
+
+
+    Definition of done
+    - Regression module exists with deterministic hashing.
+- CLI exposes baseline/compare flows.
+- Tests cover deterministic hashing without any real data.
+
+
+    Suggested commit message
+    - feat: add optional regression harness with deterministic hashing
+
+    Next prompt to run
+    - docs/prompts/013_docs_and_onboarding_polish.txt

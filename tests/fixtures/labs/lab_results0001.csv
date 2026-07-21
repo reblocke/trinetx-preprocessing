@@ -1,0 +1,4 @@
+patient_id,encounter_id,code_system,code,date,lab_result_num_val,lab_result_text_val,units_of_measure,derived_by_TriNetX,source_id
+P1,E1,LOINC,6298-4,2022-01-10,4.1,,mmol/L,N,site1
+P2,E2,LOINC,2019-8,2022-02-01,,NEGATIVE,mmol/L,Y,site2
+P3,E3,LOINC,2823-3,2022-03-01,5.0,,mmol/L,N,site3

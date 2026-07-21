@@ -1,0 +1,78 @@
+    # Milestone 002 — Python bootstrap (uv + ruff + pytest + src layout)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-002
+    Objective: Turn the repo into a runnable, testable Python project without changing pipeline semantics.
+
+    Scope
+    - Add Python packaging and test scaffolding.
+- Do not rewrite pipeline logic yet.
+- Do not touch real `data/`.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md` for this milestone.
+2. Create a `pyproject.toml` using a src layout:
+   - Package name: `trinetx_preprocessing` (use this unless repo already has a name).
+   - Python >= 3.11.
+   - Dependencies (minimal): `pandas`, `numpy`, `pyyaml` (for config), `pytest`, `ruff`.
+   - Add a console entrypoint (can be stub) OR support `python -m trinetx_preprocessing`.
+3. Generate/update `uv.lock` using `uv`:
+   - `uv sync` should succeed.
+4. Add Ruff configuration (in `pyproject.toml`) aligned with `AGENTS.md`:
+   - Enable `ruff format`.
+   - Keep rules reasonable; do not enforce overly strict style that creates churn.
+5. Create package skeleton:
+   - `src/trinetx_preprocessing/__init__.py`
+   - `src/trinetx_preprocessing/__main__.py` (calls CLI stub)
+6. Add initial tests:
+   - `tests/test_imports.py` verifies the package imports and `python -m trinetx_preprocessing --help` exits 0.
+   - Tests must not require `data/`.
+7. Update docs as needed:
+   - `docs/ONBOARDING.md`: add developer setup (`uv sync`, `pytest -q`).
+   - `docs/TESTING.md`: confirm commands.
+8. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    Run:
+```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing --help
+```
+
+
+    Definition of done
+    - `uv sync` works and `uv.lock` exists.
+- Ruff and pytest pass.
+- `python -m trinetx_preprocessing --help` works (even if CLI is stub).
+- No legacy pipeline behavior has been modified.
+
+
+    Suggested commit message
+    - chore: bootstrap python package, uv, ruff, pytest
+
+    Next prompt to run
+    - docs/prompts/003_cli_config_logging.txt

@@ -1,0 +1,77 @@
+    # Milestone 005 — Chunked I/O layer (streaming read + header-only schema checks)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-005
+    Objective: Build a robust, reusable I/O layer that reads large CSVs safely and consistently, without domain semantics.
+
+    Scope
+    - Implement generic CSV reading utilities (streaming).
+- Add minimal schema checks at file boundaries (required columns exist).
+- Avoid domain-specific transforms in this milestone.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Implement CSV reading utilities:
+   - Module: `src/trinetx_preprocessing/io/csv.py`
+   - Provide:
+     - `read_csv_head(path, n=5) -> pd.DataFrame`
+     - `iter_csv(path, chunksize=None, usecols=None, dtype=None) -> Iterator[pd.DataFrame]`
+     - `iter_many_csv(paths, ...) -> Iterator[pd.DataFrame]`
+   - Prefer pandas; avoid row-wise python loops.
+3. Implement schema validation helpers:
+   - Module: `src/trinetx_preprocessing/validation.py`
+   - Provide `require_columns(df_or_columns, required, context)`.
+   - Provide `validate_csv_columns(path, required_cols)`.
+4. Integrate into CLI `validate-inputs`:
+   - Read only headers (or first N rows) to confirm required columns exist.
+   - Avoid reading entire files.
+5. Add tests with synthetic CSV fixtures created in temp dirs:
+   - iter_csv yields correct chunks
+   - require_columns raises with useful message
+6. Update docs:
+   - `docs/DATA_CONTRACT.md` should reference validation behaviors and expected IDs.
+7. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    ```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing validate-inputs --config config.example.yaml || true
+```
+The command may fail if example config points to non-existent data; it must fail with an actionable message.
+
+
+    Definition of done
+    - Streaming CSV iteration utilities exist and are tested.
+- Schema validation is centralized and used by CLI.
+- Errors are informative; no full-file reads in validation mode.
+
+
+    Suggested commit message
+    - feat: add chunked IO + schema validation layer
+
+    Next prompt to run
+    - docs/prompts/006_transform_encounter_stage.txt

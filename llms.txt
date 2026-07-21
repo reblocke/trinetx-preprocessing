@@ -1,44 +1,60 @@
 # TriNetX Preprocessing
 
 Repository: https://github.com/reblocke/trinetx-preprocessing
-Purpose: Python code to process TriNetX database exports to tabular format
-Status: No manuscript version is expected. This is a code-only repository and should not include publisher text.
+Purpose: refactor TriNetX hypercapnia preprocessing notebooks into a
+deterministic Python CLI pipeline.
+Status: Milestone 1 is the immutable replication fallback; post-milestone work
+implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
+output-reproducibility, and aggregate-delta evidence is complete. Milestone 2
+accepts deterministic non-strict resolution of documented source conflicts
+while strict execution remains fail-closed.
 
 ## Human-Readable Entry Points
-- `README.md` is the primary human-facing overview.
-- `llms.txt` is a compact machine-readable index and should not replace the README.
-
-## Repository Layout
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_AMB2.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_EMER2.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_ABG_ENC_INPAT2.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_AMB.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_EMER.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_OBESITY_ENC_INPAT.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_EMER.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_PREDISPOSITION_ENC_INPAT.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_AMB.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_EMER.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_RESPFAIL_ENC_INPAT.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_AMB.ipynb`
-- `Executed Notebooks/Hypercapnia Final Dataset Generation - RFS_VBG_ENC_EMER.ipynb`
+- `README.md`: primary overview and quickstart.
+- `docs/ONBOARDING.md`: setup, real-data placement, and legacy workflow notes.
+- `docs/SPEC.md`: authoritative corrected analytic contract.
+- `docs/PLAN.md`: corrected pipeline completion plan.
+- `docs/VALIDATION.md`: golden-master parity workflow.
+- `docs/DATA_CONTRACT.md`: input, intermediate, and final output contracts.
 
 ## Data and Reuse Boundaries
-May describe restricted export schemas; verify no data rows
+- Raw TriNetX exports and row-level outputs are confidential clinical data.
+- Keep real inputs under ignored `data/`.
+- Do not commit raw exports, row-level extracts, private manifests, caches, or
+  generated local artifacts unless explicitly reviewed.
 
-## Workflow
-Review notebook workflow
+## Current Workflow
+```bash
+uv sync
+./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
+./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
+./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+```
 
-## Dependencies
-Jupyter requirements if present
+## Refactor Completion Gate
+- Refactor Milestone 1 completed the replication phase under near-exact
+  row-level parity: `4,412,875 / 4,412,932` final analytic rows matched exactly
+  (`99.998708%`), with `57` documented residual Weight/previous-Weight row
+  differences and no schema, row-count, or key-set differences.
+- Use `hash-outputs` to hash approved local legacy `work` and `output`
+  directories.
+- Use `compare-manifests --baseline <legacy-manifest-dir> --current
+  <refactor-manifest-dir>` to compare the refactor to that golden master.
+  Exact hashes remain useful diagnostics, but this milestone is accepted by the
+  aggregate row-parity evidence.
+- Parquet intermediates are supported; final analytic outputs remain CSV.
 
-## Citation
-No publication DOI is assigned to this repository. Cite the GitHub repository URL and the commit or release used.
-
-## License
-MIT License for repository code; see `LICENSE`. Third-party and publisher materials remain under their original terms.
+## Citation and License
+- Cite the GitHub repository URL and the commit or release used.
+- No publication DOI is assigned to this repository.
+- Code is MIT licensed; see `LICENSE`. Third-party and publisher materials
+  remain under their original terms.
 
 ## Agent Cautions
-- Do not re-add a README appendix aimed primarily at LLMs; integrate user-facing details into normal README sections.
-- Keep restricted clinical data, private drafts, publisher PDFs, local paths, and generated outputs out of public documentation unless explicitly reviewed.
-- Prefer concise summaries plus links to citable records over copied manuscript or publisher text.
+- Do not replace the richer `AGENTS.md` project instructions with this compact
+  index.
+- Follow `docs/SPEC.md`; notebooks are historical references when behavior differs.
+- Prefer concise, linked summaries over copied notebook or row-level output
+  content.
+- Do not re-add a README appendix aimed primarily at LLMs; integrate
+  user-facing details into normal README sections.

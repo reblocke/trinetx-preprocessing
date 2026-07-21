@@ -1,0 +1,70 @@
+    # Milestone 008 — Diagnosis stage extraction
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-008
+    Objective: Extract diagnosis logic into pure transforms and a stage runner; add tests and stage CLI.
+
+    Scope
+    - Implement diagnosis processing only.
+- Preserve semantics; do not change code lists unless they come from legacy code.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Identify canonical legacy diagnosis processing notebook(s); document in `docs/DECISIONS.md`.
+3. Implement pure transforms:
+   - Module: `src/trinetx_preprocessing/transform/diagnosis.py`
+   - Implement any code normalization and filtering.
+   - Keep code lists in data structures (constants) and document source.
+4. Stage runner:
+   - Module: `src/trinetx_preprocessing/pipeline/diagnosis_stage.py`
+5. CLI:
+   - Add `run-diagnosis --config path`.
+6. Tests:
+   - Synthetic ICD codes and edge cases.
+   - Integration test for stage runner.
+7. Docs updates:
+   - Data contract: required diagnosis columns.
+8. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    ```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing run-diagnosis --help
+```
+
+
+    Definition of done
+    - Diagnosis transform is pure and tested.
+- Diagnosis stage runner processes synthetic inputs end-to-end.
+- CLI supports `run-diagnosis`.
+
+
+    Suggested commit message
+    - feat: extract diagnosis stage into pure transform + runner
+
+    Next prompt to run
+    - docs/prompts/009_transform_meds_procedure_vitals_stages.txt

@@ -1,0 +1,75 @@
+    # Milestone 013 — Docs + onboarding polish (ease-of-use pass)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-013
+    Objective: Make the project easy for others to run: tighten docs, add examples, and ensure the CLI is discoverable.
+
+    Scope
+    - Documentation and user experience only (minor code tweaks allowed if needed for clarity).
+- Do not change algorithms in this milestone.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Update README (or create one if missing):
+   - What the project does
+   - Quickstart with `uv sync` and `python -m trinetx_preprocessing run --config ...`
+   - Where to put data (`data/`), and what not to commit
+   - How to run tests and validate inputs
+3. Ensure `config.example.yaml` is complete and documented.
+4. Add a “Getting started” example that runs purely on synthetic data:
+   - Document it in `docs/ONBOARDING.md`.
+   - If helpful, add `scripts/run_synthetic_example.py` (no real data).
+5. Improve CLI help text:
+   - Each subcommand should have clear descriptions and examples.
+6. Confirm `docs/ARCHITECTURE.md`, `docs/DATA_CONTRACT.md`, and `docs/CONFIG.md` are consistent with code.
+7. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing --help
+```
+
+
+
+    Definition of done
+    - A new collaborator can follow README/ONBOARDING to run tests and a synthetic example.
+- Docs match code behavior; config example is accurate.
+
+
+    Suggested commit message
+    - docs: improve onboarding + examples + CLI help
+
+    Next prompt to run
+    - docs/prompts/014_profiling_and_perf_guardrails.txt

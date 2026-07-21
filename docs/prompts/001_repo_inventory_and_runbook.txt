@@ -1,0 +1,72 @@
+    # Milestone 001 — Repository inventory + runbook (docs-only)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-001
+    Objective: Produce an accurate, code-derived description of the current pipeline (inputs → stages → outputs) and a concrete refactor runbook.
+
+    Scope
+    - Allowed: documentation edits under `docs/` and updates to `CONTINUITY.md`.
+- Avoid: changing runtime behavior or moving notebooks in this milestone.
+
+
+    Tasks
+    1. Read `CONTINUITY.md` and update Goal/Now/Next/Open Questions for this milestone.
+2. Inventory the repo:
+   - List top-level directories and files.
+   - Identify all notebooks involved in the pipeline (by filename).
+   - Identify any shell scripts (e.g., split scripts) and where they’re referenced.
+3. Infer the *canonical execution order* from the notebooks and README:
+   - What must be run first, second, etc.
+   - What intermediate artifacts are produced and consumed.
+4. Update / create these docs based on what you find:
+   - `docs/ONBOARDING.md`: a “new user” step-by-step to run the legacy pipeline.
+   - `docs/ARCHITECTURE.md`: map legacy components to proposed `src/` modules.
+   - `docs/DATA_CONTRACT.md`: fill in actual domain file names/patterns and required identifiers/columns.
+   - Create `docs/REPO_INVENTORY.md`: concise map of repo structure and where logic lives.
+   - Update `docs/PLAN.md`: refine milestones for this repo (keep numbered list).
+5. If you discover risky ambiguities (missing file naming conventions, unclear schemas):
+   - Add them to `CONTINUITY.md` as `UNCONFIRMED` open questions.
+   - Do NOT guess.
+6. End by updating `CONTINUITY.md` with what’s now known.
+
+
+    Verification
+    - No code changes required.
+- Ensure markdown renders and links are consistent.
+- Run:
+  ```bash
+  git status
+  ```
+  to confirm only documentation files changed.
+
+
+    Definition of done
+    - `docs/REPO_INVENTORY.md` exists and is accurate.
+- `docs/ONBOARDING.md`, `docs/ARCHITECTURE.md`, `docs/DATA_CONTRACT.md`, `docs/PLAN.md` are updated from repo evidence.
+- `CONTINUITY.md` updated with concrete, code-derived facts and open questions.
+
+
+    Suggested commit message
+    - docs: inventory + runbook for legacy pipeline
+
+    Next prompt to run
+    - docs/prompts/002_python_bootstrap_uv_ruff_pytest.txt

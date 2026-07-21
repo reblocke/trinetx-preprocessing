@@ -1,0 +1,13 @@
+patient_id,encounter_id,unique_id,code_system,code,start_date,route,brand,strength,derived_by_TriNetX,source_id
+P1,E1,U1,ATC,6902,2022-01-01,oral,BrandA,10mg,N,site1
+P2,E2,U2,ATC,7242,2022-01-02,oral,BrandB,5mg,N,site1
+P3,E3,U3,ATC,7213,2022-01-03,IV,BrandC,2mg,N,site2
+P4,E4,U4,ATC,4917,2022-01-04,IV,BrandD,1mg,N,site2
+P5,E5,U5,ATC,1808,2022-01-05,IV,BrandE,1mg,N,site3
+P6,E6,U6,ATC,2193,2022-01-06,IV,BrandF,1mg,N,site3
+P7,E7,U7,ATC,68139,2022-01-07,IV,BrandG,1mg,N,site3
+P8,E8,U8,ATC,817579,2022-01-08,IV,BrandH,1mg,N,site4
+P9,E9,U9,ATC,6813,2022-01-09,IV,BrandI,1mg,N,site4
+P10,E10,U10,ATC,7407,2022-01-10,IV,BrandJ,1mg,N,site4
+P11,E11,U11,ATC,21949,,IV,BrandK,1mg,N,site5
+P12,E12,U12,ATC,9999,2022-01-12,IV,BrandL,1mg,N,site5

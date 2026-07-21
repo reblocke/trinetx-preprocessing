@@ -1,0 +1,88 @@
+    # Milestone 009 — Meds + procedure + vitals stages extraction
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-009
+    Objective: Extract remaining domain stages (medications, procedures, vital signs) into pure transforms + runners + CLI commands with tests.
+
+    Scope
+    - Implement meds, procedure, and vitals.
+- Keep each domain isolated and testable.
+- Do not implement RFS or final assembly yet.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. For each domain (meds, procedure, vitals):
+   a. Identify canonical legacy notebook(s) and document in `docs/DECISIONS.md`.
+   b. Implement a pure transform module:
+      - `src/trinetx_preprocessing/transform/medications.py`
+      - `src/trinetx_preprocessing/transform/procedure.py`
+      - `src/trinetx_preprocessing/transform/vitals.py`
+   c. Implement a stage runner:
+      - `src/trinetx_preprocessing/pipeline/medications_stage.py`
+      - `src/trinetx_preprocessing/pipeline/procedure_stage.py`
+      - `src/trinetx_preprocessing/pipeline/vitals_stage.py`
+   d. Add CLI subcommands:
+      - `run-meds`, `run-procedure`, `run-vitals`
+   e. Add unit + integration tests:
+      - Synthetic records covering code filters, units, missingness.
+      - Stage runner integration test per domain (can be small).
+3. Ensure common helpers are reused:
+   - I/O helpers from milestone 005.
+   - schema validation from `validation.py`.
+4. Update docs:
+   - `docs/DATA_CONTRACT.md` for each domain required columns.
+   - `docs/VALIDATION.md` describing what these tests guarantee.
+5. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing run-meds --help
+./.venv/bin/python -m trinetx_preprocessing run-procedure --help
+./.venv/bin/python -m trinetx_preprocessing run-vitals --help
+```
+
+
+
+    Definition of done
+    - All three domain transforms are pure and tested.
+- All three stage runners run on synthetic data.
+- CLI subcommands exist for each stage.
+
+
+    Suggested commit message
+    - feat: extract meds/procedure/vitals stages into pure transforms + runners
+
+    Next prompt to run
+    - docs/prompts/010_rfs_derivation_stage.txt

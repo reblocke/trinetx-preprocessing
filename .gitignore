@@ -1,8 +1,57 @@
+# macOS/local metadata
+.DS_Store
+._*
 
+# Local handoff/media
 Video Handoff.mp4
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
+trinetx_codex_prompts.zip
+trinetx_codex_prompts_009plus_updated.zip
+trinetx_preprocessing_scaffold_md.zip
+
+# Local config and generated validation artifacts
+/config.yaml
+/artifacts/
+/logs/
+/profile/
+/manifests/
+/work/
+/output/
+
+# Local data (TriNetX exports, PHI)
+/data/
+
+# Confidential GLP-1 generated outputs
+/glp1_eligibility/
+/results/glp1_eligibility/
+/results/**/glp1_eligibility/
+/artifacts/**/glp1_eligibility/
+*.duckdb
+*.duckdb.wal
+**/glp1_hypercapnia.duckdb
+**/analysis_glp1_eligibility.parquet
+**/eligibility_evidence_long.parquet
+**/cohort_hypercapnia_encounter.parquet
+**/cohort_flow.csv
+**/data_quality_report.html
+**/run_manifest.json
+**/.glp1_build_state.json
+**/.*.glp1_build_state.json
+**/.glp1_eligibility.build-*/
+**/.glp1_eligibility.previous-*/
+
+# Python
+__pycache__/
+*.pyc
+
+.pytest_cache/
+
+.ruff_cache/
+
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+
+# uv cache
+.uv_cache/
+.uv-cache/

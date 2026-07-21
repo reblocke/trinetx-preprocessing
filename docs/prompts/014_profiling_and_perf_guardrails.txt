@@ -1,0 +1,80 @@
+    # Milestone 014 — Profiling harness + performance guardrails (no semantic change)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- Prefer explicit tool paths and a writable uv cache (avoid PATH/`uv run` issues):
+  - `mkdir -p .uv_cache && export UV_CACHE_DIR="$PWD/.uv_cache"` before `uv sync`
+  - run tools via `./.venv/bin/python` and `./.venv/bin/ruff`
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-014
+    Objective: Add a lightweight profiling harness and performance guardrails to support future optimizations safely.
+
+    Scope
+    - Add profiling utilities and documentation.
+- Do not change pipeline semantics.
+- Do not introduce heavy dependencies unless strictly necessary.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Add a profiling mode:
+   - Use stdlib `cProfile` + `pstats` (avoid new deps).
+   - Module: `src/trinetx_preprocessing/profiling.py`
+   - CLI: `profile --config path --out artifacts/profile`
+   - Record wall time per stage (simple timers) in logs/provenance.
+3. Add performance guardrails:
+   - Add row-count logging at boundaries (read, post-filter, post-join).
+   - Add optional assertions enabled in `--strict` mode:
+     - no join explosions beyond a configured multiplier
+     - required IDs not null
+4. Docs:
+   - Update `docs/REPRODUCIBILITY.md` and add a short “Performance” section to README.
+   - Record any new guardrails in `docs/DECISIONS.md`.
+5. Tests:
+   - Unit tests for timer utilities and guardrail checks (pure functions).
+6. Update `CONTINUITY.md` at end.
+
+
+    Verification
+```bash
+mkdir -p .uv_cache
+export UV_CACHE_DIR="$PWD/.uv_cache"
+uv sync
+
+./.venv/bin/ruff format .
+./.venv/bin/ruff check .
+./.venv/bin/python -m pytest -q
+
+./.venv/bin/python -m trinetx_preprocessing profile --help
+```
+
+
+
+    Definition of done
+    - Profiling command exists and runs (on synthetic configs in docs/tests).
+- Guardrails exist and are tested.
+- No semantic changes were introduced.
+
+
+    Suggested commit message
+    - feat: add profiling harness + performance guardrails
+
+    Next prompt to run
+    - (end)

@@ -1,0 +1,77 @@
+    # Milestone 006 — Encounter stage extraction (pure transform + stage runner)
+
+    You are operating in an autonomous Codex run (`--full-auto`) inside this repository.
+
+Follow `AGENTS.md` exactly:
+- Read and update `CONTINUITY.md` at the start and end.
+- Use `uv` for deps, Ruff for format/lint, pytest for tests.
+- Do not commit or expose raw TriNetX data (treat `data/` as sensitive and git-ignored).
+- Keep the computational core pure; isolate I/O and orchestration.
+- Prefer correctness → clarity → reproducibility → measured performance.
+
+Global guardrails:
+- Do NOT run on real `data/` unless explicitly required by this milestone; tests must not depend on it.
+- Do NOT delete legacy notebooks; archive/move only when asked.
+- Do NOT introduce new linters/formatters besides Ruff.
+- When you make behavior-affecting decisions, record them in `docs/DECISIONS.md`.
+
+Output expectations for this run:
+- Start with a Ledger Snapshot (Goal + Now/Next + Open Questions) sourced from `CONTINUITY.md`.
+- End with: commands run, files changed, test results, and the exact next prompt filename to run.
+
+
+    Ticket: TRIN-006
+    Objective: Extract encounter-domain logic from legacy notebooks into pure, testable functions and a stage runner.
+
+    Scope
+    - Implement encounter processing only.
+- Preserve legacy semantics; do not invent new inclusion criteria.
+- Use synthetic fixtures for tests.
+
+
+    Tasks
+    1. Read/update `CONTINUITY.md`.
+2. Identify the canonical legacy source for encounter processing (notebook/script).
+   - Record the source file and key assumptions in `docs/DECISIONS.md`.
+3. Implement pure transform(s):
+   - Module: `src/trinetx_preprocessing/transform/encounter.py`
+   - Functions should take DataFrames and return DataFrames.
+   - No file I/O inside transform functions.
+   - Validate required columns early.
+4. Implement stage runner:
+   - Module: `src/trinetx_preprocessing/pipeline/encounter_stage.py`
+   - Function: `run_encounter_stage(cfg) -> list[Path]` (writes processed outputs under a work dir)
+   - Keep writing separate from transform logic.
+5. Extend CLI `run` (still partial):
+   - Add `run-encounter --config path` to run only this stage.
+6. Tests:
+   - Create synthetic encounter DataFrames that exercise filters/derivations found in legacy code.
+   - Assert expected rows/columns and key derived fields.
+   - Add a small integration test running `run-encounter` with temp dirs and synthetic CSV input.
+7. Docs:
+   - Update `docs/ARCHITECTURE.md` and `docs/DATA_CONTRACT.md` with encounter-stage details.
+   - Update `docs/VALIDATION.md` with what is now covered by tests.
+8. Update `CONTINUITY.md` at end.
+
+
+    Verification
+    ```bash
+uv sync
+ruff format
+ruff check
+pytest -q
+python -m trinetx_preprocessing run-encounter --help
+```
+
+
+    Definition of done
+    - Encounter transform exists and is pure/tested.
+- Encounter stage runner can process synthetic CSV input end-to-end.
+- CLI can execute encounter stage in isolation.
+
+
+    Suggested commit message
+    - feat: extract encounter stage into pure transform + runner
+
+    Next prompt to run
+    - docs/prompts/007_transform_labs_stage.txt

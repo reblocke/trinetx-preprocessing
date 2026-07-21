@@ -1,0 +1,19 @@
+You are continuing after milestone 009. Local runs show:
+- ruff check is failing mostly due to notebook lint (E501) across *.ipynb, including Executed Notebooks.
+- ruff check also flags tests for I001/E402 due to sys.path insertion patterns.
+- pytest has 2 failures where pandas reads code columns as ints (6902, 94660) but tests assert strings.
+
+Implement the following, keeping behavior the same:
+1) Update pyproject.toml:
+   - Configure Ruff to exclude *.ipynb plus Executed Notebooks/ and Notebooks/ (and data/, .uv_cache/, .venv/).
+   - Configure pytest to include pythonpath = ["src"] via [tool.pytest.ini_options].
+2) Refactor tests to remove per-file sys.path insertion blocks; imports should be at top of file.
+3) Update the two failing tests to read code columns as strings (dtype={"code":"string"}), because CSV dtype inference makes numeric codes read as int otherwise.
+4) Run:
+   - uv run ruff check . --fix
+   - uv run ruff format .
+   - uv run ruff check .
+   - uv run pytest -q
+5) Report commands run and outcomes.
+
+Do not change pipeline outputs or CLI semantics.

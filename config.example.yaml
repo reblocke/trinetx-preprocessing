@@ -1,0 +1,51 @@
+# Example configuration using synthetic fixtures. Update for real runs.
+# Paths are resolved relative to this file unless absolute.
+data_dir: tests/fixtures/example_data
+work_dir: artifacts/synthetic_example/work
+output_dir: artifacts/synthetic_example/output
+
+chunking:
+  enabled: false
+  lines_per_chunk: 10000000
+
+storage:
+  intermediate_format: parquet
+  emit_legacy_csv_intermediates: false
+  emit_normalized_domain_tables: false
+  parquet_row_group_size: 250000
+  analysis_bucket_count: 256
+  emit_legacy_group_tables: false
+
+guardrails:
+  max_join_multiplier: 1.0
+
+domains:
+  encounter:
+    pattern: "Encounter/encounter*.csv"
+  diagnosis:
+    pattern: "Diagnosis/diagnosis*.csv"
+  labs:
+    pattern: "Lab Results/lab_result*.csv"
+  meds:
+    patterns:
+      - "Medications/medication[0-9]*.csv"
+      - "Medications/medication_ingredient*.csv"
+  procedure:
+    pattern: "Procedure/procedure*.csv"
+  vitals:
+    pattern: "Vital Signs/vital*_signs*.csv"
+  patient:
+    pattern: "Patient/patient*.csv"
+
+rfs:
+  enabled: true
+  ruleset: corrected_v1
+  abg_min_pco2_mmhg: 45
+  vbg_min_pco2_mmhg: 45
+
+cohort:
+  event_selection: earliest_per_setting
+
+data_screen:
+  mode: diagnosis_or_lab
+  source: derived
