@@ -264,11 +264,13 @@
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 - PR #7 merged cleanly into `refactor-pipeline` at `c2a6908` after exact-head diff, Ruff, 336-test, CI, artifact-hygiene, and zero-unresolved-review-thread gates.
+- Holistic PR #4 review of integration head `e5dfc41` found two P2 reuse gaps: damaged GLP-1 public output sets could be reused, and corrected-pipeline work manifests were not bound to behavior-code state. Both fixes and focused regressions are implemented locally; work-manifest schema advances to version 4.
 
 ## Now
-- Refresh PR #4 metadata and integration documentation, then require clean local gates, CI, and a holistic GitHub Codex review at the updated head.
+- Run full local gates, commit/push the two PR #4 reuse fixes, and obtain clean CI and Codex re-review at the updated head.
 
 ## Next
+- Refresh affected real-data provenance evidence for the final source state; the reuse fixes do not change fresh analytic output semantics but do change source identity.
 - Merge PR #4 to `main` with a merge commit and verify ancestry, tags, CI, and repository hygiene.
 - Treat investigator terminology expansion and private record-level validation as separate clinical-use work after repository promotion.
 

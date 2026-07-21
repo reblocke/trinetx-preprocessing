@@ -4163,6 +4163,24 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     assert second.output_paths == first.output_paths
     assert read_run_state(output_root).status == "completed"
 
+    unexpected = output_root / "unexpected.csv"
+    unexpected.write_text("value\n1\n")
+    with pytest.raises(RuntimeError, match="unexpected: unexpected.csv"):
+        build_glp1_eligibility(
+            input_root=export_root,
+            output_dir=output_root,
+            config_path=GLP1_CONFIG,
+        )
+    unexpected.unlink()
+
+    (output_root / "data_quality_report.html").unlink()
+    with pytest.raises(RuntimeError, match="missing: data_quality_report.html"):
+        build_glp1_eligibility(
+            input_root=export_root,
+            output_dir=output_root,
+            config_path=GLP1_CONFIG,
+        )
+
 
 def test_repository_local_glp1_output_is_rejected(tmp_path: Path) -> None:
     unsafe_output = ROOT / "results" / "unsafe-glp1-output"

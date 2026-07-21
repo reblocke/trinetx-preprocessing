@@ -14,9 +14,10 @@ from typing import Any, Iterable
 
 from . import __version__
 from .config import Config, collect_domain_paths
+from .profiling import current_git_code_state_sha256
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
-WORK_MANIFEST_SCHEMA_VERSION = 3
+WORK_MANIFEST_SCHEMA_VERSION = 4
 INTERMEDIATE_SCHEMA_VERSION = 5
 LEGACY_DATA_SCREEN_FILENAMES = (
     "amb_enc_screen.csv",
@@ -230,10 +231,14 @@ def _identity(config: Config) -> dict[str, Any]:
         "data_screen": asdict(config.data_screen),
     }
     encoded = json.dumps(config_payload, sort_keys=True, separators=(",", ":"))
+    code_state_sha256 = current_git_code_state_sha256()
+    if code_state_sha256 is None:
+        raise StaleWorkError("Cannot fingerprint the current pipeline code state.")
     return {
         "schema_version": WORK_MANIFEST_SCHEMA_VERSION,
         "intermediate_schema_version": INTERMEDIATE_SCHEMA_VERSION,
         "package_version": __version__,
+        "git_code_state_sha256": code_state_sha256,
         "runtime_versions": _runtime_versions(),
         "ruleset": config.rfs.ruleset,
         "config_hash": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
@@ -290,6 +295,7 @@ def _require_identity(
         "schema_version",
         "intermediate_schema_version",
         "package_version",
+        "git_code_state_sha256",
         "runtime_versions",
         "ruleset",
         "config_hash",

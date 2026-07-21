@@ -24,6 +24,12 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
+- Completed-output reuse now validates the exact configured GLP-1 public file
+  set, rejects empty artifacts, and confirms the DuckDB run identity/status
+  before reporting success.
+- Work-manifest schema 4 binds resumable corrected-pipeline intermediates to the
+  current behavior-code fingerprint, including a source-hash fallback when Git
+  metadata is unavailable.
 - Completed the exact behavior-head full-data GLP-1 build from commit
   `459cbda` in 20,941.55 seconds with 5,635,293,184 bytes maximum RSS, below
   the 6,238 MiB gate. The build atomically published exactly the eight

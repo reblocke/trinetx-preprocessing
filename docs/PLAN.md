@@ -51,6 +51,12 @@ holistic review at its new head before promotion to `main`. Investigator
 terminology expansion and private record-level clinical validation remain
 separate requirements before clinical use.
 
+The first holistic PR #4 review found two fail-closed reuse gaps. Completed
+GLP-1 outputs now require the exact configured public file set, nonempty files,
+and matching DuckDB run identity/status before reuse. Corrected-pipeline work
+manifest schema 4 now includes the current behavior-code SHA-256. These fixes
+require fresh CI, re-review, and affected provenance evidence before merge.
+
 ## Definition of done
 
 - All synthetic acceptance and temporal boundary tests pass locally and in CI.

@@ -266,7 +266,7 @@ def current_git_code_state_sha256() -> str | None:
         *GIT_CODE_STATE_PATHS,
     )
     if path_output is None:
-        return None
+        return _installed_code_state_sha256()
 
     digest = hashlib.sha256()
     relative_paths = sorted({path for path in path_output.split("\0") if path})
@@ -287,6 +287,23 @@ def current_git_code_state_sha256() -> str | None:
             digest.update(b"\0")
         else:
             digest.update(b"missing\0")
+    return digest.hexdigest()
+
+
+def _installed_code_state_sha256() -> str:
+    """Hash installed package sources when Git metadata is unavailable."""
+
+    package_root = Path(__file__).resolve().parent
+    digest = hashlib.sha256()
+    digest.update(__version__.encode("utf-8"))
+    digest.update(b"\0")
+    for path in sorted(package_root.rglob("*.py")):
+        digest.update(path.relative_to(package_root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
     return digest.hexdigest()
 
 

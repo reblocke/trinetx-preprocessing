@@ -1426,3 +1426,22 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
   `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #7.
+
+### 2026-07-21 — Fail closed on stale work and damaged completed outputs
+- Date: 2026-07-21
+- Decision: Bind corrected-pipeline work manifests to the current behavior-code
+  SHA-256 and validate the exact configured GLP-1 public artifact set, nonempty
+  files, and DuckDB run identity/status before reusing a completed build.
+- Context: Final promotion review found that package version, configuration,
+  runtime, and input fingerprints did not invalidate work after same-version
+  code changes. It also found that same-run GLP-1 reuse could accept missing or
+  unexpected visible output files.
+- Rationale: Resume and reuse are valid only when both the producing code and
+  the published artifact contract can be proven current.
+- Consequences: Work-manifest schema advances to version 4 and older work fails
+  closed. Installed packages without Git metadata use a deterministic package
+  source hash. Damaged GLP-1 outputs require an explicit `--replace` rebuild.
+- References: `src/trinetx_preprocessing/work_manifest.py`,
+  `src/trinetx_preprocessing/profiling.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
+  `tests/test_work_manifest.py`, `tests/test_glp1_foundation.py`, GitHub PR #4.

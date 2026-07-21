@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import trinetx_preprocessing.work_manifest as work_manifest_module
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
@@ -56,7 +57,9 @@ def test_work_manifest_records_and_requires_completed_stages(tmp_path: Path) -> 
     manifest = require_current_work(config, required_stages=["encounter"])
 
     assert path.exists()
+    assert manifest["schema_version"] == 4
     assert manifest["intermediate_schema_version"] == 5
+    assert len(manifest["git_code_state_sha256"]) == 64
     assert manifest["runtime_versions"]["python"]
     assert manifest["stages"]["encounter"]["status"] == "complete"
     assert manifest["stages"]["encounter"]["outputs"][0]["size_bytes"] > 0
@@ -73,6 +76,27 @@ def test_work_manifest_fails_when_rules_change(tmp_path: Path) -> None:
 
     with pytest.raises(StaleWorkError, match="config_hash"):
         require_current_work(changed, required_stages=[])
+
+
+def test_work_manifest_fails_when_behavior_code_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    monkeypatch.setattr(
+        work_manifest_module,
+        "current_git_code_state_sha256",
+        lambda: "a" * 64,
+    )
+    initialize_work_manifest(config)
+    monkeypatch.setattr(
+        work_manifest_module,
+        "current_git_code_state_sha256",
+        lambda: "b" * 64,
+    )
+
+    with pytest.raises(StaleWorkError, match="git_code_state_sha256"):
+        require_current_work(config, required_stages=[])
 
 
 def test_work_manifest_rejects_unmanaged_work(tmp_path: Path) -> None:

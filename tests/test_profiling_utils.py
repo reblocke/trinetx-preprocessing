@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import trinetx_preprocessing.profiling as profiling_module
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
@@ -34,6 +35,18 @@ def test_stage_timer_records_elapsed() -> None:
         pass
 
     assert timings["demo"] == pytest.approx(1.25)
+
+
+def test_code_state_hash_falls_back_without_git(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(profiling_module, "_git_output", lambda *args: None)
+
+    digest = current_git_code_state_sha256()
+
+    assert digest is not None
+    assert len(digest) == 64
+    int(digest, 16)
 
 
 def test_write_provenance_records_config_code_and_outputs(tmp_path: Path) -> None:

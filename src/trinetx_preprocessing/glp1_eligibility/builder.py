@@ -10,13 +10,13 @@ from pathlib import Path
 from ..filesystem import remove_tree_strict
 from .cohort import CoreCohortCounts, build_cohort_flow, build_core_cohort
 from .concept_sets import load_concept_sets
-from .config import load_glp1_config
+from .config import GLP1Config, load_glp1_config
 from .database import initialize_database, mark_database_complete
 from .discovery import validate_export
 from .eligibility import build_eligibility_phenotypes
 from .ingestion import build_raw_observability_summaries, ingest_core_sources
 from .monitoring import RunStateWriter, state_path_for_output
-from .outputs import summarize_database, write_build_outputs
+from .outputs import OUTPUT_TABLES, summarize_database, write_build_outputs
 from .provenance import (
     build_input_inventory,
     current_git_sha,
@@ -79,12 +79,16 @@ def build_glp1_eligibility(
 
         existing = _existing_complete_run(output)
         if existing is not None and existing.get("run_id") == run_id:
+            output_paths, summary = _validate_reusable_output(
+                output,
+                config=config,
+                run_id=run_id,
+            )
             state.complete(message="Identical completed output already exists.")
-            summary = summarize_database(output / config.output.database_name)
             return BuildResult(
                 run_id=run_id,
                 output_dir=output,
-                output_paths=_published_output_paths(output),
+                output_paths=output_paths,
                 counts=CoreCohortCounts(
                     hypercapnia_encounters=int(summary["hypercapnia_encounters"]),
                     patient_index_events=int(summary["patient_index_events"]),
@@ -220,6 +224,53 @@ def _published_output_paths(output_dir: Path) -> tuple[Path, ...]:
             and path.name != BUILD_STATE_FILENAME
         )
     )
+
+
+def _validate_reusable_output(
+    output_dir: Path,
+    *,
+    config: GLP1Config,
+    run_id: str,
+) -> tuple[tuple[Path, ...], dict[str, object]]:
+    """Require a complete, internally consistent public output before reuse."""
+
+    output_paths = _published_output_paths(output_dir)
+    actual_names = {path.name for path in output_paths}
+    expected_names = {
+        config.output.database_name,
+        "cohort_flow.csv",
+        "data_dictionary.csv",
+        "run_manifest.json",
+    }
+    if config.output.write_parquet:
+        expected_names.update(f"{table}.parquet" for table in OUTPUT_TABLES)
+    if config.output.write_html_qa:
+        expected_names.add("data_quality_report.html")
+
+    missing = sorted(expected_names - actual_names)
+    unexpected = sorted(actual_names - expected_names)
+    empty = sorted(path.name for path in output_paths if path.stat().st_size == 0)
+    if missing or unexpected or empty:
+        details = []
+        if missing:
+            details.append("missing: " + ", ".join(missing))
+        if unexpected:
+            details.append("unexpected: " + ", ".join(unexpected))
+        if empty:
+            details.append("empty: " + ", ".join(empty))
+        raise RuntimeError(
+            "Completed GLP-1 output failed reuse validation ("
+            + "; ".join(details)
+            + "); rebuild with --replace."
+        )
+
+    summary = summarize_database(output_dir / config.output.database_name)
+    if summary.get("run_id") != run_id or summary.get("status") != "complete":
+        raise RuntimeError(
+            "Completed GLP-1 output manifest and database disagree; "
+            "rebuild with --replace."
+        )
+    return output_paths, summary
 
 
 def _require_safe_output_location(output_dir: Path) -> None:
