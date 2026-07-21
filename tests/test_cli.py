@@ -303,6 +303,10 @@ def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> No
         ".trinetx-final-feature-sources-",
         ".trinetx-final-labs-",
         ".trinetx-final-prev-vitals-",
+        ".trinetx-glp1-concept-ingest-",
+        ".trinetx-glp1-observability-scan-",
+        ".trinetx-glp1-terminology-qa-",
+        ".trinetx-glp1-vital-ingest-",
     ]
     for prefix in prefixes:
         scratch = work_dir / f"{prefix}test"

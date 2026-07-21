@@ -139,3 +139,53 @@ Before release:
 - local holistic review and GitHub Codex review have no unresolved actionable
   correctness, security, privacy, or performance findings;
 - the aggregate Milestone 1 delta report is PHI-safe and external-only.
+
+## GLP-1 additive full-data evidence
+
+The exact behavior-head additive GLP-1 build from commit `459cbda` completed in
+20,941.55 seconds with 5,635,293,184 bytes maximum RSS. It used the supported
+4,096 MiB/one-thread DuckDB configuration and atomically published exactly the
+eight public files. The terminal validation gate found zero warnings, errors,
+WAL files, recognized scratch artifacts, AppleDouble sidecars, hidden
+workspaces, blank data-dictionary descriptions, or missing required concept
+matches. External free space remained about 7.40 TiB.
+
+The final run contains 59,954 analysis rows, 1,320,409 candidate encounters,
+9,527 strict primary rows, 12,028,276 evidence rows, and all 15 cohort-flow
+stages. Parquet, DuckDB, command-summary, and flow counts agree. Every paired
+PaCO2 and arterial-pH evidence row retains its raw value, raw unit, normalized
+value, and source-record hash.
+
+The PHI-safe comparison against the preserved reviewed `71ef56f` build records:
+
+- 59,954 shared index-event keys, with zero baseline-only or corrected-only
+  keys;
+- unchanged 1,320,409 candidate encounters, 9,527 strict primary rows,
+  payer-route counts, and cohort-flow counts;
+- 191 analysis rows changed by the all-history cirrhosis correction, affecting
+  `dx_cirrhosis`, `cirrhosis_status`, and a suppressed small number of
+  `mash_f2_f3_status` rows;
+- 12,028,276 evidence rows, a net reduction of 2,603,596 comprising 9,193
+  additional diagnosis rows and 2,612,789 removed post-index non-GLP-1
+  medication rows;
+- no full-data key/count effect from patient-scoped encounter reductions or
+  precision-aware date-only procedure context.
+
+The earlier `71ef56f` run remains a valid independent resource and
+publication-contract baseline. The `e7bf01a` run verifies the cirrhosis,
+encounter, medication, and procedure-context corrections. The exact-head
+`459cbda` run additionally validates ruleset `2026-07-19.1` CKD source-precision
+handling. Direct aggregate comparison between `459cbda` and `e7bf01a` found
+zero schema, key-set, table-count, non-provenance analysis-value, or semantic
+fingerprint differences across 59,954 analysis rows, 1,320,409 candidate
+encounters, and 12,028,276 evidence rows.
+
+The exact-head run root is
+`/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_final_459cbda_20260719`.
+Its terminal validation, aggregate JSON/Markdown comparison, and final scratch
+inventory are under `manifests/` and remain external and untracked.
+
+The aggregate JSON and Markdown reports remain external and untracked. No
+identifiers or row examples are emitted. Full-data computational validation does
+not remove the separate investigator terminology and private record-review
+requirements described in `docs/GLP1_ELIGIBILITY.md`.

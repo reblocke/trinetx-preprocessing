@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -55,15 +56,21 @@ def test_remove_tree_strict_tolerates_missing_nested_entries(
     nested = scratch / "chunk-000001.csv"
     nested.write_text("rows")
     original_rmtree = filesystem.shutil.rmtree
+    supports_onexc = "onexc" in inspect.signature(original_rmtree).parameters
 
     def rmtree_with_missing_nested(path, *, onexc=None, onerror=None):
+        if onexc is not None and not supports_onexc:
+            raise TypeError("rmtree() got an unexpected keyword argument 'onexc'")
         nested.unlink()
         error = FileNotFoundError(nested)
         if onexc is not None:
             onexc(nested.unlink, str(nested), error)
         elif onerror is not None:
             onerror(nested.unlink, str(nested), (FileNotFoundError, error, None))
-        original_rmtree(path, onexc=onexc)
+        if supports_onexc:
+            original_rmtree(path, onexc=onexc)
+        else:
+            original_rmtree(path, onerror=onerror)
 
     monkeypatch.setattr(filesystem.shutil, "rmtree", rmtree_with_missing_nested)
 

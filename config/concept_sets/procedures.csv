@@ -1,0 +1,18 @@
+concept_set_id,domain,code_system,code,match_type,include,description,source_authority,source_version,effective_start,effective_end,notes
+echocardiography,procedure,CPT,93306,exact,true,Complete transthoracic echocardiography,AMA CPT,2026,,,Investigator review required before clinical use
+polysomnography,procedure,CPT,95810,exact,true,Attended polysomnography,AMA CPT,2026,,,Investigator review required before clinical use
+home_sleep_apnea_test,procedure,CPT,95800,exact,true,Unattended sleep study,AMA CPT,2026,,,Investigator review required before clinical use
+pap_titration,procedure,CPT,95811,exact,true,Polysomnography with PAP titration,AMA CPT,2026,,,Investigator review required
+liver_biopsy,procedure,CPT,47000,exact,true,Percutaneous liver biopsy,AMA CPT,2026,,,Investigator review required
+transient_elastography,procedure,CPT,91200,exact,true,Liver elastography,AMA CPT,2026,,,Investigator review required
+invasive_ventilation,procedure,CPT,94002,exact,true,Ventilation management initial day,AMA CPT,2026,,,Investigator review required
+dialysis,procedure,CPT,90935,exact,true,Hemodialysis single evaluation,AMA CPT,2026,,,Investigator review required
+bariatric_surgery,procedure,CPT,43775,exact,true,Laparoscopic sleeve gastrectomy,AMA CPT,2026,,,Seed requires expansion
+lower_extremity_revascularization,procedure,CPT,37220,prefix,true,Lower extremity endovascular revascularization family,AMA CPT,2026,,,Prefix semantics require investigator review
+procedural_sedation,procedure,CPT,99151,exact,true,Moderate sedation initial service younger than 5 years,AMA CPT,2026,,,Index context seed
+procedural_sedation,procedure,CPT,99152,exact,true,Moderate sedation initial service age 5 years or older,AMA CPT,2026,,,Index context seed
+procedural_sedation,procedure,CPT,99153,exact,true,Moderate sedation additional 15 minutes,AMA CPT,2026,,,Index context seed
+procedural_sedation,procedure,CPT,99155,exact,true,Moderate sedation by other qualified professional younger than 5 years,AMA CPT,2026,,,Index context seed
+procedural_sedation,procedure,CPT,99156,exact,true,Moderate sedation by other qualified professional age 5 years or older,AMA CPT,2026,,,Index context seed
+procedural_sedation,procedure,CPT,99157,exact,true,Moderate sedation by other qualified professional additional 15 minutes,AMA CPT,2026,,,Index context seed
+anesthesia_procedure,procedure,CPT,"^(00[1-9][0-9]{2}|01[0-9]{3})$",regex,true,Anesthesia service code family,AMA CPT,2026,,,Postoperative context seed; investigator review required

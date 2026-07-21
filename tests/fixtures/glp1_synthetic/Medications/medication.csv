@@ -1,0 +1,6 @@
+patient_id,encounter_id,code_system,code,start_date,route,brand,strength
+case05,e05,RXNORM,29046,2023-01-01,oral,,
+case06,e06,RXNORM,29046,2023-01-01,oral,,
+case06,e06,RXNORM,17767,2023-01-01,oral,,
+case19,e19,RXNORM,2626,2023-01-01,oral,,
+case20,e20,RXNORM,2626,2023-01-01,oral,,

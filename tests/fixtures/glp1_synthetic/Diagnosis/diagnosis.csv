@@ -1,0 +1,9 @@
+patient_id,encounter_id,date,code_system,code,principal_diagnosis_indicator,admitting_diagnosis,reason_for_visit
+case04,e04,2023-12-01,ICD10CM,I50.3,,,
+case08,e08,2023-12-01,ICD10CM,E11.9,,,
+case10,e10,2023-12-01,ICD10CM,G47.33,,,
+case11,e11,2023-12-01,ICD10CM,K75.81,,,
+case12,e12,2023-12-01,ICD10CM,K75.81,,,
+case12,e12,2023-12-01,ICD10CM,K74.60,,,
+case13,e13,2023-12-01,ICD10CM,K75.81,,,
+case17,e17,2024-01-02,ICD10CM,E11.9,,,

@@ -1,0 +1,66 @@
+schema_version: "1.0"
+rule_set_version: "2026-07-19.1"
+labels_as_of: "2026-07-10"
+payer_policy_as_of: "2026-07-10"
+concept_sets_dir: concept_sets
+
+study:
+  study_start: null
+  study_end: null
+  index_encounter_types: ["EMER", "IMP"]
+  adult_age_min: 18
+  lookback_days: 730
+  measurement_lookback_days: 365
+  medication_lookback_days: 730
+  followup_days: 365
+
+hypercapnia:
+  index_window_hours: 24
+  pco2_gt_mm_hg: 45
+  pco2_sensitivity_thresholds_mm_hg: [50, 52]
+  pco2_plausible_min_mm_hg: 10
+  pco2_plausible_max_mm_hg: 250
+  ph_max: 7.45
+  ph_plausible_min: 6.5
+  ph_plausible_max: 8.0
+  hco3_plausible_min_mmol_l: 1
+  hco3_plausible_max_mmol_l: 80
+  po2_plausible_min_mm_hg: 10
+  po2_plausible_max_mm_hg: 800
+  sao2_plausible_min_percent: 1
+  sao2_plausible_max_percent: 100
+  acute_acidemia_ph_lt: 7.35
+  repeat_window_days: [14, 84]
+  pair_tolerance_minutes: 30
+  allow_date_only_pairing: true
+  primary_requires_arterial_specimen: true
+  include_vbg_secondary_cohort: true
+
+obesity:
+  bmi_pre_index_days: 365
+  same_encounter_fallback: true
+  thresholds: [27, 30, 35, 40]
+  bmi_min_kg_m2: 10
+  bmi_max_kg_m2: 100
+  weight_min_kg: 20
+  weight_max_kg: 500
+  height_min_m: 1.0
+  height_max_m: 2.5
+
+exclusions:
+  cleaned_view_excludes:
+    - cardiac_arrest_context
+    - major_trauma_context
+    - procedure_sedation_context
+    - postoperative_context
+    - implausible_value
+    - probable_venous_specimen
+
+runtime:
+  duckdb_memory_limit_mib: 4096
+  duckdb_threads: 1
+
+output:
+  database_name: glp1_hypercapnia.duckdb
+  write_parquet: true
+  write_html_qa: true

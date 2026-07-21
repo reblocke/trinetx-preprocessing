@@ -975,3 +975,454 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `docs/SPEC.md`, `docs/VALIDATION.md`,
   `src/trinetx_preprocessing/pipeline/encounter_stage.py`,
   `src/trinetx_preprocessing/work_manifest.py`.
+
+### 2026-07-14 — Pair supplemental arterial gases to the selected PaCO2
+- Date: 2026-07-14
+- Decision: Materialize arterial bicarbonate, PaO2, and oxygen saturation from
+  versioned LOINC seeds and pair each concept independently to the selected
+  first arterial PaCO2 using the existing specimen/panel, exact-time,
+  tolerance, and date-only hierarchy. These values do not qualify an encounter.
+- Context: The GLP-1 endpoint requires these gas descriptors, but the initial
+  implementation exposed permanent null placeholders.
+- Rationale: Reusing one pairing table prevents nearby unrelated measurements
+  from overriding a better source match and keeps pH and supplemental gas
+  provenance deterministic. Explicit unit conversions reject incompatible
+  values instead of guessing.
+- Consequences: The rule-set version advances to `2026-07-14`. The current
+  concepts and broad plausibility bounds are implementation seeds requiring
+  investigator review; real-data QA must report unit rejection and concept
+  coverage before clinical interpretation.
+- References: `config/concept_sets/measurements.csv`,
+  `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `tests/test_glp1_foundation.py`, `https://loinc.org/1960-4`,
+  `https://loinc.org/2703-7`, `https://loinc.org/2708-6`.
+
+### 2026-07-14 — Retain context flags and configure cleaned-view exclusions
+- Date: 2026-07-14
+- Decision: Keep all qualifying primary rows in the existing analysis view and
+  add `analysis_primary_cleaned_obesity_hypercapnia`, whose exclusions are an
+  explicit validated list in configuration. Populate documented context from
+  index-encounter codes and source specimen text rather than constant values.
+- Context: The endpoint requires context flags without silently deleting rows.
+  The initial tables emitted constant false values for several fields and had no
+  configurable cleaned view.
+- Rationale: Separating retained evidence from exclusion policy preserves audit
+  access and permits sensitivity analyses. The first major-trauma seed is
+  intentionally narrow because the broad injury chapter includes minor injury,
+  poisoning, and procedural complications; a validated trauma algorithm remains
+  investigator work.
+- Consequences: Positive flags mean documented seed evidence. Negative flags do
+  not prove absence. Moderate-sedation CPT `99151`-`99157` and the anesthesia
+  service family are treated as index context only when dated no later than the
+  selected PaCO2. The default cleaned view excludes all six configured context
+  fields, but the unfiltered view and encounter table remain unchanged.
+- References: `config/concept_sets/diagnoses.csv`,
+  `config/concept_sets/procedures.csv`, `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `https://www.cms.gov/files/document/02-chapter2-ncci-medicare-policy-manual-2025finalcleanpdf.pdf`,
+  `https://www.cdc.gov/nchs/icd/icd-10-cm/index.html`.
+
+### 2026-07-15 — Fail closed on GLP-1 selection and provenance ambiguity
+- Date: 2026-07-15
+- Decision: Rank the first arterial PaCO2 before validating its value or unit,
+  retain unusable first rows with explicit exclusion reasons, and calculate the
+  encounter maximum from plausible arterial measurements through discharge.
+  Treat the published 50/52 PaCO2 and 27/30/35/40 BMI columns plus arterial
+  primary endpoint as fixed contracts; reject configurations that request
+  unsupported alternatives. When encounter end is missing, use the existing
+  one-day post-start bound for same-encounter BMI fallback as well as gas windows.
+- Context: Review found that validity filtering promoted later gas values,
+  fixed output columns ignored custom configuration, and the 24-hour table
+  understated encounter maxima. A null encounter end also made valid later BMI
+  evidence unreachable within the selected encounter.
+- Rationale: Selection and validity are distinct operations. Failing closed is
+  safer than silently changing the index event or accepting configuration that
+  cannot alter the published contract.
+- Consequences: The GLP-1 ruleset advances to `2026-07-15`. Unusable first gas
+  rows remain auditable but do not enter the strict cohort. Alternate thresholds
+  require a future versioned output schema rather than a YAML-only change.
+  Open-ended index encounters use `index_date + 1 day` for the configured
+  same-encounter BMI fallback.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/config.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Separate build identity, evidence, and observability
+- Date: 2026-07-15
+- Decision: Include parsed concept and phenotype-rule content plus
+  package-anchored code content in deterministic build identity. Inventory and
+  hash supplied export metadata. Ingest optional medication-ingredient files
+  into medication evidence, while computing candidate-patient observability
+  from unfiltered raw-domain aggregate scans. Prefer the nearest canonical
+  unsplit source family and use headered chunks only as a fallback. When a
+  canonical ingredient file exists, ignore a medication chunk family only if
+  any chunk, including a one-file chunk family, lacks the required medication
+  header fields; retain independently valid medication and ingredient families
+  even when optional fields or column order differ. Reject tied nearest export
+  roots, ambiguous same-root source families, and cross-domain selections that
+  do not share one flat root or recognized sibling domain-folder root before
+  inventory or ingestion.
+- Context: A changed external concept catalog or code executed from another
+  working directory could reuse stale output. Concept-filtered source tables
+  also made unmatched history appear absent, and discovered ingredient exports
+  were not consumed.
+- Rationale: Build identity must describe every behavior-defining input.
+  Phenotype evidence depends on approved concepts, whereas data observability
+  must not depend on terminology coverage.
+- Consequences: Workspace identity schema advances to version 2. Raw
+  observability adds bounded sequential aggregate scans but stores no additional
+  row-level source copy. Run manifests expose the concept digest and source
+  inventory includes metadata files and hashes. Ingredient-only exports are
+  valid, and restored roots no longer ingest unsupported headerless medication
+  artifacts. Same-size but distinct medication and ingredient domains remain
+  discoverable, while neither one logical domain nor a cross-domain selection
+  can combine different export roots.
+- References: `src/trinetx_preprocessing/glp1_eligibility/concept_sets.py`,
+  `builder.py`, `provenance.py`, `discovery.py`, `ingestion.py`, `workspace.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Publish complete aggregate flow and protect private outputs
+- Date: 2026-07-15
+- Decision: Build all 15 contracted cohort-flow rows only after component
+  phenotypes and payer routes exist. Use bounded source aggregates for the first
+  two stages, one checkpointed domain-wide Space-Saving stream for terminology
+  QA, and reject every repository-local output directory regardless of Git
+  ignore rules.
+- Context: The previous flow stopped after five rows, per-file sketch merges
+  lost valid error bounds, and custom repository-local output paths could leave
+  confidential databases or staging trees trackable.
+- Rationale: Aggregate reports must reconcile the actual endpoint, QA bounds
+  must remain truthful, and privacy controls must cover both final and temporary
+  output locations. Ignore patterns can contain exceptions and cannot prove that
+  every current or future clinical artifact is untrackable.
+- Consequences: Cohort flow has exactly 15 ordered rows. The final five are
+  parallel BMI-at-least-30 characterizations, not a nested attrition funnel.
+  Repository-local roots always fail before staging starts. DuckDB files,
+  write-ahead logs, and other generated artifacts remain ignored as defense in
+  depth. Existing non-directory output paths fail before Git probing.
+  Publication fails closed if a WAL remains after an explicit checkpoint and
+  connection close.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `ingestion.py`, `provenance.py`, `builder.py`, `.gitignore`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-15 — Preserve date-only encounter context
+- Date: 2026-07-15
+- Decision: Match timestamped diagnosis and procedure context rows against exact
+  encounter bounds. When a source date contains no time, match by calendar-date
+  overlap after requiring the same patient and encounter identifiers.
+- Context: Casting a date-only value to midnight excluded valid same-encounter
+  context whenever the encounter began later that day.
+- Rationale: Date-only source precision should widen only the temporal boundary,
+  not the patient or encounter linkage.
+- Consequences: Cardiac arrest, trauma, pneumonia, heart failure, ventilation,
+  sedation, and postoperative context remain visible for same-day date-only
+  records. The cleaned primary view can therefore apply its configured context
+  exclusions consistently.
+- References: `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-16 — Bound DuckDB and hash candidate encounter membership
+- Date: 2026-07-16
+- Decision: Configure DuckDB with a default 4,096 MiB memory limit and one
+  thread, record both settings in run provenance, and retain encounter rows by
+  membership in deduplicated candidate-patient and candidate-encounter tables.
+- Context: A private full-data build exhausted the former 8 GB DuckDB limit.
+  The correlated patient-or-encounter predicate planned as a blockwise nested
+  loop over the full encounter export and 2.48 million candidate encounters.
+- Rationale: Separate membership predicates use bounded MARK/hash joins while
+  preserving the original logical OR and duplicate source rows. Explicit
+  runtime settings make the measured resource policy reproducible.
+- Consequences: Encounter ingestion no longer uses the pathological nested-loop
+  plan. The initial 5,120 MiB/two-thread full benchmark exceeded the 6,238 MiB
+  process ceiling by 30.3 MiB during an additional diagnostic aggregation, so
+  the approved fallback becomes the production default. A second full-scale
+  benchmark must pass before another complete private build is launched.
+- References: `config/glp1_eligibility.yml`,
+  `src/trinetx_preprocessing/glp1_eligibility/config.py`, `database.py`,
+  `ingestion.py`, `tests/test_glp1_foundation.py`.
+
+### 2026-07-16 — Respect source precision and the selected export root
+- Date: 2026-07-16
+- Decision: Evaluate date-only repeat PaCO2 using inclusive calendar-day
+  lookback bounds while retaining exact timestamp bounds for timestamped rows.
+  Ignore hidden files only below the input root, not hidden ancestors or a
+  caller-selected hidden export root.
+- Context: Review found that a date-only elevated repeat on calendar day 14
+  could precede a noon timestamp boundary and that absolute-path filtering
+  rejected otherwise valid exports staged under a hidden directory.
+- Rationale: Temporal comparisons should reflect source precision, and export
+  discovery should not reinterpret the caller's chosen root based on ancestors.
+- Consequences: Date-only day-14/day-84 repeats remain eligible, timestamped
+  events retain exact bounds, and hidden children remain excluded without
+  hiding a valid root.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `discovery.py`, `tests/test_glp1_foundation.py`.
+
+### 2026-07-17 — Reuse bounded membership and partition vital ingestion
+- Date: 2026-07-17
+- Decision: Materialize unique gas-candidate patient and encounter identifiers
+  once, reuse those tables for every retained-domain scan, and compile validated
+  exact, prefix, and regex rules into constant predicates. Exact code sets use
+  bounded `IN` hash membership within each normalized code system. Stage
+  concept-filtered vital rows in 32 patient-hash Parquet partitions, then append
+  each partition after joining only the corresponding candidate-patient bucket.
+- Context: The first 4,096 MiB/one-thread full build passed encounter ingestion
+  but exhausted DuckDB's internal memory while scanning 852,830,801 vital rows.
+  The failed query matched 2.48 million patient/encounter pairs and routed five
+  exact vital codes through a generic correlated concept matcher. Compiling the
+  rules removed that matcher, but direct table materialization still exhausted
+  DuckDB at both 4,096 MiB and 5,120 MiB; the larger trial left insufficient
+  process-RSS headroom below the 6,238 MiB release gate.
+- Rationale: Unique candidate keys and rule-specific predicates preserve source
+  duplicates and overlapping-rule truth values. Partitioned staging scans the
+  slow raw source once while bounding each candidate join and persistent-table
+  append; the existing 4,096 MiB/one-thread runtime remains unchanged.
+- Consequences: Current exact, prefix, and regex plans contain neither blockwise
+  nested-loop nor delimiter joins. Vitals require temporary external Parquet
+  capacity and strict cleanup. The isolated 852,830,801-row benchmark completed
+  in `824.15 s` with `4,248.625 MiB` maximum RSS, retained `178,529,225` rows,
+  and left zero scratch and WAL; another complete build may proceed only after
+  the focused commit passes CI and review.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `tests/test_glp1_foundation.py`, `docs/GLP1_ELIGIBILITY.md`.
+
+### 2026-07-17 — Bound patient-concept domains and normalize source dates
+- Date: 2026-07-17
+- Decision: Use the reviewed 32-way patient-hash Parquet ingestion strategy for
+  diagnosis, procedure, and medication as well as vitals. Normalize source
+  timestamps through one parser that accepts standard timestamp strings,
+  compact `YYYYMMDD` dates, and compact `YYYYMMDDHHMMSS` timestamps.
+- Context: The next full build passed bounded vitals but exhausted DuckDB's
+  4,096 MiB limit during direct diagnosis CTAS. Its preserved database also
+  showed that restored TriNetX dates use compact `YYYYMMDD`; generic timestamp
+  casts left every retained lab, encounter, vital, and diagnosis event time
+  null despite non-null source date strings.
+- Rationale: The same bounded data structure should protect every large
+  patient-keyed concept source. Temporal cohort and phenotype logic must parse
+  the actual export representation rather than silently treating valid dates as
+  missing.
+- Consequences: Duplicate rows, source-record hashes, public table schemas, and
+  ISO fixture behavior remain unchanged. The isolated 1,272,185,090-row
+  diagnosis benchmark completed in `1,790.82 s`, retained `86,182,713` rows,
+  used `4,417.00 MiB` maximum RSS, and left zero scratch and WAL. Aggregate
+  production probes confirm every distinct non-null retained lab, encounter,
+  vital, and diagnosis date parses under the shared helper. Another complete
+  private build requires clean tests, CI, and review of this checkpoint.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`, `docs/GLP1_ELIGIBILITY.md`.
+
+### 2026-07-17 — Bound duplicate QA and recognize canonical UCUM gas units
+- Date: 2026-07-17
+- Decision: Compute exact retained-source duplicate counts while reducing each
+  terminology hash partition, persist the five-row aggregate result, and make
+  output QA read that summary rather than regrouping all retained domains.
+  Recognize lowercase-normalized UCUM `mm[hg]` as mmHg and `[ph]` as pH.
+- Context: A review-clean full build completed all `906,193,358` retained source
+  rows, terminology QA, core cohort construction, and component phenotypes, then
+  exhausted DuckDB's 4,096 MiB limit while grouping source hashes across five
+  domains for the HTML report. Aggregate inspection also showed that production
+  rows use `mm[Hg]` and `[pH]`; the prior alias lists rejected those rows and
+  reduced valid-unit cohort flow to zero.
+- Rationale: Per-domain hash partitions preserve the prior exact duplicate
+  definition while bounding state. UCUM aliases are semantically identical to
+  the already-supported mmHg and pH spellings and belong in normalization, not
+  in source-specific preprocessing.
+- Consequences: Duplicate QA remains exact, including duplicate null-hash groups,
+  and no longer requires a cross-domain source aggregate. Canonical UCUM gas
+  rows can enter the intended cohort after the same plausibility and threshold
+  checks. Full-scale downstream reconstruction and review are required before
+  another complete private build.
+- References: `src/trinetx_preprocessing/glp1_eligibility/terminology_qa.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/outputs.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-17 — Bound exact terminology coverage reduction
+- Date: 2026-07-17
+- Decision: Reduce terminology matches one source domain at a time. Domains with
+  at most one million retained rows use a direct exact aggregate; larger domains
+  stage matches into 32 deterministic source-record-hash Parquet partitions and
+  count distinct hashes one partition at a time.
+- Context: Full run `7bd772e11f3b00a1d7ee6e81` completed all source ingestion
+  and retained `906,193,358` rows, then exhausted DuckDB's 4,096 MiB limit while
+  one cross-domain aggregate retained every distinct matched record hash.
+- Rationale: All copies of one source-record hash map to the same partition, so
+  partition counts sum exactly while bounding each distinct-hash set. Processing
+  domains sequentially also releases peak scratch before the next domain. The
+  direct small-domain path avoids imposing partition I/O on tests and fixtures.
+- Consequences: `concept_match_summary` retains its exact de-duplication and
+  overlapping-rule semantics. The read-only full-scale benchmark completed all
+  92 concept sets in `812.81 s` with `4,548,182,016` bytes maximum RSS, zero
+  required-set warnings, and zero residual terminology scratch.
+- References: `src/trinetx_preprocessing/glp1_eligibility/terminology_qa.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`.
+
+### 2026-07-18 — Stream unfiltered observability in bounded record batches
+- Date: 2026-07-18
+- Decision: Scan each raw observability domain through a separate 512 MiB,
+  one-thread DuckDB connection and consume selected analysis-patient rows as
+  Arrow record batches capped at one million rows. Reduce each batch against
+  the index-event table, then merge only the bounded aggregate state.
+- Context: Full build `43ef3d7f4a1441cc4ee5a737` completed all retained source
+  rows, terminology QA, and core cohort construction, then exhausted DuckDB's
+  4,096 MiB internal buffer while directly joining and grouping the 1.27
+  billion-row diagnosis export. Two partitioned Parquet variants also exhausted
+  that buffer during their 22 GB selected-row materialization.
+- Rationale: Observability must include unmapped raw events, preserve duplicate
+  row counts, and support multiple index dates per patient. Streaming the
+  existing DuckDB CSV parser retains its `null_padding` input behavior while
+  eliminating both the unbounded aggregate and row-level materialization.
+- Consequences: The production diagnosis benchmark completed in `427.76 s`,
+  produced `59,596` index summaries and `12,334,864` qualifying lookback events,
+  used `465,829,888` bytes maximum RSS, and left no row-level scratch. The scan
+  connection's temporary directory is still cleaned strictly and is recognized
+  by `clean-scratch` after interrupted runs.
+- References: `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/cli.py`, `tests/test_glp1_foundation.py`,
+  `tests/test_cli.py`.
+
+### 2026-07-17 — Correct temporal precision and historical phenotype selection
+- Date: 2026-07-17
+- Decision: Classify ISO and compact source dates by their actual precision and
+  apply the endpoint's phenotype-specific history windows. Keep diagnosis-only
+  obesity at `code_only`, normalize blood pressure only from recognized units,
+  and preserve raw gas and blood-pressure evidence fields. Apply exact
+  elapsed-time lookback bounds to timestamped rows and inclusive calendar-day
+  bounds to date-only diagnosis, procedure, laboratory, BMI, blood-pressure,
+  medication, and observability rows. Calculated BMI inherits precision from
+  its latest component, with date-only ties remaining date-only. Treat
+  date-only encounter and medication ends as inclusive calendar days and
+  use precision-aware starts and endpoints for post-index medication orders.
+  Date-only orders use the index calendar date as an inclusive day-zero start;
+  timestamped orders must occur after the exact index instant. Publish the
+  paired pH source row required by strict hypercapnia. Continue selecting the
+  earliest primary qualifying encounter before cleaned-view exclusions.
+- Context: A full-output audit found that compact date-only gases were treated
+  as exact timestamps and explicit all-history fields were truncated by general
+  lookback windows. Aggregate review also found 12,378 missing-BMI patients with
+  retained obesity diagnosis evidence and showed that source blood-pressure
+  units were overwritten in evidence. Follow-up review found that exact
+  timestamp bounds also excluded date-only rows on configured lookback days and
+  made date-only medications ending on the index day appear inactive. A second
+  review found that calculated BMI used the less-precise component even when it
+  was not the latest and that lab `datediff` windows over-included timestamped
+  boundary rows. Final follow-up review found the same `datediff` over-inclusion
+  in 30/90/365-day post-index GLP-1 order flags. Exact-head review then found
+  the corresponding date-only day-zero start was still compared as a timestamp.
+- Rationale: Temporal comparisons must respect source precision, fields named
+  as history or `ever ordered` must use the complete available pre-index record,
+  and diagnosis-only obesity remains analytically useful without fabricating a
+  BMI threshold. Although 214 patients had a later clean qualifying event,
+  reselecting it would conflict with issue #6's explicit earliest-primary-event
+  estimand; context remains a cleaned-view exclusion.
+- Consequences: The successful `e832e4a` full build remains a performance and
+  audit baseline but is stale as release evidence. The GLP-1 ruleset advances to
+  `2026-07-17`; local and full real-data validation must be regenerated after
+  review. Strict measured-BMI cohort membership is unchanged by diagnosis-only
+  obesity.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/sql_helpers.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/evidence.py`,
+  `tests/test_glp1_foundation.py`, GitHub issue #6.
+
+### 2026-07-18 — Separate private build state from public and content identity
+- Date: 2026-07-18
+- Decision: Remove `build_workspace.json` immediately before atomically
+  publishing a completed GLP-1 output tree and restore it if publication fails.
+  Retain source modification times in the inventory but exclude them from the
+  deterministic input digest.
+- Context: Exact-head review found that the internal resumability manifest was
+  published as a ninth visible file and that copying an otherwise byte-identical
+  export changed its run ID solely because the filesystem mtime changed.
+- Rationale: Build state is private orchestration metadata, not part of the
+  eight-file analytic contract. Content hashes, relative paths, sizes, schemas,
+  and row counts already identify the input; mtime is useful provenance but not
+  content identity.
+- Consequences: Successful output directories contain exactly eight public
+  files. Failed publication remains resumable, and byte-identical restored
+  exports can reuse completed outputs while still recording observed mtimes.
+  Final full build `445770a7abe7c2b0af335091` at `71ef56f` confirmed the
+  eight-file physical contract, stable semantic output fingerprints, zero WAL
+  and recognized scratch, and a `5,012,209,664`-byte maximum RSS.
+- References: `src/trinetx_preprocessing/glp1_eligibility/workspace.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/provenance.py`,
+  `tests/test_glp1_foundation.py`.
+
+### 2026-07-19 — Fix the primary threshold contract and cirrhosis horizon
+- Date: 2026-07-19
+- Decision: Require `hypercapnia.pco2_gt_mm_hg` to equal 45 because the public
+  endpoint labels are fixed, and evaluate cirrhosis over all available
+  pre-index diagnosis history when classifying noncirrhotic MASH.
+- Context: Exact-head review found that a custom threshold could produce
+  `gt45`-labeled outputs using another cutoff. It also found that cirrhosis
+  older than the general diagnosis lookback could disappear even though the
+  MASH indication explicitly requires no cirrhosis.
+- Rationale: Configuration must not contradict fixed public labels, and an
+  elapsed general history window cannot establish that a patient is
+  noncirrhotic when older positive evidence exists.
+- Consequences: Non-45 primary thresholds fail configuration validation.
+  Remote cirrhosis can remove a previously assigned noncirrhotic MASH
+  indication. The clinical ruleset advances to `2026-07-19`. The `71ef56f`
+  full run remains valid resource and publication evidence. Parent build
+  `c62cc473ccfff9d2b697af6b` at `e7bf01a` validates the cirrhosis correction;
+  aggregate comparison attributes 191 changed analysis rows to all-history
+  cirrhosis without changing index-event keys or cohort counts.
+- References: `src/trinetx_preprocessing/glp1_eligibility/config.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #7.
+
+### 2026-07-19 — Scope encounter and medication evidence temporally
+- Date: 2026-07-19
+- Decision: Treat `(patient_id, encounter_id)` as the source encounter key for
+  candidate-flow counting and every gas reduction, retain post-index medication
+  rows only for GLP-1 follow-up endpoints, and compare procedure context to a
+  date-only ABG by calendar day.
+- Context: Exact-head review found that reused encounter identifiers could
+  collapse gas rows across patients. It also found that the medication
+  lookback predicate supplied only a lower bound, allowing future non-GLP-1
+  orders to enter baseline component evidence.
+- Rationale: Source encounter identifiers are not guaranteed globally unique,
+  and baseline medication evidence must not contain post-index exposure.
+- Consequences: Cohort-flow denominators, cohort rows, and encounter maxima
+  remain patient-scoped even when identifiers collide. Future antihypertensive,
+  opioid, and other non-GLP-1 orders are absent from baseline evidence; GLP-1
+  follow-up flags retain their precision-aware windows. Same-day timestamped
+  anesthesia/sedation is retained when the selected ABG has date-only
+  precision, while timestamped ABGs retain exact ordering.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cohort.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/ingestion.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #7.
+
+### 2026-07-19 — Preserve source precision for CKD persistence
+- Date: 2026-07-19
+- Decision: Require low-eGFR measurements with timestamp precision to be at
+  least 90 elapsed days apart. If either endpoint is date-only, use the
+  inclusive 90-calendar-day boundary. Keep the public first/last eGFR date
+  columns and `egfr_persistent_lt60` field unchanged.
+- Context: Exact-head review found that reducing both low-eGFR endpoints to
+  `DATE` before comparison could qualify two timestamped measurements that
+  fell on dates 90 days apart but were slightly less than 90 elapsed days
+  apart.
+- Rationale: Timestamped measurements support exact interval arithmetic;
+  date-only measurements do not, so their uncertainty should follow the same
+  inclusive calendar-day policy used by other temporal boundaries.
+- Consequences: The internal lab reducer retains endpoint timestamps and source
+  precision only long enough to materialize the existing persistence boolean.
+  The clinical ruleset advances to `2026-07-19.1`. Exact-head full build
+  `2e5954a266757ecaeaeb44c0` at `459cbda` completed within resource gates and
+  matched the `e7bf01a` parent build with zero non-provenance semantic output
+  differences, confirming that the precision correction affects no rows in the
+  current full export.
+- References: `src/trinetx_preprocessing/glp1_eligibility/sql_helpers.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py`,
+  `src/trinetx_preprocessing/glp1_eligibility/eligibility.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #7.
