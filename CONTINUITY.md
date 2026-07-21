@@ -1,8 +1,8 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Complete the additive GLP-1 eligibility endpoint without changing the frozen Milestone 2 pipeline, with reviewed code, bounded full-data execution, exactly eight public artifacts, aggregate-only validation, and no tracked confidential outputs.
-- Current turn: the additive GLP-1 endpoint and its exact-head evidence are complete; preserve the reviewed handoff and keep terminology expansion and private record review as separate clinical-use work.
+- Promote the completed corrected pipeline and additive GLP-1 endpoint through `refactor-pipeline` to `main` without changing the frozen milestone tags or tracking confidential artifacts.
+- Current turn: PR #7 is merged into `refactor-pipeline`; refresh and verify PR #4 at its new head, then merge it to `main` after clean CI and review.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -22,7 +22,7 @@
 - `refactor-milestone-1` remains unchanged, and GLP-1 work starts only after the Milestone 2 fallback is durable on GitHub.
 
 ## State
-- Branch: `codex/glp1-augmentation`, created from Milestone 2 merge commit `e3d62de`; it tracks `origin/codex/glp1-augmentation`.
+- Branch: `refactor-pipeline`, including Milestone 2 merge commit `e3d62de` and GLP-1 PR #7 merge commit `c2a6908`; it tracks `origin/refactor-pipeline`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -263,12 +263,14 @@
 - Corrected post-milestone prior-date, procedure first/last, and previous-vital fixes are committed and reviewed.
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
+- PR #7 merged cleanly into `refactor-pipeline` at `c2a6908` after exact-head diff, Ruff, 336-test, CI, artifact-hygiene, and zero-unresolved-review-thread gates.
 
 ## Now
-- The additive GLP-1 implementation, exact-head full-data evidence, local/CI gates, and final evidence review are complete; prepare the final handoff.
+- Refresh PR #4 metadata and integration documentation, then require clean local gates, CI, and a holistic GitHub Codex review at the updated head.
 
 ## Next
-- Treat investigator terminology expansion and private record-level validation as separate clinical-use work; neither is required to preserve the completed additive software endpoint.
+- Merge PR #4 to `main` with a merge commit and verify ancestry, tags, CI, and repository hygiene.
+- Treat investigator terminology expansion and private record-level validation as separate clinical-use work after repository promotion.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
@@ -282,9 +284,10 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/final_assembly_256_bounded.log`
 - GitHub issue #6: `https://github.com/reblocke/trinetx-preprocessing/issues/6`
-- Draft PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`
+- Merged PR #7: `https://github.com/reblocke/trinetx-preprocessing/pull/7`; merge commit `c2a6908`.
+- Promotion PR #4: `https://github.com/reblocke/trinetx-preprocessing/pull/4`.
 - Review-clean corrected behavior checkpoint: `5e66242`; exact-head Codex result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5013822919`.
-- Branch: `codex/glp1-augmentation`; reviewed behavior checkpoint `8ad0d24` and full-build provenance checkpoint `e832e4a`. PR #7 is green with all prior threads resolved.
+- Integrated branch: `refactor-pipeline`; reviewed GLP-1 head `d9a469e` is contained in merge commit `c2a6908`.
 - Review-clean bounded-ingestion/date-normalization checkpoint: `a0b3d4f`; Codex review result `https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5008850622`.
 - Approved provisional output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_provisional_20260715/glp1_eligibility`
 - Corrected full output: `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/glp1/full_corrected_20260718/glp1_eligibility`; run ID `9b5d5190570c2c20873cfc64`.

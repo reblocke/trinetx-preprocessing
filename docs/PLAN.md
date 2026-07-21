@@ -1,8 +1,10 @@
-# GLP-1 Augmentation Completion Plan
+# Refactor Pipeline Integration Plan
 
-Refactor Milestones 1 and 2 remain immutable fallbacks. The current branch adds
-the independent GLP-1 eligibility database specified by GitHub issue #6 without
-changing the released 36-file preprocessing pipeline.
+Refactor Milestones 1 and 2 remain immutable fallbacks. The independent GLP-1
+eligibility database specified by GitHub issue #6 is merged into
+`refactor-pipeline` without changing the released 36-file preprocessing
+pipeline. The remaining engineering task is promotion of the complete branch to
+`main` through PR #4.
 
 ## Implementation milestones
 
@@ -42,9 +44,12 @@ Ruleset `2026-07-19.1` requires 90 elapsed days for timestamped low-eGFR
 measurements and uses inclusive calendar-day boundaries only when an endpoint
 is date-only. The exact-head run matched the reviewed `e7bf01a` parent build
 with zero schema, key, count, analysis-value, or semantic-fingerprint changes.
-The remaining engineering gate is a final review of this evidence-only commit.
-Investigator terminology expansion and private record-level clinical
-validation remain separate requirements before clinical use.
+PR #7 merged at `c2a6908` after exact-head local gates, Linux CI, and GitHub
+Codex review completed with no unresolved threads. PR #4 now carries Milestone
+1, Milestone 2, and the additive GLP-1 endpoint; it requires refreshed CI and a
+holistic review at its new head before promotion to `main`. Investigator
+terminology expansion and private record-level clinical validation remain
+separate requirements before clinical use.
 
 ## Definition of done
 
