@@ -2,7 +2,7 @@
 
 ## Goal (incl. success criteria)
 - Promote the completed corrected pipeline and additive GLP-1 endpoint through `refactor-pipeline` to `main` without changing the frozen milestone tags or tracking confidential artifacts.
-- Current turn: PR #7 is merged into `refactor-pipeline`; refresh and verify PR #4 at its new head, then merge it to `main` after clean CI and review.
+- Current turn: promotion is complete. PR #7 merged into `refactor-pipeline`, PR #4 merged the complete branch to `main`, and post-merge CI passed without changing milestone tags.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -22,7 +22,7 @@
 - `refactor-milestone-1` remains unchanged, and GLP-1 work starts only after the Milestone 2 fallback is durable on GitHub.
 
 ## State
-- Branch: `refactor-pipeline`, including Milestone 2 merge commit `e3d62de` and GLP-1 PR #7 merge commit `c2a6908`; it tracks `origin/refactor-pipeline`.
+- Branch: `main`, including Milestone 2 merge commit `e3d62de`, GLP-1 PR #7 merge commit `c2a6908`, and promotion PR #4 merge commit `60680be`; it tracks `origin/main`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -268,13 +268,14 @@
 - PR #4 re-review of `d2681a9` found one P2 monitor-exit defect: watched failed/dead-worker builds returned success. The local fix returns 1 for terminal failure while preserving 0 for completed and one-shot status calls.
 - Final PR #4 review of `896ec2a` found no major issues. Ruff, diff checks, all 340 tests, both Linux CI runs, and zero-unresolved-thread checks pass.
 - Targeted current-code validation against preserved full-data artifacts passes: the GLP-1 publication has exactly eight nonempty files with matching complete DuckDB identity and zero warnings; corrected schema-3 work is rejected for schema/code-state mismatch; completed watch exits 0. The fixes affect only reuse, resume, and monitor gates, so no fresh analytic recomputation is required.
+- PR #4 merged the reviewed refactor and GLP-1 endpoint to `main` at `60680be`; post-merge Linux CI passed and all milestone tag targets remain unchanged.
 
 ## Now
-- Commit and review the final evidence-only integration documentation, then merge PR #4 to `main`.
+- Repository promotion and verification are complete; preserve the clean `main` handoff.
 
 ## Next
-- Merge PR #4 to `main` with a merge commit and verify ancestry, tags, CI, and repository hygiene.
-- Treat investigator terminology expansion and private record-level validation as separate clinical-use work after repository promotion.
+- Decide the next package/release milestone for the additive GLP-1 endpoint separately.
+- Complete investigator terminology expansion and approved private record-level validation before clinical use.
 
 ## Open questions (UNCONFIRMED if needed)
 - No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.

@@ -1,10 +1,10 @@
-# Refactor Pipeline Integration Plan
+# Completed Refactor Pipeline Integration
 
 Refactor Milestones 1 and 2 remain immutable fallbacks. The independent GLP-1
 eligibility database specified by GitHub issue #6 is merged into
 `refactor-pipeline` without changing the released 36-file preprocessing
-pipeline. The remaining engineering task is promotion of the complete branch to
-`main` through PR #4.
+pipeline. PR #4 promoted the complete branch to `main` at merge commit
+`60680be`, with post-merge CI passing.
 
 ## Implementation milestones
 
