@@ -58,7 +58,16 @@ manifest schema 4 now includes the current behavior-code SHA-256. These fixes
 require fresh CI, re-review, and affected provenance evidence before merge.
 Re-review also required watched monitoring to return nonzero for an explicit
 failed state or a vanished same-host worker; focused CLI coverage now enforces
-that orchestration contract.
+that orchestration contract. Final review of `896ec2a` found no major issues,
+all 340 tests and both CI runs pass, and no review threads remain open.
+
+Targeted read-only validation against preserved full-data artifacts confirms
+that the current reuse validator accepts exactly eight nonempty GLP-1 outputs
+with matching complete DuckDB identity, schema-3 corrected-pipeline work is
+rejected for missing schema-4/code-state identity, and a completed watched run
+returns success. A full analytic recomputation is not required because these
+changes affect only reuse, resume, and monitoring gates, not fresh cohort or
+feature materialization.
 
 ## Definition of done
 

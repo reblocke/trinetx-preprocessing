@@ -266,12 +266,13 @@
 - PR #7 merged cleanly into `refactor-pipeline` at `c2a6908` after exact-head diff, Ruff, 336-test, CI, artifact-hygiene, and zero-unresolved-review-thread gates.
 - Holistic PR #4 review of integration head `e5dfc41` found two P2 reuse gaps: damaged GLP-1 public output sets could be reused, and corrected-pipeline work manifests were not bound to behavior-code state. Both fixes and focused regressions are implemented locally; work-manifest schema advances to version 4.
 - PR #4 re-review of `d2681a9` found one P2 monitor-exit defect: watched failed/dead-worker builds returned success. The local fix returns 1 for terminal failure while preserving 0 for completed and one-shot status calls.
+- Final PR #4 review of `896ec2a` found no major issues. Ruff, diff checks, all 340 tests, both Linux CI runs, and zero-unresolved-thread checks pass.
+- Targeted current-code validation against preserved full-data artifacts passes: the GLP-1 publication has exactly eight nonempty files with matching complete DuckDB identity and zero warnings; corrected schema-3 work is rejected for schema/code-state mismatch; completed watch exits 0. The fixes affect only reuse, resume, and monitor gates, so no fresh analytic recomputation is required.
 
 ## Now
-- Run full local gates, commit/push the two PR #4 reuse fixes, and obtain clean CI and Codex re-review at the updated head.
+- Commit and review the final evidence-only integration documentation, then merge PR #4 to `main`.
 
 ## Next
-- Refresh affected real-data provenance evidence for the final source state; the reuse fixes do not change fresh analytic output semantics but do change source identity.
 - Merge PR #4 to `main` with a merge commit and verify ancestry, tags, CI, and repository hygiene.
 - Treat investigator terminology expansion and private record-level validation as separate clinical-use work after repository promotion.
 

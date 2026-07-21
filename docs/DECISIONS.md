@@ -1441,6 +1441,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: Work-manifest schema advances to version 4 and older work fails
   closed. Installed packages without Git metadata use a deterministic package
   source hash. Damaged GLP-1 outputs require an explicit `--replace` rebuild.
+  Promotion evidence exercises these gates against preserved full-data
+  artifacts; no full analytic rerun is required because fresh cohort and
+  feature materialization are unchanged.
 - References: `src/trinetx_preprocessing/work_manifest.py`,
   `src/trinetx_preprocessing/profiling.py`,
   `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
