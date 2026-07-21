@@ -265,6 +265,7 @@
 - PR #5 merged cleanly into `refactor-pipeline` at `e3d62de`; annotated tags `refactor-milestone-2` and `v0.2.0` and both GitHub releases are published without changing Milestone 1.
 - PR #7 merged cleanly into `refactor-pipeline` at `c2a6908` after exact-head diff, Ruff, 336-test, CI, artifact-hygiene, and zero-unresolved-review-thread gates.
 - Holistic PR #4 review of integration head `e5dfc41` found two P2 reuse gaps: damaged GLP-1 public output sets could be reused, and corrected-pipeline work manifests were not bound to behavior-code state. Both fixes and focused regressions are implemented locally; work-manifest schema advances to version 4.
+- PR #4 re-review of `d2681a9` found one P2 monitor-exit defect: watched failed/dead-worker builds returned success. The local fix returns 1 for terminal failure while preserving 0 for completed and one-shot status calls.
 
 ## Now
 - Run full local gates, commit/push the two PR #4 reuse fixes, and obtain clean CI and Codex re-review at the updated head.

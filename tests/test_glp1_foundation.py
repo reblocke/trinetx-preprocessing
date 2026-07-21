@@ -714,6 +714,37 @@ def test_status_watch_stops_on_completed_state(
     assert payload["phase"] == "complete"
 
 
+def test_status_watch_returns_failure_for_failed_build(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer = RunStateWriter(tmp_path, "synthetic-run")
+    writer.fail(message="synthetic failure")
+
+    result = main(
+        ["status", "--output", str(tmp_path), "--watch", "--json"]
+    )
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+
+
+def test_status_watch_returns_failure_when_local_worker_disappears(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    writer = RunStateWriter(tmp_path, "synthetic-run")
+    writer.update(worker_pid=2_147_483_647)
+
+    result = main(
+        ["status", "--output", str(tmp_path), "--watch", "--json"]
+    )
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "running"
+    assert payload["worker_process_detected"] is False
+
+
 def test_input_inventory_is_deterministic_and_counts_data_rows(tmp_path: Path) -> None:
     _write_export(tmp_path)
     encounter = tmp_path / "Encounter" / "encounter.csv"

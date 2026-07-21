@@ -1445,3 +1445,18 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/profiling.py`,
   `src/trinetx_preprocessing/glp1_eligibility/builder.py`,
   `tests/test_work_manifest.py`, `tests/test_glp1_foundation.py`, GitHub PR #4.
+
+### 2026-07-21 — Propagate watched build failures
+- Date: 2026-07-21
+- Decision: Return exit code 1 from `status --watch` when the atomic run state is
+  failed or a same-host worker disappears before completion. Preserve exit code
+  0 for completed builds and non-watching status inspection.
+- Context: Promotion re-review found that monitoring wrappers could observe an
+  OOM, process kill, or explicit build failure and still treat the monitor as a
+  successful command.
+- Rationale: Long-running orchestration must expose terminal failure through
+  conventional process status as well as the aggregate JSON payload.
+- Consequences: Shell automation can fail closed without parsing output. Remote
+  worker activity remains indeterminate rather than being treated as failure.
+- References: `src/trinetx_preprocessing/glp1_eligibility/cli.py`,
+  `tests/test_glp1_foundation.py`, GitHub PR #4.

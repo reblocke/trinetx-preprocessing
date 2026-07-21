@@ -56,6 +56,9 @@ GLP-1 outputs now require the exact configured public file set, nonempty files,
 and matching DuckDB run identity/status before reuse. Corrected-pipeline work
 manifest schema 4 now includes the current behavior-code SHA-256. These fixes
 require fresh CI, re-review, and affected provenance evidence before merge.
+Re-review also required watched monitoring to return nonzero for an explicit
+failed state or a vanished same-host worker; focused CLI coverage now enforces
+that orchestration contract.
 
 ## Definition of done
 

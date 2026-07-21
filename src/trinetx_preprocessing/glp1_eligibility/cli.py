@@ -160,12 +160,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"worker_active={worker_active}",
                         flush=True,
                     )
-                if (
-                    not args.watch
-                    or state.status in {"completed", "failed"}
-                    or worker_active is False
-                ):
+                if not args.watch:
                     return 0
+                if state.status == "completed":
+                    return 0
+                if state.status == "failed" or worker_active is False:
+                    return 1
                 time.sleep(args.interval_seconds)
     except (FileNotFoundError, ValueError, GLP1ConfigError, ConceptSetError) as exc:
         parser.exit(2, f"error: {exc}\n")
