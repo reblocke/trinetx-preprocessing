@@ -1,19 +1,23 @@
 # TriNetX Preprocessing
 
 Repository: https://github.com/reblocke/trinetx-preprocessing
-Purpose: refactor TriNetX hypercapnia preprocessing notebooks into a
-deterministic Python CLI pipeline.
+Purpose: build one deterministic Python preprocessing product containing the
+historical hypercapnia payload and additive source elements for downstream
+studies.
 Status: Milestone 1 is the immutable replication fallback; post-milestone work
 implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
 output-reproducibility, and aggregate-delta evidence is complete. Milestone 2
 accepts deterministic non-strict resolution of documented source conflicts
 while strict execution remains fail-closed.
+The active Stage 1 endpoint is `trinetx_preprocessed.duckdb`; the 36 historical
+CSVs are compatibility exports and GLP-1 eligibility remains downstream.
 
 ## Human-Readable Entry Points
 - `README.md`: primary overview and quickstart.
 - `docs/ONBOARDING.md`: setup, real-data placement, and legacy workflow notes.
 - `docs/SPEC.md`: authoritative corrected analytic contract.
-- `docs/PLAN.md`: corrected pipeline completion plan.
+- `docs/UNIFIED_PREPROCESSING.md`: canonical product and table-grain contract.
+- `docs/PLAN.md`: unified Stage 1 completion plan.
 - `docs/VALIDATION.md`: golden-master parity workflow.
 - `docs/DATA_CONTRACT.md`: input, intermediate, and final output contracts.
 
@@ -28,7 +32,7 @@ while strict execution remains fail-closed.
 uv sync
 ./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
 ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+./.venv/bin/python -m trinetx_preprocessing build-preprocessed --config config.yaml --strict
 ```
 
 ## Refactor Completion Gate

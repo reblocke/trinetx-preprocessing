@@ -27,6 +27,7 @@ def run_pipeline(
     *,
     timings: dict[str, float] | None = None,
     strict: bool = False,
+    final_output_dir: Path | None = None,
 ) -> list[Path]:
     """Run the full preprocessing pipeline in order.
 
@@ -34,6 +35,7 @@ def run_pipeline(
         config: Pipeline configuration.
         timings: Optional mapping to collect stage wall times.
         strict: Whether to enable guardrail assertions.
+        final_output_dir: Optional physical root for staged final CSV writes.
 
     Returns:
         List of output file paths.
@@ -43,16 +45,26 @@ def run_pipeline(
     output_paths: list[Path] = []
     initialize_work_manifest(config)
 
-    def run_stage(name: str, stage) -> None:
+    def run_stage(
+        name: str,
+        stage,
+        *,
+        physical_output_dir: Path | None = None,
+    ) -> None:
         logger.info("Starting %s stage", name)
         mark_stage_started(config, name)
         with StageTimer(name, timings=timings, logger=logger):
             paths = list(stage())
-        mark_stage_complete(config, name, paths)
+        mark_stage_complete(
+            config,
+            name,
+            paths,
+            physical_output_dir=physical_output_dir,
+        )
         output_paths.extend(paths)
 
-    run_stage("encounter", lambda: run_encounter_stage(config, strict=strict))
     run_stage("labs", lambda: run_labs_stage(config))
+    run_stage("encounter", lambda: run_encounter_stage(config, strict=strict))
     run_stage("diagnosis", lambda: run_diagnosis_stage(config))
     run_stage("medications", lambda: run_medications_stage(config))
     run_stage("procedure", lambda: run_procedure_stage(config))
@@ -60,7 +72,12 @@ def run_pipeline(
     run_stage("rfs", lambda: run_rfs_stage(config))
     run_stage(
         "final_assembly",
-        lambda: run_final_assembly(config, strict=strict),
+        lambda: run_final_assembly(
+            config,
+            strict=strict,
+            output_dir=final_output_dir,
+        ),
+        physical_output_dir=final_output_dir,
     )
 
     return output_paths

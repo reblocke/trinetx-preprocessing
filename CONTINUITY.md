@@ -1,8 +1,10 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Promote the completed corrected pipeline and additive GLP-1 endpoint through `refactor-pipeline` to `main` without changing the frozen milestone tags or tracking confidential artifacts.
-- Current turn: promotion is complete. PR #7 merged into `refactor-pipeline`, PR #4 merged the complete branch to `main`, and post-merge CI passed without changing milestone tags.
+- Build one authoritative, versioned Python preprocessing product: `trinetx_preprocessed.duckdb`.
+- The product contains the complete historical 534-column encounter payload plus the normalized source elements needed by the GLP-1 work and future additions.
+- Regenerate the 36 historical CSV files exactly as compatibility exports from the unified product; preserve the current GLP-1 derivation as downstream/reference logic rather than a second preprocessing path.
+- Plan the separate `trinetx-hypercapnia-code/stata/do/10_preprocessing.do` migration only after this shared preprocessing boundary is complete.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -20,6 +22,11 @@
 - Existing work tables are not reusable after the corrected intermediate schema is introduced.
 - Milestone 2 accepts deterministic non-strict resolution for the 286 source encounter-setting conflicts; strict execution remains fail-closed.
 - `refactor-milestone-1` remains unchanged, and GLP-1 work starts only after the Milestone 2 fallback is durable on GitHub.
+- Shared preprocessing owns raw discovery, normalization, provenance, and reusable domain storage; study-specific cohort, phenotype, imputation, propensity, and analysis logic remains downstream.
+- Preserve the current GLP-1 derivation code and validated outputs as a downstream consumer/reference while extracting shared source handling; do not discard it during boundary cleanup.
+- The unified DuckDB is the sole canonical preprocessed output. Its primary encounter table and typed child event tables together form one product, not separate historical and GLP-1 products.
+- The canonical product includes GLP-1 source elements and observability, not derived eligibility/cohort decisions. The 36 legacy CSVs are generated compatibility exports.
+- A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
 - Branch: `main`, including Milestone 2 merge commit `e3d62de`, GLP-1 PR #7 merge commit `c2a6908`, and promotion PR #4 merge commit `60680be`; it tracks `origin/main`.
@@ -269,20 +276,30 @@
 - Final PR #4 review of `896ec2a` found no major issues. Ruff, diff checks, all 340 tests, both Linux CI runs, and zero-unresolved-thread checks pass.
 - Targeted current-code validation against preserved full-data artifacts passes: the GLP-1 publication has exactly eight nonempty files with matching complete DuckDB identity and zero warnings; corrected schema-3 work is rejected for schema/code-state mismatch; completed watch exits 0. The fixes affect only reuse, resume, and monitor gates, so no fresh analytic recomputation is required.
 - PR #4 merged the reviewed refactor and GLP-1 endpoint to `main` at `60680be`; post-merge Linux CI passed and all milestone tag targets remain unchanged.
+- Unified-preprocessing contract is implemented on `codex/unified-preprocessing-v1`: one canonical `trinetx_preprocessed.duckdb`, 36 exact-schema compatibility views/exports, source-element tables, a unique element catalog plus rule table, source observability, provenance, and fail-closed validation.
+- The 20-case synthetic adapter gate reproduces direct raw GLP-1 ingestion and downstream analysis/cohort-flow/evidence tables from the combined product without a second raw clinical scan.
+- Aggregate-only baseline, parity, element-completeness, and benchmark tooling is implemented under `scripts/`.
+- Unified-product documentation now defines one canonical DuckDB, exact historical CSV projections, and downstream-only GLP-1 eligibility ownership.
+- Work reuse now enforces the loaded element-catalog fingerprint; the database dictionary and quality inventory include run/source provenance tables.
+- Combined run IDs now exclude volatile stage timestamps while retaining code/config/source/catalog identity, and both private work/output roots are rejected inside Git worktrees.
+- Medication-ingredient exports are captured into the unified source table without entering historical medication feature reduction, preserving both additive coverage and the 36-file contract.
+- Final local gates pass with `350` tests, Ruff, and `git diff --check`. The actual synthetic CLI build published a valid DuckDB plus 36 compatibility files; aggregate baseline/parity/completeness scripts passed, and the benchmark wrapper completed in `5.138 s` with `226.578 MB` peak RSS on the header-only onboarding fixture.
 
 ## Now
-- Repository promotion and verification are complete; preserve the clean `main` handoff.
+- All seven reviewed publication, CSV-mode, provenance, privacy, validation, and onboarding fixes are implemented on `codex/unified-preprocessing-v1`. Focused tests pass, and the final local gate passes `git diff --check`, Ruff, and all `365` tests in `365.14 s`; no pipeline, pytest, or monitor process is active.
 
 ## Next
-- Decide the next package/release milestone for the additive GLP-1 endpoint separately.
-- Complete investigator terminology expansion and approved private record-level validation before clinical use.
+- Commit and push the unified checkpoint, obtain a clean holistic GitHub review, then execute the external full-data unified build, parity, completeness, performance, and hygiene gates.
+- Run an external full-data unified build and benchmark, capture the historical compatibility baseline, and require exact 36-file parity plus element-completeness evidence before merge acceptance.
+- Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
-- No implementation choice is blocking. Terminology expansion decisions after a successful provisional build remain `UNCONFIRMED` and will be guided by aggregate unmapped-code and unit QA plus approved private record review.
+- No implementation choice is blocking. Full-data performance and terminology-expansion results remain `UNCONFIRMED` until the unified builder is validated externally.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
 - `src/trinetx_preprocessing/config.py`, `transform/`, `pipeline/`, `storage.py`, `work_manifest.py`
+- `src/trinetx_preprocessing/combined_preprocessing/`, `tests/test_combined_preprocessing.py`
 - `git diff --check`; `./.venv/bin/ruff check .`; external-TMP full `pytest -q`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`

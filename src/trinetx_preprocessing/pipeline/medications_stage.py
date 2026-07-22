@@ -9,6 +9,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..combined_preprocessing.elements import (
+    COMBINED_MEDICATION_REQUIRED_COLUMNS,
+    ElementCaptureWriter,
+    available_source_columns,
+    is_medication_ingredient_export,
+)
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
@@ -59,6 +65,9 @@ def run_medications_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        element_writer = stack.enter_context(
+            ElementCaptureWriter(config, "medications")
+        )
         analysis_writer = stack.enter_context(
             WorkTableWriter(config, "analysis_medication_features.csv")
         )
@@ -66,8 +75,29 @@ def run_medications_stage(config: Config) -> list[Path]:
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(meds_paths, start=1):
             logger.info("Reading medications export: %s", path.name)
+            if is_medication_ingredient_export(path):
+                if element_writer.enabled:
+                    _capture_ingredient_export(
+                        path,
+                        config=config,
+                        writer=element_writer,
+                        chunksize=chunksize,
+                        logger=logger,
+                    )
+                else:
+                    logger.info(
+                        "Skipping additive medication-ingredient export outside "
+                        "combined mode: %s",
+                        path.name,
+                    )
+                continue
             rows_read = 0
             rows_normalized = 0
+            source_columns = available_source_columns(
+                path,
+                RAW_MEDICATION_COLUMNS,
+                domain="medications",
+            )
             with WorkTableWriter(
                 config,
                 _normalized_filename(path, index),
@@ -76,11 +106,16 @@ def run_medications_stage(config: Config) -> list[Path]:
                 for chunk in iter_csv(
                     path,
                     chunksize=chunksize,
-                    usecols=RAW_MEDICATION_COLUMNS,
-                    dtype=RAW_DTYPE,
-                    parse_dates=["start_date"],
+                    usecols=source_columns,
+                    dtype=(
+                        {column: "string" for column in source_columns}
+                        if config.combined.enabled
+                        else RAW_DTYPE
+                    ),
+                    parse_dates=None if config.combined.enabled else ["start_date"],
                 ):
                     rows_read += len(chunk)
+                    element_writer.add_chunk(chunk, source_path=path)
                     normalized = normalize_medications_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
@@ -141,6 +176,8 @@ def run_medications_stage(config: Config) -> list[Path]:
                         writer.written_paths[0].name,
                     )
 
+    output_paths.extend(element_writer.written_paths)
+
     return output_paths
 
 
@@ -148,3 +185,30 @@ def _normalized_filename(path: Path, index: int) -> str:
     match = re.search(r"(\d{4})$", path.stem)
     suffix = match.group(1) if match else f"{index:04}"
     return f"medication_NEW_{suffix}.csv"
+
+
+def _capture_ingredient_export(
+    path: Path,
+    *,
+    config: Config,
+    writer: ElementCaptureWriter,
+    chunksize: int | None,
+    logger: logging.Logger,
+) -> None:
+    """Capture additive ingredient rows without altering historical features."""
+
+    source_columns = available_source_columns(
+        path,
+        COMBINED_MEDICATION_REQUIRED_COLUMNS,
+        domain="medications",
+    )
+    rows_read = 0
+    for chunk in iter_csv(
+        path,
+        chunksize=chunksize,
+        usecols=source_columns,
+        dtype={column: "string" for column in source_columns},
+    ):
+        rows_read += len(chunk)
+        writer.add_chunk(chunk, source_path=path)
+    log_row_count(logger, f"medication ingredients read {path.name}", rows_read)

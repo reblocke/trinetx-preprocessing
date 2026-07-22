@@ -22,6 +22,19 @@ from typing import Iterable, Sequence
 import yaml
 
 from . import __version__
+from .combined_preprocessing.builder import (
+    build_preprocessed,
+    require_safe_output_location,
+)
+from .combined_preprocessing.database import (
+    export_compatibility_outputs,
+    inspect_combined_database,
+)
+from .combined_preprocessing.elements import (
+    COMBINED_MEDICATION_REQUIRED_COLUMNS,
+    is_medication_ingredient_export,
+)
+from .combined_preprocessing.validation import validate_preprocessed_database
 from .config import (
     Config,
     ConfigError,
@@ -428,6 +441,102 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Enable guardrail assertions during the run.",
+    )
+
+    build_preprocessed_parser = subparsers.add_parser(
+        "build-preprocessed",
+        help="Build the canonical combined preprocessing database.",
+        description=(
+            "Run shared domain preprocessing once, publish the combined DuckDB, "
+            "and regenerate all 36 historical compatibility CSVs."
+        ),
+    )
+    build_preprocessed_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Path to a YAML configuration file.",
+    )
+    build_preprocessed_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enable strict encounter and guardrail validation.",
+    )
+    build_preprocessed_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace an existing combined product after a successful build.",
+    )
+
+    preprocessed_status_parser = subparsers.add_parser(
+        "preprocessed-status",
+        help="Report aggregate status for a combined preprocessing database.",
+    )
+    preprocessed_status_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    preprocessed_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    inspect_preprocessed_parser = subparsers.add_parser(
+        "inspect-preprocessed",
+        help="Inspect aggregate table counts in a combined database.",
+    )
+    inspect_preprocessed_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    inspect_preprocessed_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    validate_preprocessed_parser = subparsers.add_parser(
+        "validate-preprocessed",
+        help="Validate the combined database and optional compatibility CSVs.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional root containing the 36 compatibility CSVs.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    export_legacy_parser = subparsers.add_parser(
+        "export-legacy",
+        help="Regenerate the 36 historical CSVs from a combined database.",
+    )
+    export_legacy_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    export_legacy_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Destination root for compatibility CSVs.",
     )
 
     run_all_parser = subparsers.add_parser(
@@ -1070,6 +1179,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
+        if args.command in {"preprocessed-status", "inspect-preprocessed"}:
+            payload = inspect_combined_database(args.database)
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                logger.info(
+                    "Combined preprocessing %s: %s (%s bytes)",
+                    payload["run_id"],
+                    payload["status"],
+                    payload["database_size_bytes"],
+                )
+                for table, count in sorted(payload["counts"].items()):
+                    logger.info("%s: %s rows", table, count)
+            return 0
+
+        if args.command == "validate-preprocessed":
+            result = validate_preprocessed_database(
+                args.database,
+                compatibility_output_dir=args.output_dir,
+            )
+            payload = {
+                "valid": result.valid,
+                "errors": list(result.errors),
+                "warnings": list(result.warnings),
+                "counts": result.counts,
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for warning in result.warnings:
+                    logger.warning("%s", warning)
+                for error in result.errors:
+                    logger.error("%s", error)
+                logger.info("Combined preprocessing valid: %s", result.valid)
+            return 0 if result.valid else 1
+
+        if args.command == "export-legacy":
+            require_safe_output_location(args.output_dir)
+            paths = export_compatibility_outputs(args.database, args.output_dir)
+            logger.info(
+                "Wrote %s compatibility CSVs to %s.", len(paths), args.output_dir
+            )
+            return 0
+
         config = load_config(args.config)
         if args.command == "inspect-inputs":
             return inspect_input_paths(
@@ -1094,12 +1247,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             logger.info("Input files validated successfully.")
             return 0
         if args.command in {"run", "run-all"}:
+            if config.combined.enabled:
+                result = build_preprocessed(config, strict=args.strict)
+                logger.info(
+                    "Combined preprocessing completed: %s (%s compatibility CSVs).",
+                    result.database_path,
+                    len(result.compatibility_paths),
+                )
+                return 0
             output_paths = run_pipeline(config, strict=args.strict)
             logger.info(
                 "Pipeline completed; wrote %s file(s) to %s and %s.",
                 len(output_paths),
                 config.work_dir,
                 config.output_dir,
+            )
+            return 0
+        if args.command == "build-preprocessed":
+            result = build_preprocessed(
+                config,
+                strict=args.strict,
+                replace_existing=args.replace,
+            )
+            logger.info(
+                "Combined preprocessing completed: %s (%s compatibility CSVs).",
+                result.database_path,
+                len(result.compatibility_paths),
             )
             return 0
         if args.command == "profile":
@@ -3463,8 +3636,11 @@ def validate_input_headers(config: Config) -> None:
             )
             continue
         for path in paths:
+            file_required = required
+            if domain_name == "meds" and is_medication_ingredient_export(path):
+                file_required = list(COMBINED_MEDICATION_REQUIRED_COLUMNS)
             try:
-                validate_csv_columns(path, required)
+                validate_csv_columns(path, file_required)
             except ValueError as exc:
                 raise ConfigError(f"{exc} (domain '{domain_name}')") from exc
         logger.info("Validated %s file(s) for domain '%s'.", len(paths), domain_name)

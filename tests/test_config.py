@@ -76,6 +76,11 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
               parquet_row_group_size: 1000
               analysis_bucket_count: 64
               emit_legacy_group_tables: true
+            combined:
+              enabled: true
+              database_name: combined.duckdb
+              schema_version: "1.0"
+              concept_sets_dir: config/concept_sets
             rfs:
               enabled: true
               ruleset: corrected_v1
@@ -101,6 +106,13 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     assert config.storage.parquet_row_group_size == 1000
     assert config.storage.analysis_bucket_count == 64
     assert config.storage.emit_legacy_group_tables is True
+    assert config.combined.enabled is True
+    assert config.combined.database_name == "combined.duckdb"
+    assert config.combined.schema_version == "1.0"
+    assert (
+        config.combined.concept_sets_dir
+        == (tmp_path / "config" / "concept_sets").resolve()
+    )
     assert config.rfs.abg_min_pco2_mmhg == 47
     assert config.rfs.vbg_min_pco2_mmhg == 48
     assert config.cohort.event_selection == "earliest_per_setting"

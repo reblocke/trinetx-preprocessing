@@ -7,14 +7,22 @@ import logging
 import re
 from collections import Counter
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
+from ..combined_preprocessing.elements import ElementCaptureWriter
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
-from ..storage import PartitionedParquetStore, WorkTableWriter
+from ..storage import (
+    PartitionedParquetStore,
+    WorkTableWriter,
+    iter_work_tables,
+    resolve_work_table,
+)
 from ..transform.encounter import (
     DEFAULT_END_DATE_FILL,
     DEFAULT_START_DATE,
@@ -78,7 +86,11 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
         encounter_type: 0 for encounter_type in ENCOUNTER_TYPES
     }
 
-    with _EncounterReducerStore(config.work_dir) as reducer:
+    candidate_lookup = _CombinedCandidateLookup.from_config(config)
+    with (
+        ElementCaptureWriter(config, "encounter", include_all=True) as element_writer,
+        _EncounterReducerStore(config.work_dir) as reducer,
+    ):
         for index, path in enumerate(encounter_paths, start=1):
             logger.info("Reading encounter export: %s", path.name)
             rows_read = 0
@@ -96,11 +108,23 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                     path,
                     chunksize=chunksize,
                     usecols=RAW_ENCOUNTER_COLUMNS,
-                    dtype=RAW_DTYPE,
-                    parse_dates=["start_date", "end_date"],
+                    dtype=(
+                        {column: "string" for column in RAW_ENCOUNTER_COLUMNS}
+                        if config.combined.enabled
+                        else RAW_DTYPE
+                    ),
+                    parse_dates=(
+                        None if config.combined.enabled else ["start_date", "end_date"]
+                    ),
                 ):
                     chunk_index += 1
                     rows_read += len(chunk)
+                    if element_writer.enabled:
+                        element_writer.add_chunk(
+                            chunk,
+                            source_path=path,
+                            retain_mask=candidate_lookup.matches(chunk),
+                        )
                     normalized = normalize_encounter_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
@@ -182,7 +206,87 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                     writer.written_paths[0].name,
                 )
 
+    output_paths.extend(element_writer.written_paths)
+
     return output_paths
+
+
+@dataclass(frozen=True)
+class _CombinedCandidateLookup:
+    """Compact conservative membership for one-pass raw encounter capture."""
+
+    patient_hashes: np.ndarray
+    encounter_hashes: np.ndarray
+
+    @classmethod
+    def from_config(cls, config: Config) -> "_CombinedCandidateLookup":
+        if not config.combined.enabled:
+            empty = np.array([], dtype=np.uint64)
+            return cls(patient_hashes=empty, encounter_hashes=empty)
+        path = resolve_work_table(config, "combined_gas_candidate_id.csv")
+        if not path.is_file():
+            raise FileNotFoundError(
+                "Combined encounter capture requires the completed lab candidate "
+                f"index: {path}"
+            )
+        chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
+        patient_chunks: list[np.ndarray] = []
+        encounter_chunks: list[np.ndarray] = []
+        for frame in iter_work_tables(
+            [path],
+            chunksize=chunksize,
+            usecols=["patient_id", "encounter_id"],
+            dtype={"patient_id": "string", "encounter_id": "string"},
+        ):
+            patient_chunks.append(_stable_string_hashes(frame["patient_id"]))
+            encounter_chunks.append(_stable_string_hashes(frame["encounter_id"]))
+        return cls(
+            patient_hashes=_merge_unique_hashes(patient_chunks),
+            encounter_hashes=_merge_unique_hashes(encounter_chunks),
+        )
+
+    def matches(self, frame: pd.DataFrame) -> pd.Series:
+        """Return rows whose patient or encounter hash is a retained candidate."""
+
+        patient_matches = _hash_membership(frame["patient_id"], self.patient_hashes)
+        encounter_matches = _hash_membership(
+            frame["encounter_id"],
+            self.encounter_hashes,
+        )
+        return pd.Series(patient_matches | encounter_matches, index=frame.index)
+
+
+def _stable_string_hashes(series: pd.Series) -> np.ndarray:
+    values = series.dropna().astype("string")
+    if values.empty:
+        return np.array([], dtype=np.uint64)
+    return pd.util.hash_pandas_object(values, index=False).to_numpy(dtype=np.uint64)
+
+
+def _merge_unique_hashes(chunks: list[np.ndarray]) -> np.ndarray:
+    nonempty = [chunk for chunk in chunks if chunk.size]
+    if not nonempty:
+        return np.array([], dtype=np.uint64)
+    return np.unique(np.concatenate(nonempty))
+
+
+def _hash_membership(series: pd.Series, candidates: np.ndarray) -> np.ndarray:
+    matches = np.zeros(len(series), dtype=bool)
+    if candidates.size == 0:
+        return matches
+    present = series.notna().to_numpy()
+    if not present.any():
+        return matches
+    hashes = pd.util.hash_pandas_object(
+        series.loc[series.notna()].astype("string"),
+        index=False,
+    ).to_numpy(dtype=np.uint64)
+    positions = np.searchsorted(candidates, hashes)
+    bounded = positions < candidates.size
+    matched = np.zeros(len(hashes), dtype=bool)
+    matched[bounded] = candidates[positions[bounded]] == hashes[bounded]
+    matches[present] = matched
+    return matches
 
 
 def _normalized_filename(path: Path, index: int) -> str:

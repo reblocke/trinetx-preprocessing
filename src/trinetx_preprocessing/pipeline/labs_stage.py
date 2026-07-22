@@ -11,6 +11,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..combined_preprocessing.elements import (
+    ElementCaptureWriter,
+    available_source_columns,
+)
 from ..config import Config, ConfigError, collect_domain_paths
 from ..filesystem import write_text_atomic
 from ..guardrails import log_row_count
@@ -77,6 +81,7 @@ def run_labs_stage(config: Config) -> list[Path]:
         for category in ("ABG", "VBG")
     }
     with ExitStack() as stack:
+        element_writer = stack.enter_context(ElementCaptureWriter(config, "labs"))
         rfs_writer = stack.enter_context(
             WorkTableWriter(config, "analysis_rfs_labs.csv")
         )
@@ -90,6 +95,11 @@ def run_labs_stage(config: Config) -> list[Path]:
             logger.info("Reading lab-results export: %s", path.name)
             rows_read = 0
             rows_written = 0
+            source_columns = available_source_columns(
+                path,
+                RAW_LAB_COLUMNS,
+                domain="labs",
+            )
             with WorkTableWriter(
                 config,
                 _normalized_filename(path, index),
@@ -98,11 +108,16 @@ def run_labs_stage(config: Config) -> list[Path]:
                 for chunk in iter_csv(
                     path,
                     chunksize=chunksize,
-                    usecols=RAW_LAB_COLUMNS,
-                    dtype=RAW_DTYPE,
-                    parse_dates=["date"],
+                    usecols=source_columns,
+                    dtype=(
+                        {column: "string" for column in source_columns}
+                        if config.combined.enabled
+                        else RAW_DTYPE
+                    ),
+                    parse_dates=None if config.combined.enabled else ["date"],
                 ):
                     rows_read += len(chunk)
+                    element_writer.add_chunk(chunk, source_path=path)
                     normalized = normalize_lab_results_chunk(chunk)
                     rows_written += len(normalized)
                     writer.write(normalized)
@@ -154,6 +169,8 @@ def run_labs_stage(config: Config) -> list[Path]:
         output_paths.extend(rfs_writer.written_paths)
         output_paths.extend(feature_writer.written_paths)
         output_paths.extend(availability_writer.written_paths)
+
+    output_paths.extend(element_writer.written_paths)
 
     audit_payload = {
         "schema_version": 1,

@@ -6,14 +6,18 @@ GLP-1 eligibility database. This work begins after immutable tags
 
 ## Compatibility boundary
 
-- The existing `trinetx-preprocessing run` command, its work tables, and its 36
-  final CSV files are unchanged.
-- GLP-1 code lives under `trinetx_preprocessing.glp1_eligibility` and writes only
-  beneath the output directory passed to that command.
-- GLP-1 ingestion must preserve source provenance independently. It must not use
-  lossy legacy feature tables as its source of truth.
+- `trinetx_preprocessed.duckdb` is the canonical shared preprocessing product;
+  its compatibility views preserve the existing 36 final CSV files.
+- GLP-1 code lives under `trinetx_preprocessing.glp1_eligibility` and remains
+  downstream of preprocessing.
+- GLP-1 source provenance comes from typed unified source tables. It must not
+  use lossy legacy feature tables as its source of truth.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
+
+The standalone raw-ingestion command below remains the validated reference
+implementation during migration. The adapter-backed synthetic gate verifies
+equivalent source and downstream outputs from the unified product.
 
 ## Current commands
 

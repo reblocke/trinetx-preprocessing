@@ -111,6 +111,16 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class CombinedPreprocessingConfig:
+    """Configuration for the canonical combined preprocessing product."""
+
+    enabled: bool = False
+    database_name: str = "trinetx_preprocessed.duckdb"
+    schema_version: str = "1.0"
+    concept_sets_dir: Path | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     """Top-level configuration container."""
 
@@ -124,6 +134,7 @@ class Config:
     storage: StorageConfig
     cohort: CohortConfig = CohortConfig()
     data_screen: DataScreenConfig = DataScreenConfig()
+    combined: CombinedPreprocessingConfig = CombinedPreprocessingConfig()
 
 
 def load_config(path: Path) -> Config:
@@ -155,6 +166,7 @@ def load_config(path: Path) -> Config:
     data_screen = _load_data_screen(raw.get("data_screen"))
     guardrails = _load_guardrails(raw.get("guardrails"))
     storage = _load_storage(raw.get("storage"))
+    combined = _load_combined(raw.get("combined"), base_dir)
 
     return Config(
         data_dir=data_dir,
@@ -167,6 +179,7 @@ def load_config(path: Path) -> Config:
         storage=storage,
         cohort=cohort,
         data_screen=data_screen,
+        combined=combined,
     )
 
 
@@ -547,6 +560,45 @@ def _load_storage(raw: Any) -> StorageConfig:
         parquet_row_group_size=parquet_row_group_size,
         analysis_bucket_count=analysis_bucket_count,
         emit_legacy_group_tables=emit_legacy_group_tables,
+    )
+
+
+def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
+    if raw is None:
+        return CombinedPreprocessingConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("Config 'combined' must be a mapping if provided.")
+
+    enabled = bool(raw.get("enabled", False))
+    database_name = str(raw.get("database_name", "trinetx_preprocessed.duckdb")).strip()
+    if not database_name or Path(database_name).name != database_name:
+        raise ConfigError(
+            "'combined.database_name' must be a filename without directories."
+        )
+    if not database_name.endswith(".duckdb"):
+        raise ConfigError("'combined.database_name' must end with '.duckdb'.")
+
+    schema_version = str(raw.get("schema_version", "1.0")).strip()
+    if schema_version != "1.0":
+        raise ConfigError("'combined.schema_version' must be '1.0'.")
+
+    concept_sets_value = raw.get("concept_sets_dir")
+    concept_sets_dir = None
+    if concept_sets_value is not None:
+        if not isinstance(concept_sets_value, str) or not concept_sets_value.strip():
+            raise ConfigError(
+                "'combined.concept_sets_dir' must be a non-empty path string."
+            )
+        concept_sets_dir = Path(concept_sets_value).expanduser()
+        if not concept_sets_dir.is_absolute():
+            concept_sets_dir = base_dir / concept_sets_dir
+        concept_sets_dir = concept_sets_dir.resolve(strict=False)
+
+    return CombinedPreprocessingConfig(
+        enabled=enabled,
+        database_name=database_name,
+        schema_version=schema_version,
+        concept_sets_dir=concept_sets_dir,
     )
 
 

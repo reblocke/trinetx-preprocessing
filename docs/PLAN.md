@@ -1,84 +1,57 @@
-# Completed Refactor Pipeline Integration
+# Unified Preprocessing Stage 1
 
-Refactor Milestones 1 and 2 remain immutable fallbacks. The independent GLP-1
-eligibility database specified by GitHub issue #6 is merged into
-`refactor-pipeline` without changing the released 36-file preprocessing
-pipeline. PR #4 promoted the complete branch to `main` at merge commit
-`60680be`, with post-merge CI passing.
+## Endpoint
 
-## Implementation milestones
+Stage 1 establishes one canonical Python preprocessing product,
+`trinetx_preprocessed.duckdb`. It contains all historical 534-column
+observations plus the source-faithful elements required by the GLP-1 pipeline.
+The 36 historical CSVs are generated compatibility exports, not a parallel
+preprocessed product. Study-specific GLP-1 eligibility and the future Stata
+migration remain downstream.
 
-1. Validate split and unsplit export discovery, metadata inventory, and source
-   headers without loading confidential rows.
-2. Fingerprint package code, configuration, concepts, phenotype rules, export
-   metadata, and clinical inputs in a deterministic run identity.
-3. Stream full source domains through bounded DuckDB and patient-hash Parquet
-   paths while preserving source provenance and duplicate-row QA.
-4. Build hypercapnia cohorts, paired gas evidence, BMI, temporal phenotypes,
-   indication tiers, payer routes, observability, and all 15 flow stages.
-5. Publish the eight-file database/Parquet/report contract atomically with
-   aggregate status monitoring and strict scratch/WAL cleanup.
-6. Pass synthetic acceptance, local and Linux CI gates, exact-head Codex review,
-   a full-data build, and a PHI-safe aggregate comparison.
+## Implemented
 
-## Current status
+1. A versioned combined database contract with exact 36-output/534-column
+   compatibility views.
+2. Bounded source capture for labs, vitals, diagnoses, procedures,
+   medications, encounters, and patients, preserving duplicate rows and source
+   provenance.
+3. A unified element catalog, matching-rule table, source membership,
+   observability, RFS membership, encounter availability, provenance,
+   data-dictionary, and quality-summary tables.
+4. Atomic combined builds with fail-closed code/config/source/catalog identity,
+   database validation, and exact compatibility-export hash checks.
+5. CLI support for build, status, inspection, validation, and compatibility
+   export.
+6. A synthetic adapter gate comparing current downstream GLP-1 source and
+   analytic tables from raw ingestion versus the combined database.
+7. Aggregate-only scripts for historical baseline capture, compatibility
+   parity, element completeness, and resource benchmarking.
 
-Implementation and synthetic verification are complete with 336 passing tests.
-The exact behavior-head full-data build from commit `459cbda` completed all
-phases in 20,941.55 seconds with 5,635,293,184 bytes maximum RSS, below the
-6,238 MiB gate. Exactly eight outputs were published with zero warnings,
-errors, WAL files, recognized scratch artifacts, hidden workspaces, or
-AppleDouble sidecars. Aggregate validation passes every automated check and
-contains 59,954 index-event rows, 1,320,409 candidate encounters, 9,527 strict
-primary rows, and 12,028,276 evidence rows.
+## Remaining acceptance work
 
-Relative to the preserved reviewed `71ef56f` baseline, the parent build
-retains every index-event key and all candidate, primary, payer-route, and
-cohort-flow counts. The all-history cirrhosis correction changes 191 analysis
-rows. Corrected evidence retention adds 9,193 diagnosis rows and removes
-2,612,789 post-index non-GLP-1 medication rows. Composite encounter and
-date-only procedure-context corrections do not change the full-data key or
-count contracts.
+1. Run all local gates and the full synthetic combined build at the final branch
+   head.
+2. Capture an approved aggregate historical baseline for the 36 CSV outputs.
+3. Run a fresh full combined build on the private external volume.
+4. Require exact ordered-schema, row-count, and normalized-hash equality for
+   all 36 compatibility exports.
+5. Record additive element rule coverage, observed-match coverage, wall time,
+   peak RSS, database/work/output footprints, and final free space.
+6. Complete holistic local and GitHub review before merging Stage 1.
 
-Ruleset `2026-07-19.1` requires 90 elapsed days for timestamped low-eGFR
-measurements and uses inclusive calendar-day boundaries only when an endpoint
-is date-only. The exact-head run matched the reviewed `e7bf01a` parent build
-with zero schema, key, count, analysis-value, or semantic-fingerprint changes.
-PR #7 merged at `c2a6908` after exact-head local gates, Linux CI, and GitHub
-Codex review completed with no unresolved threads. PR #4 now carries Milestone
-1, Milestone 2, and the additive GLP-1 endpoint; it requires refreshed CI and a
-holistic review at its new head before promotion to `main`. Investigator
-terminology expansion and private record-level clinical validation remain
-separate requirements before clinical use.
+## Deferred
 
-The first holistic PR #4 review found two fail-closed reuse gaps. Completed
-GLP-1 outputs now require the exact configured public file set, nonempty files,
-and matching DuckDB run identity/status before reuse. Corrected-pipeline work
-manifest schema 4 now includes the current behavior-code SHA-256. These fixes
-require fresh CI, re-review, and affected provenance evidence before merge.
-Re-review also required watched monitoring to return nonzero for an explicit
-failed state or a vanished same-host worker; focused CLI coverage now enforces
-that orchestration contract. Final review of `896ec2a` found no major issues,
-all 340 tests and both CI runs pass, and no review threads remain open.
+- Migrating `trinetx-hypercapnia-code/stata/do/10_preprocessing.do`.
+- Changing GLP-1 cohort, phenotype, imputation, propensity, or analysis
+  semantics.
+- Expanding clinical terminology beyond the current versioned element catalog.
 
-Targeted read-only validation against preserved full-data artifacts confirms
-that the current reuse validator accepts exactly eight nonempty GLP-1 outputs
-with matching complete DuckDB identity, schema-3 corrected-pipeline work is
-rejected for missing schema-4/code-state identity, and a completed watched run
-returns success. A full analytic recomputation is not required because these
-changes affect only reuse, resume, and monitoring gates, not fresh cohort or
-feature materialization.
+Those changes require separate branches and their own parity/correction gates.
 
-## Definition of done
+## Acceptance
 
-- All synthetic acceptance and temporal boundary tests pass locally and in CI.
-- The full export is processed once per source stage with bounded memory and
-  maximum RSS no greater than 6,238 MiB.
-- All eight contracted public outputs publish atomically with complete run,
-  source, concept, duplicate, cohort-flow, and data-dictionary provenance.
-- Full-data validation reports no warnings, errors, WAL files, scratch,
-  AppleDouble sidecars, missing required concepts, or output-count
-  inconsistencies.
-- A PHI-safe aggregate report explains changes from the preserved provisional
-  build without identifiers or row examples.
-- The final branch head has clean local, CI, and GitHub Codex reviews.
+Stage 1 is complete when the unified database validates, all 36 compatibility
+files match the approved baseline exactly, the combined GLP-1 adapter gate
+passes, resource constraints are met, aggregate evidence is complete, and no
+private or generated validation artifact is tracked.

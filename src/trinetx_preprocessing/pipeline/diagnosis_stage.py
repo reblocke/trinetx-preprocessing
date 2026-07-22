@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..combined_preprocessing.elements import ElementCaptureWriter
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
@@ -64,6 +65,7 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        element_writer = stack.enter_context(ElementCaptureWriter(config, "diagnosis"))
         analysis_writer = stack.enter_context(
             WorkTableWriter(config, "analysis_diagnosis_features.csv")
         )
@@ -90,10 +92,15 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
                     path,
                     chunksize=chunksize,
                     usecols=RAW_DIAGNOSIS_COLUMNS,
-                    dtype=RAW_DTYPE,
-                    parse_dates=["date"],
+                    dtype=(
+                        {column: "string" for column in RAW_DIAGNOSIS_COLUMNS}
+                        if config.combined.enabled
+                        else RAW_DTYPE
+                    ),
+                    parse_dates=None if config.combined.enabled else ["date"],
                 ):
                     rows_read += len(chunk)
+                    element_writer.add_chunk(chunk, source_path=path)
                     normalized = normalize_diagnosis_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
@@ -175,6 +182,8 @@ def run_diagnosis_stage(config: Config) -> list[Path]:
                     f"diagnosis post-filter {group.name}",
                     grouped_counts[group.name],
                 )
+
+    output_paths.extend(element_writer.written_paths)
 
     return output_paths
 

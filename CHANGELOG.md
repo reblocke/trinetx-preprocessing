@@ -6,8 +6,15 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 
 ## [Unreleased]
 ### Added
-- Added an independent, versioned GLP-1 eligibility database build that leaves
-  the Milestone 2 pipeline and its 36 final CSV outputs unchanged.
+- Added one canonical `trinetx_preprocessed.duckdb` containing the historical
+  534-column observations, source-faithful additive elements, catalog/rule
+  membership, observability, provenance, quality summaries, and 36 exact
+  compatibility views.
+- Added combined-product build, status, inspection, validation, and legacy
+  export commands plus aggregate-only parity, completeness, and benchmark
+  scripts.
+- Added the versioned standalone GLP-1 eligibility build now retained as the
+  downstream derivation and validation reference for unified preprocessing.
 - Added first-available arterial PaCO2 selection, unit-aware pH pairing,
   persistent-hypercapnia and VBG sensitivity cohorts, measured/calculated BMI,
   temporal component phenotypes, indication tiers, payer-route modeling, and
@@ -24,6 +31,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
+- Unified historical and GLP-1 source preprocessing behind one manifest-bound
+  raw-data pass; the existing GLP-1 cohort/phenotype implementation remains a
+  downstream reference rather than a second canonical preprocessor.
+- Medication-ingredient exports now enter the unified source-element table
+  without entering historical medication feature reduction.
 - Completed-output reuse now validates the exact configured GLP-1 public file
   set, rejects empty artifacts, and confirms the DuckDB run identity/status
   before reporting success.
@@ -54,6 +66,12 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   phenotype and evidence values.
 
 ### Fixed
+- Made combined-product replacement transactional across the DuckDB, sidecar,
+  and all 36 compatibility CSVs, with rollback on publication failure.
+- Enforced identical typed source-table contracts for CSV and Parquet work,
+  source-faithful patient strings, and `include: true` source retention.
+- Aligned medication-ingredient preflight validation with ingestion, ignored
+  confidential CSV intermediates, and made the synthetic example rerunnable.
 - Removed the internal build-workspace manifest before atomic publication while
   restoring it if publication fails, so completed builds contain exactly the
   eight contracted public files without weakening resumability.

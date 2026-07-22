@@ -1463,3 +1463,41 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   worker activity remains indeterminate rather than being treated as failure.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cli.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #4.
+
+### 2026-07-22 — Publish one unified preprocessing product
+- Date: 2026-07-22
+- Decision: Make `trinetx_preprocessed.duckdb` the sole canonical preprocessing
+  product. Store the complete historical 534-column observations and additive
+  source-faithful elements together; generate the 36 historical CSVs as exact
+  compatibility projections. Keep GLP-1 eligibility and future Stata logic
+  downstream.
+- Context: Separate historical and GLP-1 ingestion paths duplicated raw scans,
+  provenance, normalization, and extension work. Future requests need one
+  stable preprocessing boundary that can gain elements without forking the
+  pipeline.
+- Rationale: A shared typed element catalog, source record model, manifest, and
+  database make additions reviewable and reusable while retaining the released
+  historical file contract.
+- Consequences: Combined builds fail closed on code, configuration, source,
+  intermediate-schema, or element-catalog changes. Repository-local private
+  output is rejected. The standalone GLP-1 builder remains a validation
+  reference during migration, not a second canonical preprocessing product.
+- References: `docs/UNIFIED_PREPROCESSING.md`,
+  `src/trinetx_preprocessing/combined_preprocessing`,
+  `src/trinetx_preprocessing/work_manifest.py`.
+
+### 2026-07-22 — Publish the unified product as one directory transaction
+- Date: 2026-07-22
+- Decision: Build and validate the database, sidecar, and all 36 compatibility
+  CSVs in a sibling directory, then publish the complete directory with a
+  rollback backup. Preserve explicit source-table types across CSV and Parquet
+  work formats, and retain clinical source rows only through included rules.
+- Rationale: A combined product must not expose mixed-generation files after a
+  failed replacement, and downstream behavior must not depend on physical work
+  format or exclusion-only terminology rules.
+- Consequences: `--replace` rejects unmanaged output roots, failed builds leave
+  the prior product unchanged, and intermediate schema version 7 invalidates
+  earlier combined capture work.
+- References: `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/elements.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`.

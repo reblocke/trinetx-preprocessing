@@ -11,6 +11,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..combined_preprocessing.elements import (
+    ElementCaptureWriter,
+    available_source_columns,
+)
 from ..config import Config, ConfigError, collect_domain_paths
 from ..filesystem import write_text_atomic
 from ..guardrails import (
@@ -134,18 +138,25 @@ class _SettingInputs:
     allowed_encounter_ids: Collection[str] | "_EncounterIdLookup" | None
 
 
-def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
+def run_final_assembly(
+    config: Config,
+    *,
+    strict: bool = False,
+    output_dir: Path | None = None,
+) -> list[Path]:
     """Run the final dataset assembly stage.
 
     Args:
         config: Pipeline configuration.
         strict: Whether to enable guardrail assertions.
+        output_dir: Optional physical output root for transactional staging.
 
     Returns:
         List of written file paths.
     """
 
     logger = logging.getLogger(__name__)
+    output_root = output_dir or config.output_dir
     domain_paths = collect_domain_paths(config)
     patient_paths = domain_paths.get("patient")
     if not patient_paths:
@@ -153,22 +164,30 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
 
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
     with ExitStack() as stack:
+        patient_source_writer = stack.enter_context(
+            ElementCaptureWriter(config, "patient", include_all=True)
+        )
+        demographics_kwargs = {}
+        if patient_source_writer.enabled:
+            demographics_kwargs["source_writer"] = patient_source_writer
         demographics = _load_demographics_lookup(
             patient_paths,
             work_dir=config.work_dir,
             stack=stack,
             logger=logger,
             chunksize=chunksize,
+            **demographics_kwargs,
         )
         setting_inputs = _load_setting_inputs(
             config,
             logger,
+            output_root=output_root,
             chunksize=chunksize,
             stack=stack,
             strict=strict,
         )
 
-        output_paths = _initialize_final_output_files(config)
+        output_paths = _initialize_final_output_files(output_root)
         cohort_store = stack.enter_context(
             PartitionedParquetStore(
                 config.work_dir,
@@ -283,7 +302,10 @@ def run_final_assembly(config: Config, *, strict: bool = False) -> list[Path]:
             json.dumps(metrics, indent=2, sort_keys=True),
         )
 
-    return _ordered_final_output_paths(output_paths)
+    return [
+        *_ordered_final_output_paths(output_paths),
+        *patient_source_writer.written_paths,
+    ]
 
 
 def _mark_data_screen_eligibility(
@@ -333,12 +355,12 @@ def _apply_precomputed_data_screen(
 
 
 def _initialize_final_output_files(
-    config: Config,
+    output_root: Path,
 ) -> dict[tuple[str, str, str], Path]:
     output_paths: dict[tuple[str, str, str], Path] = {}
     empty = pd.DataFrame(columns=FINAL_OUTPUT_COLUMNS)
     for setting in SETTINGS:
-        output_dir = config.output_dir / SETTING_OUTPUT_DIRS[setting]
+        output_dir = output_root / SETTING_OUTPUT_DIRS[setting]
         output_dir.mkdir(parents=True, exist_ok=True)
         for category in RFS_CATEGORIES:
             for suffix in ("BEFORE", "AFTER"):
@@ -358,6 +380,7 @@ def _load_setting_inputs(
     config: Config,
     logger: logging.Logger,
     *,
+    output_root: Path,
     chunksize: int | None,
     stack: ExitStack,
     strict: bool,
@@ -382,7 +405,7 @@ def _load_setting_inputs(
             stack=stack,
             chunksize=chunksize,
         )
-        output_dir = config.output_dir / SETTING_OUTPUT_DIRS[setting]
+        output_dir = output_root / SETTING_OUTPUT_DIRS[setting]
         output_dir.mkdir(parents=True, exist_ok=True)
         data_checks_path = None
         allowed_encounter_ids = derived_allowed
@@ -607,12 +630,27 @@ def _load_demographics_lookup(
     stack: ExitStack,
     logger: logging.Logger,
     chunksize: int | None = None,
+    source_writer: ElementCaptureWriter | None = None,
 ) -> "_DemographicsLookup":
     lookup = stack.enter_context(_DemographicsLookup(work_dir))
     rows_read = 0
 
     for path in paths:
-        for raw_frame in _iter_demographic_frames(path, chunksize=chunksize):
+        source_columns = None
+        if source_writer is not None and source_writer.enabled:
+            source_columns = available_source_columns(
+                path,
+                DEMOGRAPHIC_COLUMNS,
+                domain="patient",
+            )
+        for raw_frame in _iter_demographic_frames(
+            path,
+            chunksize=chunksize,
+            usecols=source_columns,
+            preserve_source_strings=source_columns is not None,
+        ):
+            if source_writer is not None:
+                source_writer.add_chunk(raw_frame, source_path=path)
             transformed = _transform_demographics(raw_frame, context=str(path))
             lookup.add_frame(transformed)
             rows_read += len(transformed)
@@ -635,17 +673,25 @@ def _iter_demographic_frames(
     path: Path,
     *,
     chunksize: int | None,
+    usecols: list[str] | None = None,
+    preserve_source_strings: bool = False,
 ):
-    reader = pd.read_csv(
-        path,
-        usecols=DEMOGRAPHIC_COLUMNS,
-        dtype={
+    selected_columns = usecols or DEMOGRAPHIC_COLUMNS
+    dtype = (
+        {column: "string" for column in selected_columns}
+        if preserve_source_strings
+        else {
             "patient_id": "string",
             "sex": "string",
             "race": "string",
             "ethnicity": "string",
             "patient_regional_location": "string",
-        },
+        }
+    )
+    reader = pd.read_csv(
+        path,
+        usecols=selected_columns,
+        dtype=dtype,
         chunksize=chunksize,
     )
     if chunksize is None:

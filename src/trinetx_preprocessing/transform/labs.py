@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ..validation import require_columns
+from .datetimes import parse_trinetx_datetime
 
 RAW_LAB_COLUMNS = [
     "patient_id",
@@ -63,5 +64,5 @@ def normalize_lab_results_chunk(df: pd.DataFrame) -> pd.DataFrame:
     normalized["code_system"] = normalized["code_system"].astype("string")
     normalized["code"] = normalized["code"].astype("string")
     normalized["units_of_measure"] = normalized["units_of_measure"].astype("string")
-    normalized["date"] = pd.to_datetime(normalized["date"])
+    normalized["date"] = parse_trinetx_datetime(normalized["date"])
     return normalized.reset_index(drop=True)

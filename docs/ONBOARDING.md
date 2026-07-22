@@ -15,17 +15,19 @@ export UV_CACHE_DIR="$PWD/.uv_cache"
 uv sync
 
 cp config.example.yaml config.yaml
-mkdir -p artifacts/synthetic_example/work artifacts/synthetic_example/output
-./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+./.venv/bin/python scripts/run_synthetic_example.py
 ```
-Outputs land under `artifacts/synthetic_example/output/`.
+The helper writes the canonical database and all 36 compatibility CSVs under
+`/tmp/trinetx-preprocessing-synthetic-example/`.
+It is safe to rerun: the existing synthetic product is replaced only after the
+new product passes combined validation.
 
 ## Getting started example script
 The helper script writes a config for you and runs the pipeline on synthetic
 fixtures:
 ```bash
-./.venv/bin/python scripts/run_synthetic_example.py --output-root artifacts/synthetic_example
+./.venv/bin/python scripts/run_synthetic_example.py \
+  --output-root /tmp/trinetx-preprocessing-synthetic-example
 ```
 
 ## CLI run (real data)
@@ -47,11 +49,12 @@ fixtures:
    ./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
    ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
    ```
-5. Run the pipeline:
+5. Enable `combined.enabled: true` and run the canonical builder:
    ```bash
-   ./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+   ./.venv/bin/python -m trinetx_preprocessing build-preprocessed \
+     --config config.yaml --strict
    ```
-`run-all` is an alias for the same full pipeline.
+With combined mode enabled, `run` and `run-all` route to the same builder.
 
 The recommended finalization config uses Parquet work tables. Final analytic
 outputs remain CSV, but intermediates under `work_dir` may have `.parquet`

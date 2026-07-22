@@ -30,6 +30,46 @@ Post-Milestone 1 validation uses `docs/SPEC.md` as the behavior authority:
 Any behavior-code, dependency, version, or ruleset change invalidates the full
 profile evidence and requires a fresh run.
 
+## Unified preprocessing Stage 1
+
+The combined-product acceptance gate supplements the historical and corrected
+release evidence above. Keep all evidence external.
+
+```bash
+ROOT="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_v1"
+
+./.venv/bin/python scripts/capture_combined_baseline.py \
+  --output-dir "$ROOT/baseline/output" \
+  --out "$ROOT/manifests/compatibility_baseline.json"
+
+./.venv/bin/python scripts/benchmark_combined_preprocessing.py \
+  --config "$ROOT/config.yaml" \
+  --strict --replace \
+  --out "$ROOT/manifests/combined_benchmark.json"
+
+./.venv/bin/python scripts/verify_combined_parity.py \
+  --database "$ROOT/output/trinetx_preprocessed.duckdb" \
+  --output-dir "$ROOT/output" \
+  --baseline "$ROOT/manifests/compatibility_baseline.json" \
+  --out "$ROOT/manifests/combined_parity.json"
+
+./.venv/bin/python scripts/verify_element_completeness.py \
+  --database "$ROOT/output/trinetx_preprocessed.duckdb" \
+  --out "$ROOT/manifests/element_completeness.json"
+```
+
+Acceptance requires all 36 ordered schemas, row counts, and normalized hashes
+to match; database validation to pass; every source element to have a rule;
+aggregate observed-match gaps to be reviewed; peak RSS to remain at or below
+6,238 MB; and free space to remain above 100 GiB. The element report may list
+unobserved rules because absence in one export is evidence, not necessarily an
+implementation failure.
+
+The committed 20-case synthetic test additionally requires adapter-backed and
+direct-raw GLP-1 source, analysis, cohort-flow, and evidence tables to match.
+This proves the shared source boundary; it does not move study-specific GLP-1
+eligibility decisions into preprocessing.
+
 ## Local gates
 
 ```bash
@@ -140,7 +180,7 @@ Before release:
   correctness, security, privacy, or performance findings;
 - the aggregate Milestone 1 delta report is PHI-safe and external-only.
 
-## GLP-1 additive full-data evidence
+## GLP-1 downstream full-data evidence
 
 The exact behavior-head additive GLP-1 build from commit `459cbda` completed in
 20,941.55 seconds with 5,635,293,184 bytes maximum RSS. It used the supported

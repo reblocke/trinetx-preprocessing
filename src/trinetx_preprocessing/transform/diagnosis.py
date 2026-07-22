@@ -7,6 +7,7 @@ import pandas as pd
 from ..validation import require_columns
 from .clinical_rules import CodeRule, exact_code_rule, prefix_code_rule
 from .code_groups import split_rows_by_code_groups
+from .datetimes import parse_trinetx_datetime
 
 RAW_DIAGNOSIS_COLUMNS = [
     "patient_id",
@@ -217,7 +218,7 @@ def normalize_diagnosis_chunk(df: pd.DataFrame) -> pd.DataFrame:
         normalized[column] = (
             normalized[column].replace({"Unknown": "U"}).astype("string")
         )
-    normalized["date"] = pd.to_datetime(normalized["date"])
+    normalized["date"] = parse_trinetx_datetime(normalized["date"])
     return normalized.reset_index(drop=True)
 
 

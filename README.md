@@ -1,9 +1,10 @@
 # TriNetX Preprocessing Pipeline
 
-This repository refactors the TriNetX hypercapnia preprocessing notebooks into a
-deterministic, CLI-driven pipeline. The CLI reads exported CSVs, normalizes each
-domain, derives RFS cohorts, and assembles final encounter-level datasets for the
-2022 analysis window.
+This repository provides a deterministic, CLI-driven preprocessing pipeline for
+TriNetX exports. Its canonical product is one versioned
+`trinetx_preprocessed.duckdb` containing the historical encounter-level payload
+and additive source elements needed by the GLP-1 work and future studies. The
+historical 36 CSV files are generated compatibility projections of that product.
 
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
@@ -30,24 +31,37 @@ validation artifacts unless explicitly reviewed.
 mkdir -p .uv_cache
 export UV_CACHE_DIR="$PWD/.uv_cache"
 uv sync
-
-cp config.example.yaml config.yaml
-mkdir -p artifacts/synthetic_example/work artifacts/synthetic_example/output
-./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+./.venv/bin/python scripts/run_synthetic_example.py
 ```
 
-Or run the helper script that builds a config for you:
+The helper writes the canonical database and 36 compatibility CSVs under
+`/tmp/trinetx-preprocessing-synthetic-example/`. Pass `--output-root` to use a
+different location outside a Git worktree.
+
+## Unified preprocessing product
+
+Build the combined database and all 36 historical compatibility CSVs into an
+external private output directory:
+
 ```bash
-./.venv/bin/python scripts/run_synthetic_example.py --output-root artifacts/synthetic_example
+./.venv/bin/python -m trinetx_preprocessing build-preprocessed \
+  --config /private/path/config.yaml --strict
+
+./.venv/bin/python -m trinetx_preprocessing validate-preprocessed \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --output-dir /private/output --json
 ```
 
-Outputs land under `artifacts/synthetic_example/output/`.
+Set `combined.enabled: true` to make `run` and `run-all` use this same builder.
+See `docs/UNIFIED_PREPROCESSING.md` for the table grains, provenance contract,
+compatibility boundary, and acceptance gates.
 
-## Additive GLP-1 eligibility database
+## Downstream GLP-1 eligibility
 
-The post-Milestone 2 GLP-1 endpoint is a separate command and output tree. It
-does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
+The existing GLP-1 endpoint remains the validated downstream derivation and
+reference implementation while its source boundary moves to the unified
+product. It is not a second canonical preprocessing product. Its current
+standalone command remains available during that migration:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
@@ -63,9 +77,8 @@ does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
   --watch --interval-seconds 30
 ```
 
-See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub
-issue #6 for the output contract, current implementation boundary, and
-clinical-review requirements.
+See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
+#6 for the downstream analytic contract and clinical-review requirements.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:

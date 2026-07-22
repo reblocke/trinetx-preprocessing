@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -57,9 +58,10 @@ def test_work_manifest_records_and_requires_completed_stages(tmp_path: Path) -> 
     manifest = require_current_work(config, required_stages=["encounter"])
 
     assert path.exists()
-    assert manifest["schema_version"] == 4
-    assert manifest["intermediate_schema_version"] == 5
+    assert manifest["schema_version"] == 5
+    assert manifest["intermediate_schema_version"] == 7
     assert len(manifest["git_code_state_sha256"]) == 64
+    assert manifest["combined_element_catalog_sha256"] is None
     assert manifest["runtime_versions"]["python"]
     assert manifest["stages"]["encounter"]["status"] == "complete"
     assert manifest["stages"]["encounter"]["outputs"][0]["size_bytes"] > 0
@@ -96,6 +98,17 @@ def test_work_manifest_fails_when_behavior_code_changes(
     )
 
     with pytest.raises(StaleWorkError, match="git_code_state_sha256"):
+        require_current_work(config, required_stages=[])
+
+
+def test_work_manifest_fails_when_combined_catalog_changes(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    manifest_path = initialize_work_manifest(config)
+    manifest = json.loads(manifest_path.read_text())
+    manifest["combined_element_catalog_sha256"] = "a" * 64
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(StaleWorkError, match="combined_element_catalog_sha256"):
         require_current_work(config, required_stages=[])
 
 

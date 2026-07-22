@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -57,6 +58,93 @@ def _write_config(path: Path) -> None:
         '    pattern: "Encounter/encounter*.csv"\n'
     )
     path.write_text(content)
+
+
+def test_validate_inputs_accepts_minimal_medication_ingredient_schema(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    medication_dir = data_dir / "Medications"
+    medication_dir.mkdir(parents=True)
+    ingredient = medication_dir / "medication_ingredient.csv"
+    ingredient.write_text(
+        "patient_id,code_system,code,start_date\n"
+        "P1,RXNORM,1991302,2023-01-01\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "domains:\n"
+        "  meds:\n"
+        '    pattern: "Medications/medication*.csv"\n'
+    )
+
+    cli_module.validate_input_headers(load_config(config_path))
+
+
+def test_validate_inputs_rejects_incomplete_medication_ingredient_schema(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    medication_dir = data_dir / "Medications"
+    medication_dir.mkdir(parents=True)
+    (medication_dir / "medication_ingredient.csv").write_text(
+        "patient_id,code_system,code\nP1,RXNORM,1991302\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "domains:\n"
+        "  meds:\n"
+        '    pattern: "Medications/medication*.csv"\n'
+    )
+
+    with pytest.raises(cli_module.ConfigError, match="start_date"):
+        cli_module.validate_input_headers(load_config(config_path))
+
+
+def test_run_uses_combined_builder_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "data_dir: data\n"
+        "work_dir: work\n"
+        "output_dir: output\n"
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    calls = []
+
+    def fake_build(config, *, strict=False, replace_existing=False):
+        calls.append((config.combined.enabled, strict, replace_existing))
+        return SimpleNamespace(
+            database_path=tmp_path / "trinetx_preprocessed.duckdb",
+            compatibility_paths=tuple(
+                Path(f"output-{index}.csv") for index in range(36)
+            ),
+        )
+
+    monkeypatch.setattr(cli_module, "validate_config", lambda config: None)
+    monkeypatch.setattr(cli_module, "build_preprocessed", fake_build)
+    monkeypatch.setattr(
+        cli_module,
+        "run_pipeline",
+        lambda *args, **kwargs: pytest.fail("legacy pipeline entry point was used"),
+    )
+
+    result = cli_module.main(["run", "--config", str(config_path), "--strict"])
+
+    assert result == 0
+    assert calls == [(True, True, False)]
 
 
 def _write_encounter_config(

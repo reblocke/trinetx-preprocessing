@@ -16,6 +16,14 @@ storage:
   analysis_bucket_count: 256
   emit_legacy_group_tables: false
 
+combined:
+  # Keep false for this repository-local example output. Set true for an
+  # external private output_dir, or invoke build-preprocessed explicitly.
+  enabled: false
+  database_name: trinetx_preprocessed.duckdb
+  schema_version: "1.0"
+  concept_sets_dir: config/concept_sets
+
 guardrails:
   max_join_multiplier: 1.0
 
