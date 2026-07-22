@@ -1496,8 +1496,19 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   failed replacement, and downstream behavior must not depend on physical work
   format or exclusion-only terminology rules.
 - Consequences: `--replace` rejects unmanaged output roots, failed builds leave
-  the prior product unchanged, and intermediate schema version 7 invalidates
+  the prior product unchanged, and intermediate schema version 8 invalidates
   earlier combined capture work.
 - References: `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
   `src/trinetx_preprocessing/combined_preprocessing/elements.py`,
   `src/trinetx_preprocessing/combined_preprocessing/database.py`.
+
+### 2026-07-22 — Retain a compact complete encounter-flow inventory
+- Date: 2026-07-22
+- Decision: Capture patient ID, encounter ID, start timestamp, and encounter
+  type for every raw encounter row during the existing scan. Use this compact
+  table only for complete downstream source-universe flow denominators.
+- Rationale: Concept-filtered encounter capture and the historical 2022 window
+  cannot reproduce GLP-1 source-flow counts for pre-2022 or non-gas patients.
+- Consequences: The unified database is larger, but avoids a second raw
+  encounter scan and does not broaden the feature-bearing encounter source
+  table.

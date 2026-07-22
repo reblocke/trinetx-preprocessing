@@ -29,6 +29,8 @@ from .contract import (
 )
 from .elements import (
     CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN,
+    ENCOUNTER_FLOW_COLUMNS,
+    ENCOUNTER_FLOW_DUCKDB_TYPES,
     MEMBERSHIP_COLUMNS,
     SOURCE_EVENT_COLUMNS,
     SOURCE_EVENT_DUCKDB_TYPES,
@@ -81,6 +83,7 @@ def create_combined_database(
         )
         _load_element_catalog(connection, catalog_rows(catalog))
         _load_source_tables(connection, config)
+        _load_encounter_flow(connection, config)
         _load_observability_events(connection, config)
         _load_element_membership(connection, config)
         _create_rfs_membership(connection)
@@ -407,6 +410,28 @@ def _load_source_tables(
             _append_historical_encounter_work(connection, config)
 
 
+def _load_encounter_flow(
+    connection: duckdb.DuckDBPyConnection,
+    config: Config,
+) -> None:
+    path = resolve_work_table(config, "combined_encounter_flow.csv")
+    if not path.is_file():
+        raise FileNotFoundError(f"Unified encounter-flow table is missing: {path}")
+    source = _work_path_source(path)
+    expressions = []
+    for column in ENCOUNTER_FLOW_COLUMNS:
+        column_type = ENCOUNTER_FLOW_DUCKDB_TYPES[column]
+        identifier = _identifier(column)
+        expressions.append(
+            f"try_cast({identifier} AS {column_type}) AS {identifier}"
+        )
+    connection.execute(
+        "CREATE TABLE source_encounter_flow AS SELECT "
+        + ", ".join(expressions)
+        + f" FROM {source}"
+    )
+
+
 def _load_element_membership(
     connection: duckdb.DuckDBPyConnection,
     config: Config,
@@ -646,6 +671,7 @@ def _create_data_dictionary(connection: duckdb.DuckDBPyConnection) -> None:
     for table_name in (
         "preprocessing_manifest",
         "source_file_inventory",
+        "source_encounter_flow",
         PREPROCESSED_ENCOUNTER_TABLE,
         "rfs_membership",
         "element_catalog",
@@ -681,6 +707,7 @@ def _create_quality_summary(connection: duckdb.DuckDBPyConnection) -> None:
     for table_name in (
         "preprocessing_manifest",
         "source_file_inventory",
+        "source_encounter_flow",
         PREPROCESSED_ENCOUNTER_TABLE,
         "rfs_membership",
         "element_catalog",
@@ -720,6 +747,7 @@ def _database_counts(connection: duckdb.DuckDBPyConnection) -> dict[str, int]:
         "source_observability_event",
         "compatibility_output_manifest",
         *SOURCE_TABLE_BY_DOMAIN.values(),
+        "source_encounter_flow",
     )
     return {
         table: int(

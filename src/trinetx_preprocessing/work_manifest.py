@@ -18,7 +18,7 @@ from .profiling import current_git_code_state_sha256
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
 WORK_MANIFEST_SCHEMA_VERSION = 5
-INTERMEDIATE_SCHEMA_VERSION = 7
+INTERMEDIATE_SCHEMA_VERSION = 8
 LEGACY_DATA_SCREEN_FILENAMES = (
     "amb_enc_screen.csv",
     "inp_enc_screen.csv",

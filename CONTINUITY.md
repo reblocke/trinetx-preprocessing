@@ -286,10 +286,10 @@
 - Final local gates pass with `350` tests, Ruff, and `git diff --check`. The actual synthetic CLI build published a valid DuckDB plus 36 compatibility files; aggregate baseline/parity/completeness scripts passed, and the benchmark wrapper completed in `5.138 s` with `226.578 MB` peak RSS on the header-only onboarding fixture.
 
 ## Now
-- All seven reviewed publication, CSV-mode, provenance, privacy, validation, and onboarding fixes are implemented on `codex/unified-preprocessing-v1`. Focused tests pass, and the final local gate passes `git diff --check`, Ruff, and all `365` tests in `365.14 s`; no pipeline, pytest, or monitor process is active.
+- All seven local review findings are fixed. PR #8 Codex review found one P2 GLP-1 flow-denominator gap; the pipeline now retains a complete four-column encounter-flow inventory during the existing scan, including pre-2022 non-gas encounters. Direct/adapter parity passes in CSV and Parquet modes, and the post-review gate passes `git diff --check`, Ruff, and all `365` tests in `363.66 s`; no pipeline, pytest, or monitor process is active.
 
 ## Next
-- Commit and push the unified checkpoint, obtain a clean holistic GitHub review, then execute the external full-data unified build, parity, completeness, performance, and hygiene gates.
+- Push the PR #8 review fix and obtain a clean re-review, then execute the external full-data unified build, parity, completeness, performance, and hygiene gates. The approved corrected baseline is captured externally with 36 tables and 6,949,511 rows.
 - Run an external full-data unified build and benchmark, capture the historical compatibility baseline, and require exact 36-file parity plus element-completeness evidence before merge acceptance.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

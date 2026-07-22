@@ -224,6 +224,44 @@ def _copy_glp1_fixture_for_combined(tmp_path: Path) -> Path:
     return destination_root
 
 
+def _append_pre2022_non_gas_encounter(input_root: Path) -> None:
+    patient_path = input_root / "Patient/patient.csv"
+    patients = pd.read_csv(patient_path, dtype="string")
+    patient = {column: "" for column in patients.columns}
+    patient.update(
+        {
+            "patient_id": "flow-only-patient",
+            "sex": "M",
+            "race": "Unknown",
+            "ethnicity": "Unknown",
+            "year_of_birth": "1980",
+            "patient_regional_location": "Unknown",
+        }
+    )
+    pd.concat([patients, pd.DataFrame([patient])], ignore_index=True).to_csv(
+        patient_path,
+        index=False,
+    )
+
+    encounter_path = input_root / "Encounter/encounter.csv"
+    encounters = pd.read_csv(encounter_path, dtype="string")
+    encounter = {column: "" for column in encounters.columns}
+    encounter.update(
+        {
+            "encounter_id": "flow-only-encounter",
+            "patient_id": "flow-only-patient",
+            "start_date": "2020-01-01",
+            "end_date": "2020-01-02",
+            "type": "EMER",
+            "derived_by_TriNetX": "N",
+        }
+    )
+    pd.concat([encounters, pd.DataFrame([encounter])], ignore_index=True).to_csv(
+        encounter_path,
+        index=False,
+    )
+
+
 def test_element_capture_preserves_duplicate_source_rows_and_membership(
     tmp_path: Path,
 ) -> None:
@@ -678,6 +716,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
     intermediate_format: str,
 ) -> None:
     input_root = _copy_glp1_fixture_for_combined(tmp_path)
+    _append_pre2022_non_gas_encounter(input_root)
     config = load_config(
         _write_combined_config(
             tmp_path,
@@ -737,6 +776,13 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
     direct = duckdb.connect(str(direct_path), read_only=True)
     adapted = duckdb.connect(str(adapted_path), read_only=True)
     try:
+        direct_flow = direct.execute(
+            "SELECT * FROM source_cohort_flow_base ORDER BY stage_order"
+        ).fetchall()
+        adapted_flow = adapted.execute(
+            "SELECT * FROM source_cohort_flow_base ORDER BY stage_order"
+        ).fetchall()
+        assert adapted_flow == direct_flow
         columns_by_table = {
             "source_lab_measurement": (
                 "patient_id",

@@ -16,6 +16,8 @@ from .contract import (
     final_output_columns,
 )
 from .elements import (
+    ENCOUNTER_FLOW_COLUMNS,
+    ENCOUNTER_FLOW_DUCKDB_TYPES,
     SOURCE_EVENT_COLUMNS,
     SOURCE_EVENT_DUCKDB_TYPES,
     SOURCE_TABLE_BY_DOMAIN,
@@ -68,6 +70,7 @@ def validate_preprocessed_database(
             "preprocessing_quality_summary",
             "compatibility_output_manifest",
             *SOURCE_TABLE_BY_DOMAIN.values(),
+            "source_encounter_flow",
         }
         existing = {
             str(row[0])
@@ -229,6 +232,18 @@ def validate_preprocessed_database(
                 )
             if count == 0 and domain in {"labs", "encounter", "patient"}:
                 warnings.append(f"Required source table is empty: {table_name}")
+
+        encounter_flow_schema = _table_schema(connection, "source_encounter_flow")
+        expected_encounter_flow_schema = tuple(
+            (column, ENCOUNTER_FLOW_DUCKDB_TYPES[column])
+            for column in ENCOUNTER_FLOW_COLUMNS
+        )
+        if encounter_flow_schema != expected_encounter_flow_schema:
+            errors.append("source_encounter_flow ordered typed schema is invalid.")
+        counts["source_encounter_flow"] = _count(
+            connection,
+            "source_encounter_flow",
+        )
 
         catalog_count = _count(connection, "element_catalog")
         counts["element_catalog"] = catalog_count

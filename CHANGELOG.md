@@ -72,6 +72,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   source-faithful patient strings, and `include: true` source retention.
 - Aligned medication-ingredient preflight validation with ingestion, ignored
   confidential CSV intermediates, and made the synthetic example rerunnable.
+- Preserved a complete compact encounter-flow inventory so downstream GLP-1
+  source-denominator counts include pre-2022 non-gas-candidate encounters.
 - Removed the internal build-workspace manifest before atomic publication while
   restoring it if publication fails, so completed builds contain exactly the
   eight contracted public files without weakening resumability.

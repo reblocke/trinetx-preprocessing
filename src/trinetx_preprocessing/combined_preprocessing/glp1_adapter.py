@@ -393,7 +393,7 @@ def _create_source_cohort_flow_base(
             GROUP BY patient_id
         ), adult_candidate AS (
             SELECT encounter.encounter_id, encounter.patient_id
-            FROM preprocessed.source_encounter AS encounter
+            FROM preprocessed.source_encounter_flow AS encounter
             JOIN patient USING (patient_id)
             WHERE encounter.encounter_id IS NOT NULL
               AND encounter.start_datetime IS NOT NULL

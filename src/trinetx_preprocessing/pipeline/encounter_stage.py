@@ -13,7 +13,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..combined_preprocessing.elements import ElementCaptureWriter
+from ..combined_preprocessing.elements import (
+    ENCOUNTER_FLOW_COLUMNS,
+    ElementCaptureWriter,
+)
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
@@ -23,6 +26,7 @@ from ..storage import (
     iter_work_tables,
     resolve_work_table,
 )
+from ..transform.datetimes import parse_trinetx_datetime
 from ..transform.encounter import (
     DEFAULT_END_DATE_FILL,
     DEFAULT_START_DATE,
@@ -89,6 +93,11 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
     candidate_lookup = _CombinedCandidateLookup.from_config(config)
     with (
         ElementCaptureWriter(config, "encounter", include_all=True) as element_writer,
+        WorkTableWriter(
+            config,
+            "combined_encounter_flow.csv",
+            enabled=config.combined.enabled,
+        ) as flow_writer,
         _EncounterReducerStore(config.work_dir) as reducer,
     ):
         for index, path in enumerate(encounter_paths, start=1):
@@ -119,6 +128,15 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                 ):
                     chunk_index += 1
                     rows_read += len(chunk)
+                    if config.combined.enabled:
+                        flow = chunk.loc[
+                            :, ["patient_id", "encounter_id", "start_date", "type"]
+                        ].copy()
+                        flow = flow.rename(columns={"start_date": "start_datetime"})
+                        flow["start_datetime"] = parse_trinetx_datetime(
+                            flow["start_datetime"]
+                        )
+                        flow_writer.write(flow.loc[:, ENCOUNTER_FLOW_COLUMNS])
                     if element_writer.enabled:
                         element_writer.add_chunk(
                             chunk,
@@ -153,6 +171,9 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                     f"encounter normalized {path.name}",
                     rows_normalized,
                 )
+
+        if flow_writer.enabled and not flow_writer.written_paths:
+            flow_writer.write(pd.DataFrame(columns=ENCOUNTER_FLOW_COLUMNS))
 
         conflict_summary = reducer.conflict_summary()
         if conflict_summary["encounter_conflict_count"]:
@@ -207,6 +228,7 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                 )
 
     output_paths.extend(element_writer.written_paths)
+    output_paths.extend(flow_writer.written_paths)
 
     return output_paths
 

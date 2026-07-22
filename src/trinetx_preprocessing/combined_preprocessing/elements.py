@@ -122,6 +122,18 @@ OBSERVABILITY_COLUMNS = (
 )
 
 GAS_CANDIDATE_COLUMNS = ("patient_id", "encounter_id")
+ENCOUNTER_FLOW_COLUMNS = (
+    "patient_id",
+    "encounter_id",
+    "start_datetime",
+    "type",
+)
+ENCOUNTER_FLOW_DUCKDB_TYPES = {
+    "patient_id": "VARCHAR",
+    "encounter_id": "VARCHAR",
+    "start_datetime": "TIMESTAMP",
+    "type": "VARCHAR",
+}
 GAS_ELEMENT_IDS = {
     "source.arterial_pco2",
     "source.venous_pco2",

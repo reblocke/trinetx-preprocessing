@@ -27,6 +27,9 @@ second raw clinical-data scan.
 - `source_*`: one row per retained raw source record. Clinical records require
   at least one `include: true` element membership; duplicate records remain
   distinct through `source_record_id`, source file, and source row number.
+- `source_encounter_flow`: a compact complete encounter inventory containing
+  patient, encounter, start timestamp, and type for reproducible raw-universe
+  cohort-flow denominators without a second encounter-export scan.
 - `element_catalog`: one row per versioned historical derived element or
   additive source concept.
 - `element_rule`: one row per exact, prefix, or regular-expression matching

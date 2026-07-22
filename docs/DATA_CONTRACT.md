@@ -88,6 +88,11 @@ the canonical source tables. They are the shared input boundary for downstream
 studies; downstream cohort and phenotype decisions are not preprocessing
 elements.
 
+`source_encounter_flow` is the compact exception to concept-filtered clinical
+retention. It stores the four fields needed to reconstruct complete encounter
+flow denominators, including pre-2022 encounters outside the historical final
+output window.
+
 ## Public compatibility outputs
 
 The pipeline always writes:
