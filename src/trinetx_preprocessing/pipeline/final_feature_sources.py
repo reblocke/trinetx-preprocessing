@@ -29,7 +29,8 @@ from ..transform.procedure import PROCEDURE_CODE_GROUPS, PROCEDURE_COLUMNS
 from ..transform.vitals import VITAL_SIGN_RULES, VITALS_COLUMNS
 
 LAB_SOURCE_NAME = "__normalized_labs__"
-FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 25_000
+FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 100_000
+FINAL_FEATURE_BUFFER_ROWS_PER_BUCKET = 10_000
 SOURCE_COLUMNS = [
     "source_name",
     "patient_id",
@@ -310,6 +311,7 @@ def _build_feature_domain_worker(
         key_columns=["patient_id"],
         bucket_count=config.storage.analysis_bucket_count,
         row_group_size=config.storage.parquet_row_group_size,
+        buffer_rows_per_bucket=FINAL_FEATURE_BUFFER_ROWS_PER_BUCKET,
         cleanup_context=f"Final {domain} feature index scratch",
     )
     store.__enter__()

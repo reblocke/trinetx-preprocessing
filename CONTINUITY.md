@@ -293,13 +293,15 @@
 - The `100,000`-row benchmark still crossed the gate during cross-domain finalization (`7,113,310,208` current bytes at `40m17s`) and was stopped. Because macOS allocator trimming did not return retained NumPy/Pandas pages, each feature domain now builds sequentially in a fresh spawned worker; the parent retains only read-only partitions and records worker peak RSS. Parent/child monitoring and benchmark provenance include descendants.
 - The completed process-isolated benchmark indexed all `1,544,687,650` rows from five source files in `3,122.640 s` and cleaned scratch, but a short-lived worker spike reached `7,769.078 MiB`; coarse process-family monitoring did not capture that maximum. The gate therefore remains failed.
 - Final-feature indexing now caps batches at `25,000` rows and exposes per-domain worker row/file/peak metrics so subsequent evidence identifies the exact memory owner. Focused tests, `git diff --check`, Ruff, and all `368` tests pass in `363.46 s`.
+- Five-second descendant sampling rejected the `25,000`-row attempt six minutes into the first domain at `7,180,632,064` bytes (`6,848.0 MiB`), identifying vitals as the peak owner. The run was stopped with `SIGTERM`; one recognized `2,296,740,947`-byte scratch root was deleted and the external root rechecked at zero.
+- The cause is millions of tiny row groups: each source chunk wrote one small group to each of 256 persistent writers. Final-feature stores now buffer `10,000` rows per bucket before writing and restore `100,000`-row source chunks, bounding buffered data near 2.56 million rows while sharply reducing Parquet metadata. Focused tests, `git diff --check`, Ruff, and all `370` tests pass in `361.59 s`.
 
 ## Now
-- The first full run and four isolated feature benchmarks failed the `6,238 MiB` memory gate without correctness failures. Sequential per-domain process isolation is correct but its completed worker peak was `7,769.078 MiB`.
-- A `25,000`-row final-feature batch cap plus per-domain worker metrics passes all local gates and is ready for an exact-code-state full-scale benchmark.
+- The first full run and five isolated feature benchmarks failed the `6,238 MiB` memory gate without correctness failures. Sequential process isolation identified vitals as the current peak domain.
+- Bounded per-bucket buffering fixes the measured row-group metadata growth and passes all local gates; an exact-code-state vitals-only benchmark is pending.
 
 ## Next
-- Run the `25,000`-row isolated feature-index benchmark. If every authoritative worker peak is at or below `6,238 MiB`, rerun the full unified build from a clean current code state and complete parity, completeness, performance, and hygiene gates; otherwise optimize the named peak domain before another full run. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
+- Run the buffered vitals-only benchmark, then the complete five-domain feature-index benchmark if vitals stays below `6,238 MiB`. On a complete pass, rerun the full unified build from a clean current code state and finish parity, completeness, performance, and hygiene gates. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
 - Run an external full-data unified build and benchmark, capture the historical compatibility baseline, and require exact 36-file parity plus element-completeness evidence before merge acceptance.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

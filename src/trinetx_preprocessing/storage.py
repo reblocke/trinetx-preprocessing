@@ -47,21 +47,27 @@ class PartitionedParquetStore:
         key_columns: Sequence[str],
         bucket_count: int = 256,
         row_group_size: int = 250_000,
+        buffer_rows_per_bucket: int | None = None,
         cleanup_context: str | None = None,
     ) -> None:
         if bucket_count <= 0 or bucket_count & (bucket_count - 1):
             raise ValueError("bucket_count must be a positive power of two.")
         if row_group_size <= 0:
             raise ValueError("row_group_size must be positive.")
+        if buffer_rows_per_bucket is not None and buffer_rows_per_bucket <= 0:
+            raise ValueError("buffer_rows_per_bucket must be positive.")
         self.work_dir = work_dir
         self.prefix = prefix
         self.key_columns = tuple(key_columns)
         self.bucket_count = bucket_count
         self.row_group_size = row_group_size
+        self.buffer_rows_per_bucket = buffer_rows_per_bucket
         self.cleanup_context = cleanup_context or f"{prefix} scratch"
         self.path: Path | None = None
         self._writers: dict[int, object] = {}
         self._paths: dict[int, Path] = {}
+        self._buffers: dict[int, list[pd.DataFrame]] = {}
+        self._buffered_rows: dict[int, int] = {}
         self._schema = None
         self._sealed = False
 
@@ -96,7 +102,15 @@ class PartitionedParquetStore:
             bucket_count=self.bucket_count,
         )
         for bucket, rows in frame.groupby(bucket_ids, sort=False):
-            self._write_bucket(int(bucket), rows)
+            bucket_number = int(bucket)
+            if self.buffer_rows_per_bucket is None:
+                self._write_bucket(bucket_number, rows)
+                continue
+            self._buffers.setdefault(bucket_number, []).append(rows)
+            buffered_rows = self._buffered_rows.get(bucket_number, 0) + len(rows)
+            self._buffered_rows[bucket_number] = buffered_rows
+            if buffered_rows >= self.buffer_rows_per_bucket:
+                self._flush_bucket(bucket_number)
 
     def iter_frames(
         self,
@@ -137,6 +151,8 @@ class PartitionedParquetStore:
 
         if self._sealed:
             return
+        for bucket in list(self._buffers):
+            self._flush_bucket(bucket)
         writers_closed = 0
         while self._writers:
             _, writer = self._writers.popitem()
@@ -147,6 +163,17 @@ class PartitionedParquetStore:
                 release_unused_arrow_memory()
         self._sealed = True
         release_unused_tabular_memory()
+
+    def _flush_bucket(self, bucket: int) -> None:
+        frames = self._buffers.pop(bucket, None)
+        self._buffered_rows.pop(bucket, None)
+        if not frames:
+            return
+        if len(frames) == 1:
+            frame = frames[0]
+        else:
+            frame = pd.concat(frames, ignore_index=True)
+        self._write_bucket(bucket, frame)
 
     def disk_size_bytes(self) -> int:
         """Return the current physical size of populated partitions."""
