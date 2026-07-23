@@ -211,6 +211,7 @@ def test_partitioned_parquet_store_rejects_writes_after_read(tmp_path: Path) -> 
 
 def test_partitioned_parquet_store_releases_each_writer_while_sealing(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = PartitionedParquetStore(
         tmp_path,
@@ -229,10 +230,18 @@ def test_partitioned_parquet_store_releases_each_writer_while_sealing(
             closed.append(self.bucket)
 
     store._writers = {bucket: _Writer(bucket) for bucket in range(4)}
+    arrow_releases: list[None] = []
+    monkeypatch.setattr(storage, "_ARROW_RELEASE_INTERVAL", 2)
+    monkeypatch.setattr(
+        storage,
+        "release_unused_arrow_memory",
+        lambda: arrow_releases.append(None),
+    )
 
     store.seal()
 
     assert sorted(closed) == [0, 1, 2, 3]
+    assert arrow_releases == [None, None, None]
     assert store._writers == {}
     assert store._sealed is True
 

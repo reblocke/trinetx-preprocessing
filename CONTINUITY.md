@@ -288,9 +288,10 @@
 - The first full unified run completed every raw-domain scan and RFS in `10h00m`, then exceeded the `6,238 MiB` gate during lab feature indexing: current RSS reached `7,436,419,072` bytes at `13h09m`. It was stopped cleanly; published output remained untouched, eight scratch roots (`17,495,581,306` bytes) were inventoried/deleted, and the completed work tables plus aggregate monitor evidence were preserved externally.
 - The memory cause was overlapping 256-way cohort and feature Parquet writers plus allocator retention across stages. Cohort writers now seal before feature indexing, partition stores release unused Arrow/mimalloc pages when sealed, and pipeline stage boundaries release unused tabular memory.
 - The memory-lifecycle fix passes `git diff --check`, Ruff, `79` focused tests, and all `366` tests in `332.37 s` with external temp/cache.
+- The first isolated feature-index benchmark processed `1,544,687,650` rows in `2,398.841 s` and cleaned scratch, but authoritative peak RSS was `7,355.172 MiB`. Minute sampling remained below the gate, isolating a short spike while 256 writers sealed. Writer sealing now releases unused Arrow pages every 16 closes; the repeat benchmark is pending.
 
 ## Now
-- The unified full run exposed and cleanly stopped on a final-assembly memory regression after all raw-domain scans passed. The memory-lifecycle fix passes the complete `366`-test local gate; no pipeline, pytest, or monitor process is active.
+- The first full run and first isolated feature benchmark both failed the `6,238 MiB` memory gate without correctness failures. Incremental Arrow release during writer sealing passes `79` focused tests; no pipeline, pytest, or monitor process is active.
 
 ## Next
 - Commit/push the memory fix and obtain exact-head CI/Codex review. Run an isolated feature-index benchmark against preserved work, then rerun the full unified build from a clean current code state and complete parity, completeness, performance, and hygiene gates. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.

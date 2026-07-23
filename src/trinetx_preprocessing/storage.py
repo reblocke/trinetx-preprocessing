@@ -16,18 +16,24 @@ from .io.csv import iter_csv
 
 CSV_FORMAT = "csv"
 PARQUET_FORMAT = "parquet"
+_ARROW_RELEASE_INTERVAL = 16
+
+
+def release_unused_arrow_memory() -> None:
+    """Best-effort return unused Arrow allocator pages to the operating system."""
+
+    try:
+        import pyarrow as pa
+        pa.default_memory_pool().release_unused()
+    except (ImportError, RuntimeError):
+        return
 
 
 def release_unused_tabular_memory() -> None:
     """Best-effort return unused Python and Arrow pages to the operating system."""
 
     gc.collect()
-    try:
-        import pyarrow as pa
-        pa.default_memory_pool().release_unused()
-    except (ImportError, RuntimeError):
-        # Memory trimming must not mask a stage failure or prevent scratch cleanup.
-        return
+    release_unused_arrow_memory()
 
 
 class PartitionedParquetStore:
@@ -131,10 +137,14 @@ class PartitionedParquetStore:
 
         if self._sealed:
             return
+        writers_closed = 0
         while self._writers:
             _, writer = self._writers.popitem()
             writer.close()
             del writer
+            writers_closed += 1
+            if writers_closed % _ARROW_RELEASE_INTERVAL == 0:
+                release_unused_arrow_memory()
         self._sealed = True
         release_unused_tabular_memory()
 
