@@ -284,12 +284,16 @@
 - Combined run IDs now exclude volatile stage timestamps while retaining code/config/source/catalog identity, and both private work/output roots are rejected inside Git worktrees.
 - Medication-ingredient exports are captured into the unified source table without entering historical medication feature reduction, preserving both additive coverage and the 36-file contract.
 - Final local gates pass with `350` tests, Ruff, and `git diff --check`. The actual synthetic CLI build published a valid DuckDB plus 36 compatibility files; aggregate baseline/parity/completeness scripts passed, and the benchmark wrapper completed in `5.138 s` with `226.578 MB` peak RSS on the header-only onboarding fixture.
+- PR #8 implementation commit `9dd2859` passes Linux CI, all `365` local tests, and an exact-head GitHub Codex review with no new findings.
+- The first full unified run completed every raw-domain scan and RFS in `10h00m`, then exceeded the `6,238 MiB` gate during lab feature indexing: current RSS reached `7,436,419,072` bytes at `13h09m`. It was stopped cleanly; published output remained untouched, eight scratch roots (`17,495,581,306` bytes) were inventoried/deleted, and the completed work tables plus aggregate monitor evidence were preserved externally.
+- The memory cause was overlapping 256-way cohort and feature Parquet writers plus allocator retention across stages. Cohort writers now seal before feature indexing, partition stores release unused Arrow/mimalloc pages when sealed, and pipeline stage boundaries release unused tabular memory.
+- The memory-lifecycle fix passes `git diff --check`, Ruff, `79` focused tests, and all `366` tests in `332.37 s` with external temp/cache.
 
 ## Now
-- All seven local review findings are fixed. PR #8 Codex review found one P2 GLP-1 flow-denominator gap; the pipeline now retains a complete four-column encounter-flow inventory during the existing scan, including pre-2022 non-gas encounters. Direct/adapter parity passes in CSV and Parquet modes, and the post-review gate passes `git diff --check`, Ruff, and all `365` tests in `363.66 s`; no pipeline, pytest, or monitor process is active.
+- The unified full run exposed and cleanly stopped on a final-assembly memory regression after all raw-domain scans passed. The memory-lifecycle fix passes the complete `366`-test local gate; no pipeline, pytest, or monitor process is active.
 
 ## Next
-- Push the PR #8 review fix and obtain a clean re-review, then execute the external full-data unified build, parity, completeness, performance, and hygiene gates. The approved corrected baseline is captured externally with 36 tables and 6,949,511 rows.
+- Commit/push the memory fix and obtain exact-head CI/Codex review. Run an isolated feature-index benchmark against preserved work, then rerun the full unified build from a clean current code state and complete parity, completeness, performance, and hygiene gates. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
 - Run an external full-data unified build and benchmark, capture the historical compatibility baseline, and require exact 36-file parity plus element-completeness evidence before merge acceptance.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

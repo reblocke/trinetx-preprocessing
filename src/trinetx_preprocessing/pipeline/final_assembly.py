@@ -235,6 +235,8 @@ def run_final_assembly(
                     cohort_store.add_frame(base)
                     cohort_rows_indexed += len(base)
 
+        # Do not retain 256 cohort writers while opening feature-domain writers.
+        cohort_store.seal()
         feature_sources = stack.enter_context(
             FinalFeatureSourceStore(config, chunksize=chunksize)
         )

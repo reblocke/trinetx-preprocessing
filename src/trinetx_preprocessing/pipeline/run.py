@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..config import Config
 from ..profiling import StageTimer
+from ..storage import release_unused_tabular_memory
 from ..work_manifest import (
     initialize_work_manifest,
     mark_stage_complete,
@@ -54,7 +55,10 @@ def run_pipeline(
         logger.info("Starting %s stage", name)
         mark_stage_started(config, name)
         with StageTimer(name, timings=timings, logger=logger):
-            paths = list(stage())
+            try:
+                paths = list(stage())
+            finally:
+                release_unused_tabular_memory()
         mark_stage_complete(
             config,
             name,

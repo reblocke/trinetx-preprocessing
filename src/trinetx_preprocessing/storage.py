@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import tempfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -15,6 +16,18 @@ from .io.csv import iter_csv
 
 CSV_FORMAT = "csv"
 PARQUET_FORMAT = "parquet"
+
+
+def release_unused_tabular_memory() -> None:
+    """Best-effort return unused Python and Arrow pages to the operating system."""
+
+    gc.collect()
+    try:
+        import pyarrow as pa
+        pa.default_memory_pool().release_unused()
+    except (ImportError, RuntimeError):
+        # Memory trimming must not mask a stage failure or prevent scratch cleanup.
+        return
 
 
 class PartitionedParquetStore:
@@ -123,6 +136,7 @@ class PartitionedParquetStore:
             writer.close()
             del writer
         self._sealed = True
+        release_unused_tabular_memory()
 
     def disk_size_bytes(self) -> int:
         """Return the current physical size of populated partitions."""

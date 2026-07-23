@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from trinetx_preprocessing import storage
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
@@ -234,6 +235,29 @@ def test_partitioned_parquet_store_releases_each_writer_while_sealing(
     assert sorted(closed) == [0, 1, 2, 3]
     assert store._writers == {}
     assert store._sealed is True
+
+
+def test_partitioned_parquet_store_releases_unused_memory_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    releases: list[None] = []
+    monkeypatch.setattr(
+        storage,
+        "release_unused_tabular_memory",
+        lambda: releases.append(None),
+    )
+    store = PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-partitions-",
+        key_columns=["patient_id"],
+        bucket_count=2,
+    )
+
+    store.seal()
+    store.seal()
+
+    assert releases == [None]
 
 
 def test_partitioned_key_lookup_queries_and_deduplicates_membership(
