@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from trinetx_preprocessing.config import (
     ChunkingConfig,
@@ -86,6 +87,7 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
 
         assert store.files_scanned == 3
         assert store.rows_indexed == 3
+        assert store.peak_worker_rss_mb > 0
         assert bmi["value"].tolist() == [42.0]
         assert labs["lab_result_num_val"].tolist() == [55.0]
         assert diagnosis["principal_diagnosis_indicator"].tolist() == ["P"]
@@ -105,6 +107,22 @@ def test_final_feature_source_store_caps_index_chunks(tmp_path: Path) -> None:
         == FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
     )
     assert FinalFeatureSourceStore(config, chunksize=10_000).chunksize == 10_000
+
+
+def test_final_feature_source_worker_failure_cleans_scratch(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    config.work_dir.mkdir()
+    write_work_table(
+        config,
+        "analysis_vital_features.csv",
+        pd.DataFrame({"source_name": ["value_BMI.csv"], "value": [42.0]}),
+    )
+
+    with pytest.raises(RuntimeError, match="Final vitals feature index failed"):
+        with FinalFeatureSourceStore(config, chunksize=1):
+            pass
+
+    assert not list(config.work_dir.glob(".trinetx-final-feature-sources-*"))
 
 
 def test_final_feature_bucket_materializes_sources_in_observed_order() -> None:

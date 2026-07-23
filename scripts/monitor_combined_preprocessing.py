@@ -69,23 +69,47 @@ def main() -> int:
 
 def _process_status(pid: int) -> dict[str, object]:
     completed = subprocess.run(
-        ["ps", "-o", "pid=,etime=,rss=,%cpu=,state=", "-p", str(pid)],
+        ["ps", "-axo", "pid=,ppid=,etime=,rss=,%cpu=,state="],
         capture_output=True,
         text=True,
         check=False,
     )
-    line = completed.stdout.strip()
-    if not line:
+    records: dict[int, tuple[int, str, int, float, str]] = {}
+    for line in completed.stdout.splitlines():
+        fields = line.split(None, 5)
+        if len(fields) != 6:
+            continue
+        process_id, parent_id = int(fields[0]), int(fields[1])
+        records[process_id] = (
+            parent_id,
+            fields[2],
+            int(fields[3]),
+            float(fields[4]),
+            fields[5],
+        )
+    root = records.get(pid)
+    if root is None:
         return {"pid": pid, "running": False, "exit_observed": True}
-    fields = line.split(None, 4)
+    descendants: set[int] = set()
+    frontier = {pid}
+    while frontier:
+        children = {
+            process_id
+            for process_id, record in records.items()
+            if record[0] in frontier and process_id not in descendants
+        }
+        descendants.update(children)
+        frontier = children
+    process_ids = {pid, *descendants}
     return {
         "pid": pid,
         "running": True,
         "exit_observed": False,
-        "elapsed": fields[1],
-        "rss_bytes": int(fields[2]) * 1024,
-        "cpu_percent": float(fields[3]),
-        "state": fields[4],
+        "elapsed": root[1],
+        "rss_bytes": sum(records[item][2] for item in process_ids) * 1024,
+        "cpu_percent": round(sum(records[item][3] for item in process_ids), 1),
+        "state": root[4],
+        "worker_pids": sorted(descendants),
     }
 
 

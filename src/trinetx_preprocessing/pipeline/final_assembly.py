@@ -293,6 +293,7 @@ def run_final_assembly(
             "feature_source_files_scanned": feature_sources.files_scanned,
             "feature_source_file_names": sorted(feature_sources.source_files_scanned),
             "feature_source_rows_indexed": feature_sources.rows_indexed,
+            "feature_source_peak_worker_rss_mb": feature_sources.peak_worker_rss_mb,
             "cohort_index_bytes": cohort_store.disk_size_bytes(),
             "feature_source_index_bytes": feature_sources.disk_size_bytes(),
             "rows_written": {

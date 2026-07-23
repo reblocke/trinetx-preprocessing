@@ -80,7 +80,10 @@ def _directory_size(path: Path) -> int:
 
 
 def _peak_rss_mb() -> float:
-    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    value = max(
+        resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+        resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
+    )
     divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
     return round(value / divisor, 3)
 
