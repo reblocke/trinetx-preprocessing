@@ -289,9 +289,10 @@
 - The memory cause was overlapping 256-way cohort and feature Parquet writers plus allocator retention across stages. Cohort writers now seal before feature indexing, partition stores release unused Arrow/mimalloc pages when sealed, and pipeline stage boundaries release unused tabular memory.
 - The memory-lifecycle fix passes `git diff --check`, Ruff, `79` focused tests, and all `366` tests in `332.37 s` with external temp/cache.
 - The first isolated feature-index benchmark processed `1,544,687,650` rows in `2,398.841 s` and cleaned scratch, but authoritative peak RSS was `7,355.172 MiB`. Minute sampling remained below the gate, isolating a short spike while 256 writers sealed. Writer sealing now releases unused Arrow pages every 16 closes; the repeat benchmark is pending.
+- The incremental-release repeat completed in `2,314.211 s` but still peaked at `7,243.625 MiB`; seal-time trimming alone is rejected as insufficient. Final-feature indexing now caps only its Parquet batches at `100,000` rows while preserving 256 output buckets and global observed order; a third benchmark is pending.
 
 ## Now
-- The first full run and first isolated feature benchmark both failed the `6,238 MiB` memory gate without correctness failures. Incremental Arrow release during writer sealing passes `79` focused tests; no pipeline, pytest, or monitor process is active.
+- The first full run and two isolated feature benchmarks failed the `6,238 MiB` memory gate without correctness failures. A targeted `100,000`-row final-feature batch cap is implemented for the next benchmark; no pipeline, pytest, or monitor process is active.
 
 ## Next
 - Commit/push the memory fix and obtain exact-head CI/Codex review. Run an isolated feature-index benchmark against preserved work, then rerun the full unified build from a clean current code state and complete parity, completeness, performance, and hygiene gates. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.

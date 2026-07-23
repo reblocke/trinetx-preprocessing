@@ -13,6 +13,7 @@ from trinetx_preprocessing.config import (
     StorageConfig,
 )
 from trinetx_preprocessing.pipeline.final_feature_sources import (
+    FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS,
     LAB_SOURCE_NAME,
     SOURCE_COLUMNS,
     FinalFeatureBucket,
@@ -90,6 +91,20 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
         assert diagnosis["principal_diagnosis_indicator"].tolist() == ["P"]
 
     assert not list(config.work_dir.glob(".trinetx-final-feature-sources-*"))
+
+
+def test_final_feature_source_store_caps_index_chunks(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    assert (
+        FinalFeatureSourceStore(config, chunksize=250_000).chunksize
+        == FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
+    )
+    assert (
+        FinalFeatureSourceStore(config, chunksize=None).chunksize
+        == FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
+    )
+    assert FinalFeatureSourceStore(config, chunksize=10_000).chunksize == 10_000
 
 
 def test_final_feature_bucket_materializes_sources_in_observed_order() -> None:

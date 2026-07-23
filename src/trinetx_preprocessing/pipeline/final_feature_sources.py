@@ -24,6 +24,7 @@ from ..transform.procedure import PROCEDURE_CODE_GROUPS, PROCEDURE_COLUMNS
 from ..transform.vitals import VITAL_SIGN_RULES, VITALS_COLUMNS
 
 LAB_SOURCE_NAME = "__normalized_labs__"
+FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 100_000
 SOURCE_COLUMNS = [
     "source_name",
     "patient_id",
@@ -128,7 +129,11 @@ class FinalFeatureSourceStore:
 
     def __init__(self, config: Config, *, chunksize: int | None) -> None:
         self.config = config
-        self.chunksize = chunksize
+        requested_chunksize = chunksize or FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
+        self.chunksize = min(
+            requested_chunksize,
+            FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS,
+        )
         self._stack = ExitStack()
         self._stores: dict[str, PartitionedParquetStore] = {}
         self._source_domains: dict[str, str] = {}
