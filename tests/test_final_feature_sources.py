@@ -88,6 +88,9 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
         assert store.files_scanned == 3
         assert store.rows_indexed == 3
         assert store.peak_worker_rss_mb > 0
+        assert set(store.worker_metrics) == {"vitals", "labs", "diagnosis"}
+        assert store.worker_metrics["vitals"]["rows_indexed"] == 1
+        assert store.worker_metrics["vitals"]["peak_rss_mb"] > 0
         assert bmi["value"].tolist() == [42.0]
         assert labs["lab_result_num_val"].tolist() == [55.0]
         assert diagnosis["principal_diagnosis_indicator"].tolist() == ["P"]

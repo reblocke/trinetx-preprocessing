@@ -29,7 +29,7 @@ from ..transform.procedure import PROCEDURE_CODE_GROUPS, PROCEDURE_COLUMNS
 from ..transform.vitals import VITAL_SIGN_RULES, VITALS_COLUMNS
 
 LAB_SOURCE_NAME = "__normalized_labs__"
-FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 100_000
+FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 25_000
 SOURCE_COLUMNS = [
     "source_name",
     "patient_id",
@@ -177,6 +177,7 @@ class FinalFeatureSourceStore:
         self.files_scanned = 0
         self.source_files_scanned: list[str] = []
         self.peak_worker_rss_mb = 0.0
+        self.worker_metrics: dict[str, dict[str, object]] = {}
 
     def __enter__(self) -> "FinalFeatureSourceStore":
         self.config.work_dir.mkdir(parents=True, exist_ok=True)
@@ -266,6 +267,11 @@ class FinalFeatureSourceStore:
                 self.peak_worker_rss_mb,
                 float(metadata["peak_rss_mb"]),
             )
+            self.worker_metrics[domain] = {
+                "rows_indexed": rows_indexed,
+                "files_scanned": int(metadata["files_scanned"]),
+                "peak_rss_mb": float(metadata["peak_rss_mb"]),
+            }
             for source_name in metadata["source_names"]:
                 self._source_domains[str(source_name)] = domain
             self._stores[domain] = _DomainPartitionReader(
