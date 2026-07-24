@@ -474,6 +474,22 @@ def test_combined_build_exports_exact_historical_contract(tmp_path: Path) -> Non
             """
         ).fetchone()
         assert runtime == (3072, 1)
+        duplicate_observability_keys = connection.execute(
+            """
+            SELECT count(*)
+            FROM (
+                SELECT
+                    patient_id,
+                    logical_domain,
+                    event_datetime,
+                    timestamp_precision
+                FROM source_observability_event
+                GROUP BY ALL
+                HAVING count(*) > 1
+            )
+            """
+        ).fetchone()[0]
+        assert duplicate_observability_keys == 0
     finally:
         connection.close()
 

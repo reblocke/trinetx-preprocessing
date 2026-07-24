@@ -1531,3 +1531,21 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/config.py`,
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `docs/CONFIG.md`.
+
+### 2026-07-24 — Aggregate source observability one domain at a time
+- Date: 2026-07-24
+- Decision: Materialize `source_observability_event` through one grouped insert
+  per logical domain instead of one global `UNION ALL` aggregation.
+- Context: The global aggregation exhausted DuckDB's `3072 MiB` internal pool
+  after the bounded historical encounter anti-join had completed. Logical
+  domains are disjoint across the five source files, so no grouping key can
+  span files.
+- Rationale: Domain-local reduction is algebraically equivalent and bounds the
+  largest aggregation to one source file while retaining a single canonical
+  output table.
+- Consequences: Full-scale evidence produced `687,903,128` unique rows and an
+  aggregate event count of `8,162,368,161`, with zero duplicate keys and a
+  `4,815,470,592`-byte observed process peak.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.

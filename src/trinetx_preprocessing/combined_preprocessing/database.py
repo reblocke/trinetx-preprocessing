@@ -481,31 +481,44 @@ def _load_observability_events(
     connection: duckdb.DuckDBPyConnection,
     config: Config,
 ) -> None:
-    sources: list[str] = []
+    connection.execute(
+        """
+        CREATE TABLE source_observability_event (
+            patient_id VARCHAR,
+            logical_domain VARCHAR,
+            event_datetime TIMESTAMP,
+            timestamp_precision VARCHAR,
+            event_count UBIGINT
+        )
+        """
+    )
     for domain in CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN:
         path = resolve_work_table(config, f"combined_observability_{domain}.csv")
         if not path.is_file():
             raise FileNotFoundError(
                 f"Unified observability table is missing for {domain}: {path}"
             )
-        sources.append(f"SELECT * FROM {_work_path_source(path)}")
-    connection.execute(
-        """
-        CREATE TABLE source_observability_event AS
-        SELECT
-            patient_id,
-            logical_domain,
-            try_cast(event_datetime AS TIMESTAMP) AS event_datetime,
-            timestamp_precision,
-            sum(try_cast(event_count AS UBIGINT))::UBIGINT AS event_count
-        FROM (
-        """
-        + " UNION ALL ".join(sources)
-        + """
+        source = _work_path_source(path)
+        connection.execute(
+            """
+            INSERT INTO source_observability_event
+            SELECT
+                patient_id,
+                logical_domain,
+                try_cast(event_datetime AS TIMESTAMP) AS event_datetime,
+                timestamp_precision,
+                sum(try_cast(event_count AS UBIGINT))::UBIGINT AS event_count
+            FROM
+            """
+            + source
+            + """
+            GROUP BY
+                patient_id,
+                logical_domain,
+                event_datetime,
+                timestamp_precision
+            """
         )
-        GROUP BY patient_id, logical_domain, event_datetime, timestamp_precision
-        """
-    )
 
 
 def _create_source_encounter_from_work(
