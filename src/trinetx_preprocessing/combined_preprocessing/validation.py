@@ -18,6 +18,7 @@ from .contract import (
 )
 from .database import open_combined_database
 from .elements import (
+    CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN,
     ENCOUNTER_FLOW_COLUMNS,
     ENCOUNTER_FLOW_DUCKDB_TYPES,
     SOURCE_EVENT_COLUMNS,
@@ -186,33 +187,36 @@ def validate_preprocessed_database(
                         f"Stored compatibility schema mismatch: {output.key}"
                     )
 
-        source_union = " UNION ALL ".join(
-            f"SELECT source_record_id FROM {_identifier(table_name)}"
-            for table_name in SOURCE_TABLE_BY_DOMAIN.values()
-        )
-        orphan_memberships = int(
-            connection.execute(
-                "SELECT count(*) FROM element_membership AS membership "
-                f"LEFT JOIN ({source_union}) AS source USING (source_record_id) "
-                "WHERE source.source_record_id IS NULL"
-            ).fetchone()[0]
-        )
+        orphan_memberships = _count_orphan_memberships(connection)
         if orphan_memberships:
             errors.append(
                 f"element_membership contains {orphan_memberships} orphan rows."
             )
 
-        duplicate_source_ids = int(
-            connection.execute(
-                "SELECT count(*) FROM ("
-                "SELECT source_record_id FROM ("
-                + source_union
-                + ") GROUP BY source_record_id HAVING count(*) > 1)"
-            ).fetchone()[0]
-        )
+        duplicate_source_ids = _count_duplicate_source_ids(connection)
         if duplicate_source_ids:
             errors.append(
                 f"Source tables contain {duplicate_source_ids} duplicate record IDs."
+            )
+
+        wrong_source_domains = _count_wrong_source_domains(connection)
+        if wrong_source_domains:
+            errors.append(
+                f"Source tables contain {wrong_source_domains} rows assigned to "
+                "the wrong logical domain."
+            )
+
+        reused_source_files = int(
+            connection.execute(
+                "SELECT count(*) FROM ("
+                "SELECT path FROM source_file_inventory "
+                "GROUP BY path HAVING count(DISTINCT domain) > 1)"
+            ).fetchone()[0]
+        )
+        if reused_source_files:
+            errors.append(
+                f"source_file_inventory assigns {reused_source_files} files to "
+                "multiple domains."
             )
 
         for domain, table_name in SOURCE_TABLE_BY_DOMAIN.items():
@@ -342,6 +346,57 @@ def _table_columns(
             f"PRAGMA table_info({_sql_string(table_name)})"
         ).fetchall()
     )
+
+
+def _count_orphan_memberships(connection: duckdb.DuckDBPyConnection) -> int:
+    allowed_domains = tuple(CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN)
+    placeholders = ", ".join("?" for _ in allowed_domains)
+    orphan_count = int(
+        connection.execute(
+            "SELECT count(*) FROM element_membership "
+            f"WHERE logical_domain IS NULL OR logical_domain NOT IN ({placeholders})",
+            list(allowed_domains),
+        ).fetchone()[0]
+    )
+    for domain in allowed_domains:
+        table_name = SOURCE_TABLE_BY_DOMAIN[domain]
+        orphan_count += int(
+            connection.execute(
+                "SELECT count(*) FROM element_membership AS membership "
+                f"LEFT JOIN {_identifier(table_name)} AS source "
+                "USING (source_record_id) "
+                "WHERE membership.logical_domain = ? "
+                "AND source.source_record_id IS NULL",
+                [domain],
+            ).fetchone()[0]
+        )
+    return orphan_count
+
+
+def _count_duplicate_source_ids(connection: duckdb.DuckDBPyConnection) -> int:
+    duplicate_count = 0
+    for table_name in SOURCE_TABLE_BY_DOMAIN.values():
+        duplicate_count += int(
+            connection.execute(
+                "SELECT count(*) FROM ("
+                f"SELECT source_record_id FROM {_identifier(table_name)} "
+                "GROUP BY source_record_id HAVING count(*) > 1)"
+            ).fetchone()[0]
+        )
+    return duplicate_count
+
+
+def _count_wrong_source_domains(connection: duckdb.DuckDBPyConnection) -> int:
+    wrong_domain_count = 0
+    for domain, table_name in SOURCE_TABLE_BY_DOMAIN.items():
+        wrong_domain_count += int(
+            connection.execute(
+                f"SELECT count(*) FROM {_identifier(table_name)} "
+                "WHERE logical_domain IS NULL OR logical_domain <> ?",
+                [domain],
+            ).fetchone()[0]
+        )
+    return wrong_domain_count
 
 
 def _table_schema(

@@ -1566,7 +1566,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   volume and take longer, but they retain deterministic output semantics and a
   bounded memory policy. AppleDouble metadata files are removed after the
   sidecar manifest is written and immediately before the complete product is
-  atomically published.
+  atomically published. Source membership and uniqueness checks execute one
+  logical domain at a time; wrong-domain rows and source files assigned to
+  multiple domains fail validation explicitly.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`.

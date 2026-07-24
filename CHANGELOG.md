@@ -220,6 +220,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Removed macOS AppleDouble metadata files from the staging tree immediately
   before atomic publication so the canonical product contains only contracted
   outputs.
+- Replaced global all-domain source-integrity validation with equivalent
+  domain-local orphan and duplicate checks plus explicit logical-domain and
+  cross-domain source-file guards.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a
