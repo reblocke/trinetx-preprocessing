@@ -223,6 +223,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Replaced global all-domain source-integrity validation with equivalent
   domain-local orphan and duplicate checks plus explicit logical-domain and
   cross-domain source-file guards.
+- Disabled insertion-order preservation for read-only combined-product
+  sessions so large exact validation aggregates can spill within the configured
+  memory limit; canonical database creation retains ordered insertion.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a

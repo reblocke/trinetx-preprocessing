@@ -51,6 +51,7 @@ def open_combined_database(
     *,
     read_only: bool = False,
     memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+    preserve_insertion_order: bool = False,
 ) -> Iterator[duckdb.DuckDBPyConnection]:
     """Open a combined-product database with bounded, cleaned spill storage."""
 
@@ -60,7 +61,10 @@ def open_combined_database(
     try:
         connection.execute("SET memory_limit = ?", [f"{memory_limit_mib}MiB"])
         connection.execute("SET temp_directory = ?", [str(spill_path)])
-        connection.execute("SET preserve_insertion_order = true")
+        connection.execute(
+            "SET preserve_insertion_order = ?",
+            [preserve_insertion_order],
+        )
         connection.execute("SET threads = ?", [COMBINED_DUCKDB_THREADS])
         yield connection
     finally:
@@ -96,6 +100,7 @@ def create_combined_database(
     with open_combined_database(
         database_path,
         memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+        preserve_insertion_order=True,
     ) as connection:
         _create_manifest_table(
             connection,

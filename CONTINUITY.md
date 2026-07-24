@@ -304,13 +304,14 @@
 - All combined-product DuckDB connections now share the configured memory limit, one thread, unique adjacent spill, and strict spill cleanup. `git diff --check`, Ruff, the 22-test combined-product module, and all `378` tests pass while the completed database run finishes aggregate validation.
 - Publication now removes AppleDouble metadata from the complete staging tree immediately before the atomic directory swap; an integration test proves staged sidecars do not enter the public product.
 - The old validation query unioned every source table before checking membership integrity and generated at least `37 GiB` of spill. Validation now checks orphan memberships and duplicate source IDs one logical domain at a time, while separately rejecting wrong-domain rows and source files assigned to multiple domains.
+- Exact-head bounded export wrote all 36 compatibility tables in `273.872 s` and held process-family peak RSS to `4,685,922,304` bytes, but validation failed cleanly in the largest duplicate-ID aggregation because insertion-order preservation prevented further spill at the `3072 MiB` internal limit. Read-only sessions now disable insertion-order preservation; canonical database creation remains ordered.
 
 ## Now
-- Exact-head worker PID `18999` remains active against the completed staged database, currently hashing exported compatibility CSVs. It is being allowed to finish to preserve correctness/publication evidence despite the already-recorded post-creation memory-gate miss.
-- Verify the shared bounded-connection patch locally, then rerun compatibility export and downstream validation only from the completed database under process-family monitoring.
+- No combined build, export, validation, or monitor process is active.
+- Verify the read-only insertion-order patch locally, then resume validation only from the completed database and existing exact-head 36-file export under process-family monitoring.
 
 ## Next
-- Validate bounded compatibility export and post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve, then finish exact 36-file parity, element completeness, scratch, and repository-hygiene gates.
+- Validate post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve without repeating the already-passing export, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.
 - Request exact-head Codex review after evidence is complete. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

@@ -134,14 +134,16 @@ def test_combined_database_session_bounds_runtime_and_cleans_spill(
     database_path = tmp_path / "bounded.duckdb"
 
     with open_combined_database(database_path, memory_limit_mib=64) as connection:
-        memory_limit, threads, spill_path = connection.execute(
+        memory_limit, threads, spill_path, preserve_order = connection.execute(
             "SELECT current_setting('memory_limit'), current_setting('threads'), "
-            "current_setting('temp_directory')"
+            "current_setting('temp_directory'), "
+            "current_setting('preserve_insertion_order')"
         ).fetchone()
         Path(spill_path).mkdir()
 
     assert memory_limit == "64.0 MiB"
     assert threads == 1
+    assert preserve_order is False
     assert not Path(spill_path).exists()
 
 

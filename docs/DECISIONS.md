@@ -1568,7 +1568,10 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   sidecar manifest is written and immediately before the complete product is
   atomically published. Source membership and uniqueness checks execute one
   logical domain at a time; wrong-domain rows and source files assigned to
-  multiple domains fail validation explicitly.
+  multiple domains fail validation explicitly. Read-only and compatibility
+  sessions disable insertion-order preservation so external hash aggregation
+  can spill; database creation retains ordered insertion for deterministic
+  materialization.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`.
