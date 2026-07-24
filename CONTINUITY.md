@@ -302,6 +302,7 @@
 - Source observability now aggregates one disjoint logical domain at a time. A full-scale diagnostic loaded `687,903,128` unique rows representing `8,162,368,161` events in `3,587.75 s`, with zero duplicate keys, `4,815,470,592`-byte peak RSS, and zero residual spill.
 - Exact-head database creation from the preserved 36 compatibility CSVs completed in `13,996.491 s`. The subsequent unconstrained compatibility-export connection briefly peaked at `8,147,697,664` bytes, isolating the remaining memory defect to post-creation connections rather than canonical database construction.
 - All combined-product DuckDB connections now share the configured memory limit, one thread, unique adjacent spill, and strict spill cleanup. `git diff --check`, Ruff, the 20-test combined-product module, and all `376` tests pass while the completed database run finishes aggregate validation.
+- Publication now removes AppleDouble metadata from the complete staging tree immediately before the atomic directory swap; an integration test proves staged sidecars do not enter the public product.
 
 ## Now
 - Exact-head worker PID `18999` remains active against the completed staged database, currently hashing exported compatibility CSVs. It is being allowed to finish to preserve correctness/publication evidence despite the already-recorded post-creation memory-gate miss.

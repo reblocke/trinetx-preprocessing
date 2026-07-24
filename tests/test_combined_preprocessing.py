@@ -669,6 +669,29 @@ def test_replacement_rejects_unmanaged_output_entries(tmp_path: Path) -> None:
     assert unmanaged.read_text() == "not part of the combined product"
 
 
+def test_publication_removes_appledouble_sidecars(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    real_write_manifest = combined_builder.write_combined_manifest
+
+    def write_manifest_with_sidecar(*args, **kwargs):
+        manifest_path = real_write_manifest(*args, **kwargs)
+        (manifest_path.parent / "._confidential.csv").write_bytes(b"metadata")
+        return manifest_path
+
+    monkeypatch.setattr(
+        combined_builder,
+        "write_combined_manifest",
+        write_manifest_with_sidecar,
+    )
+
+    build_preprocessed(config, strict=True)
+
+    assert not list(config.output_dir.rglob("._*"))
+
+
 def test_publish_rename_failure_rolls_back_existing_product(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

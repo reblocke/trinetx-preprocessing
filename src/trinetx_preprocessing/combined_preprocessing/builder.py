@@ -126,6 +126,7 @@ def build_preprocessed(
             manifest,
             output_dir=staging_output,
         )
+        _remove_appledouble_sidecars(staging_output)
         phase_started = time.perf_counter()
         _publish_staged_product(
             staging_output,
@@ -231,6 +232,18 @@ def _publish_staged_product(
         raise
     if backup is not None:
         remove_tree_strict(backup, context="Previous combined preprocessing output")
+
+
+def _remove_appledouble_sidecars(root: Path) -> None:
+    """Remove macOS metadata files before publishing the product directory."""
+
+    for path in sorted(Path(root).rglob("._*"), reverse=True):
+        if path.is_dir() and not path.is_symlink():
+            remove_tree_strict(path, context="AppleDouble directory")
+            continue
+        path.unlink(missing_ok=True)
+        if path.exists() or path.is_symlink():
+            raise OSError(f"AppleDouble sidecar was not deleted: {path}")
 
 
 def require_safe_output_location(

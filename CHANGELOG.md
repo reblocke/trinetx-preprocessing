@@ -217,6 +217,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Applied the combined-product DuckDB memory, thread, and external-spill policy
   to compatibility export, provenance refresh, inspection, evidence, and
   validation instead of limiting only database creation.
+- Removed macOS AppleDouble metadata files from the staging tree immediately
+  before atomic publication so the canonical product contains only contracted
+  outputs.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a

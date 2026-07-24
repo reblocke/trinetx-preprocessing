@@ -1564,7 +1564,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   silently reverting to DuckDB host defaults.
 - Consequences: Large read-only queries may spill to the external output
   volume and take longer, but they retain deterministic output semantics and a
-  bounded memory policy.
+  bounded memory policy. AppleDouble metadata files are removed after the
+  sidecar manifest is written and immediately before the complete product is
+  atomically published.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`.
