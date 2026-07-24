@@ -7,12 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import duckdb
-
 from ..filesystem import write_text_atomic
 from ..regression import hash_csv_with_metadata
 from .contract import compatibility_outputs, final_output_columns
-from .database import inspect_combined_database
+from .database import inspect_combined_database, open_combined_database
 from .validation import validate_preprocessed_database
 
 EVIDENCE_SCHEMA_VERSION = 1
@@ -119,8 +117,7 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
             "complete": False,
             "errors": list(validation.errors),
         }
-    connection = duckdb.connect(str(path), read_only=True)
-    try:
+    with open_combined_database(path, read_only=True) as connection:
         rows = connection.execute(
             """
             WITH rule_counts AS (
@@ -175,9 +172,6 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
                 "WHERE element_kind = 'historical_derived'"
             ).fetchone()[0]
         )
-    finally:
-        connection.close()
-
     missing_rules = [
         element["element_id"]
         for element in elements

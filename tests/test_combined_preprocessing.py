@@ -25,6 +25,7 @@ from trinetx_preprocessing.combined_preprocessing.database import (
     _combined_run_id,
     export_compatibility_outputs,
     inspect_combined_database,
+    open_combined_database,
 )
 from trinetx_preprocessing.combined_preprocessing.elements import (
     SOURCE_EVENT_COLUMNS,
@@ -125,6 +126,23 @@ def test_combined_private_artifacts_reject_repository_paths() -> None:
             REPOSITORY_ROOT / "results" / "combined-work",
             artifact_label="work directory",
         )
+
+
+def test_combined_database_session_bounds_runtime_and_cleans_spill(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "bounded.duckdb"
+
+    with open_combined_database(database_path, memory_limit_mib=64) as connection:
+        memory_limit, threads, spill_path = connection.execute(
+            "SELECT current_setting('memory_limit'), current_setting('threads'), "
+            "current_setting('temp_directory')"
+        ).fetchone()
+        Path(spill_path).mkdir()
+
+    assert memory_limit == "64.0 MiB"
+    assert threads == 1
+    assert not Path(spill_path).exists()
 
 
 def _write_combined_config(

@@ -83,7 +83,11 @@ def build_preprocessed(
         )
         _record_timing(timings, "database", phase_started)
         phase_started = time.perf_counter()
-        export_compatibility_outputs(staged_database, staging_output)
+        export_compatibility_outputs(
+            staged_database,
+            staging_output,
+            memory_limit_mib=combined_config.combined.duckdb_memory_limit_mib,
+        )
         refresh_stage_output_metadata(
             combined_config,
             "final_assembly",
@@ -107,6 +111,7 @@ def build_preprocessed(
         validation = validate_preprocessed_database(
             staged_database,
             compatibility_output_dir=staging_output,
+            memory_limit_mib=combined_config.combined.duckdb_memory_limit_mib,
         )
         if not validation.valid:
             raise RuntimeError(

@@ -64,8 +64,9 @@ combined:
 - `combined.concept_sets_dir` supplies the versioned additive element rules;
   their parsed contents are fingerprinted for stale-work detection.
 - `combined.duckdb_memory_limit_mib` bounds DuckDB's internal buffer pool during
-  database publication. Temporary spill is written beside the database on the
-  configured output volume; publication uses one DuckDB thread.
+  database creation, compatibility export, provenance refresh, inspection, and
+  validation. Temporary spill is written beside the database on the configured
+  output volume; every combined-product connection uses one DuckDB thread.
 
 ## Corrected analytic controls
 

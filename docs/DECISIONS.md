@@ -1549,3 +1549,22 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `tests/test_combined_preprocessing.py`.
+
+### 2026-07-24 — Apply publication limits to every DuckDB connection
+- Date: 2026-07-24
+- Decision: Open database creation, compatibility export, provenance refresh,
+  inspection, evidence, and validation connections through one shared runtime
+  helper. Every connection uses the configured memory limit, one thread, and a
+  unique adjacent spill directory that is removed strictly on close.
+- Context: Full database creation completed within its bounded settings, but
+  the first compatibility export opened a new unconstrained read-only
+  connection and raised process-family RSS above the `6,238 MiB` gate.
+- Rationale: Resource limits are a product-wide execution contract, not only a
+  writer setting. Centralizing connection setup prevents future readers from
+  silently reverting to DuckDB host defaults.
+- Consequences: Large read-only queries may spill to the external output
+  volume and take longer, but they retain deterministic output semantics and a
+  bounded memory policy.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`.

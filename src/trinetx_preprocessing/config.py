@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB = 3072
+
 
 class ConfigError(ValueError):
     """Raised when configuration values are invalid."""
@@ -118,7 +120,7 @@ class CombinedPreprocessingConfig:
     database_name: str = "trinetx_preprocessed.duckdb"
     schema_version: str = "1.0"
     concept_sets_dir: Path | None = None
-    duckdb_memory_limit_mib: int = 3072
+    duckdb_memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
 
 
 @dataclass(frozen=True)
@@ -583,7 +585,10 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
     if schema_version != "1.0":
         raise ConfigError("'combined.schema_version' must be '1.0'.")
 
-    duckdb_memory_limit_mib = raw.get("duckdb_memory_limit_mib", 3072)
+    duckdb_memory_limit_mib = raw.get(
+        "duckdb_memory_limit_mib",
+        DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+    )
     if (
         not isinstance(duckdb_memory_limit_mib, int)
         or isinstance(duckdb_memory_limit_mib, bool)

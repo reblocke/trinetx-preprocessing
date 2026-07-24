@@ -5,16 +5,18 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 import duckdb
 import pandas as pd
 
 from .. import __version__
-from ..config import Config
-from ..filesystem import write_text_atomic
+from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB, Config
+from ..filesystem import remove_tree_strict, write_text_atomic
 from ..profiling import current_git_code_state_sha256
 from ..regression import CsvHashResult
 from ..storage import resolve_work_table
@@ -40,6 +42,34 @@ from .elements import (
 )
 
 COMBINED_MANIFEST_FILENAME = "trinetx_preprocessed_manifest.json"
+COMBINED_DUCKDB_THREADS = 1
+
+
+@contextmanager
+def open_combined_database(
+    database_path: Path,
+    *,
+    read_only: bool = False,
+    memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+) -> Iterator[duckdb.DuckDBPyConnection]:
+    """Open a combined-product database with bounded, cleaned spill storage."""
+
+    path = Path(database_path)
+    spill_path = path.with_name(f".{path.name}.duckdb-tmp-{uuid.uuid4().hex}")
+    connection = duckdb.connect(str(path), read_only=read_only)
+    try:
+        connection.execute("SET memory_limit = ?", [f"{memory_limit_mib}MiB"])
+        connection.execute("SET temp_directory = ?", [str(spill_path)])
+        connection.execute("SET preserve_insertion_order = true")
+        connection.execute("SET threads = ?", [COMBINED_DUCKDB_THREADS])
+        yield connection
+    finally:
+        connection.close()
+        if spill_path.exists():
+            remove_tree_strict(
+                spill_path,
+                context="Combined DuckDB spill directory",
+            )
 
 
 def create_combined_database(
@@ -63,16 +93,10 @@ def create_combined_database(
         code_state=code_state,
     )
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = duckdb.connect(str(database_path))
-    try:
-        temp_directory = database_path.with_name(f"{database_path.name}.tmp")
-        connection.execute(
-            "SET memory_limit = ?",
-            [f"{config.combined.duckdb_memory_limit_mib}MiB"],
-        )
-        connection.execute("SET temp_directory = ?", [str(temp_directory)])
-        connection.execute("SET preserve_insertion_order = true")
-        connection.execute("SET threads = 1")
+    with open_combined_database(
+        database_path,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+    ) as connection:
         _create_manifest_table(
             connection,
             config=config,
@@ -106,8 +130,6 @@ def create_combined_database(
         )
         connection.execute("CHECKPOINT")
         counts = _database_counts(connection)
-    finally:
-        connection.close()
     return {
         "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
         "combined_schema_version": COMBINED_SCHEMA_VERSION,
@@ -146,27 +168,32 @@ def refresh_database_work_manifest_fingerprint(
     work_manifest_sha256 = hashlib.sha256(
         json.dumps(work_manifest, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-    connection = duckdb.connect(str(database_path))
-    try:
+    with open_combined_database(
+        database_path,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+    ) as connection:
         connection.execute(
             "UPDATE preprocessing_manifest SET source_work_manifest_sha256 = ?",
             [work_manifest_sha256],
         )
         connection.execute("CHECKPOINT")
-    finally:
-        connection.close()
 
 
 def export_compatibility_outputs(
     database_path: Path,
     output_dir: Path,
+    *,
+    memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
 ) -> list[Path]:
     """Regenerate all 36 historical CSVs from the canonical database."""
 
     output_root = Path(output_dir)
-    connection = duckdb.connect(str(database_path), read_only=True)
     written: list[Path] = []
-    try:
+    with open_combined_database(
+        database_path,
+        read_only=True,
+        memory_limit_mib=memory_limit_mib,
+    ) as connection:
         for output in compatibility_outputs():
             destination = output_root / output.relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -180,19 +207,24 @@ def export_compatibility_outputs(
             )
             temporary.replace(destination)
             written.append(destination)
-    finally:
-        connection.close()
     return written
 
 
-def inspect_combined_database(database_path: Path) -> dict[str, Any]:
+def inspect_combined_database(
+    database_path: Path,
+    *,
+    memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+) -> dict[str, Any]:
     """Return aggregate status and table counts without exposing row data."""
 
     path = Path(database_path)
     if not path.is_file():
         raise FileNotFoundError(path)
-    connection = duckdb.connect(str(path), read_only=True)
-    try:
+    with open_combined_database(
+        path,
+        read_only=True,
+        memory_limit_mib=memory_limit_mib,
+    ) as connection:
         manifest_columns = {
             row[1]
             for row in connection.execute(
@@ -218,8 +250,6 @@ def inspect_combined_database(database_path: Path) -> dict[str, Any]:
             "manifest_columns": sorted(manifest_columns),
             "counts": _database_counts(connection),
         }
-    finally:
-        connection.close()
 
 
 def _create_manifest_table(

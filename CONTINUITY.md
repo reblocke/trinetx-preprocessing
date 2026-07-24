@@ -300,13 +300,15 @@
 - Full unified build `97527` completed all pipeline stages and staged all 36 compatibility CSVs, then was killed with exit `137` during DuckDB publication. The isolated cause is the historical encounter anti-join between `71,607,883` historical rows and `249,278,373` captured source rows; process-family RSS reached about `6,748.5 MiB`. Atomic publication held and the existing public output remained untouched.
 - Commit `22e288e` bounds DuckDB publication at `3072 MiB`, one thread, and adjacent external spill. The resumed anti-join completed with a `5,749.16 MiB` observed process peak, but the next all-domain observability aggregation exhausted DuckDB's internal pool; atomic publication again held.
 - Source observability now aggregates one disjoint logical domain at a time. A full-scale diagnostic loaded `687,903,128` unique rows representing `8,162,368,161` events in `3,587.75 s`, with zero duplicate keys, `4,815,470,592`-byte peak RSS, and zero residual spill.
+- Exact-head database creation from the preserved 36 compatibility CSVs completed in `13,996.491 s`. The subsequent unconstrained compatibility-export connection briefly peaked at `8,147,697,664` bytes, isolating the remaining memory defect to post-creation connections rather than canonical database construction.
+- All combined-product DuckDB connections now share the configured memory limit, one thread, unique adjacent spill, and strict spill cleanup. `git diff --check`, Ruff, the 20-test combined-product module, and all `376` tests pass while the completed database run finishes aggregate validation.
 
 ## Now
-- No database worker is active. Completed pipeline work and all 36 staged compatibility CSVs remain preserved externally; the partial database contains successful diagnostic tables only.
-- Run local gates for the domain-local observability fix, commit it, then retry clean database publication from the preserved compatibility CSVs.
+- Exact-head worker PID `18999` remains active against the completed staged database, currently hashing exported compatibility CSVs. It is being allowed to finish to preserve correctness/publication evidence despite the already-recorded post-creation memory-gate miss.
+- Verify the shared bounded-connection patch locally, then rerun compatibility export and downstream validation only from the completed database under process-family monitoring.
 
 ## Next
-- Validate bounded DuckDB publication under the `6,238 MiB` process gate and `100 GiB` free-space reserve, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.
+- Validate bounded compatibility export and post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve, then finish exact 36-file parity, element completeness, scratch, and repository-hygiene gates.
 - Request exact-head Codex review after evidence is complete. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

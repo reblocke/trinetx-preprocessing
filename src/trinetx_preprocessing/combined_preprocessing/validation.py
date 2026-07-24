@@ -8,6 +8,7 @@ from pathlib import Path
 
 import duckdb
 
+from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
 from ..regression import hash_csv_with_metadata
 from .contract import (
     COMBINED_SCHEMA_VERSION,
@@ -15,6 +16,7 @@ from .contract import (
     compatibility_outputs,
     final_output_columns,
 )
+from .database import open_combined_database
 from .elements import (
     ENCOUNTER_FLOW_COLUMNS,
     ENCOUNTER_FLOW_DUCKDB_TYPES,
@@ -38,6 +40,7 @@ def validate_preprocessed_database(
     database_path: Path,
     *,
     compatibility_output_dir: Path | None = None,
+    memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
 ) -> CombinedValidationResult:
     """Validate schema, referential integrity, and optional CSV exports."""
 
@@ -53,8 +56,11 @@ def validate_preprocessed_database(
     errors: list[str] = []
     warnings: list[str] = []
     counts: dict[str, int] = {}
-    connection = duckdb.connect(str(path), read_only=True)
-    try:
+    with open_combined_database(
+        path,
+        read_only=True,
+        memory_limit_mib=memory_limit_mib,
+    ) as connection:
         required_tables = {
             "preprocessing_manifest",
             PREPROCESSED_ENCOUNTER_TABLE,
@@ -281,8 +287,6 @@ def validate_preprocessed_database(
                 counts,
                 compatibility_manifest,
             )
-    finally:
-        connection.close()
     return CombinedValidationResult(
         valid=not errors,
         errors=tuple(errors),
