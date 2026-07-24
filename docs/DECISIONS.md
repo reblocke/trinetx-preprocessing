@@ -1512,3 +1512,22 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Consequences: The unified database is larger, but avoids a second raw
   encounter scan and does not broaden the feature-bearing encounter source
   table.
+
+### 2026-07-22 — Bound DuckDB publication memory and spill externally
+- Date: 2026-07-22
+- Decision: Run combined-database publication with one DuckDB thread and a
+  configurable internal memory limit that defaults to `3072 MiB`. Place the
+  DuckDB temporary spill directory beside the staged database and record the
+  effective settings in both database and JSON manifests.
+- Context: The full pipeline and all 36 staged compatibility CSVs completed,
+  but a large historical-encounter anti-join exceeded the process memory gate
+  when DuckDB used its unconstrained default buffer policy.
+- Rationale: A lower internal buffer leaves headroom for DuckDB operators,
+  client allocations, and the Python process while keeping spill on the
+  high-capacity external output volume.
+- Consequences: Database publication may trade additional external I/O for a
+  predictable memory ceiling. The setting is configurable for other machines,
+  validated at load time, and visible in provenance.
+- References: `src/trinetx_preprocessing/config.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `docs/CONFIG.md`.

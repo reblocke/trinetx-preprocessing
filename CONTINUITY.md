@@ -297,14 +297,15 @@
 - The cause is millions of tiny row groups: each source chunk wrote one small group to each of 256 persistent writers. Final-feature stores now buffer `10,000` rows per bucket before writing and restore `100,000`-row source chunks, bounding buffered data near 2.56 million rows while sharply reducing Parquet metadata. Focused tests, `git diff --check`, Ruff, and all `370` tests pass in `361.59 s`.
 - Commit `769a04a` is pushed and Linux CI passes. Its vitals-only benchmark indexed all `803,119,081` rows in `823.305 s` with `3,345.547 MiB` worker peak and `3,576,053,760`-byte five-second family peak.
 - The complete buffered feature benchmark indexed all `1,544,687,650` rows from five files in `1,661.018 s`, populated 256 buckets, used `17,098,024,372` bytes of scratch, and cleaned to zero. Authoritative peaks were vitals `3,390.516 MiB`, labs `2,733.219 MiB`, diagnosis `2,157.891 MiB`, procedure `1,621.078 MiB`, and medications `95.266 MiB`; the observed family peak was `3,623,813,120` bytes. The `6,238 MiB` gate passes with substantial headroom.
+- Full unified build `97527` completed all pipeline stages and staged all 36 compatibility CSVs, then was killed with exit `137` during DuckDB publication. The isolated cause is the historical encounter anti-join between `71,607,883` historical rows and `249,278,373` captured source rows; process-family RSS reached about `6,748.5 MiB`. Atomic publication held and the existing public output remained untouched.
 
 ## Now
-- Bounded per-bucket buffering fixes the measured row-group metadata growth. Local gates, CI, vitals-only evidence, and the complete five-domain feature benchmark all pass.
-- The clean full unified build is ready to launch from the current exact code state; stale generated work/output/temp will be inventoried and removed while evidence, logs, diagnostics, and the approved baseline remain preserved.
+- No full-build process is active. Completed pipeline work and all 36 staged compatibility CSVs are preserved externally; the partial DuckDB is diagnostic-only.
+- Add an explicit bounded DuckDB memory/spill contract and resume publication from the preserved completed artifacts without repeating raw-domain scans.
 
 ## Next
-- Run the full unified build from clean generated state, then finish exact 36-file parity, element completeness, performance, publication, scratch, and repository-hygiene gates. Request exact-head Codex review after evidence is complete. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
-- Run an external full-data unified build and benchmark, capture the historical compatibility baseline, and require exact 36-file parity plus element-completeness evidence before merge acceptance.
+- Validate bounded DuckDB publication under the `6,238 MiB` process gate and `100 GiB` free-space reserve, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.
+- Request exact-head Codex review after evidence is complete. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)

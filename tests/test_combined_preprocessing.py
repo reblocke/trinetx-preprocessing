@@ -446,6 +446,8 @@ def test_combined_build_exports_exact_historical_contract(tmp_path: Path) -> Non
     manifest = json.loads(result.manifest_path.read_text())
     assert manifest["status"] == "complete"
     assert manifest["run_id"] == result.run_id
+    assert manifest["duckdb_memory_limit_mib"] == 3072
+    assert manifest["duckdb_threads"] == 1
     work_manifest = json.loads(
         (config.work_dir / "pipeline_work_manifest.json").read_text()
     )
@@ -459,7 +461,21 @@ def test_combined_build_exports_exact_historical_contract(tmp_path: Path) -> Non
     assert validation.valid, validation.errors
     status = inspect_combined_database(result.database_path)
     assert status["status"] == "complete"
+    assert status["duckdb_memory_limit_mib"] == 3072
+    assert status["duckdb_threads"] == 1
     assert status["counts"]["element_catalog"] > len(final_output_columns())
+
+    connection = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        runtime = connection.execute(
+            """
+            SELECT duckdb_memory_limit_mib, duckdb_threads
+            FROM preprocessing_manifest
+            """
+        ).fetchone()
+        assert runtime == (3072, 1)
+    finally:
+        connection.close()
 
     connection = duckdb.connect(str(result.database_path), read_only=True)
     try:

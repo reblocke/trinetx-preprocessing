@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import textwrap
 from pathlib import Path
 
@@ -81,6 +82,7 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
               database_name: combined.duckdb
               schema_version: "1.0"
               concept_sets_dir: config/concept_sets
+              duckdb_memory_limit_mib: 2048
             rfs:
               enabled: true
               ruleset: corrected_v1
@@ -109,6 +111,7 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     assert config.combined.enabled is True
     assert config.combined.database_name == "combined.duckdb"
     assert config.combined.schema_version == "1.0"
+    assert config.combined.duckdb_memory_limit_mib == 2048
     assert (
         config.combined.concept_sets_dir
         == (tmp_path / "config" / "concept_sets").resolve()
@@ -118,6 +121,32 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     assert config.cohort.event_selection == "earliest_per_setting"
     assert config.data_screen.mode == "diagnosis_or_lab"
     validate_config(config)
+
+
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "3072"])
+def test_combined_duckdb_memory_limit_requires_positive_integer(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              duckdb_memory_limit_mib: {json.dumps(value)}
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    with pytest.raises(ConfigError, match="duckdb_memory_limit_mib"):
+        load_config(config_path)
 
 
 def test_load_config_domain_patterns_list(tmp_path: Path) -> None:

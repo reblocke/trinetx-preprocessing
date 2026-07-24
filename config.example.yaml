@@ -23,6 +23,7 @@ combined:
   database_name: trinetx_preprocessed.duckdb
   schema_version: "1.0"
   concept_sets_dir: config/concept_sets
+  duckdb_memory_limit_mib: 3072
 
 guardrails:
   max_join_multiplier: 1.0

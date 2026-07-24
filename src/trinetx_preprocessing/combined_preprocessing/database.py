@@ -65,6 +65,12 @@ def create_combined_database(
     database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = duckdb.connect(str(database_path))
     try:
+        temp_directory = database_path.with_name(f"{database_path.name}.tmp")
+        connection.execute(
+            "SET memory_limit = ?",
+            [f"{config.combined.duckdb_memory_limit_mib}MiB"],
+        )
+        connection.execute("SET temp_directory = ?", [str(temp_directory)])
         connection.execute("SET preserve_insertion_order = true")
         connection.execute("SET threads = 1")
         _create_manifest_table(
@@ -111,6 +117,8 @@ def create_combined_database(
         "database_size_bytes": database_path.stat().st_size,
         "catalog_sha256": catalog.sha256,
         "git_code_state_sha256": code_state,
+        "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
+        "duckdb_threads": 1,
         "counts": counts,
     }
 
@@ -205,6 +213,8 @@ def inspect_combined_database(database_path: Path) -> dict[str, Any]:
             "combined_schema_version": row.get("combined_schema_version"),
             "package_version": row.get("package_version"),
             "completed_at": _json_value(row.get("completed_at")),
+            "duckdb_memory_limit_mib": row.get("duckdb_memory_limit_mib"),
+            "duckdb_threads": row.get("duckdb_threads"),
             "manifest_columns": sorted(manifest_columns),
             "counts": _database_counts(connection),
         }
@@ -236,7 +246,9 @@ def _create_manifest_table(
             element_catalog_sha256 VARCHAR NOT NULL,
             data_root VARCHAR NOT NULL,
             work_root VARCHAR NOT NULL,
-            output_root VARCHAR NOT NULL
+            output_root VARCHAR NOT NULL,
+            duckdb_memory_limit_mib INTEGER NOT NULL,
+            duckdb_threads INTEGER NOT NULL
         )
         """
     )
@@ -245,7 +257,7 @@ def _create_manifest_table(
     ).hexdigest()
     connection.execute(
         "INSERT INTO preprocessing_manifest VALUES (?, 'building', ?, NULL, "
-        "?, ?, ?, ?, ?, ?, ?, ?)",
+        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             run_id,
             datetime.now(UTC).isoformat(),
@@ -257,6 +269,8 @@ def _create_manifest_table(
             str(config.data_dir),
             str(config.work_dir),
             str(published_output_dir),
+            config.combined.duckdb_memory_limit_mib,
+            1,
         ],
     )
     inventory = pd.DataFrame(work_manifest.get("inputs", []))

@@ -118,6 +118,7 @@ class CombinedPreprocessingConfig:
     database_name: str = "trinetx_preprocessed.duckdb"
     schema_version: str = "1.0"
     concept_sets_dir: Path | None = None
+    duckdb_memory_limit_mib: int = 3072
 
 
 @dataclass(frozen=True)
@@ -582,6 +583,16 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
     if schema_version != "1.0":
         raise ConfigError("'combined.schema_version' must be '1.0'.")
 
+    duckdb_memory_limit_mib = raw.get("duckdb_memory_limit_mib", 3072)
+    if (
+        not isinstance(duckdb_memory_limit_mib, int)
+        or isinstance(duckdb_memory_limit_mib, bool)
+        or duckdb_memory_limit_mib <= 0
+    ):
+        raise ConfigError(
+            "'combined.duckdb_memory_limit_mib' must be a positive integer."
+        )
+
     concept_sets_value = raw.get("concept_sets_dir")
     concept_sets_dir = None
     if concept_sets_value is not None:
@@ -599,6 +610,7 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
         database_name=database_name,
         schema_version=schema_version,
         concept_sets_dir=concept_sets_dir,
+        duckdb_memory_limit_mib=duckdb_memory_limit_mib,
     )
 
 

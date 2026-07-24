@@ -40,6 +40,7 @@ combined:
   database_name: trinetx_preprocessed.duckdb
   schema_version: "1.0"
   concept_sets_dir: config/concept_sets
+  duckdb_memory_limit_mib: 3072
 ```
 
 - `chunking.lines_per_chunk` bounds raw CSV and work-table reads.
@@ -62,6 +63,9 @@ combined:
 - `combined.schema_version` must match the supported combined contract.
 - `combined.concept_sets_dir` supplies the versioned additive element rules;
   their parsed contents are fingerprinted for stale-work detection.
+- `combined.duckdb_memory_limit_mib` bounds DuckDB's internal buffer pool during
+  database publication. Temporary spill is written beside the database on the
+  configured output volume; publication uses one DuckDB thread.
 
 ## Corrected analytic controls
 
