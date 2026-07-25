@@ -306,10 +306,12 @@
 - The old validation query unioned every source table before checking membership integrity and generated at least `37 GiB` of spill. Validation now checks orphan memberships and duplicate source IDs one logical domain at a time, while separately rejecting wrong-domain rows and source files assigned to multiple domains.
 - Exact-head bounded export wrote all 36 compatibility tables in `273.872 s` and held process-family peak RSS to `4,685,922,304` bytes, but validation failed cleanly in the largest duplicate-ID aggregation because insertion-order preservation prevented further spill at the `3072 MiB` internal limit. Read-only sessions now disable insertion-order preservation; canonical database creation remains ordered.
 - Validation-only execution from `5ba9d57` again reached the exact full-domain duplicate source-ID group and failed after `4,896.948 s`: disabling insertion-order preservation bounded process-family peak RSS to `4,580,392,960` bytes but did not make the single huge string hash table fit DuckDB's `3072 MiB` internal pool. The duplicate check now uses an exact 64-way Parquet reduction with strict scratch cleanup.
+- Exact validation from `e1383c6` completed in `6,248.955 s` with zero database errors/warnings, 36 matching schemas and row counts, zero duplicate source IDs, no residual scratch, and `4,489,232,384`-byte peak process-family RSS. Baseline comparison correctly failed all 36 hashes because the private unified config selected only additive `medication_ingredient.csv` and omitted the `2,991` historical `medication####.csv` chunks. A PHI-safe aggregate check found identical keys and differences only in the 32 medication feature columns.
 
 ## Now
-- No combined build, export, validation, or monitor process is active; the failed `5ba9d57` validation cleaned its unique spill directory.
-- Verify the exact partitioned duplicate-source reduction locally and at full scale, then resume the remaining validation from the completed database and existing 36-file export.
+- Commit `e1383c6` passes Ruff, diff checks, the 22-test combined module, and all `378` tests; it is pushed on PR #8.
+- The focused full-scale duplicate-source benchmark passed in `473.237 s`, found zero duplicates, peaked at `3,695,673,344` bytes process-family RSS, and cleaned all scratch.
+- No combined build or monitor process is active. Preserve the ingredient-only product as failed configuration evidence, update the private config to the repository's dual medication patterns, and launch a clean full build.
 
 ## Next
 - Validate post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve without repeating the already-passing export, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.
