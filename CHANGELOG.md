@@ -228,6 +228,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   memory limit; canonical database creation retains ordered insertion.
 - Replaced full-domain duplicate source-ID aggregation with an exact 64-way
   Parquet reduction so validation remains bounded on production-sized domains.
+- Made medication-ingredient filename handling schema-aware: full historical
+  exports now retain legacy features while minimal ingredient files remain
+  additive unified-source inputs.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a

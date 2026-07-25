@@ -154,7 +154,7 @@ _MEDICATION_INGREDIENT_STEM = re.compile(
 
 
 def is_medication_ingredient_export(path: Path) -> bool:
-    """Return whether ``path`` is a supported ingredient-only export."""
+    """Return whether ``path`` belongs to the medication-ingredient family."""
 
     return _MEDICATION_INGREDIENT_STEM.fullmatch(path.stem) is not None
 

@@ -116,3 +116,51 @@ def test_combined_stage_captures_ingredient_without_legacy_features(
     ingredient = source.loc[source["patient_id"].eq("P-INGREDIENT")]
     assert ingredient["code"].tolist() == ["29046"]
     assert ingredient["encounter_id"].isna().all()
+
+
+def test_full_schema_ingredient_file_retains_historical_features(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    work_dir = tmp_path / "work"
+    output_dir = tmp_path / "output"
+    meds_dir = data_dir / "Medications"
+    meds_dir.mkdir(parents=True)
+    work_dir.mkdir()
+    output_dir.mkdir()
+    ingredient_path = meds_dir / "medication_ingredient.csv"
+    full_schema = pd.read_csv(FIXTURE_PATH, dtype="string")
+    concept_match = full_schema.iloc[[0]].copy()
+    concept_match["patient_id"] = "P-INGREDIENT"
+    concept_match["encounter_id"] = "E-INGREDIENT"
+    concept_match["code_system"] = "RXNORM"
+    concept_match["code"] = "29046"
+    pd.concat([full_schema, concept_match], ignore_index=True).to_csv(
+        ingredient_path,
+        index=False,
+    )
+
+    config_path = tmp_path / "config.yaml"
+    _write_config(config_path, data_dir, work_dir, output_dir)
+    concept_sets_dir = Path(__file__).resolve().parents[1] / "config/concept_sets"
+    with config_path.open("a") as handle:
+        handle.write(
+            f'combined:\n  enabled: true\n  concept_sets_dir: "{concept_sets_dir}"\n'
+        )
+    config = load_config(config_path)
+    validate_config(config)
+
+    run_medications_stage(config)
+
+    normalized = pd.read_csv(work_dir / "medication_NEW_0001.csv")
+    assert len(normalized) == 13
+    analysis = pd.read_csv(
+        resolve_work_table(config, "analysis_medication_features.csv")
+    )
+    assert len(analysis) == 13
+    source_path = resolve_work_table(
+        config,
+        f"combined_{SOURCE_TABLE_BY_DOMAIN['medications']}.csv",
+    )
+    source = pd.read_csv(source_path, dtype="string")
+    assert source["code"].tolist() == ["29046"]

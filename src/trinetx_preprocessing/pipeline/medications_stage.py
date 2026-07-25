@@ -75,7 +75,7 @@ def run_medications_stage(config: Config) -> list[Path]:
         grouped_writers: dict[str, WorkTableWriter] = {}
         for index, path in enumerate(meds_paths, start=1):
             logger.info("Reading medications export: %s", path.name)
-            if is_medication_ingredient_export(path):
+            if _is_ingredient_only_export(path):
                 if element_writer.enabled:
                     _capture_ingredient_export(
                         path,
@@ -179,6 +179,19 @@ def run_medications_stage(config: Config) -> list[Path]:
     output_paths.extend(element_writer.written_paths)
 
     return output_paths
+
+
+def _is_ingredient_only_export(path: Path) -> bool:
+    """Distinguish minimal ingredient files from full historical exports."""
+
+    if not is_medication_ingredient_export(path):
+        return False
+    available = available_source_columns(
+        path,
+        COMBINED_MEDICATION_REQUIRED_COLUMNS,
+        domain="medications",
+    )
+    return not set(RAW_MEDICATION_COLUMNS).issubset(available)
 
 
 def _normalized_filename(path: Path, index: int) -> str:

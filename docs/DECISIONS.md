@@ -1577,3 +1577,20 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`.
+
+### 2026-07-25 — Classify medication ingredient exports by schema
+- Date: 2026-07-25
+- Decision: Treat a `medication_ingredient*.csv` file as additive-only only
+  when it has the supported minimal ingredient schema. If it carries the full
+  historical medication schema, process it through historical feature
+  reduction and unified source capture in the same scan.
+- Context: The production canonical monolith is named
+  `medication_ingredient.csv` but carries all 11 historical medication fields.
+  Filename-only routing retained its source rows while silently zeroing the 32
+  historical medication output columns.
+- Consequences: Minimal ingredient exports remain supported. Full-schema files
+  preserve the 36-file compatibility contract without reading headerless legacy
+  split artifacts.
+- References:
+  `src/trinetx_preprocessing/pipeline/medications_stage.py`,
+  `tests/test_medications_stage.py`.
