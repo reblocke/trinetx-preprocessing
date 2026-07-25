@@ -305,10 +305,11 @@
 - Publication now removes AppleDouble metadata from the complete staging tree immediately before the atomic directory swap; an integration test proves staged sidecars do not enter the public product.
 - The old validation query unioned every source table before checking membership integrity and generated at least `37 GiB` of spill. Validation now checks orphan memberships and duplicate source IDs one logical domain at a time, while separately rejecting wrong-domain rows and source files assigned to multiple domains.
 - Exact-head bounded export wrote all 36 compatibility tables in `273.872 s` and held process-family peak RSS to `4,685,922,304` bytes, but validation failed cleanly in the largest duplicate-ID aggregation because insertion-order preservation prevented further spill at the `3072 MiB` internal limit. Read-only sessions now disable insertion-order preservation; canonical database creation remains ordered.
+- Validation-only execution from `5ba9d57` again reached the exact full-domain duplicate source-ID group and failed after `4,896.948 s`: disabling insertion-order preservation bounded process-family peak RSS to `4,580,392,960` bytes but did not make the single huge string hash table fit DuckDB's `3072 MiB` internal pool. The duplicate check now uses an exact 64-way Parquet reduction with strict scratch cleanup.
 
 ## Now
-- No combined build, export, validation, or monitor process is active.
-- Verify the read-only insertion-order patch locally, then resume validation only from the completed database and existing exact-head 36-file export under process-family monitoring.
+- No combined build, export, validation, or monitor process is active; the failed `5ba9d57` validation cleaned its unique spill directory.
+- Verify the exact partitioned duplicate-source reduction locally and at full scale, then resume the remaining validation from the completed database and existing 36-file export.
 
 ## Next
 - Validate post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve without repeating the already-passing export, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.

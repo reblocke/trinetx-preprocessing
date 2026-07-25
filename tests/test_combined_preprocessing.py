@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 import trinetx_preprocessing.combined_preprocessing.builder as combined_builder
+import trinetx_preprocessing.combined_preprocessing.validation as combined_validation
 from trinetx_preprocessing.combined_preprocessing.builder import (
     build_preprocessed,
     require_safe_output_location,
@@ -785,7 +786,10 @@ def test_combined_validation_fails_when_manifest_is_incomplete(tmp_path: Path) -
     assert any("status is not complete" in error for error in validation.errors)
 
 
-def test_combined_validation_checks_source_integrity_by_domain(tmp_path: Path) -> None:
+def test_combined_validation_checks_source_integrity_by_domain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     input_root = _copy_glp1_fixture_for_combined(tmp_path)
     config = load_config(_write_combined_config(tmp_path, data_dir=input_root))
     result = build_preprocessed(config, strict=True)
@@ -814,6 +818,19 @@ def test_combined_validation_checks_source_integrity_by_domain(tmp_path: Path) -
     finally:
         connection.close()
 
+    cleanup_contexts: list[str] = []
+    real_remove_tree = combined_validation.remove_tree_strict
+
+    def record_cleanup(path: Path, *, context: str) -> None:
+        cleanup_contexts.append(context)
+        real_remove_tree(path, context=context)
+
+    monkeypatch.setattr(
+        combined_validation,
+        "_DIRECT_DUPLICATE_SOURCE_MAX_ROWS",
+        0,
+    )
+    monkeypatch.setattr(combined_validation, "remove_tree_strict", record_cleanup)
     validation = validate_preprocessed_database(result.database_path)
 
     assert not validation.valid
@@ -823,6 +840,8 @@ def test_combined_validation_checks_source_integrity_by_domain(tmp_path: Path) -
         "Source tables contain 1 rows assigned to the wrong logical domain."
         in validation.errors
     )
+    assert "Combined labs duplicate-source scratch" in cleanup_contexts
+    assert "Combined duplicate-source validation scratch" in cleanup_contexts
 
 
 @pytest.mark.parametrize("intermediate_format", ["parquet", "csv"])

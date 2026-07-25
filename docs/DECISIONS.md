@@ -1571,7 +1571,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   multiple domains fail validation explicitly. Read-only and compatibility
   sessions disable insertion-order preservation so external hash aggregation
   can spill; database creation retains ordered insertion for deterministic
-  materialization.
+  materialization. Exact source-ID uniqueness checks stage one domain into 64
+  stable hash partitions and reduce one partition at a time instead of retaining
+  a full-domain string hash table.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`.

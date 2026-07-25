@@ -226,6 +226,8 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 - Disabled insertion-order preservation for read-only combined-product
   sessions so large exact validation aggregates can spill within the configured
   memory limit; canonical database creation retains ordered insertion.
+- Replaced full-domain duplicate source-ID aggregation with an exact 64-way
+  Parquet reduction so validation remains bounded on production-sized domains.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a

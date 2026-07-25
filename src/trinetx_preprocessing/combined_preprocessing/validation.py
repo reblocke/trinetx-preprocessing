@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 import duckdb
 
 from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
+from ..filesystem import remove_tree_strict
 from ..regression import hash_csv_with_metadata
 from .contract import (
     COMBINED_SCHEMA_VERSION,
@@ -25,6 +27,9 @@ from .elements import (
     SOURCE_EVENT_DUCKDB_TYPES,
     SOURCE_TABLE_BY_DOMAIN,
 )
+
+_DIRECT_DUPLICATE_SOURCE_MAX_ROWS = 2_000_000
+_DUPLICATE_SOURCE_BUCKET_COUNT = 64
 
 
 @dataclass(frozen=True)
@@ -374,16 +379,91 @@ def _count_orphan_memberships(connection: duckdb.DuckDBPyConnection) -> int:
 
 
 def _count_duplicate_source_ids(connection: duckdb.DuckDBPyConnection) -> int:
+    """Count duplicate source IDs with one bounded partitioned pass per domain."""
+
     duplicate_count = 0
-    for table_name in SOURCE_TABLE_BY_DOMAIN.values():
-        duplicate_count += int(
-            connection.execute(
-                "SELECT count(*) FROM ("
-                f"SELECT source_record_id FROM {_identifier(table_name)} "
-                "GROUP BY source_record_id HAVING count(*) > 1)"
-            ).fetchone()[0]
+    temp_directory = Path(
+        str(
+            connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
         )
+    )
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=".trinetx-combined-source-duplicates-",
+            dir=temp_directory,
+        )
+    )
+    try:
+        for domain, table_name in SOURCE_TABLE_BY_DOMAIN.items():
+            source_rows = _count(connection, table_name)
+            if source_rows <= _DIRECT_DUPLICATE_SOURCE_MAX_ROWS:
+                duplicate_count += _count_duplicate_ids_in_source(
+                    connection,
+                    _identifier(table_name),
+                )
+                continue
+
+            domain_scratch = scratch / domain
+            try:
+                connection.execute(
+                    f"""
+                    COPY (
+                        SELECT
+                            source_record_id,
+                            hash(source_record_id) % {_DUPLICATE_SOURCE_BUCKET_COUNT}
+                                AS source_bucket
+                        FROM {_identifier(table_name)}
+                        WHERE source_record_id IS NOT NULL
+                    ) TO {_sql_string(str(domain_scratch))} (
+                        FORMAT PARQUET,
+                        PARTITION_BY (source_bucket),
+                        COMPRESSION SNAPPY,
+                        ROW_GROUP_SIZE 250000
+                    )
+                    """
+                )
+                for bucket in range(_DUPLICATE_SOURCE_BUCKET_COUNT):
+                    bucket_directory = domain_scratch / f"source_bucket={bucket}"
+                    files = sorted(
+                        path
+                        for path in bucket_directory.glob("*.parquet")
+                        if not path.name.startswith("._")
+                    )
+                    if not files:
+                        continue
+                    paths = ", ".join(_sql_string(str(path)) for path in files)
+                    duplicate_count += _count_duplicate_ids_in_source(
+                        connection,
+                        f"read_parquet([{paths}], hive_partitioning=false)",
+                    )
+            finally:
+                if domain_scratch.exists():
+                    remove_tree_strict(
+                        domain_scratch,
+                        context=f"Combined {domain} duplicate-source scratch",
+                    )
+    finally:
+        if scratch.exists():
+            remove_tree_strict(
+                scratch,
+                context="Combined duplicate-source validation scratch",
+            )
     return duplicate_count
+
+
+def _count_duplicate_ids_in_source(
+    connection: duckdb.DuckDBPyConnection,
+    source: str,
+) -> int:
+    return int(
+        connection.execute(
+            "SELECT count(*) FROM ("
+            f"SELECT source_record_id FROM {source} "
+            "WHERE source_record_id IS NOT NULL "
+            "GROUP BY source_record_id HAVING count(*) > 1)"
+        ).fetchone()[0]
+    )
 
 
 def _count_wrong_source_domains(connection: duckdb.DuckDBPyConnection) -> int:
