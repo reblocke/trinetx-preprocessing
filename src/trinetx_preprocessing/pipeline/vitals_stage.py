@@ -93,6 +93,7 @@ def run_vitals_stage(config: Config) -> list[Path]:
                         else RAW_DTYPE
                     ),
                     parse_dates=None if config.combined.enabled else ["date"],
+                    preserve_source_tokens=config.combined.enabled,
                 ):
                     rows_read += len(chunk)
                     element_writer.add_chunk(chunk, source_path=path)

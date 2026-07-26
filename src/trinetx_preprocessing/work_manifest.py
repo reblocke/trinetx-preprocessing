@@ -18,7 +18,7 @@ from .profiling import current_git_code_state_sha256
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
 WORK_MANIFEST_SCHEMA_VERSION = 5
-INTERMEDIATE_SCHEMA_VERSION = 8
+INTERMEDIATE_SCHEMA_VERSION = 9
 LEGACY_DATA_SCREEN_FILENAMES = (
     "amb_enc_screen.csv",
     "inp_enc_screen.csv",
@@ -215,6 +215,7 @@ def require_current_work(
     config: Config,
     *,
     required_stages: Iterable[str],
+    physical_output_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Validate identity and required stage completion for a resume command."""
 
@@ -235,7 +236,12 @@ def require_current_work(
             "Work manifest is missing completed stages: " + ", ".join(missing)
         )
     for stage in required_stages:
-        _require_stage_outputs_current(config, stage, manifest["stages"][stage])
+        _require_stage_outputs_current(
+            config,
+            stage,
+            manifest["stages"][stage],
+            physical_output_dir=physical_output_dir,
+        )
     return manifest
 
 
@@ -263,6 +269,13 @@ def work_manifest_path(config: Config) -> Path:
     """Return the configured work-manifest path."""
 
     return config.work_dir / WORK_MANIFEST_FILENAME
+
+
+def work_identity_sha256(config: Config) -> str:
+    """Return the deterministic identity used to bind combined staging work."""
+
+    encoded = json.dumps(_identity(config), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def _identity(config: Config) -> dict[str, Any]:
@@ -410,9 +423,15 @@ def _require_stage_outputs_current(
     config: Config,
     stage: str,
     stage_record: dict[str, Any],
+    *,
+    physical_output_dir: Path | None = None,
 ) -> None:
     for output in stage_record.get("outputs", []):
-        path = _manifest_output_path(str(output.get("path", "")), config)
+        path = _manifest_output_path(
+            str(output.get("path", "")),
+            config,
+            physical_output_dir=physical_output_dir,
+        )
         if not path.exists():
             raise StaleWorkError(f"Completed {stage} artifact is missing: {path}")
         path_stat = path.stat()
@@ -423,12 +442,17 @@ def _require_stage_outputs_current(
             raise StaleWorkError(f"Completed {stage} artifact changed: {path}")
 
 
-def _manifest_output_path(display_path: str, config: Config) -> Path:
+def _manifest_output_path(
+    display_path: str,
+    config: Config,
+    *,
+    physical_output_dir: Path | None = None,
+) -> Path:
     path = Path(display_path)
     if path.parts and path.parts[0] == "work":
         return config.work_dir / Path(*path.parts[1:])
     if path.parts and path.parts[0] == "output":
-        return config.output_dir / Path(*path.parts[1:])
+        return (physical_output_dir or config.output_dir) / Path(*path.parts[1:])
     return path
 
 

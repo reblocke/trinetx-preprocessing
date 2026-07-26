@@ -44,6 +44,9 @@ from trinetx_preprocessing.combined_preprocessing.glp1_adapter import (
     materialize_glp1_observability_from_preprocessed,
     materialize_glp1_sources_from_preprocessed,
 )
+from trinetx_preprocessing.combined_preprocessing.scratch import (
+    COMBINED_BUILD_PREFIX,
+)
 from trinetx_preprocessing.combined_preprocessing.validation import (
     CombinedValidationResult,
     validate_preprocessed_database,
@@ -78,7 +81,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 def test_combined_run_id_ignores_volatile_work_status() -> None:
     identity = {
         "schema_version": 5,
-        "intermediate_schema_version": 6,
+        "intermediate_schema_version": 9,
         "package_version": "0.2.0",
         "git_code_state_sha256": "a" * 64,
         "runtime_versions": {"python": "3.11"},
@@ -118,6 +121,18 @@ def test_combined_run_id_ignores_volatile_work_status() -> None:
         work_manifest=second,
         catalog_sha256="b" * 64,
         code_state="a" * 64,
+    )
+
+
+def test_combined_resumable_identity_includes_strict_policy(tmp_path: Path) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+
+    assert combined_builder._combined_build_identity(
+        config,
+        strict=False,
+    ) != combined_builder._combined_build_identity(
+        config,
+        strict=True,
     )
 
 
@@ -634,6 +649,52 @@ def test_combined_patient_source_preserves_raw_string_values(tmp_path: Path) -> 
     assert row == ("0001", "202001", "001")
 
 
+def test_combined_source_tables_preserve_literal_na_tokens(tmp_path: Path) -> None:
+    input_root = _copy_glp1_fixture_for_combined(tmp_path)
+    token_by_source = {
+        "Lab Results/lab_results.csv": "NA",
+        "Encounter/encounter.csv": "N/A",
+        "Patient/patient.csv": "NULL",
+        "Vital Signs/vital_signs.csv": "NA",
+        "Diagnosis/diagnosis.csv": "N/A",
+        "Procedure/procedure.csv": "NULL",
+        "Medications/medication.csv": "NA",
+    }
+    table_by_source = {
+        "Lab Results/lab_results.csv": "source_lab_measurement",
+        "Encounter/encounter.csv": "source_encounter",
+        "Patient/patient.csv": "source_patient",
+        "Vital Signs/vital_signs.csv": "source_vital_measurement",
+        "Diagnosis/diagnosis.csv": "source_diagnosis",
+        "Procedure/procedure.csv": "source_procedure",
+        "Medications/medication.csv": "source_medication",
+    }
+    for relative_path, token in token_by_source.items():
+        source_path = input_root / relative_path
+        frame = pd.read_csv(
+            source_path,
+            dtype="string",
+            keep_default_na=False,
+        )
+        frame["source_id"] = token
+        frame.to_csv(source_path, index=False)
+
+    config = load_config(_write_combined_config(tmp_path, data_dir=input_root))
+    result = build_preprocessed(config, strict=True)
+    connection = duckdb.connect(str(result.database_path), read_only=True)
+    try:
+        for relative_path, table_name in table_by_source.items():
+            observed = {
+                str(row[0])
+                for row in connection.execute(
+                    f"SELECT DISTINCT source_id FROM {table_name}"
+                ).fetchall()
+            }
+            assert observed == {token_by_source[relative_path]}, table_name
+    finally:
+        connection.close()
+
+
 def test_failed_replacement_preserves_published_product(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -642,6 +703,12 @@ def test_failed_replacement_preserves_published_product(
     first = build_preprocessed(config, strict=True)
     original_database = first.database_path.read_bytes()
     original_hashes = _output_hashes(config.output_dir)
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    real_validation = combined_builder.validate_preprocessed_database
 
     monkeypatch.setattr(
         combined_builder,
@@ -658,18 +725,59 @@ def test_failed_replacement_preserves_published_product(
 
     assert first.database_path.read_bytes() == original_database
     assert _output_hashes(config.output_dir) == original_hashes
-    assert not list(tmp_path.glob(".output.combined-*"))
+    assert paths.staging_output.is_dir()
+    assert paths.state_path.is_file()
+
+    monkeypatch.setattr(
+        combined_builder,
+        "validate_preprocessed_database",
+        real_validation,
+    )
+
+    def unexpected_rebuild(*args, **kwargs):
+        raise AssertionError("late retry rebuilt completed preprocessing work")
+
+    monkeypatch.setattr(combined_builder, "run_pipeline", unexpected_rebuild)
+    monkeypatch.setattr(
+        combined_builder,
+        "create_combined_database",
+        unexpected_rebuild,
+    )
+    resumed = build_preprocessed(config, strict=True, replace_existing=True)
+
+    assert resumed.validation.valid
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
 
 
-def test_replacement_rejects_unmanaged_output_entries(tmp_path: Path) -> None:
+@pytest.mark.parametrize("relative_path", ["notes.txt", "AMBULATORY/notes.txt"])
+def test_replacement_rejects_unmanaged_output_entries(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
     config = load_config(_write_combined_config(tmp_path))
-    unmanaged = config.output_dir / "notes.txt"
+    unmanaged = config.output_dir / relative_path
+    unmanaged.parent.mkdir(parents=True, exist_ok=True)
     unmanaged.write_text("not part of the combined product")
 
-    with pytest.raises(ValueError, match="unmanaged entries: notes.txt"):
+    with pytest.raises(ValueError, match=f"unmanaged entries: {relative_path}"):
         build_preprocessed(config, strict=True, replace_existing=True)
 
     assert unmanaged.read_text() == "not part of the combined product"
+
+
+def test_replacement_rejects_nested_output_symlinks(tmp_path: Path) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    managed_directory = config.output_dir / "AMBULATORY"
+    managed_directory.mkdir()
+    target = tmp_path / "outside.txt"
+    target.write_text("outside")
+    (managed_directory / "linked.csv").symlink_to(target)
+
+    with pytest.raises(ValueError, match="unmanaged entries"):
+        build_preprocessed(config, strict=True, replace_existing=True)
+
+    assert target.read_text() == "outside"
 
 
 def test_publication_removes_appledouble_sidecars(
@@ -702,10 +810,20 @@ def test_publish_rename_failure_rolls_back_existing_product(
     config = load_config(_write_combined_config(tmp_path))
     build_preprocessed(config, strict=True)
     original_hashes = _output_hashes(config.output_dir)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=combined_builder._combined_build_identity(
+            config,
+            strict=True,
+        ),
+    )
     real_replace = combined_builder.os.replace
 
     def fail_staging_publish(source: Path, destination: Path) -> None:
-        if Path(source).name.startswith(".output.combined-build-"):
+        if (
+            Path(source) == paths.staging_output
+            and Path(destination) == config.output_dir
+        ):
             raise OSError("injected publication failure")
         real_replace(source, destination)
 
@@ -714,7 +832,64 @@ def test_publish_rename_failure_rolls_back_existing_product(
         build_preprocessed(config, strict=True, replace_existing=True)
 
     assert _output_hashes(config.output_dir) == original_hashes
-    assert not list(tmp_path.glob(".output.combined-*"))
+    assert paths.staging_output.is_dir()
+    assert paths.state_path.is_file()
+    assert not paths.backup_output.exists()
+    assert not paths.publication_journal.exists()
+
+
+def test_combined_build_lock_rejects_overlapping_builds(tmp_path: Path) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+
+    with combined_builder._canonical_build_lock(config):
+        with pytest.raises(RuntimeError, match="holds the canonical"):
+            build_preprocessed(config, strict=True)
+
+
+def test_publication_journal_recovers_old_product_after_interruption(
+    tmp_path: Path,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    result = build_preprocessed(config, strict=True)
+    original_database = result.database_path.read_bytes()
+    original_hashes = _output_hashes(config.output_dir)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=combined_builder._combined_build_identity(
+            config,
+            strict=True,
+        ),
+    )
+    assert paths.staging_output.name.startswith(COMBINED_BUILD_PREFIX)
+    paths.staging_output.mkdir()
+    paths.state_path.write_text("{}\n")
+    os.replace(config.output_dir, paths.backup_output)
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "old_moved",
+            "had_existing": True,
+            "published_output": str(config.output_dir),
+            "staging_output": str(paths.staging_output),
+            "backup_output": str(paths.backup_output),
+            "build_state_path": str(paths.state_path),
+        },
+    )
+
+    combined_builder._recover_interrupted_publication(
+        config.output_dir,
+        publication_journal=paths.publication_journal,
+        backup_output=paths.backup_output,
+        database_name=config.combined.database_name,
+    )
+
+    assert result.database_path.read_bytes() == original_database
+    assert _output_hashes(config.output_dir) == original_hashes
+    assert paths.staging_output.is_dir()
+    assert paths.state_path.is_file()
+    assert not paths.backup_output.exists()
+    assert not paths.publication_journal.exists()
 
 
 def test_synthetic_example_is_rerunnable(tmp_path: Path) -> None:
@@ -750,6 +925,7 @@ def test_synthetic_example_is_rerunnable(tmp_path: Path) -> None:
         "private/combined_element_membership_labs.csv",
         "private/combined_observability_labs.csv",
         "private/combined_gas_candidate_id.csv",
+        "private/combined_encounter_flow.csv",
     ],
 )
 def test_confidential_combined_csv_intermediates_are_ignored(
@@ -784,6 +960,71 @@ def test_combined_validation_fails_when_manifest_is_incomplete(tmp_path: Path) -
     validation = validate_preprocessed_database(result.database_path)
     assert not validation.valid
     assert any("status is not complete" in error for error in validation.errors)
+
+
+def test_combined_validation_requires_and_reconciles_product_sidecar(
+    tmp_path: Path,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    result = build_preprocessed(config, strict=True)
+    sidecar_path = result.manifest_path
+    sidecar = json.loads(sidecar_path.read_text())
+
+    sidecar_path.unlink()
+    missing = validate_preprocessed_database(result.database_path)
+    assert not missing.valid
+    assert any(
+        error.startswith("Missing combined product sidecar:")
+        for error in missing.errors
+    )
+
+    sidecar["counts"]["source_encounter"] += 1
+    sidecar_path.write_text(json.dumps(sidecar))
+    mismatched = validate_preprocessed_database(result.database_path)
+    assert not mismatched.valid
+    assert (
+        "Combined product sidecar counts do not match the database tables."
+        in mismatched.errors
+    )
+
+
+def test_combined_validation_rejects_exclude_only_source_elements(
+    tmp_path: Path,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    result = build_preprocessed(config, strict=True)
+    connection = duckdb.connect(str(result.database_path))
+    try:
+        element_id = str(
+            connection.execute(
+                """
+                SELECT catalog.element_id
+                FROM element_catalog AS catalog
+                JOIN element_rule AS rule USING (element_id)
+                WHERE catalog.element_kind = 'source_concept'
+                  AND rule.include
+                ORDER BY catalog.element_id
+                LIMIT 1
+                """
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "UPDATE element_rule SET include = false WHERE element_id = ?",
+            [element_id],
+        )
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+
+    validation = validate_preprocessed_database(result.database_path)
+    assert not validation.valid
+    assert any(
+        "source elements without an included rule" in error
+        for error in validation.errors
+    )
+    completeness = inspect_element_completeness(result.database_path)
+    assert completeness["complete"] is False
+    assert element_id in completeness["elements_without_included_rules"]
 
 
 def test_combined_validation_checks_source_integrity_by_domain(
@@ -859,6 +1100,27 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         )
     )
     combined = build_preprocessed(config, strict=True)
+    combined_connection = duckdb.connect(
+        str(combined.database_path),
+        read_only=True,
+    )
+    try:
+        assert (
+            combined_connection.execute(
+                "SELECT count(*) FROM source_encounter "
+                "WHERE encounter_id = 'flow-only-encounter'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            combined_connection.execute(
+                "SELECT count(*) FROM source_encounter_flow "
+                "WHERE encounter_id = 'flow-only-encounter'"
+            ).fetchone()[0]
+            == 1
+        )
+    finally:
+        combined_connection.close()
     glp1_config = load_glp1_config(REPOSITORY_ROOT / "config/glp1_eligibility.yml")
     catalog = load_concept_sets(glp1_config.concept_sets_dir)
     report = validate_export(config.data_dir)
@@ -1030,3 +1292,88 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
     finally:
         direct.close()
         adapted.close()
+
+
+def test_glp1_adapter_rejects_mismatched_element_catalog(tmp_path: Path) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    combined = build_preprocessed(config, strict=True)
+    connection = duckdb.connect(str(combined.database_path))
+    try:
+        connection.execute(
+            "UPDATE preprocessing_manifest SET element_catalog_sha256 = ?",
+            ["0" * 64],
+        )
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+
+    target = duckdb.connect()
+    try:
+        glp1_config = load_glp1_config(REPOSITORY_ROOT / "config/glp1_eligibility.yml")
+        with pytest.raises(ValueError, match="concept catalog does not match"):
+            materialize_glp1_sources_from_preprocessed(
+                target,
+                combined.database_path,
+                config=glp1_config,
+            )
+    finally:
+        target.close()
+
+
+def test_glp1_observability_filtered_counts_are_zero_not_null(
+    tmp_path: Path,
+) -> None:
+    preprocessed_path = tmp_path / "preprocessed.duckdb"
+    preprocessed = duckdb.connect(str(preprocessed_path))
+    try:
+        preprocessed.execute(
+            """
+            CREATE TABLE source_observability_event (
+                patient_id VARCHAR,
+                logical_domain VARCHAR,
+                event_datetime TIMESTAMP,
+                timestamp_precision VARCHAR,
+                event_count UBIGINT
+            )
+            """
+        )
+        preprocessed.execute(
+            """
+            INSERT INTO source_observability_event
+            VALUES ('patient-1', 'diagnosis', TIMESTAMP '2020-01-01',
+                    'timestamp', 2)
+            """
+        )
+        preprocessed.execute("CHECKPOINT")
+    finally:
+        preprocessed.close()
+
+    target = duckdb.connect()
+    try:
+        target.execute(
+            """
+            CREATE TABLE analysis_glp1_eligibility (
+                index_event_id VARCHAR,
+                patient_id VARCHAR,
+                index_date TIMESTAMP
+            )
+            """
+        )
+        target.execute(
+            """
+            INSERT INTO analysis_glp1_eligibility
+            VALUES ('index-1', 'patient-1', TIMESTAMP '2025-01-01')
+            """
+        )
+        materialize_glp1_observability_from_preprocessed(
+            target,
+            preprocessed_path,
+        )
+        assert (
+            target.execute(
+                "SELECT event_count FROM raw_diagnosis_observability"
+            ).fetchone()[0]
+            == 0
+        )
+    finally:
+        target.close()

@@ -31,6 +31,7 @@ def iter_csv(
     usecols: Sequence[str] | None = None,
     dtype: dict[str, str] | str | None = None,
     parse_dates: Sequence[str] | None = None,
+    preserve_source_tokens: bool = False,
 ) -> Iterator[pd.DataFrame]:
     """Iterate over CSV rows in streaming chunks.
 
@@ -40,18 +41,30 @@ def iter_csv(
         usecols: Optional subset of columns to read.
         dtype: Optional dtype mapping or single dtype.
         parse_dates: Optional date columns to parse.
+        preserve_source_tokens: Preserve literal pandas NA-like tokens such as
+            ``NA``, ``N/A``, and ``NULL`` while still treating empty CSV fields
+            as missing.
 
     Yields:
         DataFrames containing the requested rows.
     """
 
     csv_path = Path(path)
+    read_options: dict[str, object] = {}
+    if preserve_source_tokens:
+        read_options.update(
+            {
+                "keep_default_na": False,
+                "na_values": [""],
+            }
+        )
     if chunksize is None:
         yield pd.read_csv(
             csv_path,
             usecols=usecols,
             dtype=dtype,
             parse_dates=parse_dates,
+            **read_options,
         )
         return
     if chunksize <= 0:
@@ -62,6 +75,7 @@ def iter_csv(
         usecols=usecols,
         dtype=dtype,
         parse_dates=parse_dates,
+        **read_options,
     )
     yield from reader
 
@@ -72,6 +86,7 @@ def iter_many_csv(
     usecols: Sequence[str] | None = None,
     dtype: dict[str, str] | str | None = None,
     parse_dates: Sequence[str] | None = None,
+    preserve_source_tokens: bool = False,
 ) -> Iterator[pd.DataFrame]:
     """Iterate over multiple CSV files in sequence.
 
@@ -81,6 +96,7 @@ def iter_many_csv(
         usecols: Optional subset of columns to read.
         dtype: Optional dtype mapping or single dtype.
         parse_dates: Optional date columns to parse.
+        preserve_source_tokens: Preserve literal pandas NA-like source tokens.
 
     Yields:
         DataFrames from each CSV file in order.
@@ -93,4 +109,5 @@ def iter_many_csv(
             usecols=usecols,
             dtype=dtype,
             parse_dates=parse_dates,
+            preserve_source_tokens=preserve_source_tokens,
         )

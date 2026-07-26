@@ -572,7 +572,9 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
     if not isinstance(raw, dict):
         raise ConfigError("Config 'combined' must be a mapping if provided.")
 
-    enabled = bool(raw.get("enabled", False))
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'combined.enabled' must be true or false.")
     database_name = str(raw.get("database_name", "trinetx_preprocessed.duckdb")).strip()
     if not database_name or Path(database_name).name != database_name:
         raise ConfigError(

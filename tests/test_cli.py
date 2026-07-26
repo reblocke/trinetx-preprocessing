@@ -68,8 +68,7 @@ def test_validate_inputs_accepts_minimal_medication_ingredient_schema(
     medication_dir.mkdir(parents=True)
     ingredient = medication_dir / "medication_ingredient.csv"
     ingredient.write_text(
-        "patient_id,code_system,code,start_date\n"
-        "P1,RXNORM,1991302,2023-01-01\n"
+        "patient_id,code_system,code,start_date\nP1,RXNORM,1991302,2023-01-01\n"
     )
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -145,6 +144,61 @@ def test_run_uses_combined_builder_when_enabled(
 
     assert result == 0
     assert calls == [(True, True, False)]
+
+
+COMBINED_MUTATING_ROUTES = (
+    "run",
+    "run-all",
+    "build-preprocessed",
+    "profile",
+    "baseline",
+    "compare",
+    "run-encounter",
+    "run-labs",
+    "run-diagnosis",
+    "run-meds",
+    "run-procedure",
+    "run-vitals",
+    "run-rfs",
+    "run-final-assembly",
+)
+
+
+@pytest.mark.parametrize("command", COMBINED_MUTATING_ROUTES)
+def test_every_combined_mutating_route_guards_work_and_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{tmp_path / "data"}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    config = load_config(config_path)
+    calls: list[tuple[Path, str]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append((path, artifact_label))
+
+    monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+
+    cli_module._require_safe_combined_mutation_locations(
+        config,
+        command=command,
+    )
+
+    assert set(COMBINED_MUTATING_ROUTES) == cli_module.COMBINED_MUTATING_COMMANDS
+    assert calls == [
+        (config.work_dir, "work directory"),
+        (config.output_dir, "output directory"),
+    ]
 
 
 def _write_encounter_config(
@@ -395,17 +449,31 @@ def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> No
         ".trinetx-glp1-observability-scan-",
         ".trinetx-glp1-terminology-qa-",
         ".trinetx-glp1-vital-ingest-",
+        *cli_module.COMBINED_SCRATCH_PATH_PREFIXES,
+        ".output.combined-build-",
+        ".trinetx_preprocessed.duckdb.duckdb-tmp-",
+        "._.trinetx-combined-build-",
+        "._..trinetx-combined-publication-",
+        "._.output.combined-build-",
+        "._.trinetx-combined-lock-",
     ]
-    for prefix in prefixes:
-        scratch = work_dir / f"{prefix}test"
+    scratch_names = [f"{prefix}test-{index}" for index, prefix in enumerate(prefixes)]
+    for scratch_name in scratch_names:
+        scratch = work_dir / scratch_name
         scratch.mkdir()
         (scratch / "bucket-000.parquet").write_text("rows")
 
     payload = cli_module.clean_scratch_artifacts(root, delete=False)
 
-    assert payload["artifact_count"] == len(prefixes)
+    expected_names = sorted(
+        path.name
+        for path in work_dir.iterdir()
+        if cli_module._is_known_scratch_path(path)
+    )
+    assert set(scratch_names).issubset(expected_names)
+    assert payload["artifact_count"] == len(expected_names)
     assert sorted(entry["relative_path"] for entry in payload["artifacts"]) == [
-        f"refactor/work/{prefix}test" for prefix in sorted(prefixes)
+        f"refactor/work/{scratch_name}" for scratch_name in expected_names
     ]
 
 

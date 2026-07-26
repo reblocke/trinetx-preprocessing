@@ -1,6 +1,7 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
+- Recover the stalled implementation-plan turn, fix every confirmed PR #8 review finding, then complete the remaining Step 2 unified-product validation and release-evidence plan.
 - Build one authoritative, versioned Python preprocessing product: `trinetx_preprocessed.duckdb`.
 - The product contains the complete historical 534-column encounter payload plus the normalized source elements needed by the GLP-1 work and future additions.
 - Regenerate the 36 historical CSV files exactly as compatibility exports from the unified product; preserve the current GLP-1 derivation as downstream/reference logic rather than a second preprocessing path.
@@ -14,6 +15,7 @@
 - Python, `uv`, Ruff, pytest, Parquet intermediates, and external-drive scratch remain the supported toolchain.
 
 ## Key decisions
+- The user has authorized implementation of every confirmed PR #8 review fix followed by Step 2 execution. PID `80692` remains untouched while source fixes proceed; any `f265cc5` result is diagnostic-only after behavior changes.
 - ABG is arterial LOINC `2019-8`/`32771-8`; VBG is venous LOINC `2021-4`; both require `45 < PCO2 < 200` mmHg after recognized unit conversion.
 - Specimen-unspecified `11557-6` and total CO2 `2026-3` do not define ABG/VBG cohorts.
 - Cohort events are selected independently per RFS category, setting, and patient.
@@ -266,6 +268,7 @@
 - Evidence commit `087d9f7` is pushed, Linux CI passed in `1m47s`, final Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/7#issuecomment-5019341036`), and PR #7 has zero unresolved review threads.
 
 ## Done
+- The stalled PR #8 review was recovered and independently completed against exact head `f265cc5` (`18` commits over `origin/main`). The prior pass had inspected only `CONTINUITY.md`; the completed review found no P0 issues but identified four P1 blockers and eleven distinct P2 correctness, validation, publication, monitoring, and recovery defects. Seven GitHub review threads remain unresolved: one is code-level fixed/outdated and two duplicate the same provenance defect, leaving five unique previously reported live issues.
 - Historical replication accepted at `99.998708%` aggregate exact-row parity and tagged `refactor-milestone-1`.
 - Corrected post-milestone prior-date, procedure first/last, and previous-vital fixes are committed and reviewed.
 - Legacy audit identified gas-code/threshold, predisposition-regex, setting-selection, data-screen, J46, TTE, numeric-boundary, encounter-conflict, and nondeterministic feature-reduction defects.
@@ -309,19 +312,28 @@
 - Exact validation from `e1383c6` completed in `6,248.955 s` with zero database errors/warnings, 36 matching schemas and row counts, zero duplicate source IDs, no residual scratch, and `4,489,232,384`-byte peak process-family RSS. Baseline comparison correctly failed all 36 hashes because the private unified config selected only additive `medication_ingredient.csv` and omitted the `2,991` historical `medication####.csv` chunks. A PHI-safe aggregate check found identical keys and differences only in the 32 medication feature columns.
 - Header preflight showed the legacy medication chunks are headerless after `medication0001.csv`; the canonical `medication_ingredient.csv` instead carries the complete 11-column historical schema. Medication routing is now schema-aware so this full monolith produces historical features and unified source rows in one scan, while true minimal ingredient files remain additive-only.
 - The schema-aware medication fix passes its focused regressions, `git diff --check`, Ruff, and all `379` tests in `400.65 s`. The atomic synthetic combined build also completes twice against the same output root. Exact external preflight passes all seven canonical monoliths with the `100 GiB` reserve enforced.
+- Commit `f265cc5` contains the schema-aware medication fix, is pushed on PR #8, and passes Linux CI. A clean full unified build from that exact commit started as PID `80692` in detached screen `unified_f265cc5`, with descriptive and five-second process-family monitors active. At `1h22m` it remained healthy in labs with `6.69 GB` work, about `797 MiB` current RSS, `1.15 GiB` sampled peak RSS, and over `7 TiB` free.
+- The recovered exact-head review found four P1 and eleven distinct P2 blockers spanning private-output routing, destructive replacement, catalog identity, exclusive execution, source fidelity/provenance, validation, monitoring, publication recovery, scratch cleanup, and resumability.
+- The `f265cc5` full run completed all raw pipeline stages but its five-second process-family peak reached `7,104,970,752` bytes during post-pipeline DuckDB work, above the `6,238 MiB` acceptance gate. It remains active and unmodified for diagnostic completion only.
+- Source thread `019ea7f1-3ae1-7dd0-a822-78816d53ccb0` is readable. Its last valid instruction authorizes all confirmed review fixes followed by the existing Step 2 acceptance workflow; the failed successor turn was an HTTP 400 caused by malformed input ID `review_rollout_user`, not a repository or build failure.
+- The first recovery implementation pass now covers strict YAML booleans, literal source-token preservation, catalog-SHA enforcement, include-rule completeness, mandatory sidecar reconciliation, raw-only encounter provenance, guarded combined routes, process-family RSS monitoring, terminal-result monitoring, registered scratch, exclusive work/output locking, recursive replacement safety, durable publication recovery, and resumable deterministic staging. Targeted Ruff passes; focused regression expansion and full gates remain in progress.
+- The recovered implementation passes `git diff --check`, Ruff, all focused review regressions, and the authoritative full repository gate: `413` tests in `854.39 s`. The isolated 11 GB final-test root and its AppleDouble sidecar were moved to Trash and verified absent from the validation temp root.
 
 ## Now
-- Commit `e1383c6` and its bounded validation evidence remain the current pushed checkpoint on PR #8; the schema-aware medication fix is locally verified and ready to commit.
+- The stalled thread's exact final request and Step 2 plan are recovered. All 4 P1 and 11 P2 findings have code fixes and focused regressions; local gates are complete, while commit/CI/review reconciliation and full exact-head evidence remain.
+- Commit `f265cc5` is the current pushed checkpoint on PR #8; it remains the comparison base, not release evidence.
 - The focused full-scale duplicate-source benchmark passed in `473.237 s`, found zero duplicates, peaked at `3,695,673,344` bytes process-family RSS, and cleaned all scratch.
-- No combined build or monitor process is active. The private config now selects the single canonical full-schema medication monolith. Commit the verified fix and launch a clean full build; the ingredient-only product and work remain preserved as failed evidence.
+- Full build PID `80692` completed all pipeline stages, including medication and final assembly, and is still in post-pipeline DuckDB work. At `2026-07-26T15:33Z` it remained active with `3,496,984,576` bytes family RSS and a `7,104,970,752`-byte observed peak. Do not interrupt it; the observed peak already fails the memory gate. A fresh exact-head Codex review was requested at `https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5083203051`.
+- At `2026-07-26T16:43Z`, the untouched `f265cc5` worker was actively partitioning exact duplicate encounter IDs during combined validation. Its result remains diagnostic-only because the peak gate failed and the recovered fixes change behavior.
+- The preserved partial strict-boolean edit and regression are intact. Focused tests currently pass except for one legacy publication test that still assumes the old random staging-prefix/deletion semantics; that test is being updated to prove retained-stage resume instead.
 
 ## Next
-- Validate post-creation checks under the `6,238 MiB` process gate and `100 GiB` free-space reserve without repeating the already-passing export, then finish exact 36-file parity, element completeness, publication, scratch, and repository-hygiene gates.
-- Request exact-head Codex review after evidence is complete. The approved corrected baseline remains external with 36 tables and 6,949,511 rows.
+- Commit/push the reviewed scope, reconcile every live PR thread, and obtain exact-head CI/review.
+- Execute Step 2: exact-head combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, process-family RSS/free-space limits, scratch cleanup, repository hygiene, and fresh review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
-- No implementation choice is blocking. Full-data performance and terminology-expansion results remain `UNCONFIRMED` until the unified builder is validated externally.
+- None for the review. Full-data parity and release acceptance remain `UNCONFIRMED`; the active run is not exact-head release evidence once behavior-changing fixes land.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`

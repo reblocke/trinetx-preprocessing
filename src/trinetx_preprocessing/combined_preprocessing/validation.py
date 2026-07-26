@@ -14,11 +14,16 @@ from ..filesystem import remove_tree_strict
 from ..regression import hash_csv_with_metadata
 from .contract import (
     COMBINED_SCHEMA_VERSION,
+    DATABASE_MANIFEST_SCHEMA_VERSION,
     PREPROCESSED_ENCOUNTER_TABLE,
     compatibility_outputs,
     final_output_columns,
 )
-from .database import open_combined_database
+from .database import (
+    COMBINED_MANIFEST_FILENAME,
+    combined_database_counts,
+    open_combined_database,
+)
 from .elements import (
     CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN,
     ENCOUNTER_FLOW_COLUMNS,
@@ -27,6 +32,7 @@ from .elements import (
     SOURCE_EVENT_DUCKDB_TYPES,
     SOURCE_TABLE_BY_DOMAIN,
 )
+from .scratch import COMBINED_VALIDATION_PREFIX
 
 _DIRECT_DUPLICATE_SOURCE_MAX_ROWS = 2_000_000
 _DUPLICATE_SOURCE_BUCKET_COUNT = 64
@@ -46,6 +52,7 @@ def validate_preprocessed_database(
     database_path: Path,
     *,
     compatibility_output_dir: Path | None = None,
+    published_database_path: Path | None = None,
     memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
 ) -> CombinedValidationResult:
     """Validate schema, referential integrity, and optional CSV exports."""
@@ -62,6 +69,10 @@ def validate_preprocessed_database(
     errors: list[str] = []
     warnings: list[str] = []
     counts: dict[str, int] = {}
+    sidecar = _load_product_sidecar(
+        path.parent / COMBINED_MANIFEST_FILENAME,
+        errors,
+    )
     with open_combined_database(
         path,
         read_only=True,
@@ -96,14 +107,44 @@ def validate_preprocessed_database(
             errors.append("Missing required tables: " + ", ".join(missing_tables))
             return CombinedValidationResult(False, tuple(errors), (), counts)
 
-        manifest = connection.execute(
-            "SELECT status, combined_schema_version, count(*) "
-            "FROM preprocessing_manifest GROUP BY ALL"
+        manifest_rows = connection.execute(
+            """
+            SELECT
+                run_id,
+                status,
+                combined_schema_version,
+                git_code_state_sha256,
+                element_catalog_sha256,
+                output_root,
+                duckdb_memory_limit_mib,
+                duckdb_threads
+            FROM preprocessing_manifest
+            """
         ).fetchall()
-        if len(manifest) != 1:
+        embedded_manifest: dict[str, object] | None = None
+        if len(manifest_rows) != 1:
             errors.append("preprocessing_manifest must contain exactly one run.")
         else:
-            status, schema_version, manifest_count = manifest[0]
+            (
+                run_id,
+                status,
+                schema_version,
+                git_code_state_sha256,
+                element_catalog_sha256,
+                output_root,
+                duckdb_memory_limit_mib,
+                duckdb_threads,
+            ) = manifest_rows[0]
+            embedded_manifest = {
+                "run_id": str(run_id),
+                "status": str(status),
+                "combined_schema_version": str(schema_version),
+                "git_code_state_sha256": str(git_code_state_sha256),
+                "element_catalog_sha256": str(element_catalog_sha256),
+                "output_root": str(output_root),
+                "duckdb_memory_limit_mib": int(duckdb_memory_limit_mib),
+                "duckdb_threads": int(duckdb_threads),
+            }
             if status != "complete":
                 errors.append(f"Database status is not complete: {status}")
             if schema_version != COMBINED_SCHEMA_VERSION:
@@ -111,8 +152,16 @@ def validate_preprocessed_database(
                     "Combined schema version mismatch: "
                     f"{schema_version} != {COMBINED_SCHEMA_VERSION}"
                 )
-            if int(manifest_count) != 1:
-                errors.append("preprocessing_manifest contains duplicate rows.")
+
+        if sidecar is not None and embedded_manifest is not None:
+            _validate_product_sidecar(
+                sidecar,
+                database_path=path,
+                published_database_path=published_database_path,
+                embedded_manifest=embedded_manifest,
+                database_counts=combined_database_counts(connection),
+                errors=errors,
+            )
 
         encounter_columns = _table_columns(connection, PREPROCESSED_ENCOUNTER_TABLE)
         expected_metadata = (
@@ -188,9 +237,7 @@ def validate_preprocessed_database(
                         f"Compatibility view row count mismatch: {output.key}"
                     )
                 if expected_columns != final_output_columns():
-                    errors.append(
-                        f"Stored compatibility schema mismatch: {output.key}"
-                    )
+                    errors.append(f"Stored compatibility schema mismatch: {output.key}")
 
         orphan_memberships = _count_orphan_memberships(connection)
         if orphan_memberships:
@@ -287,6 +334,26 @@ def validate_preprocessed_database(
             errors.append(
                 f"element_membership references {unknown_elements} unknown elements."
             )
+        exclude_only_elements = int(
+            connection.execute(
+                """
+                SELECT count(*)
+                FROM (
+                    SELECT catalog.element_id
+                    FROM element_catalog AS catalog
+                    LEFT JOIN element_rule AS rule USING (element_id)
+                    WHERE catalog.element_kind = 'source_concept'
+                    GROUP BY catalog.element_id
+                    HAVING count(*) FILTER (WHERE coalesce(rule.include, false)) = 0
+                )
+                """
+            ).fetchone()[0]
+        )
+        if exclude_only_elements:
+            errors.append(
+                f"element_catalog contains {exclude_only_elements} source elements "
+                "without an included rule."
+            )
 
         if compatibility_output_dir is not None:
             _validate_compatibility_files(
@@ -302,6 +369,87 @@ def validate_preprocessed_database(
         warnings=tuple(warnings),
         counts=counts,
     )
+
+
+def _load_product_sidecar(
+    path: Path,
+    errors: list[str],
+) -> dict[str, object] | None:
+    if not path.is_file():
+        errors.append(f"Missing combined product sidecar: {path}")
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"Cannot read combined product sidecar {path}: {exc}")
+        return None
+    if not isinstance(payload, dict):
+        errors.append(f"Combined product sidecar must be a JSON object: {path}")
+        return None
+    return payload
+
+
+def _validate_product_sidecar(
+    sidecar: dict[str, object],
+    *,
+    database_path: Path,
+    published_database_path: Path | None,
+    embedded_manifest: dict[str, object],
+    database_counts: dict[str, int],
+    errors: list[str],
+) -> None:
+    expected_values = {
+        "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
+        "combined_schema_version": COMBINED_SCHEMA_VERSION,
+        "run_id": embedded_manifest["run_id"],
+        "status": embedded_manifest["status"],
+        "git_code_state_sha256": embedded_manifest["git_code_state_sha256"],
+        "catalog_sha256": embedded_manifest["element_catalog_sha256"],
+        "duckdb_memory_limit_mib": embedded_manifest["duckdb_memory_limit_mib"],
+        "duckdb_threads": embedded_manifest["duckdb_threads"],
+    }
+    mismatched = [
+        key for key, expected in expected_values.items() if sidecar.get(key) != expected
+    ]
+    if mismatched:
+        errors.append(
+            "Combined product sidecar disagrees with the embedded manifest for: "
+            + ", ".join(sorted(mismatched))
+        )
+
+    embedded_database = (
+        Path(str(embedded_manifest["output_root"])) / database_path.name
+    ).resolve(strict=False)
+    expected_database = Path(published_database_path or database_path).resolve(
+        strict=False
+    )
+    if embedded_database != expected_database:
+        errors.append(
+            "Embedded published output root does not match the database location."
+        )
+    sidecar_database = sidecar.get("database")
+    if not isinstance(sidecar_database, str) or (
+        Path(sidecar_database).resolve(strict=False) != expected_database
+    ):
+        errors.append(
+            "Combined product sidecar database path does not match the embedded "
+            "published output root."
+        )
+    if sidecar.get("database_size_bytes") != database_path.stat().st_size:
+        errors.append(
+            "Combined product sidecar database size does not match the database."
+        )
+
+    sidecar_counts = sidecar.get("counts")
+    if not isinstance(sidecar_counts, dict) or any(
+        isinstance(value, bool) or not isinstance(value, int)
+        for value in sidecar_counts.values()
+    ):
+        errors.append("Combined product sidecar counts must be an integer mapping.")
+    elif sidecar_counts != database_counts:
+        errors.append(
+            "Combined product sidecar counts do not match the database tables."
+        )
 
 
 def _validate_compatibility_files(
@@ -334,9 +482,7 @@ def _validate_compatibility_files(
         if metadata.hash != expected_hash:
             errors.append(f"Compatibility CSV hash mismatch: {output.key}")
         if metadata.row_count != expected_count:
-            errors.append(
-                f"Compatibility CSV stored row count mismatch: {output.key}"
-            )
+            errors.append(f"Compatibility CSV stored row count mismatch: {output.key}")
         if metadata.columns != expected_columns:
             errors.append(f"Compatibility CSV stored schema mismatch: {output.key}")
 
@@ -390,7 +536,7 @@ def _count_duplicate_source_ids(connection: duckdb.DuckDBPyConnection) -> int:
     temp_directory.mkdir(parents=True, exist_ok=True)
     scratch = Path(
         tempfile.mkdtemp(
-            prefix=".trinetx-combined-source-duplicates-",
+            prefix=COMBINED_VALIDATION_PREFIX,
             dir=temp_directory,
         )
     )

@@ -691,11 +691,20 @@ def _iter_demographic_frames(
             "patient_regional_location": "string",
         }
     )
+    read_options: dict[str, object] = {}
+    if preserve_source_strings:
+        read_options.update(
+            {
+                "keep_default_na": False,
+                "na_values": [""],
+            }
+        )
     reader = pd.read_csv(
         path,
         usecols=selected_columns,
         dtype=dtype,
         chunksize=chunksize,
+        **read_options,
     )
     if chunksize is None:
         yield reader

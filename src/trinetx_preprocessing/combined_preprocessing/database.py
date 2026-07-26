@@ -40,9 +40,23 @@ from .elements import (
     catalog_rows,
     load_combined_catalog,
 )
+from .scratch import COMBINED_DUCKDB_SPILL_PREFIX
 
 COMBINED_MANIFEST_FILENAME = "trinetx_preprocessed_manifest.json"
 COMBINED_DUCKDB_THREADS = 1
+COMBINED_COUNT_TABLES = (
+    PREPROCESSED_ENCOUNTER_TABLE,
+    "rfs_membership",
+    "element_catalog",
+    "element_rule",
+    "element_membership",
+    "encounter_availability",
+    "patient_observability",
+    "source_observability_event",
+    "compatibility_output_manifest",
+    *SOURCE_TABLE_BY_DOMAIN.values(),
+    "source_encounter_flow",
+)
 
 
 @contextmanager
@@ -56,7 +70,9 @@ def open_combined_database(
     """Open a combined-product database with bounded, cleaned spill storage."""
 
     path = Path(database_path)
-    spill_path = path.with_name(f".{path.name}.duckdb-tmp-{uuid.uuid4().hex}")
+    spill_path = path.parent / (
+        f"{COMBINED_DUCKDB_SPILL_PREFIX}{path.name}-{uuid.uuid4().hex}"
+    )
     connection = duckdb.connect(str(path), read_only=read_only)
     try:
         connection.execute("SET memory_limit = ?", [f"{memory_limit_mib}MiB"])
@@ -134,7 +150,7 @@ def create_combined_database(
             [datetime.now(UTC).isoformat()],
         )
         connection.execute("CHECKPOINT")
-        counts = _database_counts(connection)
+        counts = combined_database_counts(connection)
     return {
         "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
         "combined_schema_version": COMBINED_SCHEMA_VERSION,
@@ -253,7 +269,7 @@ def inspect_combined_database(
             "duckdb_memory_limit_mib": row.get("duckdb_memory_limit_mib"),
             "duckdb_threads": row.get("duckdb_threads"),
             "manifest_columns": sorted(manifest_columns),
-            "counts": _database_counts(connection),
+            "counts": combined_database_counts(connection),
         }
 
 
@@ -447,16 +463,11 @@ def _load_source_tables(
 ) -> None:
     for domain, table_name in SOURCE_TABLE_BY_DOMAIN.items():
         path = resolve_work_table(config, f"combined_{table_name}.csv")
-        if domain == "encounter" and not path.is_file():
-            _create_source_encounter_from_work(connection, config)
-            continue
         if not path.is_file():
             raise FileNotFoundError(
                 f"Unified source table is missing for {domain}: {path}"
             )
         _create_source_table_from_work_path(connection, table_name, path)
-        if domain == "encounter":
-            _append_historical_encounter_work(connection, config)
 
 
 def _load_encounter_flow(
@@ -471,9 +482,7 @@ def _load_encounter_flow(
     for column in ENCOUNTER_FLOW_COLUMNS:
         column_type = ENCOUNTER_FLOW_DUCKDB_TYPES[column]
         identifier = _identifier(column)
-        expressions.append(
-            f"try_cast({identifier} AS {column_type}) AS {identifier}"
-        )
+        expressions.append(f"try_cast({identifier} AS {column_type}) AS {identifier}")
     connection.execute(
         "CREATE TABLE source_encounter_flow AS SELECT "
         + ", ".join(expressions)
@@ -554,95 +563,6 @@ def _load_observability_events(
                 timestamp_precision
             """
         )
-
-
-def _create_source_encounter_from_work(
-    connection: duckdb.DuckDBPyConnection,
-    config: Config,
-    *,
-    table_name: str = "source_encounter",
-) -> None:
-    sources = []
-    for setting, filename in (
-        ("AMB", "AMB_encounters.csv"),
-        ("EMER", "EMER_encounters.csv"),
-        ("INPAT", "INPAT_encounters.csv"),
-    ):
-        path = resolve_work_table(config, filename)
-        if not path.is_file():
-            raise FileNotFoundError(f"Missing encounter work table: {path}")
-        sources.append(
-            "SELECT *, "
-            f"{_sql_string(filename)} AS _source_file, "
-            f"{_sql_string(setting)} AS _setting FROM {_work_path_source(path)}"
-        )
-    union = " UNION ALL ".join(sources)
-    string_expressions = {
-        "source_record_id": (
-            "concat('encounter:', _setting, ':', coalesce(encounter_id, ''), ':', "
-            "row_number() OVER ())"
-        ),
-        "logical_domain": "'encounter'",
-        "source_file": "_source_file",
-        "patient_id": "patient_id",
-        "encounter_id": "encounter_id",
-        "start_date": "cast(start_date AS VARCHAR)",
-        "end_date": "cast(end_date AS VARCHAR)",
-        "type": "type",
-    }
-    expressions = []
-    for column in SOURCE_EVENT_COLUMNS:
-        if column == "source_row_number":
-            expression = "row_number() OVER (PARTITION BY _source_file)"
-        elif column == "observed_order":
-            expression = "row_number() OVER () - 1"
-        elif column in {"event_datetime", "start_datetime"}:
-            expression = "try_cast(start_date AS TIMESTAMP)"
-        elif column == "end_datetime":
-            expression = "try_cast(end_date AS TIMESTAMP)"
-        elif column in {"timestamp_precision", "start_timestamp_precision"}:
-            expression = "'timestamp'"
-        elif column == "end_timestamp_precision":
-            expression = "CASE WHEN end_date IS NULL THEN NULL ELSE 'timestamp' END"
-        elif column == "numeric_value":
-            expression = "NULL::DOUBLE"
-        else:
-            expression = string_expressions.get(column, "NULL::VARCHAR")
-        expressions.append(f"{expression} AS {_identifier(column)}")
-    connection.execute(
-        f"CREATE TABLE {_identifier(table_name)} AS "
-        f"SELECT {', '.join(expressions)} "
-        f"FROM ({union})"
-    )
-
-
-def _append_historical_encounter_work(
-    connection: duckdb.DuckDBPyConnection,
-    config: Config,
-) -> None:
-    _create_source_encounter_from_work(
-        connection,
-        config,
-        table_name="historical_encounter_work",
-    )
-    columns = ", ".join(_identifier(column) for column in SOURCE_EVENT_COLUMNS)
-    connection.execute(
-        f"""
-        INSERT INTO source_encounter ({columns})
-        SELECT {columns}
-        FROM historical_encounter_work AS historical
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM source_encounter AS captured
-            WHERE captured.patient_id IS NOT DISTINCT FROM historical.patient_id
-              AND captured.encounter_id IS NOT DISTINCT FROM historical.encounter_id
-              AND captured.start_datetime
-                    IS NOT DISTINCT FROM historical.start_datetime
-              AND captured.type IS NOT DISTINCT FROM historical.type
-        )
-        """
-    )
-    connection.execute("DROP TABLE historical_encounter_work")
 
 
 def _create_rfs_membership(connection: duckdb.DuckDBPyConnection) -> None:
@@ -797,27 +717,18 @@ def _create_quality_summary(connection: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _database_counts(connection: duckdb.DuckDBPyConnection) -> dict[str, int]:
-    tables = (
-        PREPROCESSED_ENCOUNTER_TABLE,
-        "rfs_membership",
-        "element_catalog",
-        "element_rule",
-        "element_membership",
-        "encounter_availability",
-        "patient_observability",
-        "source_observability_event",
-        "compatibility_output_manifest",
-        *SOURCE_TABLE_BY_DOMAIN.values(),
-        "source_encounter_flow",
-    )
+def combined_database_counts(
+    connection: duckdb.DuckDBPyConnection,
+) -> dict[str, int]:
+    """Return the exact aggregate table-count contract stored in the sidecar."""
+
     return {
         table: int(
             connection.execute(f"SELECT count(*) FROM {_identifier(table)}").fetchone()[
                 0
             ]
         )
-        for table in tables
+        for table in COMBINED_COUNT_TABLES
     }
 
 

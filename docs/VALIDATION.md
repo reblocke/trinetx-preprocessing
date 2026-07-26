@@ -47,6 +47,15 @@ ROOT="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_v1"
   --strict --replace \
   --out "$ROOT/manifests/combined_benchmark.json"
 
+# When supervising a background benchmark, pass its Python PID and the same
+# result path. Watch mode succeeds only for that observed process family and an
+# explicit terminal "complete" result.
+./.venv/bin/python scripts/monitor_combined_preprocessing.py \
+  --pid "$BENCHMARK_PID" \
+  --config "$ROOT/config.yaml" \
+  --result "$ROOT/manifests/combined_benchmark.json" \
+  --out "$ROOT/manifests/combined_monitor.json"
+
 ./.venv/bin/python scripts/verify_combined_parity.py \
   --database "$ROOT/output/trinetx_preprocessed.duckdb" \
   --output-dir "$ROOT/output" \
@@ -61,9 +70,10 @@ ROOT="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_v1"
 Acceptance requires all 36 ordered schemas, row counts, and normalized hashes
 to match; database validation to pass; every source element to have a rule;
 aggregate observed-match gaps to be reviewed; peak RSS to remain at or below
-6,238 MB; and free space to remain above 100 GiB. The element report may list
-unobserved rules because absence in one export is evidence, not necessarily an
-implementation failure.
+6,238 MiB using the sampled concurrent process-family sum; and free space to
+remain above 100 GiB. Every source element must have at least one included
+rule. The element report may list unobserved rules because absence in one
+export is evidence, not necessarily an implementation failure.
 
 The committed 20-case synthetic test additionally requires adapter-backed and
 direct-raw GLP-1 source, analysis, cohort-flow, and evidence tables to match.

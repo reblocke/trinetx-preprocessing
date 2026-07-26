@@ -173,9 +173,12 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
             ).fetchone()[0]
         )
     missing_rules = [
+        element["element_id"] for element in elements if int(element["rule_count"]) == 0
+    ]
+    missing_included_rules = [
         element["element_id"]
         for element in elements
-        if int(element["rule_count"]) == 0
+        if int(element["include_rule_count"]) == 0
     ]
     unobserved = [
         element["element_id"]
@@ -186,14 +189,18 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
         "schema_version": EVIDENCE_SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "complete": validation.valid
-        and not missing_rules
+        and not missing_included_rules
         and historical_count == len(final_output_columns()),
         "database_validation_errors": list(validation.errors),
         "database_validation_warnings": list(validation.warnings),
         "source_element_count": len(elements),
         "source_rule_count": sum(int(element["rule_count"]) for element in elements),
+        "source_include_rule_count": sum(
+            int(element["include_rule_count"]) for element in elements
+        ),
         "historical_element_count": historical_count,
         "elements_without_rules": missing_rules,
+        "elements_without_included_rules": missing_included_rules,
         "elements_without_observed_matches": unobserved,
         "elements": elements,
     }

@@ -34,6 +34,10 @@ from .combined_preprocessing.elements import (
     COMBINED_MEDICATION_REQUIRED_COLUMNS,
     is_medication_ingredient_export,
 )
+from .combined_preprocessing.scratch import (
+    COMBINED_SCRATCH_PATH_PREFIXES,
+    is_combined_scratch_name,
+)
 from .combined_preprocessing.validation import validate_preprocessed_database
 from .config import (
     Config,
@@ -211,7 +215,43 @@ SCRATCH_PATH_PREFIXES = (
     ".trinetx-glp1-observability-scan-",
     ".trinetx-glp1-terminology-qa-",
     ".trinetx-glp1-vital-ingest-",
+    *COMBINED_SCRATCH_PATH_PREFIXES,
 )
+COMBINED_MUTATING_COMMANDS = {
+    "run",
+    "run-all",
+    "build-preprocessed",
+    "profile",
+    "baseline",
+    "compare",
+    "run-encounter",
+    "run-labs",
+    "run-diagnosis",
+    "run-meds",
+    "run-procedure",
+    "run-vitals",
+    "run-rfs",
+    "run-final-assembly",
+}
+
+
+def _require_safe_combined_mutation_locations(
+    config: Config,
+    *,
+    command: str,
+) -> None:
+    """Guard every combined route that can write confidential artifacts."""
+
+    if not config.combined.enabled or command not in COMBINED_MUTATING_COMMANDS:
+        return
+    require_safe_output_location(
+        config.work_dir,
+        artifact_label="work directory",
+    )
+    require_safe_output_location(
+        config.output_dir,
+        artifact_label="output directory",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1239,6 +1279,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         validate_config(config)
+        _require_safe_combined_mutation_locations(
+            config,
+            command=args.command,
+        )
         if args.command == "validate-config":
             logger.info("Configuration validated successfully.")
             return 0
@@ -1643,7 +1687,9 @@ def _find_scratch_artifacts(root: Path) -> list[Path]:
 
 
 def _is_known_scratch_path(path: Path) -> bool:
-    return any(path.name.startswith(prefix) for prefix in SCRATCH_PATH_PREFIXES)
+    return any(
+        path.name.startswith(prefix) for prefix in SCRATCH_PATH_PREFIXES
+    ) or is_combined_scratch_name(path.name)
 
 
 def _path_size_bytes(path: Path) -> int:

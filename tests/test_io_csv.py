@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pandas as pd
+
 from trinetx_preprocessing.io.csv import iter_csv
 
 
@@ -22,3 +24,26 @@ def test_iter_csv_yields_chunks(tmp_path: Path) -> None:
 
     assert [len(chunk) for chunk in chunks] == [2, 2, 1]
     assert list(chunks[0].columns) == ["col1", "col2"]
+
+
+def test_iter_csv_preserves_literal_na_like_source_tokens(tmp_path: Path) -> None:
+    input_csv = tmp_path / "source.csv"
+    _write_csv(
+        input_csv,
+        [
+            ["NA", "N/A"],
+            ["NULL", ""],
+        ],
+    )
+
+    frame = next(
+        iter_csv(
+            input_csv,
+            dtype="string",
+            preserve_source_tokens=True,
+        )
+    )
+
+    assert frame.loc[0].tolist() == ["NA", "N/A"]
+    assert frame.loc[1, "col1"] == "NULL"
+    assert pd.isna(frame.loc[1, "col2"])

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import duckdb
 
+from ..glp1_eligibility.concept_sets import load_concept_sets
 from ..glp1_eligibility.config import GLP1Config
 from ..glp1_eligibility.sql_helpers import inclusive_lookback_start_sql
 
@@ -116,6 +117,7 @@ def materialize_glp1_sources_from_preprocessed(
 
     _attach_preprocessed(connection, database_path)
     try:
+        _require_matching_element_catalog(connection, config)
         _create_lab_source(connection)
         _create_gas_candidate_ids(connection)
         _create_candidate_membership(connection)
@@ -431,9 +433,9 @@ def _create_observability_table(
             lookback_days,
         )
         event_count = (
-            "sum(event.event_count) FILTER (WHERE "
+            "coalesce(sum(event.event_count) FILTER (WHERE "
             "event.event_datetime <= analysis.index_date AND "
-            f"{lower_bound})::BIGINT AS event_count"
+            f"{lower_bound}), 0)::BIGINT AS event_count"
         )
     connection.execute(
         f"""
@@ -451,6 +453,35 @@ def _create_observability_table(
         GROUP BY analysis.index_event_id
         """
     )
+
+
+def _require_matching_element_catalog(
+    connection: duckdb.DuckDBPyConnection,
+    config: GLP1Config,
+) -> None:
+    """Reject an adapter run whose active catalog differs from the product."""
+
+    rows = connection.execute(
+        """
+        SELECT status, element_catalog_sha256
+        FROM preprocessed.preprocessing_manifest
+        """
+    ).fetchall()
+    if len(rows) != 1:
+        raise ValueError(
+            "Combined preprocessing manifest must contain exactly one run."
+        )
+    status, stored_sha256 = rows[0]
+    if status != "complete":
+        raise ValueError(
+            f"Combined preprocessing database is not complete: {status!r}."
+        )
+    active_sha256 = load_concept_sets(config.concept_sets_dir).sha256
+    if str(stored_sha256) != active_sha256:
+        raise ValueError(
+            "GLP-1 concept catalog does not match the combined preprocessing "
+            f"catalog: active {active_sha256}, stored {stored_sha256}."
+        )
 
 
 def _source_hash_sql(table_name: str) -> str:

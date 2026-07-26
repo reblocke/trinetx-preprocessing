@@ -76,8 +76,18 @@ and table-level data dictionary.
 Publication is transactional at the product-directory boundary: all 36 CSVs,
 the database, and its sidecar are built and validated in a sibling staging
 directory. `--replace` moves the prior product to a rollback backup and installs
-the completed directory only after every check passes. Failed builds leave the
-published product unchanged; output roots with unmanaged files are rejected.
+the completed directory only after every check passes. A durable publication
+journal repairs an interrupted directory swap on the next invocation. Staging
+and phase state use deterministic source/code/config identities, so a failure
+after the raw pipeline completes resumes database, export, or validation work
+without rescanning the exports. Exclusive locks cover both the canonical work
+and output roots. Failed builds leave the published product unchanged; output
+roots with unmanaged descendants or symlinks are rejected.
+
+Validation requires the adjacent sidecar and reconciles its run, catalog,
+runtime, database size/path, and table counts with the embedded manifest.
+Literal source values such as `NA`, `N/A`, and `NULL` remain source strings;
+only empty CSV fields are treated as missing.
 
 ## Acceptance evidence
 
@@ -85,8 +95,8 @@ Stage 1 is accepted only after:
 
 1. the 36 compatibility exports match the approved historical baseline by
    ordered schema, row count, and normalized SHA-256;
-2. every required source element has a catalog rule and aggregate coverage is
-   reported without identifiers;
+2. every required source element has at least one included catalog rule and
+   aggregate coverage is reported without identifiers;
 3. the combined product passes structural, referential-integrity, manifest,
    and export validation;
 4. the full build satisfies the existing external-space and peak-memory gates;

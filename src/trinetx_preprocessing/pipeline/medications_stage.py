@@ -113,6 +113,7 @@ def run_medications_stage(config: Config) -> list[Path]:
                         else RAW_DTYPE
                     ),
                     parse_dates=None if config.combined.enabled else ["start_date"],
+                    preserve_source_tokens=config.combined.enabled,
                 ):
                     rows_read += len(chunk)
                     element_writer.add_chunk(chunk, source_path=path)
@@ -221,6 +222,7 @@ def _capture_ingredient_export(
         chunksize=chunksize,
         usecols=source_columns,
         dtype={column: "string" for column in source_columns},
+        preserve_source_tokens=True,
     ):
         rows_read += len(chunk)
         writer.add_chunk(chunk, source_path=path)

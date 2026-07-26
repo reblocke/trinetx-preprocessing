@@ -123,6 +123,29 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     validate_config(config)
 
 
+@pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1", "null"])
+def test_combined_enabled_requires_boolean(tmp_path: Path, value: str) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              enabled: {value}
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    with pytest.raises(ConfigError, match="combined.enabled"):
+        load_config(config_path)
+
+
 @pytest.mark.parametrize("value", [0, -1, 1.5, True, "3072"])
 def test_combined_duckdb_memory_limit_requires_positive_integer(
     tmp_path: Path,

@@ -50,6 +50,8 @@ trinetx_preprocessing_scaffold_md.zip
 **/combined_observability_*.csv
 **/combined_gas_candidate_id.parquet
 **/combined_gas_candidate_id.csv
+**/combined_encounter_flow.parquet
+**/combined_encounter_flow.csv
 **/RFS_*_ENC_*_BEFORE.csv
 **/RFS_*_ENC_*_AFTER.csv
 

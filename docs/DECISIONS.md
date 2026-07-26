@@ -1594,3 +1594,37 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References:
   `src/trinetx_preprocessing/pipeline/medications_stage.py`,
   `tests/test_medications_stage.py`.
+
+### 2026-07-26 — Make combined publication recoverable and source-faithful
+- Date: 2026-07-26
+- Decision: Bind deterministic combined staging to source, configuration, code,
+  catalog, and strict-mode identity; lock both canonical roots; retain completed
+  phases after late failure; and publish through a durable recovery journal.
+  Validate the complete managed tree recursively before replacement and require
+  the adjacent sidecar to reconcile with the embedded database manifest.
+- Context: Exact-head PR #8 review found that alternate combined CLI routes
+  could bypass the private-path guard, nested unmanaged descendants could be
+  deleted by `--replace`, overlapping builds shared canonical state, late
+  failures forced another raw scan, and an interrupted directory swap could
+  leave no published output. The review also found source-token coercion,
+  reduced encounter rows presented as raw provenance, catalog-identity,
+  observability, monitoring, sidecar, scratch, and include-rule gaps.
+- Rationale: Confidential row-level products need fail-closed path and
+  replacement boundaries. Long raw scans need resumable late phases, while
+  provenance tables must contain only captured raw records. Release monitoring
+  must measure the concurrent process family and require explicit terminal
+  evidence.
+- Consequences: Every combined mutating route guards work and output roots;
+  `NA`, `N/A`, and `NULL` remain literal source strings; complete encounter
+  denominators live only in `source_encounter_flow`; GLP-1 adaptation requires
+  the active catalog SHA; filtered zero-event counts are zero; source elements
+  require an included rule; and all transient combined path families are
+  discoverable by `clean-scratch`. Intermediate schema version 9 invalidates
+  earlier combined work.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py`,
+  `src/trinetx_preprocessing/io/csv.py`,
+  `scripts/benchmark_combined_preprocessing.py`,
+  `scripts/monitor_combined_preprocessing.py`.

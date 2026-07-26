@@ -125,6 +125,7 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                     parse_dates=(
                         None if config.combined.enabled else ["start_date", "end_date"]
                     ),
+                    preserve_source_tokens=config.combined.enabled,
                 ):
                     chunk_index += 1
                     rows_read += len(chunk)

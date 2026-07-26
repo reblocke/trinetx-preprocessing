@@ -59,7 +59,7 @@ def test_work_manifest_records_and_requires_completed_stages(tmp_path: Path) -> 
 
     assert path.exists()
     assert manifest["schema_version"] == 5
-    assert manifest["intermediate_schema_version"] == 8
+    assert manifest["intermediate_schema_version"] == 9
     assert len(manifest["git_code_state_sha256"]) == 64
     assert manifest["combined_element_catalog_sha256"] is None
     assert manifest["runtime_versions"]["python"]
