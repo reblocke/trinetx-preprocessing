@@ -18,6 +18,7 @@ from trinetx_preprocessing.filesystem import write_text_atomic
 from trinetx_preprocessing.work_manifest import work_manifest_path
 
 MONITOR_SCHEMA_VERSION = 2
+BENCHMARK_RESULT_SCHEMA_VERSION = 2
 
 
 def main() -> int:
@@ -209,12 +210,36 @@ def _result_status(path: Path | None) -> dict[str, object]:
             "status": None,
             "error": str(exc),
         }
-    status = payload.get("status") if isinstance(payload, dict) else None
-    result_pid = payload.get("pid") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return {
+            "available": False,
+            "path": str(path),
+            "status": None,
+            "pid": None,
+            "schema_version": None,
+            "error": "Benchmark result must contain a JSON object.",
+        }
+    schema_version = payload.get("schema_version")
+    if schema_version != BENCHMARK_RESULT_SCHEMA_VERSION:
+        return {
+            "available": True,
+            "path": str(path),
+            "status": None,
+            "pid": None,
+            "schema_version": schema_version,
+            "error": (
+                "Benchmark result schema mismatch: expected "
+                f"{BENCHMARK_RESULT_SCHEMA_VERSION}, observed "
+                f"{schema_version!r}."
+            ),
+        }
+    status = payload.get("status")
+    result_pid = payload.get("pid")
     return {
-        "available": isinstance(payload, dict),
+        "available": True,
         "path": str(path),
         "status": status,
+        "schema_version": schema_version,
         "pid": (
             result_pid
             if isinstance(result_pid, int) and not isinstance(result_pid, bool)
@@ -238,7 +263,14 @@ def _monitor_exit_code(
         build_result.get("status") if isinstance(build_result, dict) else None
     )
     result_pid = build_result.get("pid") if isinstance(build_result, dict) else None
-    trusted_result = trusted_result_pid is not None and result_pid == trusted_result_pid
+    result_schema = (
+        build_result.get("schema_version") if isinstance(build_result, dict) else None
+    )
+    trusted_result = (
+        result_schema == BENCHMARK_RESULT_SCHEMA_VERSION
+        and trusted_result_pid is not None
+        and result_pid == trusted_result_pid
+    )
     if trusted_result and result_status == "failed":
         return 1
     if bool(process.get("running")):

@@ -36,7 +36,7 @@ def test_monitor_requires_explicit_terminal_success() -> None:
         monitor_script._monitor_exit_code(
             once=False,
             process=running,
-            build_result={"status": "running", "pid": 42},
+            build_result={"schema_version": 2, "status": "running", "pid": 42},
             trusted_result_pid=42,
         )
         is None
@@ -45,7 +45,7 @@ def test_monitor_requires_explicit_terminal_success() -> None:
         monitor_script._monitor_exit_code(
             once=False,
             process=vanished,
-            build_result={"status": "running", "pid": 42},
+            build_result={"schema_version": 2, "status": "running", "pid": 42},
             trusted_result_pid=42,
         )
         == 1
@@ -54,7 +54,7 @@ def test_monitor_requires_explicit_terminal_success() -> None:
         monitor_script._monitor_exit_code(
             once=False,
             process=running,
-            build_result={"status": "failed", "pid": 42},
+            build_result={"schema_version": 2, "status": "failed", "pid": 42},
             trusted_result_pid=42,
         )
         == 1
@@ -63,7 +63,7 @@ def test_monitor_requires_explicit_terminal_success() -> None:
         monitor_script._monitor_exit_code(
             once=False,
             process=vanished,
-            build_result={"status": "complete", "pid": 42},
+            build_result={"schema_version": 2, "status": "complete", "pid": 42},
             trusted_result_pid=42,
         )
         == 0
@@ -72,7 +72,33 @@ def test_monitor_requires_explicit_terminal_success() -> None:
         monitor_script._monitor_exit_code(
             once=False,
             process=vanished,
-            build_result={"status": "complete", "pid": 99},
+            build_result={"schema_version": 2, "status": "complete", "pid": 99},
+            trusted_result_pid=42,
+        )
+        == 1
+    )
+
+
+def test_monitor_rejects_unversioned_or_stale_result_schema(tmp_path: Path) -> None:
+    result_path = tmp_path / "result.json"
+    result_path.write_text('{"schema_version": 1, "status": "complete", "pid": 42}\n')
+
+    status = monitor_script._result_status(result_path)
+
+    assert status["available"] is True
+    assert status["schema_version"] == 1
+    assert status["status"] is None
+    assert status["pid"] is None
+    assert "schema mismatch" in status["error"]
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process={"running": False},
+            build_result={
+                "schema_version": 1,
+                "status": "complete",
+                "pid": 42,
+            },
             trusted_result_pid=42,
         )
         == 1

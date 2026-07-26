@@ -386,6 +386,7 @@ def _combined_build_identity(config: Config, *, strict: bool) -> str:
     payload = {
         "work_identity_sha256": work_identity_sha256(config),
         "strict": strict,
+        "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

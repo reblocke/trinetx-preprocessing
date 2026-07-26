@@ -1598,8 +1598,9 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 ### 2026-07-26 — Make combined publication recoverable and source-faithful
 - Date: 2026-07-26
 - Decision: Bind deterministic combined staging to source, configuration, code,
-  catalog, and strict-mode identity; lock both canonical roots; retain completed
-  phases after late failure; and publish through a durable recovery journal.
+  catalog, strict-mode identity, and the DuckDB memory limit; lock both canonical
+  roots; retain completed phases after late failure; and publish through a
+  durable recovery journal.
   Validate the complete managed tree recursively before replacement and require
   the adjacent sidecar to reconcile with the embedded database manifest.
 - Context: Exact-head PR #8 review found that alternate combined CLI routes
@@ -1612,8 +1613,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - Rationale: Confidential row-level products need fail-closed path and
   replacement boundaries. Long raw scans need resumable late phases, while
   provenance tables must contain only captured raw records. Release monitoring
-  must measure the concurrent process family and require explicit terminal
-  evidence.
+  must measure the concurrent process family and require explicit schema-2
+  terminal evidence.
 - Consequences: Every combined mutating route guards work and output roots;
   `NA`, `N/A`, and `NULL` remain literal source strings; complete encounter
   denominators live only in `source_encounter_flow`; GLP-1 adaptation requires

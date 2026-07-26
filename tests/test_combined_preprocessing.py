@@ -136,6 +136,27 @@ def test_combined_resumable_identity_includes_strict_policy(tmp_path: Path) -> N
     )
 
 
+def test_combined_resumable_identity_includes_duckdb_memory_limit(
+    tmp_path: Path,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    changed = replace(
+        config,
+        combined=replace(
+            config.combined,
+            duckdb_memory_limit_mib=config.combined.duckdb_memory_limit_mib + 1,
+        ),
+    )
+
+    assert combined_builder._combined_build_identity(
+        config,
+        strict=False,
+    ) != combined_builder._combined_build_identity(
+        changed,
+        strict=False,
+    )
+
+
 def test_combined_private_artifacts_reject_repository_paths() -> None:
     with pytest.raises(ValueError, match="work directory"):
         require_safe_output_location(
