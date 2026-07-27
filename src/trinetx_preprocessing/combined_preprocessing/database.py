@@ -44,6 +44,8 @@ from .scratch import COMBINED_DUCKDB_SPILL_PREFIX
 
 COMBINED_MANIFEST_FILENAME = "trinetx_preprocessed_manifest.json"
 COMBINED_DUCKDB_THREADS = 1
+COMBINED_AVAILABILITY_BUCKET_COUNT = 64
+COMBINED_AVAILABILITY_ROW_GROUP_SIZE = 250_000
 COMBINED_COUNT_TABLES = (
     PREPROCESSED_ENCOUNTER_TABLE,
     "rfs_membership",
@@ -596,34 +598,10 @@ def _create_availability_tables(
         raise FileNotFoundError(
             "Combined preprocessing requires diagnosis and lab availability indexes."
         )
-    connection.execute(
-        f"""
-        CREATE TABLE encounter_availability AS
-        WITH diagnosis AS (
-            SELECT DISTINCT encounter_id
-            FROM {_work_path_source(diagnosis_path)}
-            WHERE encounter_id IS NOT NULL
-        ),
-        lab AS (
-            SELECT DISTINCT encounter_id
-            FROM {_work_path_source(lab_path)}
-            WHERE encounter_id IS NOT NULL
-        ),
-        keys AS (
-            SELECT encounter_id FROM diagnosis
-            UNION
-            SELECT encounter_id FROM lab
-        )
-        SELECT
-            keys.encounter_id,
-            diagnosis.encounter_id IS NOT NULL AS has_diagnosis,
-            lab.encounter_id IS NOT NULL AS has_lab,
-            diagnosis.encounter_id IS NOT NULL OR lab.encounter_id IS NOT NULL
-                AS has_diagnosis_or_lab
-        FROM keys
-        LEFT JOIN diagnosis USING (encounter_id)
-        LEFT JOIN lab USING (encounter_id)
-        """
+    _create_encounter_availability(
+        connection,
+        diagnosis_path=diagnosis_path,
+        lab_path=lab_path,
     )
     connection.execute(
         """
@@ -638,6 +616,90 @@ def _create_availability_tables(
         GROUP BY patient_id, logical_domain
         """
     )
+
+
+def _create_encounter_availability(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    diagnosis_path: Path,
+    lab_path: Path,
+) -> None:
+    """Create exact diagnosis/lab flags through bounded hash partitions."""
+
+    connection.execute("SET preserve_insertion_order = false")
+    connection.execute(
+        f"SET partitioned_write_max_open_files = {COMBINED_AVAILABILITY_BUCKET_COUNT}"
+    )
+    spill_root = Path(
+        connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
+    )
+    spill_root.mkdir(parents=True, exist_ok=True)
+    partition_root = spill_root / "encounter-availability"
+    try:
+        connection.execute(
+            f"""
+            COPY (
+                SELECT
+                    encounter_id,
+                    1::UTINYINT AS has_diagnosis,
+                    0::UTINYINT AS has_lab,
+                    hash(encounter_id) % {COMBINED_AVAILABILITY_BUCKET_COUNT}
+                        AS availability_bucket
+                FROM {_work_path_source(diagnosis_path)}
+                WHERE encounter_id IS NOT NULL
+                UNION ALL
+                SELECT
+                    encounter_id,
+                    0::UTINYINT AS has_diagnosis,
+                    1::UTINYINT AS has_lab,
+                    hash(encounter_id) % {COMBINED_AVAILABILITY_BUCKET_COUNT}
+                        AS availability_bucket
+                FROM {_work_path_source(lab_path)}
+                WHERE encounter_id IS NOT NULL
+            ) TO {_sql_string(str(partition_root))}
+            (
+                FORMAT PARQUET,
+                PARTITION_BY (availability_bucket),
+                COMPRESSION ZSTD,
+                ROW_GROUP_SIZE {COMBINED_AVAILABILITY_ROW_GROUP_SIZE}
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE encounter_availability (
+                encounter_id VARCHAR NOT NULL,
+                has_diagnosis BOOLEAN NOT NULL,
+                has_lab BOOLEAN NOT NULL,
+                has_diagnosis_or_lab BOOLEAN NOT NULL
+            )
+            """
+        )
+        for bucket in range(COMBINED_AVAILABILITY_BUCKET_COUNT):
+            bucket_path = (
+                partition_root / f"availability_bucket={bucket}" / "data_*.parquet"
+            )
+            if not any(bucket_path.parent.glob("data_*.parquet")):
+                continue
+            connection.execute(
+                f"""
+                INSERT INTO encounter_availability
+                SELECT
+                    encounter_id,
+                    max(has_diagnosis) = 1 AS has_diagnosis,
+                    max(has_lab) = 1 AS has_lab,
+                    max(has_diagnosis) = 1 OR max(has_lab) = 1
+                        AS has_diagnosis_or_lab
+                FROM read_parquet({_sql_string(str(bucket_path))})
+                GROUP BY encounter_id
+                """
+            )
+    finally:
+        if partition_root.exists():
+            remove_tree_strict(
+                partition_root,
+                context="Combined encounter-availability partitions",
+            )
 
 
 def _create_compatibility_views(connection: duckdb.DuckDBPyConnection) -> None:

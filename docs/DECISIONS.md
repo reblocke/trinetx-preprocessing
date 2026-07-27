@@ -1550,6 +1550,32 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `tests/test_combined_preprocessing.py`.
 
+### 2026-07-27 — Hash-partition encounter availability during publication
+- Date: 2026-07-27
+- Decision: Shuffle diagnosis/lab encounter IDs once into 64 DuckDB-managed
+  Parquet partitions, reduce one partition at a time, and remove the partitions
+  before database publication continues. Read only `data_*.parquet` so ExFAT
+  AppleDouble sidecars cannot be mistaken for data.
+- Context: Exact-head full publication reached `6,318.703 MiB` process RSS
+  while one query simultaneously materialized diagnosis distinct IDs, lab
+  distinct IDs, their union, and two joins. The worker then disappeared during
+  a host-wide low-memory/jetsam event. Lowering DuckDB to `2048 MiB` made the
+  unchanged query fail internally, and one global union/group aggregation also
+  exhausted the `3072 MiB` pool.
+- Rationale: Hash partitioning keeps every occurrence of an encounter ID in one
+  bucket, so bucket-local Boolean reduction is algebraically identical without
+  retaining global key sets. Full-scale candidate and bucket-local-original
+  comparators matched all `303,490,815` rows, three flag counts, and three
+  order-independent ID hashes.
+- Consequences: The measured candidate completed in `135.460 s` with
+  `2,328.656 MiB` peak process RSS and zero residual scratch. The transient
+  partitions live under the existing registered DuckDB spill root, use one
+  writer per bucket, and remain recoverable by the combined scratch cleaner
+  after an unclean exit.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.
+
 ### 2026-07-24 — Apply publication limits to every DuckDB connection
 - Date: 2026-07-24
 - Decision: Open database creation, compatibility export, provenance refresh,

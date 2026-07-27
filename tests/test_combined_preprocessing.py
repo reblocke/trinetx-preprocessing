@@ -24,6 +24,7 @@ from trinetx_preprocessing.combined_preprocessing.contract import (
 )
 from trinetx_preprocessing.combined_preprocessing.database import (
     _combined_run_id,
+    _create_availability_tables,
     export_compatibility_outputs,
     inspect_combined_database,
     open_combined_database,
@@ -182,6 +183,80 @@ def test_combined_database_session_bounds_runtime_and_cleans_spill(
     assert threads == 1
     assert preserve_order is False
     assert not Path(spill_path).exists()
+
+
+def test_combined_encounter_availability_is_exact_and_cleans_partitions(
+    tmp_path: Path,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    pd.DataFrame(
+        {"encounter_id": pd.Series(["E1", "E1", "E2", None], dtype="string")}
+    ).to_parquet(config.work_dir / "analysis_diagnosis_availability.parquet")
+    pd.DataFrame(
+        {"encounter_id": pd.Series(["E2", "E3", "E3", None], dtype="string")}
+    ).to_parquet(config.work_dir / "analysis_lab_availability.parquet")
+    database_path = tmp_path / "availability.duckdb"
+
+    with open_combined_database(database_path, memory_limit_mib=64) as connection:
+        connection.execute(
+            """
+            CREATE TABLE source_observability_event (
+                patient_id VARCHAR,
+                logical_domain VARCHAR,
+                event_datetime TIMESTAMP,
+                timestamp_precision VARCHAR,
+                event_count UBIGINT
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO source_observability_event
+            VALUES ('P1', 'diagnosis', '2022-01-01', 'date_only', 2)
+            """
+        )
+        _create_availability_tables(connection, config)
+        rows = connection.execute(
+            """
+            SELECT
+                encounter_id,
+                has_diagnosis,
+                has_lab,
+                has_diagnosis_or_lab
+            FROM encounter_availability
+            ORDER BY encounter_id
+            """
+        ).fetchall()
+        spill_path = Path(
+            connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
+        )
+        observability = connection.execute(
+            """
+            SELECT
+                patient_id,
+                logical_domain,
+                event_count,
+                first_event_datetime,
+                last_event_datetime
+            FROM patient_observability
+            """
+        ).fetchone()
+
+        assert rows == [
+            ("E1", True, False, True),
+            ("E2", True, True, True),
+            ("E3", False, True, True),
+        ]
+        assert observability == (
+            "P1",
+            "diagnosis",
+            2,
+            pd.Timestamp("2022-01-01"),
+            pd.Timestamp("2022-01-01"),
+        )
+        assert not (spill_path / "encounter-availability").exists()
+
+    assert not spill_path.exists()
 
 
 def _write_combined_config(
