@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `main`, including Milestone 2 merge commit `e3d62de`, GLP-1 PR #7 merge commit `c2a6908`, and promotion PR #4 merge commit `60680be`; it tracks `origin/main`.
+- Branch: `codex/unified-preprocessing-v1`, exact-head behavior checkpoint `e298885`; it tracks `origin/codex/unified-preprocessing-v1`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -344,10 +344,13 @@
 - Database creation now retains the required `3072 MiB` pool but rotates three durable write sessions after source observability and after element/RFS membership. Each connection closes and strict-cleans its unique spill before the next opens, preventing native allocator overlap with availability and final checkpoint work without changing the database contract.
 - The connection-rotation regression, all `35` combined-preprocessing tests (`178.90 s`), and all `416` repository tests (`469.73 s`) pass. Ruff lint, scoped Ruff formatting, and `git diff --check` are clean. The generated `14 GiB` pytest root is recoverable in the external volume Trash; an incomplete `924 MiB` duplicate from a failed cross-volume Trash move remains recoverable in the user Trash.
 - Exact-head review of `e97b0e7` found one P3 documentation mismatch only: an interrupted embedded manifest remains `building`, not `running`. Runtime behavior is unchanged; the decision record is corrected.
+- Commit `e298885` contains that documentation correction, is pushed on PR #8, passes Linux CI run `30319028043`, has zero unresolved review threads, and received a clean exact-head Codex review (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5098672982`).
+- The exact-head `3072 MiB` database-only proof from the preserved real 36-file checkpoint completed in `20,338.444 s` with trusted schema-2 status and wrapper exit `0`. Database creation took `12,479.633 s`, full validation took `7,834.498 s`, and the availability fingerprint took `24.216 s`.
+- The proof passes the memory gate: authoritative lifetime peak was `5,413,322,752` bytes (`5,162.547 MiB`), `1,075.453 MiB` below the `6,238 MiB` ceiling. The three write-session peaks were `5,162.641`, `5,069.859`, and `4,842.391 MiB`; validation peaked at `4,488.969 MiB`.
+- All 36 CSV hashes, row counts, and 534-column schemas match; database integrity checks pass with zero warnings; and all availability counts plus the three order-independent encounter-ID hashes exactly match both independent full-scale comparators. The completed `82,194,477,056`-byte database has no WAL or spill root. Ten proof-scoped `4 KiB` ExFAT AppleDouble sidecars were removed and the exact scope rechecked clean.
 
 ## Next
-- Use the preserved full-scale checkpoint to localize the terminal `126.844 MiB` memory overage between database materialization and compatibility hashing, apply the smallest measured bounded-memory correction, and rerun the exact-head database-only proof below the gate.
-- Require a fresh exact-head build with terminal schema-2 evidence before parity, completeness, adapter, resource, and hygiene acceptance can be final.
+- Create and push the durable ledger checkpoint, then require a fresh exact-head full raw build with terminal schema-2 evidence before parity, completeness, adapter, resource, and hygiene acceptance can be final.
 - Execute Step 2: exact-head combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, process-family RSS/free-space limits, scratch cleanup, repository hygiene, and fresh review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
@@ -359,6 +362,8 @@
 - `src/trinetx_preprocessing/config.py`, `transform/`, `pipeline/`, `storage.py`, `work_manifest.py`
 - `src/trinetx_preprocessing/combined_preprocessing/`, `tests/test_combined_preprocessing.py`
 - `git diff --check`; `./.venv/bin/ruff check .`; external-TMP full `pytest -q`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_e225107_20260726/evidence/database_only_e298885_3072.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_e225107_20260726/diagnostics/database_only_e298885_3072/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
