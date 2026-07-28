@@ -138,8 +138,20 @@ def create_combined_database(
         _load_source_tables(connection, config)
         _load_encounter_flow(connection, config)
         _load_observability_events(connection, config)
+
+    with open_combined_database(
+        database_path,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+        preserve_insertion_order=True,
+    ) as connection:
         _load_element_membership(connection, config)
         _create_rfs_membership(connection)
+
+    with open_combined_database(
+        database_path,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+        preserve_insertion_order=True,
+    ) as connection:
         _create_availability_tables(connection, config)
         _create_compatibility_views(connection)
         _create_data_dictionary(connection)

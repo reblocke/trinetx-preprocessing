@@ -5,14 +5,17 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from typing import Iterator
 
 import duckdb
 import pandas as pd
 import pytest
 
 import trinetx_preprocessing.combined_preprocessing.builder as combined_builder
+import trinetx_preprocessing.combined_preprocessing.database as combined_database
 import trinetx_preprocessing.combined_preprocessing.validation as combined_validation
 from trinetx_preprocessing.combined_preprocessing.builder import (
     build_preprocessed,
@@ -567,8 +570,34 @@ def test_element_capture_retains_only_rows_with_included_membership(
     assert gas_candidates.empty
 
 
-def test_combined_build_exports_exact_historical_contract(tmp_path: Path) -> None:
+def test_combined_build_exports_exact_historical_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     config = load_config(_write_combined_config(tmp_path))
+    real_open_combined_database = combined_database.open_combined_database
+    write_session_tables: list[set[str]] = []
+
+    @contextmanager
+    def track_write_session(*args, **kwargs) -> Iterator[duckdb.DuckDBPyConnection]:
+        with real_open_combined_database(*args, **kwargs) as connection:
+            yield connection
+            if not kwargs.get("read_only", False):
+                write_session_tables.append(
+                    {
+                        str(row[0])
+                        for row in connection.execute(
+                            "SELECT table_name FROM information_schema.tables "
+                            "WHERE table_schema = 'main'"
+                        ).fetchall()
+                    }
+                )
+
+    monkeypatch.setattr(
+        combined_database,
+        "open_combined_database",
+        track_write_session,
+    )
     result = build_preprocessed(config, strict=True)
 
     assert result.database_path.is_file()
@@ -580,6 +609,13 @@ def test_combined_build_exports_exact_historical_contract(tmp_path: Path) -> Non
     assert manifest["run_id"] == result.run_id
     assert manifest["duckdb_memory_limit_mib"] == 3072
     assert manifest["duckdb_threads"] == 1
+    assert "source_observability_event" in write_session_tables[0]
+    assert "element_membership" not in write_session_tables[0]
+    assert "element_membership" in write_session_tables[1]
+    assert "rfs_membership" in write_session_tables[1]
+    assert "encounter_availability" not in write_session_tables[1]
+    assert "encounter_availability" in write_session_tables[2]
+    assert "patient_observability" in write_session_tables[2]
     work_manifest = json.loads(
         (config.work_dir / "pipeline_work_manifest.json").read_text()
     )

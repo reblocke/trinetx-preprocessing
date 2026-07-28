@@ -1576,6 +1576,30 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `tests/test_combined_preprocessing.py`.
 
+### 2026-07-27 — Rotate bounded DuckDB write sessions during publication
+- Date: 2026-07-27
+- Decision: Materialize the canonical database through three sequential write
+  sessions: core/source observability, element membership/RFS membership, and
+  availability/final metadata. Close each session and strictly remove its
+  unique spill root before opening the next session.
+- Context: The semantically valid `3072 MiB` full-scale database-only proof
+  peaked at `6,364.844 MiB`, above the `6,238 MiB` process gate. Reducing the
+  internal limit to `2816 MiB` kept process RSS to `5,088.859 MiB` but made the
+  already domain-sequential source-observability load fail after `6,552.179 s`
+  because DuckDB could not allocate another 256 KiB block.
+- Rationale: The observability aggregation requires the existing internal pool;
+  lowering it is not a viable release setting. Rotating durable connections
+  retains that pool within each query while preventing native buffer and
+  allocator state from overlapping later membership, availability, and final
+  checkpoint work.
+- Consequences: Table contents, insertion-order policy, manifests, views, and
+  the atomic publication boundary are unchanged. A failure between sessions
+  leaves an incomplete database with manifest status `running`; the existing
+  resumable builder removes that incomplete database before retrying.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.
+
 ### 2026-07-24 — Apply publication limits to every DuckDB connection
 - Date: 2026-07-24
 - Decision: Open database creation, compatibility export, provenance refresh,
