@@ -1594,7 +1594,7 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   checkpoint work.
 - Consequences: Table contents, insertion-order policy, manifests, views, and
   the atomic publication boundary are unchanged. A failure between sessions
-  leaves an incomplete database with manifest status `running`; the existing
+  leaves an incomplete database with manifest status `building`; the existing
   resumable builder removes that incomplete database before retrying.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
