@@ -79,6 +79,7 @@ from trinetx_preprocessing.glp1_eligibility.ingestion import (
     ingest_core_sources,
 )
 from trinetx_preprocessing.glp1_eligibility.provenance import build_input_inventory
+from trinetx_preprocessing.process_locks import SpawnedLockFileDescriptor
 from trinetx_preprocessing.regression import hash_csv_with_metadata
 from trinetx_preprocessing.work_manifest import require_current_work
 
@@ -232,7 +233,7 @@ def test_spawned_worker_retains_canonical_lock_after_parent_descriptor_closes(
     process = context.Process(
         target=_hold_transferred_lock,
         args=(
-            combined_builder._SpawnedLockFileDescriptor(parent_handle.fileno()),
+            SpawnedLockFileDescriptor(parent_handle.fileno()),
             ready_path,
             release_path,
         ),

@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import trinetx_preprocessing.pipeline.final_feature_sources as final_feature_sources
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
@@ -45,6 +46,7 @@ def _config(tmp_path: Path) -> Config:
 
 def test_final_feature_sources_scan_once_and_serve_patient_bucket(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = _config(tmp_path)
     config.work_dir.mkdir()
@@ -79,7 +81,17 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
             bucket_count=config.storage.analysis_bucket_count,
         ).iloc[0]
     )
-    with FinalFeatureSourceStore(config, chunksize=1) as store:
+    observed_lock_transfers: list[tuple[int, ...]] = []
+    monkeypatch.setattr(
+        final_feature_sources,
+        "duplicate_lock_file_descriptors_for_spawn",
+        lambda descriptors: observed_lock_transfers.append(descriptors) or (),
+    )
+    with FinalFeatureSourceStore(
+        config,
+        chunksize=1,
+        lock_file_descriptors=(101, 102),
+    ) as store:
         source_bucket = store.bucket(bucket)
         bmi = source_bucket.frame("value_BMI.csv", VITALS_COLUMNS)
         labs = source_bucket.frame(LAB_SOURCE_NAME, LAB_COLUMNS)
@@ -95,6 +107,7 @@ def test_final_feature_sources_scan_once_and_serve_patient_bucket(
         assert labs["lab_result_num_val"].tolist() == [55.0]
         assert diagnosis["principal_diagnosis_indicator"].tolist() == ["P"]
 
+    assert observed_lock_transfers == [(101, 102)] * 3
     assert not list(config.work_dir.glob(".trinetx-final-feature-sources-*"))
 
 

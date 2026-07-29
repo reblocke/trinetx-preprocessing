@@ -143,6 +143,7 @@ def run_final_assembly(
     *,
     strict: bool = False,
     output_dir: Path | None = None,
+    lock_file_descriptors: tuple[int, ...] = (),
 ) -> list[Path]:
     """Run the final dataset assembly stage.
 
@@ -150,6 +151,7 @@ def run_final_assembly(
         config: Pipeline configuration.
         strict: Whether to enable guardrail assertions.
         output_dir: Optional physical output root for transactional staging.
+        lock_file_descriptors: Held canonical locks to retain in nested workers.
 
     Returns:
         List of written file paths.
@@ -165,7 +167,11 @@ def run_final_assembly(
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
     with ExitStack() as stack:
         feature_sources = stack.enter_context(
-            FinalFeatureSourceStore(config, chunksize=chunksize)
+            FinalFeatureSourceStore(
+                config,
+                chunksize=chunksize,
+                lock_file_descriptors=lock_file_descriptors,
+            )
         )
         logger.info(
             "Indexed %s final feature rows from %s work tables",

@@ -13,7 +13,6 @@ import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from multiprocessing.reduction import DupFd
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -23,6 +22,7 @@ from ..pipeline.run import (
     run_final_pipeline_stage,
     run_pipeline_before_final_assembly,
 )
+from ..process_locks import duplicate_lock_file_descriptors_for_spawn
 from ..regression import CsvHashResult, hash_csv_with_metadata
 from ..work_manifest import (
     STAGE_ORDER,
@@ -78,20 +78,6 @@ class _CombinedBuildPaths:
     state_path: Path
     backup_output: Path
     publication_journal: Path
-
-
-class _SpawnedLockFileDescriptor:
-    """Duplicate one held lock descriptor through the spawn pass-fd channel."""
-
-    def __init__(self, descriptor: int) -> None:
-        self.descriptor = descriptor
-
-    def __reduce__(self):
-        return (_detach_duplicated_file_descriptor, (DupFd(self.descriptor),))
-
-
-def _detach_duplicated_file_descriptor(duplicated_descriptor: Any) -> int:
-    return int(duplicated_descriptor.detach())
 
 
 def build_preprocessed(
@@ -407,9 +393,7 @@ def _run_pipeline_phase_process(
     lock_file_descriptors: tuple[int, ...],
 ) -> None:
     context = multiprocessing.get_context("spawn")
-    duplicated_locks = tuple(
-        _SpawnedLockFileDescriptor(descriptor) for descriptor in lock_file_descriptors
-    )
+    duplicated_locks = duplicate_lock_file_descriptors_for_spawn(lock_file_descriptors)
     process = context.Process(
         target=_run_pipeline_phase_worker,
         args=(target, args, duplicated_locks),
@@ -435,13 +419,22 @@ def _run_pipeline_phase_worker(
     duplicated_locks: tuple[int, ...],
 ) -> None:
     try:
-        target(*args)
+        target(
+            *args,
+            retained_lock_file_descriptors=duplicated_locks,
+        )
     finally:
         for descriptor in reversed(duplicated_locks):
             os.close(descriptor)
 
 
-def _run_pre_final_pipeline_worker(config: Config, strict: bool) -> None:
+def _run_pre_final_pipeline_worker(
+    config: Config,
+    strict: bool,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    _ = retained_lock_file_descriptors
     run_pipeline_before_final_assembly(config, strict=strict)
 
 
@@ -450,11 +443,14 @@ def _run_final_pipeline_worker(
     strict: bool,
     paths: _CombinedBuildPaths,
     build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
 ) -> None:
     run_final_pipeline_stage(
         config,
         strict=strict,
         final_output_dir=paths.staging_output,
+        lock_file_descriptors=retained_lock_file_descriptors,
     )
     baseline = _compatibility_hashes(paths.staging_output)
     state = _new_build_state(

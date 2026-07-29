@@ -1700,12 +1700,16 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   resumable identity, or the canonical product contract.
 - Consequences: Combined builds pay two Python spawn/import costs. A failed
   worker exits nonzero and leaves the existing atomic publication and
-  resumable-work safeguards intact. Each worker retains duplicated descriptors
-  for the parent's canonical work/output locks, so an orphan cannot continue
-  unlocked if the parent exits unexpectedly. Direct non-combined pipeline
-  commands keep their existing in-process behavior.
+  resumable-work safeguards intact. Each phase worker and every nested
+  final-feature domain worker retain duplicated descriptors for the parent's
+  canonical work/output locks, so no surviving descendant can continue
+  unlocked if an ancestor exits unexpectedly. Descriptor duplication occurs
+  through the spawn pass-fd channel and does not require a Unix socket on the
+  external ExFAT `TMPDIR`. Direct non-combined pipeline commands keep their
+  existing in-process behavior.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/process_locks.py`,
   `src/trinetx_preprocessing/pipeline/run.py`,
   `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_combined_preprocessing.py`,

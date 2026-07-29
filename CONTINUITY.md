@@ -353,10 +353,12 @@
 - The phase-isolation correction runs pre-final stages and final assembly in two sequential spawned workers, writes baseline hashes and resumable pipeline state before the final worker exits, builds feature sources before demographics/cohort retention, and starts database/export/validation in the clean parent. Direct non-combined execution remains unchanged.
 - Spawned workers retain duplicated canonical work/output lock descriptors, so an unexpectedly orphaned worker cannot continue after the parent releases its descriptors. A direct spawn regression closes the original descriptor and proves a new contender remains blocked until the worker exits; the transfer uses the spawn pass-fd channel and works with external ExFAT `TMPDIR`.
 - Focused ordering/isolation tests, the real spawned-build publication/resume tests, all `37` combined-product tests, all `3` direct pipeline end-to-end tests, and the authoritative full gate pass. The repository has `418` passing tests in `470.59 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` are clean.
+- Exact-head review of `fb7f735`/`75bddce` returned a P2 root-orphan lock finding already fixed by `75bddce` and one valid P1 nested-worker finding: final-feature domain workers did not yet retain the phase worker's lock descriptors.
+- The nested lock fix centralizes spawn-time pass-fd transfer, propagates retained descriptors through final-stage orchestration, and gives every feature-domain child its own duplicates. The real ExFAT combined build, direct lock-survival regression, all `41` combined/feature-source tests, and all `418` repository tests pass (`468.87 s`); Ruff and diff checks are clean.
 - Three proof-scoped synthetic pytest roots totaling about `14.4 GiB` were moved recoverably to external Trash and the test root rechecked empty. The diagnostic full-build root's two `4 KiB` lock AppleDouble sidecars were deleted through `clean-scratch`, which rechecked at zero recognized scratch.
 
 ## Next
-- Inspect and commit the bounded phase-isolation diff, push it, and require exact-head CI plus fresh Codex review before another private launch.
+- Commit and push the nested-worker lock fix, answer and resolve both exact-head review threads, and require green CI plus clean re-review before another private launch.
 - Rerun the exact-head full raw build and complete Step 2: combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, process-family RSS/free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 

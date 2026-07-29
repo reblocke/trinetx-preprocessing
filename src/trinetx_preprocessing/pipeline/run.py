@@ -51,6 +51,7 @@ def run_pipeline(
         timings=timings,
         strict=strict,
         final_output_dir=final_output_dir,
+        lock_file_descriptors=(),
     )
 
 
@@ -68,6 +69,7 @@ def run_pipeline_before_final_assembly(
         timings=None,
         strict=strict,
         final_output_dir=None,
+        lock_file_descriptors=(),
     )
 
 
@@ -76,6 +78,7 @@ def run_final_pipeline_stage(
     *,
     strict: bool = False,
     final_output_dir: Path | None = None,
+    lock_file_descriptors: tuple[int, ...] = (),
 ) -> list[Path]:
     """Run and checkpoint final assembly against completed prerequisite work."""
 
@@ -85,6 +88,7 @@ def run_final_pipeline_stage(
         timings=None,
         strict=strict,
         final_output_dir=final_output_dir,
+        lock_file_descriptors=lock_file_descriptors,
     )
 
 
@@ -95,6 +99,7 @@ def _run_pipeline_stages(
     timings: dict[str, float] | None,
     strict: bool,
     final_output_dir: Path | None,
+    lock_file_descriptors: tuple[int, ...],
 ) -> list[Path]:
     """Run an ordered pipeline stage sequence through the shared checkpoint shell."""
 
@@ -135,6 +140,7 @@ def _run_pipeline_stages(
                 config,
                 strict=strict,
                 output_dir=final_output_dir,
+                lock_file_descriptors=lock_file_descriptors,
             ),
             final_output_dir,
         ),

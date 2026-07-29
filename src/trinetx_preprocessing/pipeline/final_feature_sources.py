@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import os
 import resource
 import sys
 import tempfile
@@ -16,6 +17,7 @@ import pandas as pd
 
 from ..config import Config
 from ..filesystem import remove_tree_strict, write_text_atomic
+from ..process_locks import duplicate_lock_file_descriptors_for_spawn
 from ..storage import (
     PartitionedParquetStore,
     find_work_tables,
@@ -164,8 +166,15 @@ class FinalFeatureBucket:
 class FinalFeatureSourceStore:
     """Build and expose all final-feature sources with one source scan."""
 
-    def __init__(self, config: Config, *, chunksize: int | None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        *,
+        chunksize: int | None,
+        lock_file_descriptors: tuple[int, ...] = (),
+    ) -> None:
         self.config = config
+        self.lock_file_descriptors = lock_file_descriptors
         requested_chunksize = chunksize or FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
         self.chunksize = min(
             requested_chunksize,
@@ -239,6 +248,9 @@ class FinalFeatureSourceStore:
                     next_row_order,
                     root,
                     metadata_path,
+                    duplicate_lock_file_descriptors_for_spawn(
+                        self.lock_file_descriptors
+                    ),
                 ),
                 name=f"trinetx-final-feature-{domain}",
             )
@@ -302,9 +314,34 @@ def _build_feature_domain_worker(
     row_order_start: int,
     root: Path,
     metadata_path: Path,
+    lock_file_descriptors: tuple[int, ...],
 ) -> None:
     """Build one domain in a fresh process so allocator state cannot accumulate."""
 
+    try:
+        _build_feature_domain_worker_body(
+            config,
+            chunksize,
+            domain,
+            definitions,
+            row_order_start,
+            root,
+            metadata_path,
+        )
+    finally:
+        for descriptor in reversed(lock_file_descriptors):
+            os.close(descriptor)
+
+
+def _build_feature_domain_worker_body(
+    config: Config,
+    chunksize: int,
+    domain: str,
+    definitions: tuple[_SourceDefinition, ...],
+    row_order_start: int,
+    root: Path,
+    metadata_path: Path,
+) -> None:
     store = PartitionedParquetStore(
         root,
         prefix=f".{domain}-",
@@ -341,8 +378,7 @@ def _build_feature_domain_worker(
                     )
                     rows_indexed += len(indexed)
                     source_names.update(
-                        str(value)
-                        for value in indexed["source_name"].dropna().unique()
+                        str(value) for value in indexed["source_name"].dropna().unique()
                     )
                     store.add_frame(indexed)
         store.seal()
