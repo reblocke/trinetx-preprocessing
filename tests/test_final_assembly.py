@@ -948,9 +948,7 @@ def test_final_event_selection_is_independent_per_setting() -> None:
     ]
 
 
-def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> (
-    None
-):
+def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> None:
     rows = pd.DataFrame(
         {
             "patient_id": ["P1", "P1", "P2"],
@@ -1733,11 +1731,25 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     rfs_calls: list[tuple[str, int | None, bool]] = []
     data_check_calls: list[int | None] = []
     demographics_calls: list[int | None] = []
+    load_order: list[str] = []
+
+    real_feature_source_store = final_assembly.FinalFeatureSourceStore
+
+    class TrackedFeatureSourceStore(real_feature_source_store):
+        def __enter__(self):
+            result = super().__enter__()
+            load_order.append("feature_sources_ready")
+            return result
 
     monkeypatch.setattr(
         final_assembly,
         "collect_domain_paths",
         lambda config: {"patient": [tmp_path / "patient.csv"]},
+    )
+    monkeypatch.setattr(
+        final_assembly,
+        "FinalFeatureSourceStore",
+        TrackedFeatureSourceStore,
     )
     monkeypatch.setattr(
         final_assembly,
@@ -1748,6 +1760,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         stack,
         logger,
         chunksize=None: demographics_calls.append(chunksize)
+        or load_order.append("demographics")
         or pd.DataFrame(columns=final_assembly.DEMOGRAPHIC_OUTPUT_COLUMNS),
     )
 
@@ -1855,6 +1868,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     ]
     assert demographics_calls == [config.chunking.lines_per_chunk]
     assert data_check_calls == [config.chunking.lines_per_chunk]
+    assert load_order[:2] == ["feature_sources_ready", "demographics"]
 
     expected_outputs = [
         config.output_dir

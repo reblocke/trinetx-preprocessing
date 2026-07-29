@@ -1679,3 +1679,32 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/io/csv.py`,
   `scripts/benchmark_combined_preprocessing.py`,
   `scripts/monitor_combined_preprocessing.py`.
+
+### 2026-07-29 — Isolate allocation-heavy combined pipeline phases
+- Date: 2026-07-29
+- Decision: Run the pre-final pipeline and final assembly in two sequential
+  spawned workers. Build the final feature-source index before loading
+  demographics, setting lookups, and cohort rows. Hash the 36 staged outputs
+  and write the resumable pipeline checkpoint in the final-assembly worker,
+  then exit that worker before database creation, export, and validation begin
+  in the clean parent process.
+- Context: The clean exact-head `8d388ea` full build passed every semantic and
+  publication check but reached `6,616.609 MiB` authoritative peak RSS, above
+  the `6,238 MiB` release ceiling. One sampled breach coincided with a spawned
+  feature-domain worker overlapping cohort-retained parent memory; later
+  handoffs retained pipeline allocator pages into otherwise bounded DuckDB
+  phases. The same database phases pass independently when started from a
+  clean process.
+- Rationale: Sequential process lifetimes provide a deterministic allocator
+  boundary without changing stage logic, intermediate files, output order,
+  resumable identity, or the canonical product contract.
+- Consequences: Combined builds pay two Python spawn/import costs. A failed
+  worker exits nonzero and leaves the existing atomic publication and
+  resumable-work safeguards intact. Direct non-combined pipeline commands keep
+  their existing in-process behavior.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/pipeline/run.py`,
+  `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_combined_preprocessing.py`,
+  `tests/test_final_assembly.py`.

@@ -161,6 +161,41 @@ def test_combined_resumable_identity_includes_duckdb_memory_limit(
     )
 
 
+def test_combined_pipeline_uses_sequential_fresh_phase_workers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    calls: list[tuple[str, object, tuple[object, ...]]] = []
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_pipeline_phase_process",
+        lambda phase, target, args: calls.append((phase, target, args)),
+    )
+
+    combined_builder._run_combined_pipeline_isolated(
+        config,
+        strict=True,
+        paths=paths,
+        build_identity=build_identity,
+    )
+
+    assert [phase for phase, _, _ in calls] == [
+        "pre-final",
+        "final-assembly",
+    ]
+    assert calls[0][1] is combined_builder._run_pre_final_pipeline_worker
+    assert calls[0][2] == (config, True)
+    assert calls[1][1] is combined_builder._run_final_pipeline_worker
+    assert calls[1][2] == (config, True, paths, build_identity)
+
+
 def test_combined_private_artifacts_reject_repository_paths() -> None:
     with pytest.raises(ValueError, match="work directory"):
         require_safe_output_location(
@@ -869,7 +904,11 @@ def test_failed_replacement_preserves_published_product(
     def unexpected_rebuild(*args, **kwargs):
         raise AssertionError("late retry rebuilt completed preprocessing work")
 
-    monkeypatch.setattr(combined_builder, "run_pipeline", unexpected_rebuild)
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_combined_pipeline_isolated",
+        unexpected_rebuild,
+    )
     monkeypatch.setattr(
         combined_builder,
         "create_combined_database",

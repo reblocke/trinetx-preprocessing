@@ -164,6 +164,14 @@ def run_final_assembly(
 
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
     with ExitStack() as stack:
+        feature_sources = stack.enter_context(
+            FinalFeatureSourceStore(config, chunksize=chunksize)
+        )
+        logger.info(
+            "Indexed %s final feature rows from %s work tables",
+            feature_sources.rows_indexed,
+            feature_sources.files_scanned,
+        )
         patient_source_writer = stack.enter_context(
             ElementCaptureWriter(config, "patient", include_all=True)
         )
@@ -235,16 +243,8 @@ def run_final_assembly(
                     cohort_store.add_frame(base)
                     cohort_rows_indexed += len(base)
 
-        # Do not retain 256 cohort writers while opening feature-domain writers.
+        # Release cohort writers before loading feature partitions for enrichment.
         cohort_store.seal()
-        feature_sources = stack.enter_context(
-            FinalFeatureSourceStore(config, chunksize=chunksize)
-        )
-        logger.info(
-            "Indexed %s final feature rows from %s work tables",
-            feature_sources.rows_indexed,
-            feature_sources.files_scanned,
-        )
         rows_written = {key: 0 for key in output_paths}
         buckets_processed = 0
         for bucket, cohort_rows in cohort_store.iter_frames():

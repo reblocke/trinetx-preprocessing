@@ -5,10 +5,12 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import multiprocessing
 import os
 import socket
 import subprocess
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -16,7 +18,10 @@ from typing import Any, Iterator
 
 from ..config import Config
 from ..filesystem import remove_tree_strict, write_text_atomic
-from ..pipeline.run import run_pipeline
+from ..pipeline.run import (
+    run_final_pipeline_stage,
+    run_pipeline_before_final_assembly,
+)
 from ..regression import CsvHashResult, hash_csv_with_metadata
 from ..work_manifest import (
     STAGE_ORDER,
@@ -165,20 +170,24 @@ def _build_locked(
     if state is None and not pipeline_current:
         paths.staging_output.mkdir(parents=True)
         phase_started = time.perf_counter()
-        run_pipeline(
+        _run_combined_pipeline_isolated(
             config,
             strict=strict,
-            final_output_dir=paths.staging_output,
+            paths=paths,
+            build_identity=build_identity,
         )
         _record_timing(timings, "pipeline", phase_started)
-        baseline = _compatibility_hashes(paths.staging_output)
-        state = _new_build_state(
-            paths,
-            build_identity=build_identity,
+        state = _load_build_state(
+            paths.state_path,
+            expected_identity=build_identity,
+            paths=paths,
             published_output=config.output_dir,
-            baseline=baseline,
         )
-        _write_build_state(paths.state_path, state)
+        if state is None:
+            raise RuntimeError(
+                "Combined final-assembly worker completed without resumable state."
+            )
+        baseline = _deserialize_hashes(state.get("baseline"))
     elif state is None:
         baseline = _compatibility_hashes(paths.staging_output)
         state = _new_build_state(
@@ -341,6 +350,82 @@ def _build_locked(
         run_id=str(manifest["run_id"]),
         validation=validation,
     )
+
+
+def _run_combined_pipeline_isolated(
+    config: Config,
+    *,
+    strict: bool,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+) -> None:
+    """Run allocation-heavy pipeline phases in sequential fresh processes."""
+
+    _run_pipeline_phase_process(
+        "pre-final",
+        _run_pre_final_pipeline_worker,
+        (config, strict),
+    )
+    _run_pipeline_phase_process(
+        "final-assembly",
+        _run_final_pipeline_worker,
+        (
+            config,
+            strict,
+            paths,
+            build_identity,
+        ),
+    )
+
+
+def _run_pipeline_phase_process(
+    phase: str,
+    target: Callable[..., None],
+    args: tuple[object, ...],
+) -> None:
+    context = multiprocessing.get_context("spawn")
+    process = context.Process(
+        target=target,
+        args=args,
+        name=f"trinetx-combined-{phase}",
+    )
+    process.start()
+    try:
+        process.join()
+    except BaseException:
+        if process.is_alive():
+            process.terminate()
+        process.join()
+        raise
+    if process.exitcode != 0:
+        raise RuntimeError(
+            f"Combined {phase} worker exited with status {process.exitcode}."
+        )
+
+
+def _run_pre_final_pipeline_worker(config: Config, strict: bool) -> None:
+    run_pipeline_before_final_assembly(config, strict=strict)
+
+
+def _run_final_pipeline_worker(
+    config: Config,
+    strict: bool,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+) -> None:
+    run_final_pipeline_stage(
+        config,
+        strict=strict,
+        final_output_dir=paths.staging_output,
+    )
+    baseline = _compatibility_hashes(paths.staging_output)
+    state = _new_build_state(
+        paths,
+        build_identity=build_identity,
+        published_output=config.output_dir,
+        baseline=baseline,
+    )
+    _write_build_state(paths.state_path, state)
 
 
 def _new_build_state(

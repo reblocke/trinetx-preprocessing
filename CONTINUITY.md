@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`, exact-head behavior checkpoint `e298885`; it tracks `origin/codex/unified-preprocessing-v1`.
+- Branch: `codex/unified-preprocessing-v1`, exact-head recovery checkpoint `8d388ea`; it tracks `origin/codex/unified-preprocessing-v1`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -348,14 +348,19 @@
 - The exact-head `3072 MiB` database-only proof from the preserved real 36-file checkpoint completed in `20,338.444 s` with trusted schema-2 status and wrapper exit `0`. Database creation took `12,479.633 s`, full validation took `7,834.498 s`, and the availability fingerprint took `24.216 s`.
 - The proof passes the memory gate: authoritative lifetime peak was `5,413,322,752` bytes (`5,162.547 MiB`), `1,075.453 MiB` below the `6,238 MiB` ceiling. The three write-session peaks were `5,162.641`, `5,069.859`, and `4,842.391 MiB`; validation peaked at `4,488.969 MiB`.
 - All 36 CSV hashes, row counts, and 534-column schemas match; database integrity checks pass with zero warnings; and all availability counts plus the three order-independent encounter-ID hashes exactly match both independent full-scale comparators. The completed `82,194,477,056`-byte database has no WAL or spill root. Ten proof-scoped `4 KiB` ExFAT AppleDouble sidecars were removed and the exact scope rechecked clean.
+- The fresh exact-head `8d388ea` full raw build completed naturally with wrapper exit `0` after `94,303.733 s`. Pipeline, database, compatibility export, validation, and atomic publication all completed; the database is `82,169,835,520` bytes, all 36 compatibility files and aggregate validation counts pass, and validation emitted zero warnings.
+- The full run is diagnostic rather than release-passing because authoritative peak RSS was `6,938,017,792` bytes (`6,616.609 MiB`), `378.609 MiB` above the `6,238 MiB` ceiling. Read-only phase evidence localizes transient overlap first to retained final-assembly parent memory plus spawned feature workers and later to retained pipeline allocator state during database/export handoffs. The semantically valid output is preserved under `unified_8d388ea_20260728/output`.
+- The phase-isolation correction runs pre-final stages and final assembly in two sequential spawned workers, writes baseline hashes and resumable pipeline state before the final worker exits, builds feature sources before demographics/cohort retention, and starts database/export/validation in the clean parent. Direct non-combined execution remains unchanged.
+- Focused ordering/isolation tests, the real spawned-build publication/resume tests, all `36` combined-product tests, all `3` direct pipeline end-to-end tests, and the authoritative full gate pass. The repository has `417` passing tests in `467.01 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` are clean.
+- Three proof-scoped synthetic pytest roots totaling about `14.4 GiB` were moved recoverably to external Trash and the test root rechecked empty. The diagnostic full-build root's two `4 KiB` lock AppleDouble sidecars were deleted through `clean-scratch`, which rechecked at zero recognized scratch.
 
 ## Next
-- Create and push the durable ledger checkpoint, then require a fresh exact-head full raw build with terminal schema-2 evidence before parity, completeness, adapter, resource, and hygiene acceptance can be final.
-- Execute Step 2: exact-head combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, process-family RSS/free-space limits, scratch cleanup, repository hygiene, and fresh review.
+- Inspect and commit the bounded phase-isolation diff, push it, and require exact-head CI plus fresh Codex review before another private launch.
+- Rerun the exact-head full raw build and complete Step 2: combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, process-family RSS/free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
-- None for the review. Direct per-process jetsam attribution is `UNCONFIRMED`; the simultaneous low-memory/jetsam event and unclean process-group loss make OS memory pressure the leading diagnosis. Full-data parity and final release acceptance remain `UNCONFIRMED` until the exact-head build and all Step 2 evidence complete.
+- None for the review. Direct per-process jetsam attribution for the older interrupted run is `UNCONFIRMED`. Final release acceptance remains `UNCONFIRMED` until the phase-isolation fix passes a fresh exact-head full run and every Step 2 gate.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -364,6 +369,8 @@
 - `git diff --check`; `./.venv/bin/ruff check .`; external-TMP full `pytest -q`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_e225107_20260726/evidence/database_only_e298885_3072.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_e225107_20260726/diagnostics/database_only_e298885_3072/trinetx_preprocessed.duckdb`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_8d388ea_20260728/evidence/combined_benchmark_8d388ea.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_8d388ea_20260728/output/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
