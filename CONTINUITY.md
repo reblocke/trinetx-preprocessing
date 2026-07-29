@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`, exact-head recovery checkpoint `8d388ea`; it tracks `origin/codex/unified-preprocessing-v1`.
+- Branch: `codex/unified-preprocessing-v1`, exact-head phase-isolation checkpoint `5cf73d6`; it tracks `origin/codex/unified-preprocessing-v1`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -355,11 +355,12 @@
 - Focused ordering/isolation tests, the real spawned-build publication/resume tests, all `37` combined-product tests, all `3` direct pipeline end-to-end tests, and the authoritative full gate pass. The repository has `418` passing tests in `470.59 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` are clean.
 - Exact-head review of `fb7f735`/`75bddce` returned a P2 root-orphan lock finding already fixed by `75bddce` and one valid P1 nested-worker finding: final-feature domain workers did not yet retain the phase worker's lock descriptors.
 - The nested lock fix centralizes spawn-time pass-fd transfer, propagates retained descriptors through final-stage orchestration, and gives every feature-domain child its own duplicates. The real ExFAT combined build, direct lock-survival regression, all `41` combined/feature-source tests, and all `418` repository tests pass (`468.87 s`); Ruff and diff checks are clean.
+- Commit `5cf73d6` contains the complete phase-isolation and descendant-lock correction and is pushed. Exact-head CI run `30443685767` passes in `4m50s`; both findings have direct fix replies, all PR #8 threads are resolved, and Codex re-review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5116563668`).
 - Three proof-scoped synthetic pytest roots totaling about `14.4 GiB` were moved recoverably to external Trash and the test root rechecked empty. The diagnostic full-build root's two `4 KiB` lock AppleDouble sidecars were deleted through `clean-scratch`, which rechecked at zero recognized scratch.
 
 ## Next
-- Commit and push the nested-worker lock fix, answer and resolve both exact-head review threads, and require green CI plus clean re-review before another private launch.
-- Rerun the exact-head full raw build and complete Step 2: combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, process-family RSS/free-space limits, scratch cleanup, repository hygiene, CI, and final review.
+- Create the durable docs-only ledger checkpoint, then launch and monitor one fresh exact-head full raw build from empty work/output roots.
+- Complete Step 2 on the terminal product: combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, process-family RSS/free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
