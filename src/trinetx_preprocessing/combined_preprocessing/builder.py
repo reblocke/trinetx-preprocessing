@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from multiprocessing.reduction import DupFd
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -79,6 +80,20 @@ class _CombinedBuildPaths:
     publication_journal: Path
 
 
+class _SpawnedLockFileDescriptor:
+    """Duplicate one held lock descriptor through the spawn pass-fd channel."""
+
+    def __init__(self, descriptor: int) -> None:
+        self.descriptor = descriptor
+
+    def __reduce__(self):
+        return (_detach_duplicated_file_descriptor, (DupFd(self.descriptor),))
+
+
+def _detach_duplicated_file_descriptor(duplicated_descriptor: Any) -> int:
+    return int(duplicated_descriptor.detach())
+
+
 def build_preprocessed(
     config: Config,
     *,
@@ -97,7 +112,7 @@ def build_preprocessed(
     published_output = combined_config.output_dir
     database_path = published_output / combined_config.combined.database_name
 
-    with _canonical_build_lock(combined_config):
+    with _canonical_build_lock(combined_config) as lock_file_descriptors:
         build_identity = _combined_build_identity(
             combined_config,
             strict=strict,
@@ -125,6 +140,7 @@ def build_preprocessed(
             strict=strict,
             replace_existing=replace_existing,
             timings=timings,
+            lock_file_descriptors=lock_file_descriptors,
         )
 
 
@@ -137,6 +153,7 @@ def _build_locked(
     strict: bool,
     replace_existing: bool,
     timings: dict[str, float] | None,
+    lock_file_descriptors: tuple[int, ...],
 ) -> CombinedBuildResult:
     if paths.staging_output.is_symlink() or (
         paths.staging_output.exists() and not paths.staging_output.is_dir()
@@ -175,6 +192,7 @@ def _build_locked(
             strict=strict,
             paths=paths,
             build_identity=build_identity,
+            lock_file_descriptors=lock_file_descriptors,
         )
         _record_timing(timings, "pipeline", phase_started)
         state = _load_build_state(
@@ -358,6 +376,7 @@ def _run_combined_pipeline_isolated(
     strict: bool,
     paths: _CombinedBuildPaths,
     build_identity: str,
+    lock_file_descriptors: tuple[int, ...],
 ) -> None:
     """Run allocation-heavy pipeline phases in sequential fresh processes."""
 
@@ -365,6 +384,7 @@ def _run_combined_pipeline_isolated(
         "pre-final",
         _run_pre_final_pipeline_worker,
         (config, strict),
+        lock_file_descriptors=lock_file_descriptors,
     )
     _run_pipeline_phase_process(
         "final-assembly",
@@ -375,6 +395,7 @@ def _run_combined_pipeline_isolated(
             paths,
             build_identity,
         ),
+        lock_file_descriptors=lock_file_descriptors,
     )
 
 
@@ -382,11 +403,16 @@ def _run_pipeline_phase_process(
     phase: str,
     target: Callable[..., None],
     args: tuple[object, ...],
+    *,
+    lock_file_descriptors: tuple[int, ...],
 ) -> None:
     context = multiprocessing.get_context("spawn")
+    duplicated_locks = tuple(
+        _SpawnedLockFileDescriptor(descriptor) for descriptor in lock_file_descriptors
+    )
     process = context.Process(
-        target=target,
-        args=args,
+        target=_run_pipeline_phase_worker,
+        args=(target, args, duplicated_locks),
         name=f"trinetx-combined-{phase}",
     )
     process.start()
@@ -401,6 +427,18 @@ def _run_pipeline_phase_process(
         raise RuntimeError(
             f"Combined {phase} worker exited with status {process.exitcode}."
         )
+
+
+def _run_pipeline_phase_worker(
+    target: Callable[..., None],
+    args: tuple[object, ...],
+    duplicated_locks: tuple[int, ...],
+) -> None:
+    try:
+        target(*args)
+    finally:
+        for descriptor in reversed(duplicated_locks):
+            os.close(descriptor)
 
 
 def _run_pre_final_pipeline_worker(config: Config, strict: bool) -> None:
@@ -1094,7 +1132,7 @@ def _unlink_generated_file(path: Path) -> None:
 
 
 @contextmanager
-def _canonical_build_lock(config: Config) -> Iterator[None]:
+def _canonical_build_lock(config: Config) -> Iterator[tuple[int, ...]]:
     lock_paths = sorted(
         {
             _lock_path(config.work_dir),
@@ -1131,7 +1169,7 @@ def _canonical_build_lock(config: Config) -> Iterator[None]:
             handle.flush()
             os.fsync(handle.fileno())
             handles.append(handle)
-        yield
+        yield tuple(handle.fileno() for handle in handles)
     finally:
         for handle in reversed(handles):
             try:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import json
+import multiprocessing
 import os
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -80,6 +83,22 @@ from trinetx_preprocessing.regression import hash_csv_with_metadata
 from trinetx_preprocessing.work_manifest import require_current_work
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _hold_transferred_lock(
+    descriptor: int,
+    ready_path: Path,
+    release_path: Path,
+) -> None:
+    ready_path.write_text("ready")
+    deadline = time.monotonic() + 10
+    try:
+        while not release_path.exists():
+            if time.monotonic() >= deadline:
+                raise TimeoutError("lock-transfer test release was not observed")
+            time.sleep(0.01)
+    finally:
+        os.close(descriptor)
 
 
 def test_combined_run_id_ignores_volatile_work_status() -> None:
@@ -171,12 +190,14 @@ def test_combined_pipeline_uses_sequential_fresh_phase_workers(
         config.output_dir,
         build_identity=build_identity,
     )
-    calls: list[tuple[str, object, tuple[object, ...]]] = []
+    calls: list[tuple[str, object, tuple[object, ...], tuple[int, ...]]] = []
 
     monkeypatch.setattr(
         combined_builder,
         "_run_pipeline_phase_process",
-        lambda phase, target, args: calls.append((phase, target, args)),
+        lambda phase, target, args, *, lock_file_descriptors: calls.append(
+            (phase, target, args, lock_file_descriptors)
+        ),
     )
 
     combined_builder._run_combined_pipeline_isolated(
@@ -184,16 +205,67 @@ def test_combined_pipeline_uses_sequential_fresh_phase_workers(
         strict=True,
         paths=paths,
         build_identity=build_identity,
+        lock_file_descriptors=(101, 102),
     )
 
-    assert [phase for phase, _, _ in calls] == [
+    assert [phase for phase, _, _, _ in calls] == [
         "pre-final",
         "final-assembly",
     ]
     assert calls[0][1] is combined_builder._run_pre_final_pipeline_worker
     assert calls[0][2] == (config, True)
+    assert calls[0][3] == (101, 102)
     assert calls[1][1] is combined_builder._run_final_pipeline_worker
     assert calls[1][2] == (config, True, paths, build_identity)
+    assert calls[1][3] == (101, 102)
+
+
+def test_spawned_worker_retains_canonical_lock_after_parent_descriptor_closes(
+    tmp_path: Path,
+) -> None:
+    lock_path = tmp_path / "canonical.lock"
+    ready_path = tmp_path / "worker.ready"
+    release_path = tmp_path / "worker.release"
+    parent_handle = lock_path.open("a+")
+    fcntl.flock(parent_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    context = multiprocessing.get_context("spawn")
+    process = context.Process(
+        target=_hold_transferred_lock,
+        args=(
+            combined_builder._SpawnedLockFileDescriptor(parent_handle.fileno()),
+            ready_path,
+            release_path,
+        ),
+    )
+    process.start()
+    try:
+        deadline = time.monotonic() + 10
+        while not ready_path.exists():
+            if time.monotonic() >= deadline:
+                raise TimeoutError("spawned lock worker did not become ready")
+            time.sleep(0.01)
+
+        parent_handle.close()
+        contender = lock_path.open("a+")
+        try:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            contender.close()
+    finally:
+        release_path.touch()
+        process.join(timeout=10)
+        if process.is_alive():
+            process.terminate()
+            process.join()
+        if not parent_handle.closed:
+            fcntl.flock(parent_handle.fileno(), fcntl.LOCK_UN)
+            parent_handle.close()
+
+    assert process.exitcode == 0
+    with lock_path.open("a+") as contender:
+        fcntl.flock(contender.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(contender.fileno(), fcntl.LOCK_UN)
 
 
 def test_combined_private_artifacts_reject_repository_paths() -> None:
