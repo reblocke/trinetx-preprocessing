@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; database-session isolation checkpoint `4f0448d` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed database-session isolation and export-recovery implementation checkpoint `302a849` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -371,12 +371,13 @@
 - The exact post-refresh/pre-state-write failure regression and four adjacent resume/build tests pass. The complete gate passes all `422` tests in `496.46 s`; repository-wide Ruff, scoped formatting, `git diff --check`, and tracked-artifact checks pass. The exact `11 GiB` synthetic gate root was moved recoverably to external Trash and its source path rechecked absent.
 - Commit `89965e1` passed exact-head CI. Re-review found one adjacent P2 durability gap: the progress checkpoint could outlive unsynced CSV renames after power loss or volume disconnect. Export now strictly fsyncs all 36 CSVs, their containing directories and staging parent, plus the refreshed work manifest and its directory before writing progress; build-state directory fsync is strict as well.
 - A direct ExFAT file/directory fsync probe passed. Four focused durability/recovery/build tests and all `423` repository tests pass (`579.43 s`); Ruff, formatting, diff, and tracked-artifact gates pass. The `11 GiB` synthetic full-gate root and tiny fsync probe were moved recoverably to external Trash and their source paths rechecked absent.
+- Commit `302a849` is pushed; exact-head CI run `30549275358` passed, all PR #8 review threads are resolved, and Codex re-review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5131817496`).
 
 ## Now
-- The confirmed export-durability fix is locally complete and ready to commit/push for exact-head CI and re-review. The private full-scale proof harness remains unlaunched; no build worker is active.
+- The implementation head is review-clean and CI-green. A docs-only ledger checkpoint and exact-head confirmation are the final launch gates for the prepared private full-scale post-pipeline proof; no build worker is active.
 
 ## Next
-- Commit/push the export-durability fix, pass exact-head CI/re-review, then run the prepared full-scale post-pipeline memory proof.
+- Commit/push the docs-only ledger checkpoint, confirm its exact head, then run the prepared full-scale post-pipeline memory proof.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
