@@ -243,22 +243,63 @@ def write_combined_manifest(
 def refresh_database_work_manifest_fingerprint(
     database_path: Path,
     config: Config,
-) -> None:
+    *,
+    expected_previous_sha256: str,
+    expected_new_sha256: str,
+    expected_run_id: str,
+) -> str:
     """Synchronize embedded provenance after staged CSV fingerprints change."""
 
-    work_manifest = _read_work_manifest(config)
-    work_manifest_sha256 = hashlib.sha256(
-        json.dumps(work_manifest, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    work_manifest_sha256 = current_work_manifest_sha256(config)
+    if work_manifest_sha256 != expected_new_sha256:
+        raise ValueError(
+            "Pipeline work manifest changed after export provenance was prepared."
+        )
     with open_combined_database(
         database_path,
         memory_limit_mib=config.combined.duckdb_memory_limit_mib,
     ) as connection:
-        connection.execute(
-            "UPDATE preprocessing_manifest SET source_work_manifest_sha256 = ?",
-            [work_manifest_sha256],
-        )
+        rows = connection.execute(
+            """
+            SELECT run_id, status, source_work_manifest_sha256
+            FROM preprocessing_manifest
+            """
+        ).fetchall()
+        if len(rows) != 1:
+            raise ValueError(
+                "Combined database must contain exactly one preprocessing run."
+            )
+        observed_run_id, status, observed_sha256 = rows[0]
+        if observed_run_id != expected_run_id or status != "complete":
+            raise ValueError(
+                "Combined database identity or terminal status changed before "
+                "provenance refresh."
+            )
+        allowed_sha256 = {expected_previous_sha256, expected_new_sha256}
+        if observed_sha256 not in allowed_sha256:
+            raise ValueError(
+                "Combined database work-manifest fingerprint changed unexpectedly."
+            )
+        if observed_sha256 != expected_new_sha256:
+            connection.execute(
+                """
+                UPDATE preprocessing_manifest
+                SET source_work_manifest_sha256 = ?
+                WHERE run_id = ?
+                """,
+                [expected_new_sha256, expected_run_id],
+            )
         connection.execute("CHECKPOINT")
+    return expected_new_sha256
+
+
+def current_work_manifest_sha256(config: Config) -> str:
+    """Hash the current complete pipeline work manifest."""
+
+    work_manifest = _read_work_manifest(config)
+    return hashlib.sha256(
+        json.dumps(work_manifest, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def export_compatibility_outputs(
@@ -327,6 +368,7 @@ def inspect_combined_database(
             "combined_schema_version": row.get("combined_schema_version"),
             "package_version": row.get("package_version"),
             "completed_at": _json_value(row.get("completed_at")),
+            "source_work_manifest_sha256": row.get("source_work_manifest_sha256"),
             "duckdb_memory_limit_mib": row.get("duckdb_memory_limit_mib"),
             "duckdb_threads": row.get("duckdb_threads"),
             "manifest_columns": sorted(manifest_columns),

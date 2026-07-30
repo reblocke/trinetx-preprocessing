@@ -35,6 +35,7 @@ from ..work_manifest import (
 from .contract import compatibility_outputs
 from .database import (
     COMBINED_MANIFEST_FILENAME,
+    current_work_manifest_sha256,
     export_compatibility_outputs,
     finalize_combined_database,
     initialize_combined_database,
@@ -55,6 +56,7 @@ from .validation import CombinedValidationResult, validate_preprocessed_database
 
 _BUILD_STATE_SCHEMA_VERSION = 1
 _PUBLICATION_JOURNAL_SCHEMA_VERSION = 1
+_EXPORT_PROGRESS_DATABASE_FINGERPRINT_PENDING = "database_fingerprint_pending"
 _PHASE_ORDER = {
     "pipeline": 1,
     "database": 2,
@@ -540,7 +542,18 @@ def _run_compatibility_export_phase_worker(
     baseline = _deserialize_hashes(state.get("baseline"))
     manifest = _require_manifest_state(state)
     staged_database = paths.staging_output / config.combined.database_name
-    _require_database_state_current(staged_database, state, config=config)
+    if state.get("export_progress") is not None:
+        _complete_compatibility_export_checkpoint(
+            config,
+            paths=paths,
+            state=state,
+        )
+        return
+    database_status = _require_database_state_current(
+        staged_database,
+        state,
+        config=config,
+    )
     export_compatibility_outputs(
         staged_database,
         paths.staging_output,
@@ -551,7 +564,6 @@ def _run_compatibility_export_phase_worker(
         "final_assembly",
         physical_output_dir=paths.staging_output,
     )
-    refresh_database_work_manifest_fingerprint(staged_database, config)
     exported = _compatibility_hashes(paths.staging_output)
     _require_matching_hashes(baseline, exported)
     manifest = {
@@ -559,12 +571,95 @@ def _run_compatibility_export_phase_worker(
         "database": str(config.output_dir / config.combined.database_name),
         "database_size_bytes": staged_database.stat().st_size,
     }
+    refreshed_work_manifest_sha256 = current_work_manifest_sha256(config)
+    prepared_state = {
+        **state,
+        "manifest": manifest,
+        "compatibility_stats": _compatibility_file_stats(paths.staging_output),
+        "exported": _serialize_hashes(exported),
+        "export_progress": {
+            "status": _EXPORT_PROGRESS_DATABASE_FINGERPRINT_PENDING,
+            "source_work_manifest_sha256_before": database_status[
+                "source_work_manifest_sha256"
+            ],
+            "source_work_manifest_sha256_after": refreshed_work_manifest_sha256,
+        },
+    }
+    _write_build_state(paths.state_path, prepared_state)
+    _complete_compatibility_export_checkpoint(
+        config,
+        paths=paths,
+        state=prepared_state,
+    )
+
+
+def _complete_compatibility_export_checkpoint(
+    config: Config,
+    *,
+    paths: _CombinedBuildPaths,
+    state: dict[str, object],
+) -> None:
+    """Finish or recover the write-ahead export provenance checkpoint."""
+
+    progress = state.get("export_progress")
+    if not isinstance(progress, dict) or set(progress) != {
+        "status",
+        "source_work_manifest_sha256_before",
+        "source_work_manifest_sha256_after",
+    }:
+        raise ValueError("Combined export progress state is invalid.")
+    if progress.get("status") != _EXPORT_PROGRESS_DATABASE_FINGERPRINT_PENDING:
+        raise ValueError("Combined export progress state has an unknown status.")
+    previous_sha256 = progress.get("source_work_manifest_sha256_before")
+    expected_sha256 = progress.get("source_work_manifest_sha256_after")
+    if not isinstance(previous_sha256, str) or not isinstance(expected_sha256, str):
+        raise ValueError("Combined export progress has invalid provenance hashes.")
+
+    baseline = _deserialize_hashes(state.get("baseline"))
+    exported = _deserialize_hashes(state.get("exported"))
+    _require_matching_hashes(baseline, exported)
+    _require_compatibility_state_current(paths.staging_output, state)
+    manifest = _require_manifest_state(state)
+    run_id = manifest.get("run_id")
+    if not isinstance(run_id, str):
+        raise ValueError("Combined export progress has no database run ID.")
+    staged_database = paths.staging_output / config.combined.database_name
+    refreshed_sha256 = refresh_database_work_manifest_fingerprint(
+        staged_database,
+        config,
+        expected_previous_sha256=previous_sha256,
+        expected_new_sha256=expected_sha256,
+        expected_run_id=run_id,
+    )
+    if refreshed_sha256 != current_work_manifest_sha256(config):
+        raise RuntimeError("Combined database provenance refresh did not stabilize.")
+    database_status = inspect_combined_database(
+        staged_database,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+    )
+    if (
+        database_status.get("status") != "complete"
+        or database_status.get("run_id") != run_id
+        or database_status.get("source_work_manifest_sha256") != refreshed_sha256
+        or database_status.get("counts") != manifest.get("counts")
+    ):
+        raise ValueError(
+            "Combined database changed unexpectedly during export checkpoint."
+        )
+    completed_state = {
+        key: value for key, value in state.items() if key != "export_progress"
+    }
+    completed_manifest = {
+        **manifest,
+        "database": str(config.output_dir / config.combined.database_name),
+        "database_size_bytes": staged_database.stat().st_size,
+    }
     _write_build_state(
         paths.state_path,
         {
-            **state,
+            **completed_state,
             "phase": "compatibility_export",
-            "manifest": manifest,
+            "manifest": completed_manifest,
             "database_stat": _file_stat(staged_database),
             "compatibility_stats": _compatibility_file_stats(paths.staging_output),
             "exported": _serialize_hashes(exported),
@@ -849,7 +944,7 @@ def _require_database_state_current(
     state: dict[str, object],
     *,
     config: Config,
-) -> None:
+) -> dict[str, Any]:
     _require_file_state_current(
         database_path,
         state.get("database_stat"),
@@ -866,6 +961,7 @@ def _require_database_state_current(
         raise ValueError(
             "Resumable combined database identity or terminal status changed."
         )
+    return status
 
 
 def _require_manifest_state(state: dict[str, object]) -> dict[str, Any]:

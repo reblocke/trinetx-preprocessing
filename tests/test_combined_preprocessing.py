@@ -1185,6 +1185,76 @@ def test_failed_database_session_restarts_incomplete_database(
     assert not paths.state_path.exists()
 
 
+def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        _run_isolated_phase_locally,
+    )
+    real_write_build_state = combined_builder._write_build_state
+    fail_final_export_checkpoint = True
+
+    def write_state_with_injected_failure(path, payload):
+        nonlocal fail_final_export_checkpoint
+        if (
+            fail_final_export_checkpoint
+            and payload.get("phase") == "compatibility_export"
+            and "export_progress" not in payload
+        ):
+            fail_final_export_checkpoint = False
+            raise RuntimeError("injected final export checkpoint failure")
+        real_write_build_state(path, payload)
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_write_build_state",
+        write_state_with_injected_failure,
+    )
+    with pytest.raises(
+        RuntimeError,
+        match="injected final export checkpoint failure",
+    ):
+        build_preprocessed(config, strict=True)
+
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    failed_state = json.loads(paths.state_path.read_text())
+    assert failed_state["phase"] == "database"
+    assert failed_state["export_progress"]["status"] == "database_fingerprint_pending"
+    staged_database = paths.staging_output / config.combined.database_name
+    database_status = inspect_combined_database(staged_database)
+    assert database_status["source_work_manifest_sha256"] == (
+        combined_database.current_work_manifest_sha256(config)
+    )
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_write_build_state",
+        real_write_build_state,
+    )
+
+    def unexpected_export(*args, **kwargs):
+        raise AssertionError("prepared compatibility export ran again")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        unexpected_export,
+    )
+    resumed = build_preprocessed(config, strict=True)
+
+    assert resumed.validation.valid
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
+
+
 @pytest.mark.parametrize("relative_path", ["notes.txt", "AMBULATORY/notes.txt"])
 def test_replacement_rejects_unmanaged_output_entries(
     tmp_path: Path,

@@ -367,12 +367,14 @@
 - The official resumable phase remains `pipeline` while the three database workers communicate only conservative internal progress. It advances to `database` after finalization; a middle-session failure regression proves retry removes and rebuilds the incomplete database.
 - The correction passes all `40` combined-product tests and all `421` repository tests; the final full gate completed in `493.50 s`. Repository-wide Ruff, scoped formatting, `git diff --check`, and the tracked sensitive/generated filename scan pass. Final review also restored the fail-closed comparison between serialized baseline and exported hashes on resumed validation, with a focused regression.
 - Three proof-scoped synthetic test batches totaling about `40 GiB`, plus a `19 MiB` focused-test root, were moved recoverably to external Trash and their source scopes rechecked empty.
+- Exact-head CI for `c83a687` passed. Codex review then found one valid P2 export-recovery gap: the database provenance refresh could commit before the external export state advanced. A fsynced write-ahead checkpoint now pins the prior and target work-manifest hashes, exported file stats/hashes, run identity, terminal status, and counts; retry safely completes either side of the DuckDB update.
+- The exact post-refresh/pre-state-write failure regression and four adjacent resume/build tests pass. The complete gate passes all `422` tests in `496.46 s`; repository-wide Ruff, scoped formatting, `git diff --check`, and tracked-artifact checks pass. The exact `11 GiB` synthetic gate root was moved recoverably to external Trash and its source path rechecked absent.
 
 ## Now
-- Implementation commit `4f0448d` is pushed after the 421-test, Ruff, formatting, diff, and tracked-artifact gates. Exact-head Linux CI and Codex re-review are pending; no build worker is active.
+- The confirmed export-recovery fix is locally complete and ready to commit/push for exact-head CI and re-review. The private full-scale proof harness remains unlaunched; no build worker is active.
 
 ## Next
-- Pass exact-head CI and review for `4f0448d`, then prove its database/export/validation process-family peaks against the preserved full-scale inputs.
+- Commit/push the export-recovery fix, pass exact-head CI/re-review, then run the prepared full-scale post-pipeline memory proof.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
