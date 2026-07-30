@@ -1196,10 +1196,19 @@ def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
         _run_isolated_phase_locally,
     )
     real_write_build_state = combined_builder._write_build_state
+    real_fsync_checkpoint_inputs = combined_builder._fsync_export_checkpoint_inputs
     fail_final_export_checkpoint = True
+    durability_barrier_completed = False
+
+    def track_durability_barrier(*args, **kwargs):
+        nonlocal durability_barrier_completed
+        real_fsync_checkpoint_inputs(*args, **kwargs)
+        durability_barrier_completed = True
 
     def write_state_with_injected_failure(path, payload):
         nonlocal fail_final_export_checkpoint
+        if "export_progress" in payload:
+            assert durability_barrier_completed
         if (
             fail_final_export_checkpoint
             and payload.get("phase") == "compatibility_export"
@@ -1213,6 +1222,11 @@ def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
         combined_builder,
         "_write_build_state",
         write_state_with_injected_failure,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_fsync_export_checkpoint_inputs",
+        track_durability_barrier,
     )
     with pytest.raises(
         RuntimeError,
@@ -1253,6 +1267,59 @@ def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
     assert resumed.validation.valid
     assert not paths.staging_output.exists()
     assert not paths.state_path.exists()
+
+
+def test_export_checkpoint_durability_barrier_fsyncs_files_and_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "staging"
+    compatibility_paths = tuple(
+        output_dir / output.relative_path for output in compatibility_outputs()
+    )
+    for path in compatibility_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic\n")
+    work_manifest = tmp_path / "work" / "pipeline_work_manifest.json"
+    work_manifest.parent.mkdir()
+    work_manifest.write_text("{}\n")
+
+    synced_files: list[Path] = []
+    synced_directories: list[Path] = []
+    real_fsync_file = combined_builder._fsync_file_strict
+    real_fsync_directory = combined_builder._fsync_directory_strict
+
+    def track_file(path: Path) -> None:
+        synced_files.append(path)
+        real_fsync_file(path)
+
+    def track_directory(path: Path) -> None:
+        synced_directories.append(path)
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(combined_builder, "_fsync_file_strict", track_file)
+    monkeypatch.setattr(
+        combined_builder,
+        "_fsync_directory_strict",
+        track_directory,
+    )
+
+    combined_builder._fsync_export_checkpoint_inputs(
+        output_dir,
+        work_manifest=work_manifest,
+    )
+
+    assert set(synced_files) == {*compatibility_paths, work_manifest}
+    expected_directories = {
+        output_dir,
+        work_manifest.parent,
+        *(path.parent for path in compatibility_paths),
+    }
+    assert set(synced_directories) == expected_directories
+    for compatibility_directory in {path.parent for path in compatibility_paths}:
+        assert synced_directories.index(compatibility_directory) < (
+            synced_directories.index(output_dir)
+        )
 
 
 @pytest.mark.parametrize("relative_path", ["notes.txt", "AMBULATORY/notes.txt"])

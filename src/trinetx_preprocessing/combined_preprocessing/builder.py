@@ -31,6 +31,7 @@ from ..work_manifest import (
     require_current_work,
     require_strict_encounter_work,
     work_identity_sha256,
+    work_manifest_path,
 )
 from .contract import compatibility_outputs
 from .database import (
@@ -564,6 +565,10 @@ def _run_compatibility_export_phase_worker(
         "final_assembly",
         physical_output_dir=paths.staging_output,
     )
+    _fsync_export_checkpoint_inputs(
+        paths.staging_output,
+        work_manifest=work_manifest_path(config),
+    )
     exported = _compatibility_hashes(paths.staging_output)
     _require_matching_hashes(baseline, exported)
     manifest = {
@@ -1087,7 +1092,7 @@ def _require_reloaded_build_state(
 
 def _write_build_state(path: Path, payload: dict[str, object]) -> None:
     write_text_atomic(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    _fsync_directory(path.parent)
+    _fsync_directory_strict(path.parent)
 
 
 def _record_timing(
@@ -1495,6 +1500,46 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(descriptor)
     except OSError:
         pass
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_export_checkpoint_inputs(
+    output_dir: Path,
+    *,
+    work_manifest: Path,
+) -> None:
+    """Durably sync exported CSVs and their refreshed work manifest."""
+
+    compatibility_paths = tuple(
+        output_dir / output.relative_path for output in compatibility_outputs()
+    )
+    for path in (*compatibility_paths, work_manifest):
+        _fsync_file_strict(path)
+
+    directories = {
+        output_dir,
+        work_manifest.parent,
+        *(path.parent for path in compatibility_paths),
+    }
+    for path in sorted(
+        directories,
+        key=lambda item: (-len(item.parts), str(item)),
+    ):
+        _fsync_directory_strict(path)
+
+
+def _fsync_file_strict(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"Cannot fsync non-regular checkpoint file: {path}")
+    with path.open("rb") as handle:
+        os.fsync(handle.fileno())
+
+
+def _fsync_directory_strict(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
     finally:
         os.close(descriptor)
 

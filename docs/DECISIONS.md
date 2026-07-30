@@ -1710,11 +1710,12 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   export, and validation results cross the process boundary through the
   fsynced resumable state rather than row-level IPC. A failed worker exits
   nonzero and leaves the existing atomic publication and resumable-work
-  safeguards intact. Compatibility export writes a fsynced intent checkpoint
-  before mutating the database's embedded work-manifest fingerprint; retry
-  accepts only the pinned prior or pinned target fingerprint, matching run
-  identity, terminal status, table counts, the unchanged target work manifest,
-  and unchanged exported-file stats.
+  safeguards intact. Compatibility export fsyncs all regenerated CSV files,
+  their containing directories, and the refreshed work manifest before writing
+  a fsynced intent checkpoint and mutating the database's embedded
+  work-manifest fingerprint. Retry accepts only the pinned prior or pinned
+  target fingerprint, matching run identity, terminal status, table counts,
+  the unchanged target work manifest, and unchanged exported-file stats.
   Each phase worker and every nested final-feature domain worker retain
   duplicated descriptors for the parent's canonical work/output locks, so no
   surviving descendant can continue unlocked if an ancestor exits

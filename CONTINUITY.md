@@ -369,12 +369,14 @@
 - Three proof-scoped synthetic test batches totaling about `40 GiB`, plus a `19 MiB` focused-test root, were moved recoverably to external Trash and their source scopes rechecked empty.
 - Exact-head CI for `c83a687` passed. Codex review then found one valid P2 export-recovery gap: the database provenance refresh could commit before the external export state advanced. A fsynced write-ahead checkpoint now pins the prior and target work-manifest hashes, exported file stats/hashes, run identity, terminal status, and counts; retry safely completes either side of the DuckDB update.
 - The exact post-refresh/pre-state-write failure regression and four adjacent resume/build tests pass. The complete gate passes all `422` tests in `496.46 s`; repository-wide Ruff, scoped formatting, `git diff --check`, and tracked-artifact checks pass. The exact `11 GiB` synthetic gate root was moved recoverably to external Trash and its source path rechecked absent.
+- Commit `89965e1` passed exact-head CI. Re-review found one adjacent P2 durability gap: the progress checkpoint could outlive unsynced CSV renames after power loss or volume disconnect. Export now strictly fsyncs all 36 CSVs, their containing directories and staging parent, plus the refreshed work manifest and its directory before writing progress; build-state directory fsync is strict as well.
+- A direct ExFAT file/directory fsync probe passed. Four focused durability/recovery/build tests and all `423` repository tests pass (`579.43 s`); Ruff, formatting, diff, and tracked-artifact gates pass. The `11 GiB` synthetic full-gate root and tiny fsync probe were moved recoverably to external Trash and their source paths rechecked absent.
 
 ## Now
-- The confirmed export-recovery fix is locally complete and ready to commit/push for exact-head CI and re-review. The private full-scale proof harness remains unlaunched; no build worker is active.
+- The confirmed export-durability fix is locally complete and ready to commit/push for exact-head CI and re-review. The private full-scale proof harness remains unlaunched; no build worker is active.
 
 ## Next
-- Commit/push the export-recovery fix, pass exact-head CI/re-review, then run the prepared full-scale post-pipeline memory proof.
+- Commit/push the export-durability fix, pass exact-head CI/re-review, then run the prepared full-scale post-pipeline memory proof.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
