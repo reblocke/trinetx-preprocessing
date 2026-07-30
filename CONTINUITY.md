@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; reviewed docs checkpoint `254c2eb` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; implementation checkpoint `94c1497` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -382,10 +382,11 @@
 - Docs-only commit `254c2eb` is pushed, exact-head CI run `30572899664` passed in `6m9s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5135154832`).
 - The exact-head post-pipeline proof at `254c2eb` completed naturally in `15,083.545 s`. All six measured phases completed, all 36 exports validate, aggregate counts and availability fingerprints match, validation warnings are empty, and WAL/spill/hash scratch rechecked at zero.
 - Resource acceptance failed only in core: the core phase peaked at `7104.047 MiB` and the authoritative family peak was `7158.953 MiB`. Observability, membership, finalization, export, and validation peaked at `5098.719`, `4125.844`, `3943.781`, `3373.547`, and `4275.000 MiB`, respectively. Wrapper exit `1` is the expected memory-gate result, not a semantic or build failure.
-- The four-session evidence disproves observability retention as a sufficient explanation and localizes the remaining resource failure to the isolated core/source worker. A provenance-visible `2816 MiB` core limit with the required `3072 MiB` later-phase limit passes all `429` tests in `513.08 s`, repository-wide Ruff, scoped formatting, diff, and tracked-artifact checks; an omitted core setting respects any lower general cap. The `11 GiB` full-test root was moved recoverably to external Trash. The correction is not yet committed, reviewed, or proven at full scale.
+- The four-session evidence disproves observability retention as a sufficient explanation and localizes the remaining resource failure to the isolated core/source worker. A provenance-visible `2816 MiB` core limit with the required `3072 MiB` later-phase limit passes all `429` tests in `513.08 s`, repository-wide Ruff, scoped formatting, diff, and tracked-artifact checks; an omitted core setting respects any lower general cap. The `11 GiB` full-test root was moved recoverably to external Trash.
+- Commit `94c1497` is pushed, exact-head CI run `30590994517` passed in `5m51s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5137454927`).
 
 ## Now
-- Run the full local gate for the phase-specific core limit, then commit/push and reconcile exact-head CI and Codex review.
+- Commit/push this docs-only ledger checkpoint, confirm its exact head, then launch the isolated `2816 MiB` core proof.
 
 ## Next
 - Prove the isolated `2816 MiB` core worker from the preserved checkpoint before repeating the private full-scale post-pipeline proof.
