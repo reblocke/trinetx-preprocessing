@@ -35,9 +35,11 @@ from ..work_manifest import (
 from .contract import compatibility_outputs
 from .database import (
     COMBINED_MANIFEST_FILENAME,
-    create_combined_database,
     export_compatibility_outputs,
+    finalize_combined_database,
+    initialize_combined_database,
     inspect_combined_database,
+    load_combined_memberships,
     refresh_database_work_manifest_fingerprint,
     write_combined_manifest,
 )
@@ -191,7 +193,7 @@ def _build_locked(
             raise RuntimeError(
                 "Combined final-assembly worker completed without resumable state."
             )
-        baseline = _deserialize_hashes(state.get("baseline"))
+        _deserialize_hashes(state.get("baseline"))
     elif state is None:
         baseline = _compatibility_hashes(paths.staging_output)
         state = _new_build_state(
@@ -202,132 +204,76 @@ def _build_locked(
         )
         _write_build_state(paths.state_path, state)
     else:
-        baseline = _deserialize_hashes(state.get("baseline"))
+        _deserialize_hashes(state.get("baseline"))
         if not _phase_at_least(state, "database") and not pipeline_current:
             raise ValueError(
                 "Resumable combined pipeline outputs no longer match the work "
                 f"manifest: {paths.staging_output}"
             )
 
-    staged_database = paths.staging_output / config.combined.database_name
-    if _phase_at_least(state, "database"):
-        _require_database_state_current(
-            staged_database,
-            state,
-            config=config,
-        )
-        manifest = _require_manifest_state(state)
-    else:
-        _remove_incomplete_database(staged_database)
+    if not _phase_at_least(state, "database"):
         phase_started = time.perf_counter()
-        manifest = create_combined_database(
-            config,
-            staged_database,
-            compatibility_hashes=baseline,
-            compatibility_output_dir=paths.staging_output,
-            published_output_dir=config.output_dir,
+        _run_isolated_phase_process(
+            "database-core",
+            _run_database_core_phase_worker,
+            (config, paths, build_identity),
+            lock_file_descriptors=lock_file_descriptors,
+        )
+        _run_isolated_phase_process(
+            "database-membership",
+            _run_database_membership_phase_worker,
+            (config, paths, build_identity),
+            lock_file_descriptors=lock_file_descriptors,
+        )
+        _run_isolated_phase_process(
+            "database-finalize",
+            _run_database_finalize_phase_worker,
+            (config, paths, build_identity),
+            lock_file_descriptors=lock_file_descriptors,
         )
         _record_timing(timings, "database", phase_started)
-        state = {
-            **state,
-            "phase": "database",
-            "manifest": manifest,
-            "database_stat": _file_stat(staged_database),
-        }
-        _write_build_state(paths.state_path, state)
-
-    if _phase_at_least(state, "compatibility_export"):
-        _require_database_state_current(
-            staged_database,
-            state,
-            config=config,
-        )
-        _require_compatibility_state_current(paths.staging_output, state)
-        exported = _deserialize_hashes(state.get("exported"))
-        _require_matching_hashes(baseline, exported)
-    else:
-        phase_started = time.perf_counter()
-        export_compatibility_outputs(
-            staged_database,
-            paths.staging_output,
-            memory_limit_mib=config.combined.duckdb_memory_limit_mib,
-        )
-        refresh_stage_output_metadata(
+        state = _require_reloaded_build_state(
             config,
-            "final_assembly",
-            physical_output_dir=paths.staging_output,
+            paths=paths,
+            build_identity=build_identity,
+            expected_phase="database",
         )
-        refresh_database_work_manifest_fingerprint(staged_database, config)
-        exported = _compatibility_hashes(paths.staging_output)
-        _require_matching_hashes(baseline, exported)
+
+    if not _phase_at_least(state, "compatibility_export"):
+        phase_started = time.perf_counter()
+        _run_isolated_phase_process(
+            "compatibility-export",
+            _run_compatibility_export_phase_worker,
+            (config, paths, build_identity),
+            lock_file_descriptors=lock_file_descriptors,
+        )
         _record_timing(timings, "compatibility_export", phase_started)
-        manifest = {
-            **manifest,
-            "database": str(database_path),
-            "database_size_bytes": staged_database.stat().st_size,
-        }
-        state = {
-            **state,
-            "phase": "compatibility_export",
-            "manifest": manifest,
-            "database_stat": _file_stat(staged_database),
-            "compatibility_stats": _compatibility_file_stats(paths.staging_output),
-            "exported": _serialize_hashes(exported),
-        }
-        _write_build_state(paths.state_path, state)
-
-    manifest = _require_manifest_state(state)
-    manifest = {
-        **manifest,
-        "database": str(database_path),
-        "database_size_bytes": staged_database.stat().st_size,
-    }
-    if _phase_at_least(state, "validation"):
-        _require_database_state_current(
-            staged_database,
-            state,
-            config=config,
-        )
-        _require_compatibility_state_current(paths.staging_output, state)
-        _require_file_state_current(
-            paths.staging_output / COMBINED_MANIFEST_FILENAME,
-            state.get("sidecar_stat"),
-            label="combined product sidecar",
-        )
-        validation = _deserialize_validation(state.get("validation"))
-        if not validation.valid:
-            raise RuntimeError(
-                "Resumable combined validation state is not valid: "
-                + "; ".join(validation.errors)
-            )
-    else:
-        sidecar_path = write_combined_manifest(
+        state = _require_reloaded_build_state(
             config,
-            manifest,
-            output_dir=paths.staging_output,
+            paths=paths,
+            build_identity=build_identity,
+            expected_phase="compatibility_export",
         )
+
+    validation_already_complete = _phase_at_least(state, "validation")
+    if not validation_already_complete:
         phase_started = time.perf_counter()
-        validation = validate_preprocessed_database(
-            staged_database,
-            compatibility_output_dir=paths.staging_output,
-            published_database_path=database_path,
-            memory_limit_mib=config.combined.duckdb_memory_limit_mib,
-        )
-        if not validation.valid:
-            raise RuntimeError(
-                "Combined database validation failed: " + "; ".join(validation.errors)
-            )
+    _run_isolated_phase_process(
+        "validation-state-check" if validation_already_complete else "validation",
+        _run_validation_phase_worker,
+        (config, paths, build_identity),
+        lock_file_descriptors=lock_file_descriptors,
+    )
+    if not validation_already_complete:
         _record_timing(timings, "validation", phase_started)
-        state = {
-            **state,
-            "phase": "validation",
-            "manifest": manifest,
-            "database_stat": _file_stat(staged_database),
-            "compatibility_stats": _compatibility_file_stats(paths.staging_output),
-            "sidecar_stat": _file_stat(sidecar_path),
-            "validation": _serialize_validation(validation),
-        }
-        _write_build_state(paths.state_path, state)
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="validation",
+    )
+    manifest = _require_manifest_state(state)
+    validation = _deserialize_validation(state.get("validation"))
 
     _remove_appledouble_sidecars(paths.staging_output)
     _validate_product_tree(
@@ -366,13 +312,13 @@ def _run_combined_pipeline_isolated(
 ) -> None:
     """Run allocation-heavy pipeline phases in sequential fresh processes."""
 
-    _run_pipeline_phase_process(
+    _run_isolated_phase_process(
         "pre-final",
         _run_pre_final_pipeline_worker,
         (config, strict),
         lock_file_descriptors=lock_file_descriptors,
     )
-    _run_pipeline_phase_process(
+    _run_isolated_phase_process(
         "final-assembly",
         _run_final_pipeline_worker,
         (
@@ -385,7 +331,7 @@ def _run_combined_pipeline_isolated(
     )
 
 
-def _run_pipeline_phase_process(
+def _run_isolated_phase_process(
     phase: str,
     target: Callable[..., None],
     args: tuple[object, ...],
@@ -395,7 +341,7 @@ def _run_pipeline_phase_process(
     context = multiprocessing.get_context("spawn")
     duplicated_locks = duplicate_lock_file_descriptors_for_spawn(lock_file_descriptors)
     process = context.Process(
-        target=_run_pipeline_phase_worker,
+        target=_run_isolated_phase_worker,
         args=(target, args, duplicated_locks),
         name=f"trinetx-combined-{phase}",
     )
@@ -413,7 +359,7 @@ def _run_pipeline_phase_process(
         )
 
 
-def _run_pipeline_phase_worker(
+def _run_isolated_phase_worker(
     target: Callable[..., None],
     args: tuple[object, ...],
     duplicated_locks: tuple[int, ...],
@@ -460,6 +406,236 @@ def _run_final_pipeline_worker(
         baseline=baseline,
     )
     _write_build_state(paths.state_path, state)
+
+
+def _run_database_core_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Create core/source tables in the first fresh database process."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="pipeline",
+    )
+    baseline = _deserialize_hashes(state.get("baseline"))
+    staged_database = paths.staging_output / config.combined.database_name
+    _remove_incomplete_database(staged_database)
+    manifest = initialize_combined_database(
+        config,
+        staged_database,
+        compatibility_hashes=baseline,
+        compatibility_output_dir=paths.staging_output,
+        published_output_dir=config.output_dir,
+    )
+    _write_build_state(
+        paths.state_path,
+        {
+            **state,
+            "database_progress": "core",
+            "manifest": manifest,
+            "database_stat": _file_stat(staged_database),
+        },
+    )
+
+
+def _run_database_membership_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Create membership tables in a second fresh database process."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="pipeline",
+    )
+    _require_database_progress(state, "core")
+    staged_database = paths.staging_output / config.combined.database_name
+    _require_file_state_current(
+        staged_database,
+        state.get("database_stat"),
+        label="in-progress combined database",
+    )
+    load_combined_memberships(config, staged_database)
+    _write_build_state(
+        paths.state_path,
+        {
+            **state,
+            "database_progress": "membership",
+            "database_stat": _file_stat(staged_database),
+        },
+    )
+
+
+def _run_database_finalize_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Finalize the database in a third fresh process and advance state."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="pipeline",
+    )
+    _require_database_progress(state, "membership")
+    staged_database = paths.staging_output / config.combined.database_name
+    _require_file_state_current(
+        staged_database,
+        state.get("database_stat"),
+        label="in-progress combined database",
+    )
+    manifest = finalize_combined_database(
+        config,
+        staged_database,
+        manifest=_require_manifest_state(state),
+    )
+    completed_state = {
+        key: value for key, value in state.items() if key != "database_progress"
+    }
+    _write_build_state(
+        paths.state_path,
+        {
+            **completed_state,
+            "phase": "database",
+            "manifest": manifest,
+            "database_stat": _file_stat(staged_database),
+        },
+    )
+
+
+def _run_compatibility_export_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Regenerate compatibility exports in a fresh process and persist state."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="database",
+    )
+    baseline = _deserialize_hashes(state.get("baseline"))
+    manifest = _require_manifest_state(state)
+    staged_database = paths.staging_output / config.combined.database_name
+    _require_database_state_current(staged_database, state, config=config)
+    export_compatibility_outputs(
+        staged_database,
+        paths.staging_output,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+    )
+    refresh_stage_output_metadata(
+        config,
+        "final_assembly",
+        physical_output_dir=paths.staging_output,
+    )
+    refresh_database_work_manifest_fingerprint(staged_database, config)
+    exported = _compatibility_hashes(paths.staging_output)
+    _require_matching_hashes(baseline, exported)
+    manifest = {
+        **manifest,
+        "database": str(config.output_dir / config.combined.database_name),
+        "database_size_bytes": staged_database.stat().st_size,
+    }
+    _write_build_state(
+        paths.state_path,
+        {
+            **state,
+            "phase": "compatibility_export",
+            "manifest": manifest,
+            "database_stat": _file_stat(staged_database),
+            "compatibility_stats": _compatibility_file_stats(paths.staging_output),
+            "exported": _serialize_hashes(exported),
+        },
+    )
+
+
+def _run_validation_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Validate or recheck a staged product in a fresh bounded process."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="compatibility_export",
+    )
+    staged_database = paths.staging_output / config.combined.database_name
+    _require_database_state_current(staged_database, state, config=config)
+    _require_compatibility_state_current(paths.staging_output, state)
+    baseline = _deserialize_hashes(state.get("baseline"))
+    exported = _deserialize_hashes(state.get("exported"))
+    _require_matching_hashes(baseline, exported)
+    if _phase_at_least(state, "validation"):
+        _require_file_state_current(
+            paths.staging_output / COMBINED_MANIFEST_FILENAME,
+            state.get("sidecar_stat"),
+            label="combined product sidecar",
+        )
+        validation = _deserialize_validation(state.get("validation"))
+        if not validation.valid:
+            raise RuntimeError(
+                "Resumable combined validation state is not valid: "
+                + "; ".join(validation.errors)
+            )
+        return
+
+    manifest = _require_manifest_state(state)
+    sidecar_path = write_combined_manifest(
+        config,
+        manifest,
+        output_dir=paths.staging_output,
+    )
+    validation = validate_preprocessed_database(
+        staged_database,
+        compatibility_output_dir=paths.staging_output,
+        published_database_path=config.output_dir / config.combined.database_name,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+    )
+    if not validation.valid:
+        raise RuntimeError(
+            "Combined database validation failed: " + "; ".join(validation.errors)
+        )
+    _write_build_state(
+        paths.state_path,
+        {
+            **state,
+            "phase": "validation",
+            "manifest": manifest,
+            "database_stat": _file_stat(staged_database),
+            "compatibility_stats": _compatibility_file_stats(paths.staging_output),
+            "sidecar_stat": _file_stat(sidecar_path),
+            "validation": _serialize_validation(validation),
+        },
+    )
 
 
 def _new_build_state(
@@ -699,6 +875,18 @@ def _require_manifest_state(state: dict[str, object]) -> dict[str, Any]:
     return dict(manifest)
 
 
+def _require_database_progress(
+    state: dict[str, object],
+    expected: str,
+) -> None:
+    observed = state.get("database_progress")
+    if observed != expected:
+        raise RuntimeError(
+            "Combined database session did not durably advance progress "
+            f"to {expected!r}; observed {observed!r}."
+        )
+
+
 def _serialize_validation(
     validation: CombinedValidationResult,
 ) -> dict[str, object]:
@@ -777,6 +965,28 @@ def _load_build_state(
         details = ", ".join(sorted(mismatched))
         raise ValueError(f"Combined build state is stale or invalid for: {details}")
     return payload
+
+
+def _require_reloaded_build_state(
+    config: Config,
+    *,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    expected_phase: str,
+) -> dict[str, object]:
+    state = _load_build_state(
+        paths.state_path,
+        expected_identity=build_identity,
+        paths=paths,
+        published_output=config.output_dir,
+    )
+    if state is None or not _phase_at_least(state, expected_phase):
+        observed = None if state is None else state.get("phase")
+        raise RuntimeError(
+            "Combined isolated phase did not durably advance build state "
+            f"to {expected_phase!r}; observed {observed!r}."
+        )
+    return state
 
 
 def _write_build_state(path: Path, payload: dict[str, object]) -> None:

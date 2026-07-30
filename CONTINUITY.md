@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`, exact-head phase-isolation checkpoint `5cf73d6`; it tracks `origin/codex/unified-preprocessing-v1`.
+- Branch: `codex/unified-preprocessing-v1`, exact-head full-run checkpoint `d455548`; it tracks `origin/codex/unified-preprocessing-v1`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -357,14 +357,25 @@
 - The nested lock fix centralizes spawn-time pass-fd transfer, propagates retained descriptors through final-stage orchestration, and gives every feature-domain child its own duplicates. The real ExFAT combined build, direct lock-survival regression, all `41` combined/feature-source tests, and all `418` repository tests pass (`468.87 s`); Ruff and diff checks are clean.
 - Commit `5cf73d6` contains the complete phase-isolation and descendant-lock correction and is pushed. Exact-head CI run `30443685767` passes in `4m50s`; both findings have direct fix replies, all PR #8 threads are resolved, and Codex re-review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5116563668`).
 - Three proof-scoped synthetic pytest roots totaling about `14.4 GiB` were moved recoverably to external Trash and the test root rechecked empty. The diagnostic full-build root's two `4 KiB` lock AppleDouble sidecars were deleted through `clean-scratch`, which rechecked at zero recognized scratch.
+- Docs-only checkpoint `d455548` is pushed, passes exact-head CI run `30444202925`, has zero unresolved PR #8 threads, and received a clean exact-head Codex review (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5116652723`).
+- Fresh exact-head run `e7dd8bb9957abc5cb28fe227` completed naturally with wrapper exit `0` after `90,600.801 s`. It atomically published the `82,192,379,904`-byte DuckDB, manifest, and all 36 compatibility CSVs; aggregate validation counts pass and `validation_warnings` is empty.
+- Exact-head provenance passes: expected and actual Git head are `d455548ad200a026ec49b26c0d1f9f9edf4991c5`, the repository was clean at launch, and code/config hashes are recorded. Pipeline, database, compatibility export, validation, and publication all reached terminal completion.
+- Resource acceptance still fails narrowly: authoritative lifetime peak was `6,697,238,528` bytes (`6,386.984 MiB`), `148.984 MiB` above the `6,238 MiB` ceiling. Sampled process-family peak and the resource floor agree within about `7.5 MiB`; the terminal product remains semantic/diagnostic evidence, not release evidence.
+- No build worker remains active. The monitor's last pre-swap status is stale because its terminal formatter encountered a null process RSS after normal process exit; the trusted schema-2 result and wrapper exit marker are terminal and authoritative.
+- The local session log retains 311 five-minute samples for the exact-head run. Final assembly peaked at `3,572 MiB` in those samples and its internal feature-worker metric was `3,736.672 MiB`; the post-final database window reached `5,746 MiB`. This localizes the short `6,386.984 MiB` lifetime spike to database work rather than final assembly.
+- Database core/source loading, element/RFS membership, and final derived-table materialization now run in three separate spawned workers, followed by fresh export and validation workers. Together with pre-final and final-assembly isolation, the combined build has seven sequential allocation lifetimes. Every worker retains the canonical work/output locks.
+- The official resumable phase remains `pipeline` while the three database workers communicate only conservative internal progress. It advances to `database` after finalization; a middle-session failure regression proves retry removes and rebuilds the incomplete database.
+- The correction passes all `40` combined-product tests and all `421` repository tests; the final full gate completed in `493.50 s`. Repository-wide Ruff, scoped formatting, `git diff --check`, and the tracked sensitive/generated filename scan pass. Final review also restored the fail-closed comparison between serialized baseline and exported hashes on resumed validation, with a focused regression.
+- Three proof-scoped synthetic test batches totaling about `40 GiB`, plus a `19 MiB` focused-test root, were moved recoverably to external Trash and their source scopes rechecked empty.
 
 ## Next
-- Create the durable docs-only ledger checkpoint, then launch and monitor one fresh exact-head full raw build from empty work/output roots.
-- Complete Step 2 on the terminal product: combined-product validation, 36-file corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, process-family RSS/free-space limits, scratch cleanup, repository hygiene, CI, and final review.
+- Commit/push the evidence-localized database-session isolation, pass exact-head CI and review, then prove its database/export/validation process-family peaks against the preserved full-scale inputs.
+- Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
-- None for the review. Direct per-process jetsam attribution for the older interrupted run is `UNCONFIRMED`. Final release acceptance remains `UNCONFIRMED` until the phase-isolation fix passes a fresh exact-head full run and every Step 2 gate.
+- The one-second peak's exact database statement is `UNCONFIRMED`; direct per-process jetsam attribution for the older interrupted run also remains `UNCONFIRMED`.
+- Final release acceptance remains `UNCONFIRMED` until a fresh exact-head full run passes the memory ceiling and every Step 2 gate.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
@@ -375,6 +386,8 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_e225107_20260726/diagnostics/database_only_e298885_3072/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_8d388ea_20260728/evidence/combined_benchmark_8d388ea.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_8d388ea_20260728/output/trinetx_preprocessed.duckdb`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/evidence/combined_benchmark_d455548.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/output/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`

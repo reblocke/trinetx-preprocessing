@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -80,7 +81,7 @@ from trinetx_preprocessing.glp1_eligibility.ingestion import (
 )
 from trinetx_preprocessing.glp1_eligibility.provenance import build_input_inventory
 from trinetx_preprocessing.process_locks import SpawnedLockFileDescriptor
-from trinetx_preprocessing.regression import hash_csv_with_metadata
+from trinetx_preprocessing.regression import CsvHashResult, hash_csv_with_metadata
 from trinetx_preprocessing.work_manifest import require_current_work
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -100,6 +101,29 @@ def _hold_transferred_lock(
             time.sleep(0.01)
     finally:
         os.close(descriptor)
+
+
+def _record_isolated_worker_pid(
+    output_path: Path,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    assert retained_lock_file_descriptors == ()
+    output_path.write_text(str(os.getpid()))
+
+
+def _run_isolated_phase_locally(
+    phase: str,
+    target: Callable[..., None],
+    args: tuple[object, ...],
+    *,
+    lock_file_descriptors: tuple[int, ...],
+) -> None:
+    _ = phase
+    target(
+        *args,
+        retained_lock_file_descriptors=lock_file_descriptors,
+    )
 
 
 def test_combined_run_id_ignores_volatile_work_status() -> None:
@@ -195,7 +219,7 @@ def test_combined_pipeline_uses_sequential_fresh_phase_workers(
 
     monkeypatch.setattr(
         combined_builder,
-        "_run_pipeline_phase_process",
+        "_run_isolated_phase_process",
         lambda phase, target, args, *, lock_file_descriptors: calls.append(
             (phase, target, args, lock_file_descriptors)
         ),
@@ -219,6 +243,78 @@ def test_combined_pipeline_uses_sequential_fresh_phase_workers(
     assert calls[1][1] is combined_builder._run_final_pipeline_worker
     assert calls[1][2] == (config, True, paths, build_identity)
     assert calls[1][3] == (101, 102)
+
+
+def test_isolated_phase_process_runs_target_in_fresh_process(
+    tmp_path: Path,
+) -> None:
+    worker_pid_path = tmp_path / "worker.pid"
+
+    combined_builder._run_isolated_phase_process(
+        "pid-proof",
+        _record_isolated_worker_pid,
+        (worker_pid_path,),
+        lock_file_descriptors=(),
+    )
+
+    assert int(worker_pid_path.read_text()) != os.getpid()
+
+
+def test_validation_worker_rechecks_serialized_export_hashes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    baseline = {
+        output.key: CsvHashResult(
+            hash="a" * 64,
+            row_count=0,
+            columns=final_output_columns(),
+        )
+        for output in compatibility_outputs()
+    }
+    exported = dict(baseline)
+    mismatched_key = compatibility_outputs()[0].key
+    exported[mismatched_key] = replace(
+        exported[mismatched_key],
+        hash="b" * 64,
+    )
+    state: dict[str, object] = {
+        "phase": "compatibility_export",
+        "baseline": combined_builder._serialize_hashes(baseline),
+        "exported": combined_builder._serialize_hashes(exported),
+    }
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_reloaded_build_state",
+        lambda *args, **kwargs: state,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_database_state_current",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_compatibility_state_current",
+        lambda *args, **kwargs: None,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Database compatibility exports changed normalized CSV contents",
+    ):
+        combined_builder._run_validation_phase_worker(
+            config,
+            paths,
+            build_identity,
+            retained_lock_file_descriptors=(),
+        )
 
 
 def test_spawned_worker_retains_canonical_lock_after_parent_descriptor_closes(
@@ -683,6 +779,28 @@ def test_combined_build_exports_exact_historical_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(_write_combined_config(tmp_path))
+    isolated_phases: list[str] = []
+
+    def run_phase_locally(
+        phase: str,
+        target: Callable[..., None],
+        args: tuple[object, ...],
+        *,
+        lock_file_descriptors: tuple[int, ...],
+    ) -> None:
+        isolated_phases.append(phase)
+        _run_isolated_phase_locally(
+            phase,
+            target,
+            args,
+            lock_file_descriptors=lock_file_descriptors,
+        )
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        run_phase_locally,
+    )
     real_open_combined_database = combined_database.open_combined_database
     write_session_tables: list[set[str]] = []
 
@@ -708,6 +826,15 @@ def test_combined_build_exports_exact_historical_contract(
     )
     result = build_preprocessed(config, strict=True)
 
+    assert isolated_phases == [
+        "pre-final",
+        "final-assembly",
+        "database-core",
+        "database-membership",
+        "database-finalize",
+        "compatibility-export",
+        "validation",
+    ]
     assert result.database_path.is_file()
     assert result.manifest_path.is_file()
     assert len(result.compatibility_paths) == 36
@@ -940,6 +1067,11 @@ def test_failed_replacement_preserves_published_product(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(_write_combined_config(tmp_path))
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        _run_isolated_phase_locally,
+    )
     first = build_preprocessed(config, strict=True)
     original_database = first.database_path.read_bytes()
     original_hashes = _output_hashes(config.output_dir)
@@ -984,12 +1116,71 @@ def test_failed_replacement_preserves_published_product(
     )
     monkeypatch.setattr(
         combined_builder,
-        "create_combined_database",
+        "initialize_combined_database",
         unexpected_rebuild,
     )
     resumed = build_preprocessed(config, strict=True, replace_existing=True)
 
     assert resumed.validation.valid
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
+
+
+def test_failed_database_session_restarts_incomplete_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        _run_isolated_phase_locally,
+    )
+    real_initialize = combined_builder.initialize_combined_database
+    real_load_memberships = combined_builder.load_combined_memberships
+    initialize_calls = 0
+
+    def track_initialize(*args, **kwargs):
+        nonlocal initialize_calls
+        initialize_calls += 1
+        return real_initialize(*args, **kwargs)
+
+    def fail_memberships(*args, **kwargs):
+        raise RuntimeError("injected membership failure")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "initialize_combined_database",
+        track_initialize,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "load_combined_memberships",
+        fail_memberships,
+    )
+
+    with pytest.raises(RuntimeError, match="injected membership failure"):
+        build_preprocessed(config, strict=True)
+
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    failed_state = json.loads(paths.state_path.read_text())
+    assert failed_state["phase"] == "pipeline"
+    assert failed_state["database_progress"] == "core"
+    assert (paths.staging_output / config.combined.database_name).is_file()
+
+    monkeypatch.setattr(
+        combined_builder,
+        "load_combined_memberships",
+        real_load_memberships,
+    )
+    resumed = build_preprocessed(config, strict=True)
+
+    assert resumed.validation.valid
+    assert initialize_calls == 2
     assert not paths.staging_output.exists()
     assert not paths.state_path.exists()
 
@@ -1029,6 +1220,11 @@ def test_publication_removes_appledouble_sidecars(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(_write_combined_config(tmp_path))
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        _run_isolated_phase_locally,
+    )
     real_write_manifest = combined_builder.write_combined_manifest
 
     def write_manifest_with_sidecar(*args, **kwargs):

@@ -1686,27 +1686,37 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   spawned workers. Build the final feature-source index before loading
   demographics, setting lookups, and cohort rows. Hash the 36 staged outputs
   and write the resumable pipeline checkpoint in the final-assembly worker,
-  then exit that worker before database creation, export, and validation begin
-  in the clean parent process.
+  then exit that worker. Run the three durable DuckDB write sessions,
+  compatibility export, and validation in five additional sequential spawned
+  workers; each completed product phase durably advances the existing
+  build-state file before it exits.
 - Context: The clean exact-head `8d388ea` full build passed every semantic and
   publication check but reached `6,616.609 MiB` authoritative peak RSS, above
   the `6,238 MiB` release ceiling. One sampled breach coincided with a spawned
   feature-domain worker overlapping cohort-retained parent memory; later
   handoffs retained pipeline allocator pages into otherwise bounded DuckDB
-  phases. The same database phases pass independently when started from a
-  clean process.
+  phases. Pipeline isolation reduced the next exact-head full peak to
+  `6,386.984 MiB`, but it still exceeded the ceiling by `148.984 MiB`. Across
+  311 retained five-minute samples, final assembly peaked at `3,572 MiB`
+  (`3,736.672 MiB` in its internal feature-worker metric), while the database
+  window reached `5,746 MiB`. The same three database write sessions pass
+  independently from a clean process at `5,162.641`, `5,069.859`, and
+  `4,842.391 MiB`, localizing the remaining transient to allocator retention
+  within the database process lifetime.
 - Rationale: Sequential process lifetimes provide a deterministic allocator
   boundary without changing stage logic, intermediate files, output order,
   resumable identity, or the canonical product contract.
-- Consequences: Combined builds pay two Python spawn/import costs. A failed
-  worker exits nonzero and leaves the existing atomic publication and
-  resumable-work safeguards intact. Each phase worker and every nested
-  final-feature domain worker retain duplicated descriptors for the parent's
-  canonical work/output locks, so no surviving descendant can continue
-  unlocked if an ancestor exits unexpectedly. Descriptor duplication occurs
-  through the spawn pass-fd channel and does not require a Unix socket on the
-  external ExFAT `TMPDIR`. Direct non-combined pipeline commands keep their
-  existing in-process behavior.
+- Consequences: Combined builds pay seven Python spawn/import costs. Database,
+  export, and validation results cross the process boundary through the
+  fsynced resumable state rather than row-level IPC. A failed worker exits
+  nonzero and leaves the existing atomic publication and resumable-work
+  safeguards intact. Each phase worker and every nested final-feature domain
+  worker retain duplicated descriptors for the parent's canonical work/output
+  locks, so no surviving descendant can continue unlocked if an ancestor exits
+  unexpectedly. Descriptor duplication occurs through the spawn pass-fd
+  channel and does not require a Unix socket on the external ExFAT `TMPDIR`.
+  Direct non-combined pipeline commands keep their existing in-process
+  behavior.
 - References:
   `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
   `src/trinetx_preprocessing/process_locks.py`,

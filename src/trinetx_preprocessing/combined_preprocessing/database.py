@@ -104,6 +104,31 @@ def create_combined_database(
 ) -> dict[str, Any]:
     """Create a complete combined database from current pipeline artifacts."""
 
+    manifest = initialize_combined_database(
+        config,
+        database_path,
+        compatibility_hashes=compatibility_hashes,
+        compatibility_output_dir=compatibility_output_dir,
+        published_output_dir=published_output_dir,
+    )
+    load_combined_memberships(config, database_path)
+    return finalize_combined_database(
+        config,
+        database_path,
+        manifest=manifest,
+    )
+
+
+def initialize_combined_database(
+    config: Config,
+    database_path: Path,
+    *,
+    compatibility_hashes: Mapping[str, CsvHashResult],
+    compatibility_output_dir: Path | None = None,
+    published_output_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Create core/source tables through the first durable write session."""
+
     catalog = load_combined_catalog(config)
     work_manifest = _read_work_manifest(config)
     code_state = current_git_code_state_sha256()
@@ -138,6 +163,25 @@ def create_combined_database(
         _load_source_tables(connection, config)
         _load_encounter_flow(connection, config)
         _load_observability_events(connection, config)
+    return {
+        "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
+        "combined_schema_version": COMBINED_SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "building",
+        "database": str(database_path),
+        "database_size_bytes": database_path.stat().st_size,
+        "catalog_sha256": catalog.sha256,
+        "git_code_state_sha256": code_state,
+        "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
+        "duckdb_threads": 1,
+    }
+
+
+def load_combined_memberships(
+    config: Config,
+    database_path: Path,
+) -> None:
+    """Materialize element and RFS membership in a second write session."""
 
     with open_combined_database(
         database_path,
@@ -146,6 +190,15 @@ def create_combined_database(
     ) as connection:
         _load_element_membership(connection, config)
         _create_rfs_membership(connection)
+
+
+def finalize_combined_database(
+    config: Config,
+    database_path: Path,
+    *,
+    manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Create derived tables and mark the database complete in a final session."""
 
     with open_combined_database(
         database_path,
@@ -166,16 +219,10 @@ def create_combined_database(
         connection.execute("CHECKPOINT")
         counts = combined_database_counts(connection)
     return {
-        "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
-        "combined_schema_version": COMBINED_SCHEMA_VERSION,
-        "run_id": run_id,
+        **manifest,
         "status": "complete",
         "database": str(database_path),
         "database_size_bytes": database_path.stat().st_size,
-        "catalog_sha256": catalog.sha256,
-        "git_code_state_sha256": code_state,
-        "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
-        "duckdb_threads": 1,
         "counts": counts,
     }
 
