@@ -1757,3 +1757,31 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/combined_preprocessing/database.py`,
   `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
   `tests/test_combined_preprocessing.py`.
+
+### 2026-07-30 — Give core and observability separate DuckDB pools
+- Date: 2026-07-30
+- Decision: Use an explicit `2816 MiB` DuckDB limit for the isolated core/source
+  worker while retaining `3072 MiB` for observability and every later combined
+  phase. Record both limits in configuration, resumable identity, the embedded
+  database manifest, and the version-2 JSON sidecar manifest.
+- Context: The exact-head four-session post-pipeline proof disproved retained
+  observability allocations as the remaining cause. The isolated core worker
+  peaked at `7104.047 MiB`, while observability, membership, and finalization
+  peaked at `5098.719`, `4125.844`, and `3943.781 MiB`. The earlier monolithic
+  `2816 MiB` trial had completed the same core/source loads and failed only
+  inside observability, which now has its own `3072 MiB` worker.
+- Rationale: Phase-specific limits preserve the larger pool exactly where full
+  data proves it is required and recover headroom during the core worker's
+  durable terminal checkpoint. An explicit, provenance-visible setting is
+  reproducible and avoids a hidden implementation cap.
+- Consequences: Core memory still requires a fresh exact-head full-scale proof;
+  the earlier `2816 MiB` result proves query progress, not terminal core
+  completion. If the general limit is configured below `2816 MiB`, an omitted
+  core limit inherits that lower cap. Output SQL, insertion-order policy, table
+  contents, and the atomic publication boundary are unchanged.
+- References:
+  `src/trinetx_preprocessing/config.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`,
+  `tests/test_config.py`,
+  `tests/test_combined_preprocessing.py`.

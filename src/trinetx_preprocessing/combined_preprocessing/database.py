@@ -143,7 +143,7 @@ def initialize_combined_database(
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with open_combined_database(
         database_path,
-        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+        memory_limit_mib=config.combined.duckdb_core_memory_limit_mib,
         preserve_insertion_order=True,
     ) as connection:
         _create_manifest_table(
@@ -173,6 +173,7 @@ def initialize_combined_database(
         "catalog_sha256": catalog.sha256,
         "git_code_state_sha256": code_state,
         "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
+        "duckdb_core_memory_limit_mib": (config.combined.duckdb_core_memory_limit_mib),
         "duckdb_threads": 1,
     }
 
@@ -384,6 +385,7 @@ def inspect_combined_database(
             "completed_at": _json_value(row.get("completed_at")),
             "source_work_manifest_sha256": row.get("source_work_manifest_sha256"),
             "duckdb_memory_limit_mib": row.get("duckdb_memory_limit_mib"),
+            "duckdb_core_memory_limit_mib": row.get("duckdb_core_memory_limit_mib"),
             "duckdb_threads": row.get("duckdb_threads"),
             "manifest_columns": sorted(manifest_columns),
             "counts": combined_database_counts(connection),
@@ -416,6 +418,7 @@ def _create_manifest_table(
             work_root VARCHAR NOT NULL,
             output_root VARCHAR NOT NULL,
             duckdb_memory_limit_mib INTEGER NOT NULL,
+            duckdb_core_memory_limit_mib INTEGER NOT NULL,
             duckdb_threads INTEGER NOT NULL
         )
         """
@@ -425,7 +428,7 @@ def _create_manifest_table(
     ).hexdigest()
     connection.execute(
         "INSERT INTO preprocessing_manifest VALUES (?, 'building', ?, NULL, "
-        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             run_id,
             datetime.now(UTC).isoformat(),
@@ -438,6 +441,7 @@ def _create_manifest_table(
             str(config.work_dir),
             str(published_output_dir),
             config.combined.duckdb_memory_limit_mib,
+            config.combined.duckdb_core_memory_limit_mib,
             1,
         ],
     )

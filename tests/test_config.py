@@ -83,6 +83,7 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
               schema_version: "1.0"
               concept_sets_dir: config/concept_sets
               duckdb_memory_limit_mib: 2048
+              duckdb_core_memory_limit_mib: 1792
             rfs:
               enabled: true
               ruleset: corrected_v1
@@ -112,6 +113,7 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     assert config.combined.database_name == "combined.duckdb"
     assert config.combined.schema_version == "1.0"
     assert config.combined.duckdb_memory_limit_mib == 2048
+    assert config.combined.duckdb_core_memory_limit_mib == 1792
     assert (
         config.combined.concept_sets_dir
         == (tmp_path / "config" / "concept_sets").resolve()
@@ -146,9 +148,14 @@ def test_combined_enabled_requires_boolean(tmp_path: Path, value: str) -> None:
         load_config(config_path)
 
 
+@pytest.mark.parametrize(
+    "key",
+    ["duckdb_memory_limit_mib", "duckdb_core_memory_limit_mib"],
+)
 @pytest.mark.parametrize("value", [0, -1, 1.5, True, "3072"])
-def test_combined_duckdb_memory_limit_requires_positive_integer(
+def test_combined_duckdb_memory_limits_require_positive_integers(
     tmp_path: Path,
+    key: str,
     value: object,
 ) -> None:
     config_path = tmp_path / "config.yaml"
@@ -159,7 +166,7 @@ def test_combined_duckdb_memory_limit_requires_positive_integer(
             work_dir: work
             output_dir: output
             combined:
-              duckdb_memory_limit_mib: {json.dumps(value)}
+              {key}: {json.dumps(value)}
             domains:
               encounter:
                 pattern: "Encounter/encounter*.csv"
@@ -168,8 +175,34 @@ def test_combined_duckdb_memory_limit_requires_positive_integer(
         + "\n"
     )
 
-    with pytest.raises(ConfigError, match="duckdb_memory_limit_mib"):
+    with pytest.raises(ConfigError, match=key):
         load_config(config_path)
+
+
+def test_combined_core_memory_default_respects_lower_general_limit(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            """
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              duckdb_memory_limit_mib: 2048
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+
+    assert config.combined.duckdb_memory_limit_mib == 2048
+    assert config.combined.duckdb_core_memory_limit_mib == 2048
 
 
 def test_load_config_domain_patterns_list(tmp_path: Path) -> None:

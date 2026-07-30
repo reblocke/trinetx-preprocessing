@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB = 3072
+DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB = 2816
 
 
 class ConfigError(ValueError):
@@ -121,6 +122,7 @@ class CombinedPreprocessingConfig:
     schema_version: str = "1.0"
     concept_sets_dir: Path | None = None
     duckdb_memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
+    duckdb_core_memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB
 
 
 @dataclass(frozen=True)
@@ -599,6 +601,21 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
         raise ConfigError(
             "'combined.duckdb_memory_limit_mib' must be a positive integer."
         )
+    duckdb_core_memory_limit_mib = raw.get(
+        "duckdb_core_memory_limit_mib",
+        min(
+            DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB,
+            duckdb_memory_limit_mib,
+        ),
+    )
+    if (
+        not isinstance(duckdb_core_memory_limit_mib, int)
+        or isinstance(duckdb_core_memory_limit_mib, bool)
+        or duckdb_core_memory_limit_mib <= 0
+    ):
+        raise ConfigError(
+            "'combined.duckdb_core_memory_limit_mib' must be a positive integer."
+        )
 
     concept_sets_value = raw.get("concept_sets_dir")
     concept_sets_dir = None
@@ -618,6 +635,7 @@ def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
         schema_version=schema_version,
         concept_sets_dir=concept_sets_dir,
         duckdb_memory_limit_mib=duckdb_memory_limit_mib,
+        duckdb_core_memory_limit_mib=duckdb_core_memory_limit_mib,
     )
 
 

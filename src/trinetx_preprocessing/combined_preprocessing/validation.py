@@ -117,6 +117,7 @@ def validate_preprocessed_database(
                 element_catalog_sha256,
                 output_root,
                 duckdb_memory_limit_mib,
+                duckdb_core_memory_limit_mib,
                 duckdb_threads
             FROM preprocessing_manifest
             """
@@ -133,6 +134,7 @@ def validate_preprocessed_database(
                 element_catalog_sha256,
                 output_root,
                 duckdb_memory_limit_mib,
+                duckdb_core_memory_limit_mib,
                 duckdb_threads,
             ) = manifest_rows[0]
             embedded_manifest = {
@@ -143,6 +145,7 @@ def validate_preprocessed_database(
                 "element_catalog_sha256": str(element_catalog_sha256),
                 "output_root": str(output_root),
                 "duckdb_memory_limit_mib": int(duckdb_memory_limit_mib),
+                "duckdb_core_memory_limit_mib": int(duckdb_core_memory_limit_mib),
                 "duckdb_threads": int(duckdb_threads),
             }
             if status != "complete":
@@ -406,6 +409,9 @@ def _validate_product_sidecar(
         "git_code_state_sha256": embedded_manifest["git_code_state_sha256"],
         "catalog_sha256": embedded_manifest["element_catalog_sha256"],
         "duckdb_memory_limit_mib": embedded_manifest["duckdb_memory_limit_mib"],
+        "duckdb_core_memory_limit_mib": embedded_manifest[
+            "duckdb_core_memory_limit_mib"
+        ],
         "duckdb_threads": embedded_manifest["duckdb_threads"],
     }
     mismatched = [

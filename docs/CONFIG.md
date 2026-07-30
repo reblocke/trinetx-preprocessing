@@ -41,6 +41,7 @@ combined:
   schema_version: "1.0"
   concept_sets_dir: config/concept_sets
   duckdb_memory_limit_mib: 3072
+  duckdb_core_memory_limit_mib: 2816
 ```
 
 - `chunking.lines_per_chunk` bounds raw CSV and work-table reads.
@@ -63,10 +64,16 @@ combined:
 - `combined.schema_version` must match the supported combined contract.
 - `combined.concept_sets_dir` supplies the versioned additive element rules;
   their parsed contents are fingerprinted for stale-work detection.
-- `combined.duckdb_memory_limit_mib` bounds DuckDB's internal buffer pool during
-  database creation, compatibility export, provenance refresh, inspection, and
-  validation. Temporary spill is written beside the database on the configured
-  output volume; every combined-product connection uses one DuckDB thread.
+- `combined.duckdb_core_memory_limit_mib` bounds DuckDB's internal buffer pool
+  while the core and source tables are created. It defaults to the lower of
+  `2816` and `combined.duckdb_memory_limit_mib`, preserving an explicitly lower
+  legacy cap.
+- `combined.duckdb_memory_limit_mib` bounds the later observability, membership,
+  finalization, compatibility export, provenance refresh, inspection, and
+  validation sessions. It defaults to `3072`; observability requires this
+  larger pool at full scale. Temporary spill is written beside the database on
+  the configured output volume, and every combined-product connection uses one
+  DuckDB thread.
 
 ## Corrected analytic controls
 

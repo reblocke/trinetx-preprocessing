@@ -184,15 +184,24 @@ def test_combined_resumable_identity_includes_strict_policy(tmp_path: Path) -> N
     )
 
 
-def test_combined_resumable_identity_includes_duckdb_memory_limit(
+def test_combined_resumable_identity_includes_duckdb_memory_limits(
     tmp_path: Path,
 ) -> None:
     config = load_config(_write_combined_config(tmp_path))
-    changed = replace(
+    changed_default = replace(
         config,
         combined=replace(
             config.combined,
             duckdb_memory_limit_mib=config.combined.duckdb_memory_limit_mib + 1,
+        ),
+    )
+    changed_core = replace(
+        config,
+        combined=replace(
+            config.combined,
+            duckdb_core_memory_limit_mib=(
+                config.combined.duckdb_core_memory_limit_mib + 1
+            ),
         ),
     )
 
@@ -200,7 +209,14 @@ def test_combined_resumable_identity_includes_duckdb_memory_limit(
         config,
         strict=False,
     ) != combined_builder._combined_build_identity(
-        changed,
+        changed_default,
+        strict=False,
+    )
+    assert combined_builder._combined_build_identity(
+        config,
+        strict=False,
+    ) != combined_builder._combined_build_identity(
+        changed_core,
         strict=False,
     )
 
@@ -803,9 +819,12 @@ def test_combined_build_exports_exact_historical_contract(
     )
     real_open_combined_database = combined_database.open_combined_database
     write_session_tables: list[set[str]] = []
+    write_session_memory_limits: list[int] = []
 
     @contextmanager
     def track_write_session(*args, **kwargs) -> Iterator[duckdb.DuckDBPyConnection]:
+        if not kwargs.get("read_only", False):
+            write_session_memory_limits.append(int(kwargs["memory_limit_mib"]))
         with real_open_combined_database(*args, **kwargs) as connection:
             yield connection
             if not kwargs.get("read_only", False):
@@ -843,8 +862,11 @@ def test_combined_build_exports_exact_historical_contract(
     manifest = json.loads(result.manifest_path.read_text())
     assert manifest["status"] == "complete"
     assert manifest["run_id"] == result.run_id
+    assert manifest["schema_version"] == 2
     assert manifest["duckdb_memory_limit_mib"] == 3072
+    assert manifest["duckdb_core_memory_limit_mib"] == 2816
     assert manifest["duckdb_threads"] == 1
+    assert write_session_memory_limits[:4] == [2816, 3072, 3072, 3072]
     assert "source_observability_event" not in write_session_tables[0]
     assert "element_membership" not in write_session_tables[0]
     assert "source_observability_event" in write_session_tables[1]
@@ -868,6 +890,7 @@ def test_combined_build_exports_exact_historical_contract(
     status = inspect_combined_database(result.database_path)
     assert status["status"] == "complete"
     assert status["duckdb_memory_limit_mib"] == 3072
+    assert status["duckdb_core_memory_limit_mib"] == 2816
     assert status["duckdb_threads"] == 1
     assert status["counts"]["element_catalog"] > len(final_output_columns())
 
@@ -875,11 +898,14 @@ def test_combined_build_exports_exact_historical_contract(
     try:
         runtime = connection.execute(
             """
-            SELECT duckdb_memory_limit_mib, duckdb_threads
+            SELECT
+                duckdb_memory_limit_mib,
+                duckdb_core_memory_limit_mib,
+                duckdb_threads
             FROM preprocessing_manifest
             """
         ).fetchone()
-        assert runtime == (3072, 1)
+        assert runtime == (3072, 2816, 1)
         duplicate_observability_keys = connection.execute(
             """
             SELECT count(*)

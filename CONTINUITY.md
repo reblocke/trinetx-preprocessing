@@ -15,7 +15,7 @@
 - Python, `uv`, Ruff, pytest, Parquet intermediates, and external-drive scratch remain the supported toolchain.
 
 ## Key decisions
-- The user has authorized implementation of every confirmed PR #8 review fix followed by Step 2 execution. PID `80692` remains untouched while source fixes proceed; any `f265cc5` result is diagnostic-only after behavior changes.
+- The user has authorized implementation of every confirmed PR #8 review fix followed by Step 2 execution. PID `80692` exited naturally without interruption; any `f265cc5` result is diagnostic-only after behavior changes.
 - ABG is arterial LOINC `2019-8`/`32771-8`; VBG is venous LOINC `2021-4`; both require `45 < PCO2 < 200` mmHg after recognized unit conversion.
 - Specimen-unspecified `11557-6` and total CO2 `2026-3` do not define ABG/VBG cohorts.
 - Cohort events are selected independently per RFS category, setting, and patient.
@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; reviewed implementation head `fd10373` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed docs checkpoint `254c2eb` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -379,12 +379,16 @@
 - Core/source loading, source observability, membership, and finalization now use four durable fresh database workers. The synthetic integration gate proves the expected table boundary and an injected post-observability membership failure rebuilds the incomplete database cleanly.
 - The correction passes all `42` combined-product tests and all `423` repository tests in `506.09 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` pass. Generated focused/module/full test roots totaling about `15 GiB` were moved recoverably to external Trash and their source paths rechecked absent.
 - Commit `fd10373` is pushed, exact-head CI run `30571948529` passed in `5m57s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5135061787`).
+- Docs-only commit `254c2eb` is pushed, exact-head CI run `30572899664` passed in `6m9s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5135154832`).
+- The exact-head post-pipeline proof at `254c2eb` completed naturally in `15,083.545 s`. All six measured phases completed, all 36 exports validate, aggregate counts and availability fingerprints match, validation warnings are empty, and WAL/spill/hash scratch rechecked at zero.
+- Resource acceptance failed only in core: the core phase peaked at `7104.047 MiB` and the authoritative family peak was `7158.953 MiB`. Observability, membership, finalization, export, and validation peaked at `5098.719`, `4125.844`, `3943.781`, `3373.547`, and `4275.000 MiB`, respectively. Wrapper exit `1` is the expected memory-gate result, not a semantic or build failure.
+- The four-session evidence disproves observability retention as a sufficient explanation and localizes the remaining resource failure to the isolated core/source worker. A provenance-visible `2816 MiB` core limit with the required `3072 MiB` later-phase limit passes all `429` tests in `513.08 s`, repository-wide Ruff, scoped formatting, diff, and tracked-artifact checks; an omitted core setting respects any lower general cap. The `11 GiB` full-test root was moved recoverably to external Trash. The correction is not yet committed, reviewed, or proven at full scale.
 
 ## Now
-- No build or monitor worker is active. Commit/push this docs-only ledger checkpoint, confirm its exact head, then launch the repeated private full-scale post-pipeline proof.
+- Run the full local gate for the phase-specific core limit, then commit/push and reconcile exact-head CI and Codex review.
 
 ## Next
-- Run focused and full local gates, exact-head CI/review, then repeat the private full-scale post-pipeline proof from the preserved checkpoint.
+- Prove the isolated `2816 MiB` core worker from the preserved checkpoint before repeating the private full-scale post-pipeline proof.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
@@ -404,6 +408,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/evidence/combined_benchmark_d455548.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/output/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_9a960b9/evidence/postpipeline_9a960b9.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_254c2eb/evidence/postpipeline_254c2eb.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
