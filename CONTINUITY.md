@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`, exact-head full-run checkpoint `d455548`; it tracks `origin/codex/unified-preprocessing-v1`.
+- Branch: `codex/unified-preprocessing-v1`; database-session isolation checkpoint `4f0448d` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -368,8 +368,11 @@
 - The correction passes all `40` combined-product tests and all `421` repository tests; the final full gate completed in `493.50 s`. Repository-wide Ruff, scoped formatting, `git diff --check`, and the tracked sensitive/generated filename scan pass. Final review also restored the fail-closed comparison between serialized baseline and exported hashes on resumed validation, with a focused regression.
 - Three proof-scoped synthetic test batches totaling about `40 GiB`, plus a `19 MiB` focused-test root, were moved recoverably to external Trash and their source scopes rechecked empty.
 
+## Now
+- Implementation commit `4f0448d` is pushed after the 421-test, Ruff, formatting, diff, and tracked-artifact gates. Exact-head Linux CI and Codex re-review are pending; no build worker is active.
+
 ## Next
-- Commit/push the evidence-localized database-session isolation, pass exact-head CI and review, then prove its database/export/validation process-family peaks against the preserved full-scale inputs.
+- Pass exact-head CI and review for `4f0448d`, then prove its database/export/validation process-family peaks against the preserved full-scale inputs.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
