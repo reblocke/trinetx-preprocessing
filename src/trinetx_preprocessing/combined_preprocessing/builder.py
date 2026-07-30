@@ -42,6 +42,7 @@ from .database import (
     initialize_combined_database,
     inspect_combined_database,
     load_combined_memberships,
+    load_combined_observability,
     refresh_database_work_manifest_fingerprint,
     write_combined_manifest,
 )
@@ -219,6 +220,12 @@ def _build_locked(
         _run_isolated_phase_process(
             "database-core",
             _run_database_core_phase_worker,
+            (config, paths, build_identity),
+            lock_file_descriptors=lock_file_descriptors,
+        )
+        _run_isolated_phase_process(
+            "database-observability",
+            _run_database_observability_phase_worker,
             (config, paths, build_identity),
             lock_file_descriptors=lock_file_descriptors,
         )
@@ -448,14 +455,14 @@ def _run_database_core_phase_worker(
     )
 
 
-def _run_database_membership_phase_worker(
+def _run_database_observability_phase_worker(
     config: Config,
     paths: _CombinedBuildPaths,
     build_identity: str,
     *,
     retained_lock_file_descriptors: tuple[int, ...],
 ) -> None:
-    """Create membership tables in a second fresh database process."""
+    """Create source observability in a second fresh database process."""
 
     _ = retained_lock_file_descriptors
     state = _require_reloaded_build_state(
@@ -465,6 +472,40 @@ def _run_database_membership_phase_worker(
         expected_phase="pipeline",
     )
     _require_database_progress(state, "core")
+    staged_database = paths.staging_output / config.combined.database_name
+    _require_file_state_current(
+        staged_database,
+        state.get("database_stat"),
+        label="in-progress combined database",
+    )
+    load_combined_observability(config, staged_database)
+    _write_build_state(
+        paths.state_path,
+        {
+            **state,
+            "database_progress": "observability",
+            "database_stat": _file_stat(staged_database),
+        },
+    )
+
+
+def _run_database_membership_phase_worker(
+    config: Config,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    *,
+    retained_lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Create membership tables in a third fresh database process."""
+
+    _ = retained_lock_file_descriptors
+    state = _require_reloaded_build_state(
+        config,
+        paths=paths,
+        build_identity=build_identity,
+        expected_phase="pipeline",
+    )
+    _require_database_progress(state, "observability")
     staged_database = paths.staging_output / config.combined.database_name
     _require_file_state_current(
         staged_database,
@@ -489,7 +530,7 @@ def _run_database_finalize_phase_worker(
     *,
     retained_lock_file_descriptors: tuple[int, ...],
 ) -> None:
-    """Finalize the database in a third fresh process and advance state."""
+    """Finalize the database in a fourth fresh process and advance state."""
 
     _ = retained_lock_file_descriptors
     state = _require_reloaded_build_state(

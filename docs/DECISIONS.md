@@ -1730,3 +1730,30 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/pipeline/final_assembly.py`,
   `tests/test_combined_preprocessing.py`,
   `tests/test_final_assembly.py`.
+
+### 2026-07-30 — Isolate source-observability materialization
+- Date: 2026-07-30
+- Decision: Close the core/source DuckDB session before materializing
+  `source_observability_event`, and run observability in its own durable spawned
+  worker before the membership and finalization workers. Keep the reviewed
+  `3072 MiB` DuckDB memory limit unchanged.
+- Context: The exact-head post-pipeline proof at `9a960b9` completed every
+  semantic phase, all 36 exports, and validation with zero warnings. Its core
+  worker peaked at `6,189.891 MiB`, but concurrent parent and resource-tracker
+  overhead raised the authoritative process-family peak to `6,251.828 MiB`,
+  `13.828 MiB` above the `6,238 MiB` release gate. The peak occurred while
+  `_load_observability_events` followed all core/source loads in one process.
+  A prior full-scale isolated observability benchmark used about `4.48 GiB`;
+  lowering DuckDB to `2816 MiB` instead had already failed internally.
+- Rationale: A fresh process releases source-loading allocator state without
+  changing the required DuckDB pool, SQL, table contents, insertion order,
+  manifests, or publication boundary.
+- Consequences: Combined builds use eight sequential spawned workers. While
+  the public phase remains `pipeline`, durable internal progress advances
+  `core` → `observability` → `membership`; any failure before finalization
+  leaves the database incomplete, and retry removes and rebuilds it from the
+  retained pipeline checkpoint.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `tests/test_combined_preprocessing.py`.

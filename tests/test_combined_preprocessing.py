@@ -830,6 +830,7 @@ def test_combined_build_exports_exact_historical_contract(
         "pre-final",
         "final-assembly",
         "database-core",
+        "database-observability",
         "database-membership",
         "database-finalize",
         "compatibility-export",
@@ -844,13 +845,15 @@ def test_combined_build_exports_exact_historical_contract(
     assert manifest["run_id"] == result.run_id
     assert manifest["duckdb_memory_limit_mib"] == 3072
     assert manifest["duckdb_threads"] == 1
-    assert "source_observability_event" in write_session_tables[0]
+    assert "source_observability_event" not in write_session_tables[0]
     assert "element_membership" not in write_session_tables[0]
-    assert "element_membership" in write_session_tables[1]
-    assert "rfs_membership" in write_session_tables[1]
-    assert "encounter_availability" not in write_session_tables[1]
-    assert "encounter_availability" in write_session_tables[2]
-    assert "patient_observability" in write_session_tables[2]
+    assert "source_observability_event" in write_session_tables[1]
+    assert "element_membership" not in write_session_tables[1]
+    assert "element_membership" in write_session_tables[2]
+    assert "rfs_membership" in write_session_tables[2]
+    assert "encounter_availability" not in write_session_tables[2]
+    assert "encounter_availability" in write_session_tables[3]
+    assert "patient_observability" in write_session_tables[3]
     work_manifest = json.loads(
         (config.work_dir / "pipeline_work_manifest.json").read_text()
     )
@@ -1169,7 +1172,7 @@ def test_failed_database_session_restarts_incomplete_database(
     )
     failed_state = json.loads(paths.state_path.read_text())
     assert failed_state["phase"] == "pipeline"
-    assert failed_state["database_progress"] == "core"
+    assert failed_state["database_progress"] == "observability"
     assert (paths.staging_output / config.combined.database_name).is_file()
 
     monkeypatch.setattr(

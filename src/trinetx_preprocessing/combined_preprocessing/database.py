@@ -111,6 +111,7 @@ def create_combined_database(
         compatibility_output_dir=compatibility_output_dir,
         published_output_dir=published_output_dir,
     )
+    load_combined_observability(config, database_path)
     load_combined_memberships(config, database_path)
     return finalize_combined_database(
         config,
@@ -162,7 +163,6 @@ def initialize_combined_database(
         _load_element_catalog(connection, catalog_rows(catalog))
         _load_source_tables(connection, config)
         _load_encounter_flow(connection, config)
-        _load_observability_events(connection, config)
     return {
         "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
         "combined_schema_version": COMBINED_SCHEMA_VERSION,
@@ -177,11 +177,25 @@ def initialize_combined_database(
     }
 
 
+def load_combined_observability(
+    config: Config,
+    database_path: Path,
+) -> None:
+    """Materialize source observability in a fresh durable write session."""
+
+    with open_combined_database(
+        database_path,
+        memory_limit_mib=config.combined.duckdb_memory_limit_mib,
+        preserve_insertion_order=True,
+    ) as connection:
+        _load_observability_events(connection, config)
+
+
 def load_combined_memberships(
     config: Config,
     database_path: Path,
 ) -> None:
-    """Materialize element and RFS membership in a second write session."""
+    """Materialize element and RFS membership in a fresh write session."""
 
     with open_combined_database(
         database_path,

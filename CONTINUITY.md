@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; reviewed database-session isolation and export-recovery implementation checkpoint `302a849` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed exact head `9a960b9` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -372,17 +372,23 @@
 - Commit `89965e1` passed exact-head CI. Re-review found one adjacent P2 durability gap: the progress checkpoint could outlive unsynced CSV renames after power loss or volume disconnect. Export now strictly fsyncs all 36 CSVs, their containing directories and staging parent, plus the refreshed work manifest and its directory before writing progress; build-state directory fsync is strict as well.
 - A direct ExFAT file/directory fsync probe passed. Four focused durability/recovery/build tests and all `423` repository tests pass (`579.43 s`); Ruff, formatting, diff, and tracked-artifact gates pass. The `11 GiB` synthetic full-gate root and tiny fsync probe were moved recoverably to external Trash and their source paths rechecked absent.
 - Commit `302a849` is pushed; exact-head CI run `30549275358` passed, all PR #8 review threads are resolved, and Codex re-review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5131817496`).
+- Docs-only commit `9a960b9` is pushed, passes exact-head CI run `30550221906`, has zero unresolved PR #8 threads, and received a clean exact-head Codex review (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5131956936`).
+- The exact-head post-pipeline proof at `9a960b9` completed every semantic phase in `14,836.245 s`: core/source, membership, finalization, 36-file export, and validation all completed; the database is `82,181,632,000` bytes; validation has zero warnings; all expected counts and availability hashes match; and WAL/spill rechecked at zero.
+- Resource acceptance still failed by `13.828 MiB`: the core worker peaked at `6,189.891 MiB`, but the authoritative concurrent parent-plus-descendant peak was `6,251.828 MiB` against the `6,238 MiB` gate. The wrapper exit marker is `1`; this remains diagnostic evidence.
+- The peak is localized to `_load_observability_events` after retained core/source-table allocations. The existing `3072 MiB` DuckDB pool remains required because the prior `2816 MiB` trial failed internally; a new fresh-process boundary before observability is the active correction.
+- Core/source loading, source observability, membership, and finalization now use four durable fresh database workers. The synthetic integration gate proves the expected table boundary and an injected post-observability membership failure rebuilds the incomplete database cleanly.
+- The correction passes all `42` combined-product tests and all `423` repository tests in `506.09 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` pass. Generated focused/module/full test roots totaling about `15 GiB` were moved recoverably to external Trash and their source paths rechecked absent.
 
 ## Now
-- The implementation head is review-clean and CI-green. A docs-only ledger checkpoint and exact-head confirmation are the final launch gates for the prepared private full-scale post-pipeline proof; no build worker is active.
+- No build or monitor worker is active. Complete exact diff/privacy review, commit/push the observability-process correction, and obtain exact-head CI/review before another private proof.
 
 ## Next
-- Commit/push the docs-only ledger checkpoint, confirm its exact head, then run the prepared full-scale post-pipeline memory proof.
+- Run focused and full local gates, exact-head CI/review, then repeat the private full-scale post-pipeline proof from the preserved checkpoint.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
-- The one-second peak's exact database statement is `UNCONFIRMED`; direct per-process jetsam attribution for the older interrupted run also remains `UNCONFIRMED`.
+- Direct per-process jetsam attribution for the older interrupted run remains `UNCONFIRMED`.
 - Final release acceptance remains `UNCONFIRMED` until a fresh exact-head full run passes the memory ceiling and every Step 2 gate.
 
 ## Working set (files/ids/commands)
@@ -396,6 +402,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_8d388ea_20260728/output/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/evidence/combined_benchmark_d455548.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/output/trinetx_preprocessed.duckdb`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_9a960b9/evidence/postpipeline_9a960b9.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
