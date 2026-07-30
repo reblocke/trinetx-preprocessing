@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; reviewed exact head `9a960b9` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed implementation head `fd10373` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -378,9 +378,10 @@
 - The peak is localized to `_load_observability_events` after retained core/source-table allocations. The existing `3072 MiB` DuckDB pool remains required because the prior `2816 MiB` trial failed internally; a new fresh-process boundary before observability is the active correction.
 - Core/source loading, source observability, membership, and finalization now use four durable fresh database workers. The synthetic integration gate proves the expected table boundary and an injected post-observability membership failure rebuilds the incomplete database cleanly.
 - The correction passes all `42` combined-product tests and all `423` repository tests in `506.09 s`; repository-wide Ruff lint, scoped Ruff formatting, and `git diff --check` pass. Generated focused/module/full test roots totaling about `15 GiB` were moved recoverably to external Trash and their source paths rechecked absent.
+- Commit `fd10373` is pushed, exact-head CI run `30571948529` passed in `5m57s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5135061787`).
 
 ## Now
-- No build or monitor worker is active. Complete exact diff/privacy review, commit/push the observability-process correction, and obtain exact-head CI/review before another private proof.
+- No build or monitor worker is active. Commit/push this docs-only ledger checkpoint, confirm its exact head, then launch the repeated private full-scale post-pipeline proof.
 
 ## Next
 - Run focused and full local gates, exact-head CI/review, then repeat the private full-scale post-pipeline proof from the preserved checkpoint.
