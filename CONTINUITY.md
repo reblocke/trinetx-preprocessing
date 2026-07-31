@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; reviewed docs checkpoint `fc5d4b3` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed evidence checkpoint `8059c01` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -388,12 +388,16 @@
 - The isolated core proof from clean exact head `fc5d4b3` completed naturally with wrapper exit `0` in `5,265.28 s`. The authoritative process-family peak was `4,662,050,816` bytes (`4,446.078 MiB`), below the `6,238 MiB` gate; the core worker itself peaked at `4,393.953 MiB`.
 - Core verification matched all `11` expected aggregate count keys, the `14`-table core boundary, the `36`-table compatibility manifest, and the seven-file source inventory. The product contains only `trinetx_preprocessed.duckdb`; WAL, spill, and hash scratch rechecked at zero. Eight AppleDouble sidecars were removed before terminal evidence writes; two evidence-sidecar files created by those writes remain outside the product.
 - No core proof process or screen remains active. Result SHA-256 is `b684591791fde6629b378fb19ef30786304b25ac865cdfe550e350dd02c5ee3f`; harness SHA-256 remains `14bcb6cc877ac123b64744a08ee9eab95cdc909c17be23ad478dd2badcc18c28`.
+- Evidence commit `8059c01` is pushed, exact-head CI run `30596502914` passed in `5m47s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5138250059`).
+- The authoritative full post-pipeline proof from clean exact head `8059c01` completed naturally with wrapper exit `0` in `14,423.644 s`. All six measured phases completed, all 36 compatibility exports validate, all 85 aggregate validation counts and seven availability fingerprints match the preserved evidence, and validation warnings are empty.
+- Its authoritative process-family peak was `4,420,206,592` bytes (`4,215.438 MiB`), leaving `2,022.562 MiB` below the `6,238 MiB` gate. Phase peaks were core `4,108.766`, observability `4,192.281`, membership `3,701.953`, finalization `3,663.094`, export `3,411.781`, and validation `4,132.250 MiB`.
+- The terminal product contains the `82,192,379,904`-byte DuckDB, its manifest, and 36 compatibility CSVs. Fifty-four AppleDouble sidecars were removed before acceptance; product sidecars, WAL, spill, and hash scratch rechecked at zero. Two evidence-sidecar files created by terminal result/exit writes remain outside the product. No proof process or screen remains active.
+- Post-pipeline result SHA-256 is `cdf929341530d1674fa12e244fbfdde27d59fbe4d7f35a1245e24540d9c94676`; the validated harness SHA-256 is `9f745c397792ac30cee18e971d432ac6ff4cacb5f9d9e23482096c369e727218`.
 
 ## Now
-- Commit and reconcile this passing isolated-core checkpoint at exact head, then prepare the authoritative full post-pipeline proof with the separate `2816/3072 MiB` limits.
+- Commit and reconcile the passing full post-pipeline checkpoint, then launch the final fresh exact-head raw build from an empty external root.
 
 ## Next
-- Run the complete post-pipeline sequence from the preserved checkpoint in one authoritative harness and require every semantic, resource, publication, and cleanup gate to pass.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
@@ -415,6 +419,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_9a960b9/evidence/postpipeline_9a960b9.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_254c2eb/evidence/postpipeline_254c2eb.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/core_2816_fc5d4b3/evidence/core_2816_fc5d4b3.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_8059c01/evidence/postpipeline_8059c01.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
