@@ -31,7 +31,7 @@
 - A single versioned element registry owns historical and additive source-element matching. Clinical endpoint thresholds remain in downstream study rules.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; implementation checkpoint `94c1497` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
+- Branch: `codex/unified-preprocessing-v1`; reviewed docs checkpoint `fc5d4b3` is pushed and tracks `origin/codex/unified-preprocessing-v1`. The latest completed full-run checkpoint remains `d455548`.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -384,12 +384,16 @@
 - Resource acceptance failed only in core: the core phase peaked at `7104.047 MiB` and the authoritative family peak was `7158.953 MiB`. Observability, membership, finalization, export, and validation peaked at `5098.719`, `4125.844`, `3943.781`, `3373.547`, and `4275.000 MiB`, respectively. Wrapper exit `1` is the expected memory-gate result, not a semantic or build failure.
 - The four-session evidence disproves observability retention as a sufficient explanation and localizes the remaining resource failure to the isolated core/source worker. A provenance-visible `2816 MiB` core limit with the required `3072 MiB` later-phase limit passes all `429` tests in `513.08 s`, repository-wide Ruff, scoped formatting, diff, and tracked-artifact checks; an omitted core setting respects any lower general cap. The `11 GiB` full-test root was moved recoverably to external Trash.
 - Commit `94c1497` is pushed, exact-head CI run `30590994517` passed in `5m51s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5137454927`).
+- Docs-only commit `fc5d4b3` is pushed, exact-head CI run `30591753198` passed in `6m22s`, PR #8 has zero unresolved threads, and Codex review found no major issues (`https://github.com/reblocke/trinetx-preprocessing/pull/8#issuecomment-5137483181`).
+- The isolated core proof from clean exact head `fc5d4b3` completed naturally with wrapper exit `0` in `5,265.28 s`. The authoritative process-family peak was `4,662,050,816` bytes (`4,446.078 MiB`), below the `6,238 MiB` gate; the core worker itself peaked at `4,393.953 MiB`.
+- Core verification matched all `11` expected aggregate count keys, the `14`-table core boundary, the `36`-table compatibility manifest, and the seven-file source inventory. The product contains only `trinetx_preprocessed.duckdb`; WAL, spill, and hash scratch rechecked at zero. Eight AppleDouble sidecars were removed before terminal evidence writes; two evidence-sidecar files created by those writes remain outside the product.
+- No core proof process or screen remains active. Result SHA-256 is `b684591791fde6629b378fb19ef30786304b25ac865cdfe550e350dd02c5ee3f`; harness SHA-256 remains `14bcb6cc877ac123b64744a08ee9eab95cdc909c17be23ad478dd2badcc18c28`.
 
 ## Now
-- Commit/push this docs-only ledger checkpoint, confirm its exact head, then launch the isolated `2816 MiB` core proof.
+- Commit and reconcile this passing isolated-core checkpoint at exact head, then prepare the authoritative full post-pipeline proof with the separate `2816/3072 MiB` limits.
 
 ## Next
-- Prove the isolated `2816 MiB` core worker from the preserved checkpoint before repeating the private full-scale post-pipeline proof.
+- Run the complete post-pipeline sequence from the preserved checkpoint in one authoritative harness and require every semantic, resource, publication, and cleanup gate to pass.
 - Produce one fresh exact-head full raw build that passes the `6,238 MiB` ceiling, then complete Step 2 on that terminal product: corrected-baseline parity, element completeness, adapter contract, strict fail-closed behavior, free-space limits, scratch cleanup, repository hygiene, CI, and final review.
 - Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
 
@@ -410,6 +414,7 @@
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/output/trinetx_preprocessed.duckdb`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_9a960b9/evidence/postpipeline_9a960b9.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/postpipeline_254c2eb/evidence/postpipeline_254c2eb.json`
+- `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_d455548_20260729/diagnostics/core_2816_fc5d4b3/evidence/core_2816_fc5d4b3.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/tools/monitor_pipeline.py`
 - `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/corrected_v0.2.0/full/monitor_256_bounded_status.json`
