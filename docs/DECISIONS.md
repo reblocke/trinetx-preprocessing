@@ -1785,3 +1785,41 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `src/trinetx_preprocessing/combined_preprocessing/validation.py`,
   `tests/test_config.py`,
   `tests/test_combined_preprocessing.py`.
+
+### 2026-08-01 — Accept unified Milestone 2 release evidence
+- Date: 2026-08-01
+- Decision: Accept the atomically published unified product built from behavior
+  head `c96dc40` after the complete Step 2 gate. Treat `f3c1b03` as a read-only
+  evidence correction: it bounds exact element-completeness inspection without
+  changing transforms, database materialization, compatibility export, or the
+  accepted product.
+- Context: The fresh build completed naturally in `89,270.965 s`, published
+  exactly 38 files, and peaked at `4,722,294,784` bytes (`4,503.531 MiB`) for
+  the concurrent process family, below the `6,238 MiB` ceiling. All 36 exports
+  and `6,949,511` rows matched the corrected baseline exactly. Database and
+  element validation passed with zero warnings/errors, all 534 historical
+  elements, 92 source elements, and all 118 included rules represented. Both
+  adapter cases passed. The prescribed strict final-assembly command failed
+  before writes on exactly 286 source encounter-setting conflicts, leaving the
+  work manifest, conflict report, and product metadata unchanged. Exact-head
+  diff/Ruff checks and all 430 tests passed; free-space, product-hygiene, and
+  post-cleanup scratch gates also passed.
+- Rationale: Product evidence must remain bound to the code that created it.
+  Because `f3c1b03` changes only the read-only verifier, the raw work manifest
+  correctly rejects a resume from that newer code-state hash. Running the
+  strict proof from a clean detached `c96dc40` worktree proves the required
+  conflict guard against the matching work identity, while independent
+  exact-head tests and review validate the bounded verifier against the
+  unchanged product.
+- Consequences: Milestone 2 has release-grade product, parity, completeness,
+  adapter, strict-failure, resource, space, scratch, and repository evidence.
+  This acceptance does not claim the strict historical `validation-status`
+  gate is ready; the documented 286 conflicts remain deterministically resolved
+  in non-strict mode and fail closed in strict mode. Aggregate evidence remains
+  external and untracked, and the PR remains draft unless separately promoted.
+- References:
+  `docs/VALIDATION.md`,
+  `src/trinetx_preprocessing/combined_preprocessing/evidence.py`,
+  `tests/test_combined_preprocessing.py`,
+  `scripts/verify_combined_parity.py`,
+  `scripts/verify_element_completeness.py`.

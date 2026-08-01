@@ -149,9 +149,10 @@ Required evidence:
 If a performance target is missed, correctness evidence remains useful, but the
 release waits while the measured top bottleneck is addressed.
 
-## Current corrected evidence
+## Earlier corrected profile evidence
 
-The review-clean full non-strict profile from commit `1112963` completed with:
+The earlier review-clean full non-strict profile from commit `1112963`
+completed with:
 
 - 36 final CSVs and the ordered 534-column schema;
 - 73,589.093 seconds total wall time;
@@ -179,6 +180,46 @@ ready, and the release does not claim `validation_status.json` has
 `ready: true`. For this release only, acceptance is the corrected evidence
 checklist above plus the explicit aggregate conflict policy. A future run on
 adjudicated source data should return to the strict `validation-status` gate.
+
+## Current unified Milestone 2 evidence
+
+The accepted fresh product was built from behavior head `c96dc40`; read-only
+element-evidence head `f3c1b03` changes only bounded inspection and its
+regression, not transforms, database materialization, compatibility export, or
+the published product. The raw work manifest therefore remains correctly bound
+to `c96dc40`, while the evidence correction is independently tested and
+reviewed at `f3c1b03`.
+
+The completed Step 2 gates are:
+
+- atomic publication completed with exactly 38 product files: the canonical
+  DuckDB, its manifest, and all 36 compatibility CSVs;
+- total wall time was `89,270.965 s`; authoritative concurrent process-family
+  peak RSS was `4,722,294,784` bytes (`4,503.531 MiB`), leaving
+  `1,818,722,304` bytes below the `6,238 MiB` ceiling;
+- corrected-baseline parity matched all 36 tables and all `6,949,511` rows,
+  with zero schema, row-count, or normalized-hash mismatches;
+- bounded database and element inspection passed with zero validation warnings
+  or errors, all 534 historical elements, 92 source elements, and all 118
+  included rules represented. Two transparently reported source rules had no
+  observed match in this export and are not contract failures;
+- both synthetic GLP-1 adapter cases passed without modifying any of the 38
+  product files;
+- the prescribed `run-final-assembly --strict` proof exited before writes with
+  the exact 286-conflict failure, while the work manifest, conflict report, and
+  published-product metadata remained unchanged;
+- exact-head diff, repository-wide Ruff, and all 430 tests passed; free space
+  remained above 100 GiB; product sidecars, WAL, product scratch, and recognized
+  validation scratch all rechecked at zero after approved cleanup; and
+- CI and Codex review passed at the `f3c1b03` evidence head with zero unresolved
+  review threads. The final documentation-only head is reconciled separately
+  in the live PR before completion is reported.
+
+The aggregate evidence files remain external and untracked. They include
+`combined_benchmark_c96dc40.json`, `combined_parity_c96dc40.json`,
+`element_completeness_f3c1b03.json`, `adapter_contract_f3c1b03.json`,
+`strict_resume_proof_c96dc40_worktree.json`, and
+`local_release_gates_f3c1b03.json`. They contain no committed row-level data.
 
 ## Hygiene and review
 

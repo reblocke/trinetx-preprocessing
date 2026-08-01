@@ -194,12 +194,13 @@ schema, row counts, key sets, and the documented row-parity threshold are met.
 Corrected post-milestone releases are validated against `docs/SPEC.md` and an
 aggregate delta report rather than required to reproduce known legacy defects.
 
-The review-clean corrected full profile produced all 36 outputs in 73,589.093
-seconds with 6,122.562 MB peak RSS; final assembly took 49,180.54 seconds.
-Local and GitHub review are clean, all three corrected staged tiers pass, and
-the aggregate-only Milestone 1 delta contains no identifiers or row examples.
-Milestone 2 release evidence accepts deterministic non-strict resolution for
-286 source encounter IDs assigned to multiple settings. Strict execution still
+The release-grade unified build produced the canonical DuckDB, its manifest,
+and all 36 compatibility exports in 89,270.965 seconds. Concurrent
+process-family peak RSS was 4,503.531 MiB, below the 6,238 MiB ceiling. All 36
+exports and 6,949,511 rows match the corrected baseline exactly; database,
+element-completeness, adapter, local-test, free-space, and scratch-hygiene gates
+also pass. Milestone 2 accepts deterministic non-strict resolution for 286
+source encounter IDs assigned to multiple settings. Strict execution still
 fails closed on those conflicts and remains available for upstream data-quality
 adjudication.
 
