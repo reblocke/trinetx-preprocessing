@@ -270,6 +270,9 @@ def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
     def record_guard(path: Path, *, artifact_label: str) -> None:
         calls.append(("guard", path, artifact_label))
 
+    def record_compatibility_guard(path: Path, *, artifact_prefix: str) -> None:
+        calls.append(("compatibility_guard", path, artifact_prefix))
+
     def validate(
         database_path: Path,
         *,
@@ -279,6 +282,11 @@ def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
         return SimpleNamespace(valid=True, errors=(), warnings=(), counts={})
 
     monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+    monkeypatch.setattr(
+        cli_module,
+        "require_safe_compatibility_hash_locations",
+        record_compatibility_guard,
+    )
     monkeypatch.setattr(cli_module, "validate_preprocessed_database", validate)
 
     result = cli_module.main(
@@ -292,31 +300,15 @@ def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
     )
 
     assert result == 0
-    compatibility_hash_directories = sorted(
-        {
-            output_dir / output.relative_path.parent
-            for output in cli_module.compatibility_outputs()
-        },
-        key=lambda path: path.as_posix(),
-    )
-    expected_calls = [
+    assert calls == [
         ("guard", database.parent, "validation database/spill directory"),
         (
-            "guard",
+            "compatibility_guard",
             output_dir,
-            "validation compatibility output directory",
+            "validation compatibility",
         ),
+        ("validate", database, str(output_dir)),
     ]
-    expected_calls.extend(
-        (
-            "guard",
-            directory,
-            "validation compatibility hash directory",
-        )
-        for directory in compatibility_hash_directories
-    )
-    expected_calls.append(("validate", database, str(output_dir)))
-    assert calls == expected_calls
 
 
 def test_validate_preprocessed_cli_rejects_repository_local_database(

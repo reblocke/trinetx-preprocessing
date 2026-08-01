@@ -12,6 +12,10 @@ import duckdb
 
 from ..filesystem import remove_tree_strict, write_text_atomic
 from ..regression import hash_csv_with_metadata
+from .builder import (
+    require_safe_compatibility_hash_locations,
+    require_safe_output_location,
+)
 from .contract import compatibility_outputs, final_output_columns
 from .database import inspect_combined_database, open_combined_database
 from .scratch import COMBINED_VALIDATION_PREFIX
@@ -25,9 +29,14 @@ _ELEMENT_MEMBERSHIP_BUCKET_COUNT = 64
 def capture_compatibility_evidence(output_dir: Path) -> dict[str, Any]:
     """Hash the exact 36-file compatibility contract without retaining row data."""
 
+    output_root = Path(output_dir)
+    require_safe_compatibility_hash_locations(
+        output_root,
+        artifact_prefix="evidence compatibility",
+    )
     tables = []
     for output in compatibility_outputs():
-        metadata = hash_csv_with_metadata(Path(output_dir) / output.relative_path)
+        metadata = hash_csv_with_metadata(output_root / output.relative_path)
         if metadata.columns != final_output_columns():
             raise ValueError(f"Compatibility schema mismatch: {output.key}")
         tables.append(
@@ -55,6 +64,11 @@ def verify_compatibility_evidence(
 ) -> dict[str, Any]:
     """Compare current compatibility CSVs to a prior aggregate baseline."""
 
+    database = Path(database_path)
+    require_safe_output_location(
+        database.parent,
+        artifact_label="evidence database/spill directory",
+    )
     baseline = _load_compatibility_evidence(baseline_path)
     current = capture_compatibility_evidence(output_dir)
     baseline_tables = _tables_by_key(baseline)
@@ -79,7 +93,7 @@ def verify_compatibility_evidence(
         if baseline_tables[key]["columns"] != current_tables[key]["columns"]
     ]
     database_validation = validate_preprocessed_database(
-        database_path,
+        database,
         compatibility_output_dir=output_dir,
     )
     exact = not (
@@ -93,7 +107,7 @@ def verify_compatibility_evidence(
         "schema_version": EVIDENCE_SCHEMA_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "ready": exact and database_validation.valid,
-        "database": inspect_combined_database(database_path),
+        "database": inspect_combined_database(database),
         "database_validation": {
             "valid": database_validation.valid,
             "errors": list(database_validation.errors),
@@ -115,6 +129,10 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
     """Summarize catalog, rule, and observed-membership coverage without IDs."""
 
     path = Path(database_path)
+    require_safe_output_location(
+        path.parent,
+        artifact_label="evidence database/spill directory",
+    )
     validation = validate_preprocessed_database(path)
     if not path.is_file():
         return {

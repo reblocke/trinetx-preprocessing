@@ -2066,3 +2066,29 @@ def require_safe_output_location(
         f"Refusing repository-local combined preprocessing {artifact_label}: "
         f"{output}. Confidential outputs must be outside {repository}."
     )
+
+
+def require_safe_compatibility_hash_locations(
+    output_dir: Path,
+    *,
+    artifact_prefix: str,
+) -> None:
+    """Reject repository-local roots used by compatibility CSV hashing."""
+
+    output_root = Path(output_dir)
+    require_safe_output_location(
+        output_root,
+        artifact_label=f"{artifact_prefix} output directory",
+    )
+    parent_directories = sorted(
+        {
+            output_root / output.relative_path.parent
+            for output in compatibility_outputs()
+        },
+        key=lambda path: path.as_posix(),
+    )
+    for directory in parent_directories:
+        require_safe_output_location(
+            directory,
+            artifact_label=f"{artifact_prefix} hash directory",
+        )

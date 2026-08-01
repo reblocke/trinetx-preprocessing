@@ -35,7 +35,7 @@
 ## State
 - Branch: `codex/unified-preprocessing-v1`.
 - Integrated review-reconciliation head:
-  `2a74dc3baceede1835fcc90b827849b8dccfd52e`.
+  `75805d20411a6f177126b9750c286f4591a22b22`.
 - Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
   review found one P3 stale 462-versus-463 test-count statement in thread
   `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
@@ -59,8 +59,21 @@
   safe top-level root; the current change set also guards every distinct
   contract CSV parent and adds a symlink regression. All four focused tests and
   the complete 468-test suite pass.
-- The earlier three P2 threads and the P3 thread have exact-fix replies and are
-  resolved.
+- Commit `75805d2` is pushed; the latest P2 has an exact-fix reply and is
+  resolved. Exact-head CI run `30715666488` passed in 6m25s; holistic review
+  request `issuecomment-5153140607` completed as review `4835619937` and found
+  one additional P2 in thread `PRRT_kwDOLtXliM6VqoE6`: baseline/parity evidence
+  hashing does not guard compatibility roots or contract CSV parents before
+  creating adjacent hash scratch.
+- The earlier four P2 threads and the P3 thread are resolved.
+- The current local fix centralizes root/contract-parent hash guards, applies
+  them before combined evidence hashing, and also guards the database spill
+  roots used by parity and element-completeness evidence. Generic pre-existing
+  `hash-outputs` remains outside this combined-evidence review finding. An
+  independent callsite audit found no other unguarded new combined-product hash
+  path; builder, validation, export, and benchmark routes use guarded staging.
+  All nine focused validation/evidence regressions and the complete 473-test
+  suite pass.
 
 ## Done
 - Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
@@ -99,10 +112,10 @@
   no-follow lock opening, terminal/exact-cardinality compatibility export,
   staging-routed spill, live-destination revalidation, unowned-state
   preservation, and canonical/standalone scratch recovery.
-- The exact current worktree passes all 468 tests in 166.20 seconds using the
+- The exact current worktree passes all 473 tests in 171.34 seconds using the
   external validation temp/cache. Repository-wide Ruff, touched-file format,
-  `git diff --check`, and `uv lock --check` also pass after the
-  descendant-symlink follow-up.
+  `git diff --check`, and `uv lock --check` also pass after the evidence-scratch
+  fix.
 - A bounded read-only check against the unchanged accepted database reports
   zero retained rows missing an included source-concept membership across all
   five clinical domains and zero included memberships with a wrong catalog
@@ -111,8 +124,9 @@
   and all spill was cleaned.
 
 ## Now
-- Commit/push the validation-scratch fix, reconcile its review thread, and
-  repeat exact-head CI/review, unresolved-thread, and clean-worktree checks.
+- Commit/push the evidence-scratch fix, reconcile its thread, and repeat
+  exact-head CI/review, unresolved-thread, PR-state, privacy, and clean-worktree
+  checks.
 
 ## Next
 - Require final exact-head CI, clean GitHub review, zero unresolved threads,
@@ -136,7 +150,9 @@
 - PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
   comments `issuecomment-5152599268` and `issuecomment-5152752637`; resolved P2
   threads `PRRT_kwDOLtXliM6VpRQI`, `PRRT_kwDOLtXliM6Vp6VT`, and
-  `PRRT_kwDOLtXliM6VqWae`; P3 thread `PRRT_kwDOLtXliM6VqEpq`; open P2 thread
-  `PRRT_kwDOLtXliM6VqeGE`; CI runs `30710776011`, `30712167025`,
-  `30712522979`, and `30714776156`
+  `PRRT_kwDOLtXliM6VqWae`; P3 thread `PRRT_kwDOLtXliM6VqEpq`; resolved P2
+  thread `PRRT_kwDOLtXliM6VqeGE`; exact-head review request
+  `issuecomment-5153140607`; review `4835619937`; open P2 thread
+  `PRRT_kwDOLtXliM6VqoE6`; CI runs `30710776011`, `30712167025`,
+  `30712522979`, `30714776156`, and `30715666488`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`

@@ -513,6 +513,105 @@ def test_combined_private_artifacts_reject_repository_case_alias() -> None:
         )
 
 
+def test_compatibility_evidence_guards_locations_before_hashing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "compatibility"
+    events: list[tuple[str, Path, str]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        events.append(("guard", path, artifact_label))
+
+    def record_hash(path: Path) -> CsvHashResult:
+        events.append(("hash", path, ""))
+        return CsvHashResult(
+            hash="0" * 64,
+            row_count=0,
+            columns=final_output_columns(),
+        )
+
+    monkeypatch.setattr(
+        combined_builder,
+        "require_safe_output_location",
+        record_guard,
+    )
+    monkeypatch.setattr(combined_evidence, "hash_csv_with_metadata", record_hash)
+
+    payload = capture_compatibility_evidence(output_dir)
+
+    assert payload["table_count"] == 36
+    assert events[:4] == [
+        ("guard", output_dir, "evidence compatibility output directory"),
+        (
+            "guard",
+            output_dir / "AMBULATORY",
+            "evidence compatibility hash directory",
+        ),
+        (
+            "guard",
+            output_dir / "EMERGENCY",
+            "evidence compatibility hash directory",
+        ),
+        (
+            "guard",
+            output_dir / "INPATIENT",
+            "evidence compatibility hash directory",
+        ),
+    ]
+    assert len(events) == 40
+    assert all(event == "hash" for event, _, _ in events[4:])
+
+
+@pytest.mark.parametrize("nested_symlink", [False, True])
+def test_compatibility_evidence_rejects_repository_hash_locations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    nested_symlink: bool,
+) -> None:
+    if nested_symlink:
+        output_dir = tmp_path / "compatibility"
+        output_dir.mkdir()
+        (output_dir / "AMBULATORY").symlink_to(
+            REPOSITORY_ROOT,
+            target_is_directory=True,
+        )
+    else:
+        output_dir = REPOSITORY_ROOT / "private-compatibility-evidence"
+    monkeypatch.setattr(
+        combined_evidence,
+        "hash_csv_with_metadata",
+        lambda *args, **kwargs: pytest.fail("unsafe location reached hashing"),
+    )
+
+    with pytest.raises(ValueError, match="repository-local"):
+        capture_compatibility_evidence(output_dir)
+
+
+@pytest.mark.parametrize("operation", ["parity", "element_completeness"])
+def test_database_evidence_rejects_repository_spill_before_scanning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    database = REPOSITORY_ROOT / "private-evidence.duckdb"
+    monkeypatch.setattr(
+        combined_evidence,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe database reached validation"),
+    )
+
+    with pytest.raises(ValueError, match="evidence database/spill directory"):
+        if operation == "parity":
+            verify_compatibility_evidence(
+                database,
+                tmp_path / "compatibility",
+                tmp_path / "baseline.json",
+            )
+        else:
+            inspect_element_completeness(database)
+
+
 def test_filesystem_aliases_share_locks_and_publication_paths(
     tmp_path: Path,
 ) -> None:

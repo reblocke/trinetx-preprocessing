@@ -239,9 +239,11 @@ The subsequent holistic review did not change the accepted product or its
 historical inclusion logic. It hardened pre-database recovery, filesystem
 identity and locks, standalone compatibility publication, and source-integrity
 validation. Standalone validation now also rejects repository-local database,
-DuckDB-spill, and compatibility-hash roots before scanning. The exact
-reconciliation worktree passes all 468 synthetic tests plus Ruff,
-diff-hygiene, and lockfile checks.
+DuckDB-spill, and compatibility-hash roots before scanning. Aggregate baseline
+and parity evidence guard the compatibility root and contract parents before
+hashing; parity and element-completeness evidence guard the database/spill
+parent before database scans. The exact reconciliation worktree passes all 473
+synthetic tests plus Ruff, diff-hygiene, and lockfile checks.
 
 A bounded aggregate-only read of the unchanged accepted database verified the
 new source-integrity invariant in two parts:
