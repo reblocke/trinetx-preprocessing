@@ -39,12 +39,17 @@
 - Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
   review found one P3 stale 462-versus-463 test-count statement in thread
   `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
+- Documentation reconciliation head
+  `14b8fb758281df1787f577081170bd084b21717b` passed CI run `30712522979`
+  in 7m18s.
 - The requested holistic GitHub review found one P2 recovery issue in thread
   `PRRT_kwDOLtXliM6VpRQI`; parallel whole-diff audits found and rechecked the
   related path, lock, scratch, export, validation, and documentation issues.
-- Both P2 threads have exact-fix replies and are resolved. The final
-  reconciliation change set contains the P3 documentation correction and this
-  ledger reconciliation.
+- Its final exact-head review found a third P2: the sidecar rename was not
+  directory-fsynced before validation state in thread `PRRT_kwDOLtXliM6VqWae`.
+  The current change set adds the missing durability barrier and regression.
+- The earlier two P2 threads and the P3 thread have exact-fix replies and are
+  resolved.
 
 ## Done
 - Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
@@ -83,10 +88,10 @@
   no-follow lock opening, terminal/exact-cardinality compatibility export,
   staging-routed spill, live-destination revalidation, unowned-state
   preservation, and canonical/standalone scratch recovery.
-- The exact current worktree passes all 463 tests in 545.92 seconds using the
-  external validation temp/cache. All focused regressions and independent
-  read-only re-audits pass with no remaining confirmed local implementation
-  issue. Repository Ruff, touched-file format, `git diff --check`, and
+- The exact current worktree passes all 464 tests in 550.79 seconds using the
+  external validation temp/cache. The focused fault regression and independent
+  read-only audit pass with no remaining confirmed local implementation issue.
+  Repository Ruff, touched-file format, `git diff --check`, and
   `uv lock --check` pass.
 - A bounded read-only check against the unchanged accepted database reports
   zero retained rows missing an included source-concept membership across all
@@ -96,10 +101,9 @@
   and all spill was cleaned.
 
 ## Now
-- Final reconciliation checkpoint: completion is reported only after the P3
-  correction is published, its thread is resolved, the documentation-only
-  successor passes CI/review, unresolved threads are zero, and the worktree is
-  clean.
+- Final durability checkpoint: completion is reported only after the sidecar
+  barrier is published, its thread is resolved, exact-head CI/review pass,
+  unresolved threads are zero, and the worktree is clean.
 
 ## Next
 - Require final exact-head CI, clean GitHub review, zero unresolved threads,
@@ -123,5 +127,6 @@
 - PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
   comments `issuecomment-5152599268` and `issuecomment-5152752637`; resolved P2
   threads `PRRT_kwDOLtXliM6VpRQI` and `PRRT_kwDOLtXliM6Vp6VT`; P3 thread
-  `PRRT_kwDOLtXliM6VqEpq`; CI runs `30710776011` and `30712167025`
+  `PRRT_kwDOLtXliM6VqEpq`; final P2 thread `PRRT_kwDOLtXliM6VqWae`; CI runs
+  `30710776011`, `30712167025`, and `30712522979`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`

@@ -883,6 +883,7 @@ def _run_validation_phase_worker(
         manifest,
         output_dir=paths.staging_output,
     )
+    _fsync_directory_strict(sidecar_path.parent)
     validation = validate_preprocessed_database(
         staged_database,
         compatibility_output_dir=paths.staging_output,

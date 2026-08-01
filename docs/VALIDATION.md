@@ -238,7 +238,7 @@ The aggregate evidence files remain external and untracked. They include
 The subsequent holistic review did not change the accepted product or its
 historical inclusion logic. It hardened pre-database recovery, filesystem
 identity and locks, standalone compatibility publication, and source-integrity
-validation. The exact reconciliation worktree passes all 463 synthetic tests
+validation. The exact reconciliation worktree passes all 464 synthetic tests
 plus Ruff, diff-hygiene, and lockfile checks.
 
 A bounded aggregate-only read of the unchanged accepted database verified the

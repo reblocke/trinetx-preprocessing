@@ -343,6 +343,104 @@ def test_validation_worker_rechecks_serialized_export_hashes(
         )
 
 
+def test_validation_checkpoint_requires_durable_sidecar_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    paths.staging_output.mkdir()
+    staged_database = paths.staging_output / config.combined.database_name
+    staged_database.write_bytes(b"synthetic database")
+    hashes = {
+        output.key: CsvHashResult(
+            hash="a" * 64,
+            row_count=0,
+            columns=final_output_columns(),
+        )
+        for output in compatibility_outputs()
+    }
+    state: dict[str, object] = {
+        "phase": "compatibility_export",
+        "baseline": combined_builder._serialize_hashes(hashes),
+        "exported": combined_builder._serialize_hashes(hashes),
+        "manifest": {},
+    }
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_reloaded_build_state",
+        lambda *args, **kwargs: state,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_database_state_current",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_require_compatibility_state_current",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_compatibility_file_stats",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: CombinedValidationResult(
+            valid=True,
+            errors=(),
+            warnings=(),
+            counts={},
+        ),
+    )
+    synced_directories: list[Path] = []
+    real_fsync_directory = combined_builder._fsync_directory_strict
+    fail_sidecar_sync = True
+
+    def track_directory(path: Path) -> None:
+        nonlocal fail_sidecar_sync
+        if fail_sidecar_sync and path == paths.staging_output:
+            raise OSError("injected sidecar directory fsync failure")
+        synced_directories.append(path)
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_fsync_directory_strict",
+        track_directory,
+    )
+
+    with pytest.raises(OSError, match="sidecar directory fsync failure"):
+        combined_builder._run_validation_phase_worker(
+            config,
+            paths,
+            build_identity,
+            retained_lock_file_descriptors=(),
+        )
+
+    assert not paths.state_path.exists()
+    fail_sidecar_sync = False
+    combined_builder._run_validation_phase_worker(
+        config,
+        paths,
+        build_identity,
+        retained_lock_file_descriptors=(),
+    )
+
+    assert synced_directories.index(paths.staging_output) < synced_directories.index(
+        paths.state_path.parent
+    )
+    checkpoint = json.loads(paths.state_path.read_text())
+    assert checkpoint["phase"] == "validation"
+
+
 def test_spawned_worker_retains_canonical_lock_after_parent_descriptor_closes(
     tmp_path: Path,
 ) -> None:
