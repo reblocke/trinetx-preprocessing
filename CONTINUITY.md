@@ -34,17 +34,17 @@
 
 ## State
 - Branch: `codex/unified-preprocessing-v1`.
-- Integrated implementation/evidence head:
-  `b9e79d7a84cbb8bcd707473126f1243242f843bd`.
-- Exact-head CI run `30710776011` passed in 6m50s. The fresh whole-PR Codex
-  review completed at that head and found one additional P2 encounter-flow date
-  parsing issue in thread `PRRT_kwDOLtXliM6Vp6VT`.
+- Integrated review-reconciliation head:
+  `5ec0457c84dc665d790a66bc3192d63935cf9031`.
+- Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
+  review found one P3 stale 462-versus-463 test-count statement in thread
+  `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
 - The requested holistic GitHub review found one P2 recovery issue in thread
   `PRRT_kwDOLtXliM6VpRQI`; parallel whole-diff audits found and rechecked the
   related path, lock, scratch, export, validation, and documentation issues.
-- The original P2 thread has an exact-fix reply and is resolved. The current
-  worktree contains the new encounter-flow fix/regression plus the live ledger
-  and roadmap/evidence documentation clarifications.
+- Both P2 threads have exact-fix replies and are resolved. The final
+  reconciliation change set contains the P3 documentation correction and this
+  ledger reconciliation.
 
 ## Done
 - Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
@@ -96,9 +96,10 @@
   and all spill was cleaned.
 
 ## Now
-- Commit/push the tested successor, then reply to and resolve the new P2 thread.
-- Require that successor to pass CI and exact-head review before completion is
-  reported.
+- Final reconciliation checkpoint: completion is reported only after the P3
+  correction is published, its thread is resolved, the documentation-only
+  successor passes CI/review, unresolved threads are zero, and the worktree is
+  clean.
 
 ## Next
 - Require final exact-head CI, clean GitHub review, zero unresolved threads,
@@ -120,7 +121,7 @@
 - `docs/{PLAN,ONBOARDING,UNIFIED_PREPROCESSING,VALIDATION,GLP1_ELIGIBILITY}.md`
 - `README.md`, `CHANGELOG.md`, `llms.txt`, `pyproject.toml`
 - PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
-  comment `issuecomment-5152599268`; P2 threads `PRRT_kwDOLtXliM6VpRQI`
-  (resolved) and `PRRT_kwDOLtXliM6Vp6VT` (tested local fix); CI run
-  `30710776011`
+  comments `issuecomment-5152599268` and `issuecomment-5152752637`; resolved P2
+  threads `PRRT_kwDOLtXliM6VpRQI` and `PRRT_kwDOLtXliM6Vp6VT`; P3 thread
+  `PRRT_kwDOLtXliM6VqEpq`; CI runs `30710776011` and `30712167025`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`
