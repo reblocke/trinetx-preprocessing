@@ -210,17 +210,32 @@ def validate_preprocessed_database(
         if unknown_keys:
             errors.append("Unexpected compatibility output keys are present.")
 
-        compatibility_manifest = {
-            str(key): (str(hash_value), int(row_count), tuple(json.loads(columns)))
-            for key, hash_value, row_count, columns in connection.execute(
-                "SELECT compatibility_output_key, normalized_sha256, row_count, "
-                "columns_json FROM compatibility_output_manifest"
-            ).fetchall()
-        }
-        if set(compatibility_manifest) != output_keys:
+        compatibility_manifest_rows = connection.execute(
+            "SELECT compatibility_output_key, normalized_sha256, row_count, "
+            "columns_json FROM compatibility_output_manifest"
+        ).fetchall()
+        compatibility_manifest_keys = [
+            str(row[0]) for row in compatibility_manifest_rows
+        ]
+        compatibility_manifest_invalid = (
+            len(compatibility_manifest_rows) != len(output_keys)
+            or len(set(compatibility_manifest_keys)) != len(compatibility_manifest_keys)
+            or set(compatibility_manifest_keys) != output_keys
+        )
+        if compatibility_manifest_invalid:
             errors.append(
                 "compatibility_output_manifest does not contain exactly 36 outputs."
             )
+            compatibility_manifest = {}
+        else:
+            compatibility_manifest = {
+                str(key): (
+                    str(hash_value),
+                    int(row_count),
+                    tuple(json.loads(columns)),
+                )
+                for key, hash_value, row_count, columns in compatibility_manifest_rows
+            }
 
         for output in compatibility_outputs():
             view_columns = _table_columns(connection, output.view_name)
@@ -247,6 +262,16 @@ def validate_preprocessed_database(
             errors.append(
                 f"element_membership contains {orphan_memberships} orphan rows."
             )
+
+        missing_source_memberships = (
+            _count_retained_sources_without_included_membership(connection)
+        )
+        for domain, missing_count in missing_source_memberships.items():
+            if missing_count:
+                errors.append(
+                    f"{SOURCE_TABLE_BY_DOMAIN[domain]} contains {missing_count} "
+                    "retained rows without an included source-concept membership."
+                )
 
         duplicate_source_ids = _count_duplicate_source_ids(connection)
         if duplicate_source_ids:
@@ -528,6 +553,36 @@ def _count_orphan_memberships(connection: duckdb.DuckDBPyConnection) -> int:
             ).fetchone()[0]
         )
     return orphan_count
+
+
+def _count_retained_sources_without_included_membership(
+    connection: duckdb.DuckDBPyConnection,
+) -> dict[str, int]:
+    """Count retained clinical rows lacking a valid included membership."""
+
+    missing_counts: dict[str, int] = {}
+    for domain, concept_domain in CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN.items():
+        table_name = SOURCE_TABLE_BY_DOMAIN[domain]
+        missing_counts[domain] = int(
+            connection.execute(
+                f"""
+                SELECT count(*)::BIGINT
+                FROM {_identifier(table_name)} AS source
+                ANTI JOIN (
+                    SELECT membership.source_record_id
+                    FROM element_membership AS membership
+                    JOIN element_catalog AS catalog USING (element_id)
+                    WHERE membership.logical_domain = ?
+                      AND coalesce(membership.include, false)
+                      AND catalog.element_kind = 'source_concept'
+                      AND catalog.domain = ?
+                ) AS included_membership
+                  ON source.source_record_id = included_membership.source_record_id
+                """,
+                [domain, concept_domain],
+            ).fetchone()[0]
+        )
+    return missing_counts
 
 
 def _count_duplicate_source_ids(connection: duckdb.DuckDBPyConnection) -> int:

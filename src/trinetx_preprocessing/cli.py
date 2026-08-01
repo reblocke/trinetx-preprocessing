@@ -23,11 +23,12 @@ import yaml
 
 from . import __version__
 from .combined_preprocessing.builder import (
+    CombinedLockError,
     build_preprocessed,
+    export_legacy_compatibility_outputs,
     require_safe_output_location,
 )
 from .combined_preprocessing.database import (
-    export_compatibility_outputs,
     inspect_combined_database,
 )
 from .combined_preprocessing.elements import (
@@ -71,6 +72,7 @@ from .regression import (
     HASH_ALGORITHM,
     HASH_MANIFEST_FILENAME,
     HASH_SCOPE_VALUES,
+    HASH_SCRATCH_PREFIX,
     ManifestComparisonResult,
     TableHashEntry,
     collect_directory_entries,
@@ -198,7 +200,7 @@ REQUIRED_FILESYSTEM_LABELS = ("data_dir", "work_dir", "output_dir")
 MANIFEST_METADATA_BLOCKER_SAMPLE_LIMIT = 20
 SCRATCH_CLEANUP_SCHEMA_VERSION = 1
 SCRATCH_PATH_PREFIXES = (
-    ".trinetx-hash-",
+    HASH_SCRATCH_PREFIX,
     ".trinetx-encounter-reducer-",
     ".trinetx-rfs-membership-",
     ".trinetx-rfs-encounters-",
@@ -577,6 +579,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="Destination root for compatibility CSVs.",
+    )
+    export_legacy_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Atomically replace an existing compatibility-only export tree.",
     )
 
     run_all_parser = subparsers.add_parser(
@@ -1256,8 +1263,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if result.valid else 1
 
         if args.command == "export-legacy":
-            require_safe_output_location(args.output_dir)
-            paths = export_compatibility_outputs(args.database, args.output_dir)
+            paths = export_legacy_compatibility_outputs(
+                args.database,
+                args.output_dir,
+                replace_existing=args.replace,
+            )
             logger.info(
                 "Wrote %s compatibility CSVs to %s.", len(paths), args.output_dir
             )
@@ -1472,7 +1482,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config.output_dir,
             )
             return 0
-    except (ConfigError, FileNotFoundError, StaleWorkError, ValueError) as exc:
+    except (
+        CombinedLockError,
+        ConfigError,
+        FileExistsError,
+        FileNotFoundError,
+        StaleWorkError,
+        ValueError,
+    ) as exc:
         logger.error("%s", exc)
         return 2
 

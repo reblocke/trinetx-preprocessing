@@ -201,7 +201,62 @@ def validate_config(config: Config) -> None:
     _require_dir(config.data_dir, "data_dir")
     _require_dir(config.work_dir, "work_dir")
     _require_dir(config.output_dir, "output_dir")
+    validate_combined_path_separation(config)
     collect_domain_paths(config)
+
+
+def validate_combined_path_separation(config: Config) -> None:
+    """Require separate work and output trees for combined preprocessing.
+
+    Args:
+        config: ``Config`` instance to validate.
+
+    Raises:
+        ConfigError: If the resolved work and output paths overlap.
+    """
+
+    if not config.combined.enabled:
+        return
+
+    work_dir = config.work_dir.resolve(strict=False)
+    output_dir = config.output_dir.resolve(strict=False)
+    if paths_overlap(work_dir, output_dir):
+        raise ConfigError(
+            "Combined preprocessing requires non-overlapping 'work_dir' and "
+            f"'output_dir' paths: work_dir={work_dir}; output_dir={output_dir}"
+        )
+
+
+def paths_overlap(first: Path, second: Path) -> bool:
+    """Return whether two paths are equal or one contains the other.
+
+    Existing ancestors are compared by filesystem identity so case aliases on
+    case-insensitive filesystems cannot bypass lifecycle safety checks. The
+    lexical comparison remains necessary for destinations that do not exist
+    yet.
+    """
+
+    return path_is_within(first, second) or path_is_within(second, first)
+
+
+def path_is_within(path: Path, directory: Path) -> bool:
+    """Return whether ``path`` is equal to or below ``directory`` safely."""
+
+    candidate = Path(path).resolve(strict=False)
+    root = Path(directory).resolve(strict=False)
+    if candidate == root or root in candidate.parents:
+        return True
+    if not root.exists():
+        return False
+    for ancestor in (candidate, *candidate.parents):
+        if not ancestor.exists():
+            continue
+        try:
+            if ancestor.samefile(root):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def collect_domain_paths(config: Config) -> dict[str, list[Path]]:

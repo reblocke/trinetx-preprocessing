@@ -24,6 +24,7 @@ import trinetx_preprocessing.combined_preprocessing.evidence as combined_evidenc
 import trinetx_preprocessing.combined_preprocessing.validation as combined_validation
 from trinetx_preprocessing.combined_preprocessing.builder import (
     build_preprocessed,
+    export_legacy_compatibility_outputs,
     require_safe_output_location,
 )
 from trinetx_preprocessing.combined_preprocessing.contract import (
@@ -33,7 +34,6 @@ from trinetx_preprocessing.combined_preprocessing.contract import (
 from trinetx_preprocessing.combined_preprocessing.database import (
     _combined_run_id,
     _create_availability_tables,
-    export_compatibility_outputs,
     inspect_combined_database,
     open_combined_database,
 )
@@ -55,12 +55,17 @@ from trinetx_preprocessing.combined_preprocessing.glp1_adapter import (
 )
 from trinetx_preprocessing.combined_preprocessing.scratch import (
     COMBINED_BUILD_PREFIX,
+    COMBINED_DUCKDB_SPILL_PREFIX,
 )
 from trinetx_preprocessing.combined_preprocessing.validation import (
     CombinedValidationResult,
     validate_preprocessed_database,
 )
-from trinetx_preprocessing.config import CombinedPreprocessingConfig, load_config
+from trinetx_preprocessing.config import (
+    CombinedPreprocessingConfig,
+    ConfigError,
+    load_config,
+)
 from trinetx_preprocessing.glp1_eligibility.cohort import (
     build_cohort_flow,
     build_core_cohort,
@@ -82,7 +87,11 @@ from trinetx_preprocessing.glp1_eligibility.ingestion import (
 )
 from trinetx_preprocessing.glp1_eligibility.provenance import build_input_inventory
 from trinetx_preprocessing.process_locks import SpawnedLockFileDescriptor
-from trinetx_preprocessing.regression import CsvHashResult, hash_csv_with_metadata
+from trinetx_preprocessing.regression import (
+    HASH_SCRATCH_PREFIX,
+    CsvHashResult,
+    hash_csv_with_metadata,
+)
 from trinetx_preprocessing.work_manifest import require_current_work
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -388,6 +397,138 @@ def test_combined_private_artifacts_reject_repository_paths() -> None:
             REPOSITORY_ROOT / "results" / "combined-work",
             artifact_label="work directory",
         )
+
+
+def test_combined_private_artifacts_reject_repository_case_alias() -> None:
+    aliased_parent = REPOSITORY_ROOT.parent.with_name(
+        REPOSITORY_ROOT.parent.name.swapcase()
+    )
+    aliased_repository = aliased_parent / REPOSITORY_ROOT.name
+    if not aliased_repository.exists() or not aliased_repository.samefile(
+        REPOSITORY_ROOT
+    ):
+        pytest.skip("requires a case-insensitive repository filesystem")
+
+    with pytest.raises(ValueError, match="repository-local"):
+        require_safe_output_location(
+            aliased_repository / "future-private-output",
+        )
+
+
+def test_filesystem_aliases_share_locks_and_publication_paths(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "Shared"
+    canonical.mkdir()
+    alias = tmp_path / "shared"
+    if not alias.exists() or not alias.samefile(canonical):
+        pytest.skip("requires a case-insensitive filesystem")
+
+    assert combined_builder._lock_path(canonical) == combined_builder._lock_path(alias)
+    assert combined_builder._compatibility_export_paths(
+        canonical
+    ) == combined_builder._compatibility_export_paths(alias)
+
+
+def test_absent_case_aliases_share_locks_and_publication_paths(
+    tmp_path: Path,
+) -> None:
+    canonical_parent = tmp_path / "Parent"
+    canonical_parent.mkdir()
+    alias_parent = tmp_path / "parent"
+    if not alias_parent.exists() or not alias_parent.samefile(canonical_parent):
+        pytest.skip("requires a case-insensitive filesystem")
+    canonical = canonical_parent / "Export"
+    alias = alias_parent / "export"
+    assert not canonical.exists()
+
+    assert combined_builder._path_identity(canonical) == (
+        combined_builder._path_identity(alias)
+    )
+    assert combined_builder._lock_path(canonical) == combined_builder._lock_path(alias)
+    assert combined_builder._compatibility_export_paths(
+        canonical
+    ) == combined_builder._compatibility_export_paths(alias)
+
+
+def test_lock_and_publication_identity_survive_parent_creation(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "new-parent" / "compatibility"
+    lock_before = combined_builder._lock_path(output)
+    publication_before = combined_builder._compatibility_export_paths(output)
+
+    output.parent.mkdir()
+    assert combined_builder._lock_path(output) == lock_before
+    assert combined_builder._compatibility_export_paths(output) == publication_before
+
+    output.mkdir()
+    assert combined_builder._lock_path(output) == lock_before
+    assert combined_builder._compatibility_export_paths(output) == publication_before
+
+
+@pytest.mark.parametrize("entry_kind", ["file", "symlink"])
+def test_staging_runtime_scratch_rejects_non_directory_entries(
+    tmp_path: Path,
+    entry_kind: str,
+) -> None:
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    scratch = staging / f"{COMBINED_DUCKDB_SPILL_PREFIX}unexpected"
+    if entry_kind == "file":
+        scratch.write_text("must remain\n")
+    else:
+        target = tmp_path / "outside"
+        target.mkdir()
+        scratch.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="scratch must be a real directory"):
+        combined_builder._remove_staging_runtime_scratch(staging)
+
+    assert scratch.exists() or scratch.is_symlink()
+
+
+def test_lock_opener_rejects_symlink_without_clobbering_target(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    lock_path = combined_builder._lock_path(root)
+    target = tmp_path / "must-remain.txt"
+    target.write_text("unchanged\n")
+    lock_path.symlink_to(target)
+
+    with pytest.raises(ValueError, match="lock path must be a regular file"):
+        combined_builder._open_lock_file(lock_path)
+
+    assert target.read_text() == "unchanged\n"
+
+
+def test_combined_builder_rejects_path_overlap_before_location_checks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    config = replace(
+        config,
+        output_dir=config.work_dir,
+        combined=replace(config.combined, enabled=False),
+    )
+    marker = config.work_dir / "must-remain.txt"
+    marker.write_text("unchanged")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "require_safe_output_location",
+        lambda *args, **kwargs: pytest.fail(
+            "repository-location checks ran before path-overlap validation"
+        ),
+    )
+
+    with pytest.raises(ConfigError, match="non-overlapping 'work_dir'.*'output_dir'"):
+        build_preprocessed(config, strict=True, replace_existing=True)
+
+    assert marker.read_text() == "unchanged"
 
 
 def test_combined_database_session_bounds_runtime_and_cleans_spill(
@@ -821,11 +962,14 @@ def test_combined_build_exports_exact_historical_contract(
     real_open_combined_database = combined_database.open_combined_database
     write_session_tables: list[set[str]] = []
     write_session_memory_limits: list[int] = []
+    explicit_spill_roots: list[Path] = []
 
     @contextmanager
     def track_write_session(*args, **kwargs) -> Iterator[duckdb.DuckDBPyConnection]:
         if not kwargs.get("read_only", False):
             write_session_memory_limits.append(int(kwargs["memory_limit_mib"]))
+        if kwargs.get("spill_root") is not None:
+            explicit_spill_roots.append(Path(kwargs["spill_root"]))
         with real_open_combined_database(*args, **kwargs) as connection:
             yield connection
             if not kwargs.get("read_only", False):
@@ -944,7 +1088,11 @@ def test_combined_build_exports_exact_historical_contract(
         for output in compatibility_outputs()
     }
     regenerated_root = tmp_path / "regenerated"
-    regenerated = export_compatibility_outputs(
+    regenerated_paths = combined_builder._compatibility_export_paths(regenerated_root)
+    source_entries_before = {
+        path.relative_to(config.output_dir) for path in config.output_dir.rglob("*")
+    }
+    regenerated = export_legacy_compatibility_outputs(
         result.database_path,
         regenerated_root,
     )
@@ -954,6 +1102,13 @@ def test_combined_build_exports_exact_historical_contract(
         for output in compatibility_outputs()
     }
     assert before == after
+    assert explicit_spill_roots[-2:] == [
+        regenerated_paths.staging_output,
+        regenerated_paths.staging_output,
+    ]
+    assert {
+        path.relative_to(config.output_dir) for path in config.output_dir.rglob("*")
+    } == source_entries_before
 
     baseline_path = tmp_path / "combined_baseline.json"
     write_evidence(
@@ -1129,6 +1284,22 @@ def test_failed_replacement_preserves_published_product(
     assert _output_hashes(config.output_dir) == original_hashes
     assert paths.staging_output.is_dir()
     assert paths.state_path.is_file()
+    interrupted_hash_scratch = (
+        paths.staging_output
+        / compatibility_outputs()[0].relative_path.parent
+        / f"{HASH_SCRATCH_PREFIX}interrupted"
+    )
+    interrupted_hash_scratch.mkdir()
+    (interrupted_hash_scratch / "chunk.csv").write_text(
+        "confidential staged hash data\n"
+    )
+    interrupted_duckdb_spill = (
+        paths.staging_output / f"{COMBINED_DUCKDB_SPILL_PREFIX}interrupted"
+    )
+    interrupted_duckdb_spill.mkdir()
+    (interrupted_duckdb_spill / "row-level.tmp").write_text(
+        "confidential staged spill data\n"
+    )
 
     monkeypatch.setattr(
         combined_builder,
@@ -1152,6 +1323,8 @@ def test_failed_replacement_preserves_published_product(
     resumed = build_preprocessed(config, strict=True, replace_existing=True)
 
     assert resumed.validation.valid
+    assert not interrupted_hash_scratch.exists()
+    assert not interrupted_duckdb_spill.exists()
     assert not paths.staging_output.exists()
     assert not paths.state_path.exists()
 
@@ -1215,6 +1388,73 @@ def test_failed_database_session_restarts_incomplete_database(
     assert not paths.state_path.exists()
 
 
+@pytest.mark.parametrize("stale_mode", ["missing-file", "missing-staging"])
+def test_stale_pre_database_checkpoint_rebuilds_pipeline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stale_mode: str,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_isolated_phase_process",
+        _run_isolated_phase_locally,
+    )
+    real_pipeline = combined_builder._run_combined_pipeline_isolated
+    real_initialize = combined_builder.initialize_combined_database
+    pipeline_calls = 0
+
+    def track_pipeline(*args, **kwargs):
+        nonlocal pipeline_calls
+        pipeline_calls += 1
+        return real_pipeline(*args, **kwargs)
+
+    def fail_before_database(*args, **kwargs):
+        raise RuntimeError("injected pre-database interruption")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_combined_pipeline_isolated",
+        track_pipeline,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "initialize_combined_database",
+        fail_before_database,
+    )
+
+    with pytest.raises(RuntimeError, match="pre-database interruption"):
+        build_preprocessed(config, strict=True)
+
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    interrupted_state = json.loads(paths.state_path.read_text())
+    assert interrupted_state["phase"] == "pipeline"
+    if stale_mode == "missing-file":
+        stale_output = paths.staging_output / compatibility_outputs()[0].relative_path
+        stale_output.unlink()
+    else:
+        combined_builder.remove_tree_strict(
+            paths.staging_output,
+            context="Synthetic interrupted staging directory",
+        )
+
+    monkeypatch.setattr(
+        combined_builder,
+        "initialize_combined_database",
+        real_initialize,
+    )
+    resumed = build_preprocessed(config, strict=True)
+
+    assert resumed.validation.valid
+    assert pipeline_calls == 2
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
+
+
 def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1237,6 +1477,8 @@ def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
 
     def write_state_with_injected_failure(path, payload):
         nonlocal fail_final_export_checkpoint
+        if payload.get("phase") == "pipeline":
+            assert durability_barrier_completed
         if "export_progress" in payload:
             assert durability_barrier_completed
         if (
@@ -1297,6 +1539,357 @@ def test_export_checkpoint_recovers_after_database_fingerprint_refresh(
     assert resumed.validation.valid
     assert not paths.staging_output.exists()
     assert not paths.state_path.exists()
+
+
+def _write_synthetic_compatibility_tree(root: Path, value: str) -> tuple[Path, ...]:
+    paths = tuple(root / output.relative_path for output in compatibility_outputs())
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+    return paths
+
+
+def _verify_synthetic_compatibility_tree(
+    database_path: Path,
+    staging_dir: Path,
+    *,
+    spill_root: Path,
+) -> tuple[Path, ...]:
+    del database_path
+    assert spill_root == staging_dir
+    return tuple(
+        staging_dir / output.relative_path for output in compatibility_outputs()
+    )
+
+
+def test_legacy_export_rejects_managed_directory_symlink(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    output_dir.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (output_dir / "AMBULATORY").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="unmanaged entries: AMBULATORY"):
+        export_legacy_compatibility_outputs(
+            database,
+            output_dir,
+            replace_existing=True,
+        )
+
+    assert list(outside.iterdir()) == []
+
+
+def test_failed_legacy_export_preserves_existing_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    existing_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+
+    def fail_after_one_file(
+        database_path: Path,
+        staging_dir: Path,
+        *,
+        spill_root: Path,
+    ) -> list[Path]:
+        del database_path
+        assert spill_root == staging_dir
+        first = staging_dir / compatibility_outputs()[0].relative_path
+        first.parent.mkdir(parents=True)
+        first.write_text("new\n")
+        raise RuntimeError("synthetic export failure")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        fail_after_one_file,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic export failure"):
+        export_legacy_compatibility_outputs(
+            database,
+            output_dir,
+            replace_existing=True,
+        )
+
+    assert all(path.read_text() == "old\n" for path in existing_paths)
+    publication_paths = combined_builder._compatibility_export_paths(output_dir)
+    assert not publication_paths.staging_output.exists()
+    assert not publication_paths.backup_output.exists()
+    assert not publication_paths.publication_journal.exists()
+
+
+def test_legacy_export_recovers_interrupted_hash_scratch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    publication_paths = combined_builder._compatibility_export_paths(output_dir)
+    stale_hash_scratch = (
+        publication_paths.staging_output / "AMBULATORY" / ".trinetx-hash-interrupted"
+    )
+    stale_hash_scratch.mkdir(parents=True)
+    (stale_hash_scratch / "chunk.csv").write_text("confidential staging data\n")
+
+    def write_new_export(
+        database_path: Path,
+        staging_dir: Path,
+        *,
+        spill_root: Path,
+    ) -> list[Path]:
+        del database_path
+        assert spill_root == staging_dir
+        assert not stale_hash_scratch.exists()
+        return list(_write_synthetic_compatibility_tree(staging_dir, "new\n"))
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        write_new_export,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "verify_compatibility_outputs",
+        _verify_synthetic_compatibility_tree,
+    )
+
+    written = export_legacy_compatibility_outputs(database, output_dir)
+
+    assert len(written) == 36
+    assert all(path.read_text() == "new\n" for path in written)
+    assert not publication_paths.staging_output.exists()
+
+
+def test_legacy_export_atomically_replaces_complete_compatibility_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    _write_synthetic_compatibility_tree(output_dir, "old\n")
+    publication_paths = combined_builder._compatibility_export_paths(output_dir)
+    publication_paths.state_path.write_text("user-owned sentinel\n")
+
+    def write_new_export(
+        database_path: Path,
+        staging_dir: Path,
+        *,
+        spill_root: Path,
+    ) -> list[Path]:
+        del database_path
+        assert spill_root == staging_dir
+        return list(_write_synthetic_compatibility_tree(staging_dir, "new\n"))
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        write_new_export,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "verify_compatibility_outputs",
+        _verify_synthetic_compatibility_tree,
+    )
+
+    written = export_legacy_compatibility_outputs(
+        database,
+        output_dir,
+        replace_existing=True,
+    )
+
+    assert len(written) == 36
+    assert all(path.read_text() == "new\n" for path in written)
+    assert not publication_paths.staging_output.exists()
+    assert not publication_paths.backup_output.exists()
+    assert not publication_paths.publication_journal.exists()
+    assert publication_paths.state_path.read_text() == "user-owned sentinel\n"
+
+
+def test_legacy_export_publication_failure_rolls_back_existing_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    existing_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+    publication_paths = combined_builder._compatibility_export_paths(output_dir)
+
+    def write_new_export(
+        database_path: Path,
+        staging_dir: Path,
+        *,
+        spill_root: Path,
+    ) -> list[Path]:
+        del database_path
+        assert spill_root == staging_dir
+        return list(_write_synthetic_compatibility_tree(staging_dir, "new\n"))
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        write_new_export,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "verify_compatibility_outputs",
+        _verify_synthetic_compatibility_tree,
+    )
+    real_replace = combined_builder.os.replace
+
+    def fail_staging_publish(source: Path, destination: Path) -> None:
+        if (
+            Path(source) == publication_paths.staging_output
+            and Path(destination) == output_dir
+        ):
+            raise OSError("synthetic publication failure")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(combined_builder.os, "replace", fail_staging_publish)
+
+    with pytest.raises(OSError, match="synthetic publication failure"):
+        export_legacy_compatibility_outputs(
+            database,
+            output_dir,
+            replace_existing=True,
+        )
+
+    assert all(path.read_text() == "old\n" for path in existing_paths)
+    assert not publication_paths.staging_output.exists()
+    assert not publication_paths.backup_output.exists()
+    assert not publication_paths.publication_journal.exists()
+
+
+def test_legacy_export_rejects_late_unmanaged_destination_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    existing_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+    publication_paths = combined_builder._compatibility_export_paths(output_dir)
+    late_file = output_dir / "notes.txt"
+
+    def write_new_export(
+        database_path: Path,
+        staging_dir: Path,
+        *,
+        spill_root: Path,
+    ) -> list[Path]:
+        del database_path
+        assert spill_root == staging_dir
+        late_file.write_text("user-owned late file\n")
+        return list(_write_synthetic_compatibility_tree(staging_dir, "new\n"))
+
+    monkeypatch.setattr(
+        combined_builder,
+        "export_compatibility_outputs",
+        write_new_export,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "verify_compatibility_outputs",
+        _verify_synthetic_compatibility_tree,
+    )
+
+    with pytest.raises(ValueError, match="unmanaged entries: notes.txt"):
+        export_legacy_compatibility_outputs(
+            database,
+            output_dir,
+            replace_existing=True,
+        )
+
+    assert all(path.read_text() == "old\n" for path in existing_paths)
+    assert late_file.read_text() == "user-owned late file\n"
+    assert not publication_paths.staging_output.exists()
+    assert not publication_paths.backup_output.exists()
+    assert not publication_paths.publication_journal.exists()
+
+
+def test_legacy_export_requires_explicit_replacement(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "source" / "trinetx_preprocessed.duckdb"
+    database.parent.mkdir()
+    database.write_bytes(b"synthetic database")
+    output_dir = tmp_path / "export"
+    existing_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+
+    with pytest.raises(FileExistsError, match="use --replace"):
+        export_legacy_compatibility_outputs(database, output_dir)
+
+    assert all(path.read_text() == "old\n" for path in existing_paths)
+
+
+def test_legacy_export_rejects_in_place_canonical_product_mutation(
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "product"
+    product_dir.mkdir()
+    database = product_dir / "trinetx_preprocessed.duckdb"
+    database.write_bytes(b"synthetic database")
+
+    with pytest.raises(ValueError, match="separate destination"):
+        export_legacy_compatibility_outputs(
+            database,
+            product_dir,
+            replace_existing=True,
+        )
+
+    assert database.read_bytes() == b"synthetic database"
+
+
+def test_legacy_export_rejects_destination_nested_in_canonical_product(
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "product"
+    product_dir.mkdir()
+    database = product_dir / "trinetx_preprocessed.duckdb"
+    database.write_bytes(b"synthetic database")
+
+    with pytest.raises(ValueError, match="separate destination"):
+        export_legacy_compatibility_outputs(
+            database,
+            product_dir / "compatibility-export",
+        )
+
+    assert not (product_dir / "compatibility-export").exists()
+
+
+def test_legacy_export_rejects_case_alias_inside_canonical_product(
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "Product"
+    product_dir.mkdir()
+    alias = tmp_path / "product"
+    if not alias.exists() or not alias.samefile(product_dir):
+        pytest.skip("requires a case-insensitive filesystem")
+    database = product_dir / "trinetx_preprocessed.duckdb"
+    database.write_bytes(b"synthetic database")
+
+    with pytest.raises(ValueError, match="separate destination"):
+        export_legacy_compatibility_outputs(
+            database,
+            alias / "compatibility-export",
+        )
+
+    assert not (product_dir / "compatibility-export").exists()
 
 
 def test_export_checkpoint_durability_barrier_fsyncs_files_and_directories(
@@ -1499,6 +2092,84 @@ def test_publication_journal_recovers_old_product_after_interruption(
     assert not paths.publication_journal.exists()
 
 
+def test_compatibility_publication_recovers_old_tree_without_touching_state(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "compatibility"
+    original_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+    paths = combined_builder._compatibility_export_paths(output_dir)
+    _write_synthetic_compatibility_tree(paths.staging_output, "new\n")
+    paths.state_path.write_text("user-owned sentinel\n")
+    os.replace(output_dir, paths.backup_output)
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "old_moved",
+            "had_existing": True,
+            "published_output": str(output_dir),
+            "staging_output": str(paths.staging_output),
+            "backup_output": str(paths.backup_output),
+        },
+    )
+
+    combined_builder._recover_interrupted_publication(
+        output_dir,
+        publication_journal=paths.publication_journal,
+        backup_output=paths.backup_output,
+        database_name="trinetx_preprocessed.duckdb",
+        compatibility_only=True,
+    )
+
+    assert all(path.read_text() == "old\n" for path in original_paths)
+    assert paths.staging_output.is_dir()
+    assert paths.state_path.read_text() == "user-owned sentinel\n"
+    assert not paths.backup_output.exists()
+    assert not paths.publication_journal.exists()
+
+
+def test_compatibility_publication_recovers_through_case_alias(
+    tmp_path: Path,
+) -> None:
+    canonical_parent = tmp_path / "Parent"
+    canonical_parent.mkdir()
+    alias_parent = tmp_path / "parent"
+    if not alias_parent.exists() or not alias_parent.samefile(canonical_parent):
+        pytest.skip("requires a case-insensitive filesystem")
+    output_dir = canonical_parent / "Export"
+    alias_output = alias_parent / "export"
+    original_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+    paths = combined_builder._compatibility_export_paths(output_dir)
+    _write_synthetic_compatibility_tree(paths.staging_output, "new\n")
+    os.replace(output_dir, paths.backup_output)
+    alias_staging = alias_parent / paths.staging_output.name
+    alias_backup = alias_parent / paths.backup_output.name
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "old_moved",
+            "had_existing": True,
+            "published_output": str(alias_output),
+            "staging_output": str(alias_staging),
+            "backup_output": str(alias_backup),
+        },
+    )
+
+    combined_builder._recover_interrupted_publication(
+        output_dir,
+        publication_journal=paths.publication_journal,
+        backup_output=paths.backup_output,
+        database_name="trinetx_preprocessed.duckdb",
+        compatibility_only=True,
+    )
+
+    assert all(path.read_text() == "old\n" for path in original_paths)
+    assert paths.staging_output.is_dir()
+    assert not paths.backup_output.exists()
+    assert not paths.publication_journal.exists()
+
+
 def test_synthetic_example_is_rerunnable(tmp_path: Path) -> None:
     output_root = tmp_path / "synthetic-example"
     environment = os.environ.copy()
@@ -1567,6 +2238,51 @@ def test_combined_validation_fails_when_manifest_is_incomplete(tmp_path: Path) -
     validation = validate_preprocessed_database(result.database_path)
     assert not validation.valid
     assert any("status is not complete" in error for error in validation.errors)
+
+    export_dir = tmp_path / "incomplete-export"
+    with pytest.raises(ValueError, match="status is not complete"):
+        export_legacy_compatibility_outputs(result.database_path, export_dir)
+    export_paths = combined_builder._compatibility_export_paths(export_dir)
+    assert not export_dir.exists()
+    assert not export_paths.staging_output.exists()
+    assert not export_paths.publication_journal.exists()
+
+
+def test_compatibility_manifest_duplicate_key_fails_all_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    result = build_preprocessed(config, strict=True)
+    connection = duckdb.connect(str(result.database_path))
+    try:
+        connection.execute(
+            "INSERT INTO compatibility_output_manifest "
+            "SELECT * FROM compatibility_output_manifest LIMIT 1"
+        )
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+
+    monkeypatch.setattr(
+        combined_database,
+        "hash_csv_with_metadata",
+        lambda *args, **kwargs: pytest.fail(
+            "duplicate manifest must fail before output hashing"
+        ),
+    )
+    with pytest.raises(ValueError, match="exactly 36 outputs"):
+        combined_database.verify_compatibility_outputs(
+            result.database_path,
+            config.output_dir,
+        )
+
+    validation = validate_preprocessed_database(result.database_path)
+    assert not validation.valid
+    assert (
+        "compatibility_output_manifest does not contain exactly 36 outputs."
+        in validation.errors
+    )
 
 
 def test_combined_validation_requires_and_reconciles_product_sidecar(
@@ -1687,6 +2403,50 @@ def test_combined_validation_checks_source_integrity_by_domain(
     result = build_preprocessed(config, strict=True)
     connection = duckdb.connect(str(result.database_path))
     try:
+        procedure_source_ids = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT source_record_id FROM source_procedure "
+                "ORDER BY source_record_id LIMIT 2"
+            ).fetchall()
+        ]
+        assert len(procedure_source_ids) == 2
+        wrong_domain_source_id = "synthetic-wrong-domain-source"
+        historical_element_id = str(
+            connection.execute(
+                "SELECT element_id FROM element_catalog "
+                "WHERE element_kind = 'historical_derived' "
+                "ORDER BY element_id LIMIT 1"
+            ).fetchone()[0]
+        )
+        wrong_domain_element_id = str(
+            connection.execute(
+                "SELECT element_id FROM element_catalog "
+                "WHERE element_kind = 'source_concept' AND domain = 'lab' "
+                "ORDER BY element_id LIMIT 1"
+            ).fetchone()[0]
+        )
+        connection.execute(
+            "UPDATE element_membership SET include = false "
+            "WHERE source_record_id = ? AND logical_domain = 'procedure'",
+            [procedure_source_ids[0]],
+        )
+        connection.execute(
+            "UPDATE element_membership SET element_id = ? "
+            "WHERE source_record_id = ? AND logical_domain = 'procedure'",
+            [historical_element_id, procedure_source_ids[1]],
+        )
+        connection.execute(
+            "INSERT INTO source_procedure "
+            "SELECT * REPLACE (? AS source_record_id) "
+            "FROM source_procedure LIMIT 1",
+            [wrong_domain_source_id],
+        )
+        connection.execute(
+            "INSERT INTO element_membership VALUES (?, ?, 'procedure', true, "
+            "'exact', 'LOINC', 'synthetic')",
+            [wrong_domain_source_id, wrong_domain_element_id],
+        )
         connection.execute(
             """
             INSERT INTO element_membership
@@ -1727,6 +2487,17 @@ def test_combined_validation_checks_source_integrity_by_domain(
 
     assert not validation.valid
     assert "element_membership contains 1 orphan rows." in validation.errors
+    membership_error = (
+        "source_procedure contains 3 retained rows without an included "
+        "source-concept membership."
+    )
+    assert membership_error in validation.errors
+    corrupted_source_ids = [*procedure_source_ids, wrong_domain_source_id]
+    assert not any(
+        source_record_id in error
+        for source_record_id in corrupted_source_ids
+        for error in validation.errors
+    )
     assert "Source tables contain 1 duplicate record IDs." in validation.errors
     assert (
         "Source tables contain 1 rows assigned to the wrong logical domain."

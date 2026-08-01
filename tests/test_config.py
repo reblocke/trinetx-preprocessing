@@ -125,6 +125,82 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     validate_config(config)
 
 
+@pytest.mark.parametrize(
+    ("work_relative", "output_relative"),
+    [
+        pytest.param("shared/alias/..", "shared", id="resolved-equal"),
+        pytest.param("shared/work", "shared", id="work-under-output"),
+        pytest.param("shared", "shared/output", id="output-under-work"),
+    ],
+)
+def test_validate_config_rejects_combined_work_output_overlap(
+    tmp_path: Path,
+    work_relative: str,
+    output_relative: str,
+) -> None:
+    _write_encounter_csv(tmp_path / "data" / "Encounter" / "encounter0001.csv")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: {work_relative}
+            output_dir: {output_relative}
+            combined:
+              enabled: true
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+    config.work_dir.mkdir(parents=True, exist_ok=True)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ConfigError, match="non-overlapping 'work_dir'.*'output_dir'"):
+        validate_config(config)
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_validate_config_rejects_case_alias_overlap(
+    tmp_path: Path,
+    nested: bool,
+) -> None:
+    shared = tmp_path / "Shared"
+    shared.mkdir()
+    alias = tmp_path / "shared"
+    if not alias.exists() or not alias.samefile(shared):
+        pytest.skip("requires a case-insensitive filesystem")
+
+    _write_encounter_csv(tmp_path / "data" / "Encounter" / "encounter0001.csv")
+    output = alias / "output" if nested else alias
+    if nested:
+        output.mkdir()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: Shared
+            output_dir: {output.relative_to(tmp_path)}
+            combined:
+              enabled: true
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+    with pytest.raises(ConfigError, match="non-overlapping 'work_dir'.*'output_dir'"):
+        validate_config(config)
+
+
 @pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1", "null"])
 def test_combined_enabled_requires_boolean(tmp_path: Path, value: str) -> None:
     config_path = tmp_path / "config.yaml"

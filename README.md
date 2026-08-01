@@ -45,7 +45,7 @@ external private output directory:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing build-preprocessed \
-  --config /private/path/config.yaml --strict
+  --config /private/path/config.yaml
 
 ./.venv/bin/python -m trinetx_preprocessing validate-preprocessed \
   --database /private/output/trinetx_preprocessed.duckdb \
@@ -53,6 +53,24 @@ external private output directory:
 ```
 
 Set `combined.enabled: true` to make `run` and `run-all` use this same builder.
+The accepted full source contains 286 encounter-setting conflicts, so the
+release build uses deterministic non-strict resolution. Use the prescribed
+`run-final-assembly --strict` resume check as the separate fail-closed
+data-adjudication proof; on the current source it exits before final-output
+writes. Do not run a full strict replacement build against the accepted product.
+
+Regenerate the compatibility CSVs into a separate external destination. The
+source database must have one terminal `complete` manifest row. The command
+keeps export scratch in its owned staging tree, validates all 36 files against
+the database manifest, and publishes the set atomically; replacing an existing
+compatibility-only tree is explicit:
+
+```bash
+./.venv/bin/python -m trinetx_preprocessing export-legacy \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --output-dir /private/compatibility-export --replace
+```
+
 See `docs/UNIFIED_PREPROCESSING.md` for the table grains, provenance contract,
 compatibility boundary, and acceptance gates.
 
@@ -94,17 +112,17 @@ data/
 ```
 Adjust domain patterns in `config.yaml` if your filenames differ.
 
-For the current machine, keep real-data validation on the external drive:
+Keep real-data validation under a private external root:
 ```bash
-export UV_CACHE_DIR="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/uv-cache"
+export VALIDATION_ROOT="/private/path/trinetx-preprocessing-validation"
+export UV_CACHE_DIR="$VALIDATION_ROOT/uv-cache"
 
 ./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
-  --data-dir "/Volumes/LOCKE BOOK/TriNetX" \
-  --validation-root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation"
+  --data-dir "/private/path/TriNetX" \
+  --validation-root "$VALIDATION_ROOT"
 ```
 Use the mounted private raw-data tree as `data_dir`, and place `work_dir`,
-`output_dir`, profile output, logs, and manifests under
-`/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`.
+`output_dir`, profile output, logs, and manifests under that external root.
 
 ## CLI basics
 ```bash
@@ -133,8 +151,10 @@ Profile the pipeline with cProfile and stage timers:
 ./.venv/bin/python -m trinetx_preprocessing profile --config config.yaml \
   --out artifacts/profile
 ```
-Use `--strict` with `run` or `profile` to enable guardrail checks for joins and
-required identifiers. `profile` writes metadata-only provenance with the
+For the non-combined corrected pipeline, `--strict` enables guardrail checks
+for joins and required identifiers. For the current combined full source, use
+strict mode only for the separate conflict-adjudication proof described above.
+`profile` writes metadata-only provenance with the
 config hash, package/Python version, git commit/dirty state, behavior-code
 state hash for `src/`, `pyproject.toml`, and `uv.lock`, output inventory, stage
 timings, peak RSS, and work/output disk footprint.

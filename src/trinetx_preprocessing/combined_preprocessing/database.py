@@ -18,7 +18,7 @@ from .. import __version__
 from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB, Config
 from ..filesystem import remove_tree_strict, write_text_atomic
 from ..profiling import current_git_code_state_sha256
-from ..regression import CsvHashResult
+from ..regression import CsvHashResult, hash_csv_with_metadata
 from ..storage import resolve_work_table
 from ..work_manifest import work_manifest_path
 from .contract import (
@@ -68,11 +68,15 @@ def open_combined_database(
     read_only: bool = False,
     memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
     preserve_insertion_order: bool = False,
+    spill_root: Path | None = None,
 ) -> Iterator[duckdb.DuckDBPyConnection]:
     """Open a combined-product database with bounded, cleaned spill storage."""
 
     path = Path(database_path)
-    spill_path = path.parent / (
+    spill_parent = path.parent if spill_root is None else Path(spill_root)
+    if spill_parent.is_symlink() or not spill_parent.is_dir():
+        raise ValueError(f"DuckDB spill root must be a real directory: {spill_parent}")
+    spill_path = spill_parent / (
         f"{COMBINED_DUCKDB_SPILL_PREFIX}{path.name}-{uuid.uuid4().hex}"
     )
     connection = duckdb.connect(str(path), read_only=read_only)
@@ -322,6 +326,7 @@ def export_compatibility_outputs(
     output_dir: Path,
     *,
     memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+    spill_root: Path | None = None,
 ) -> list[Path]:
     """Regenerate all 36 historical CSVs from the canonical database."""
 
@@ -331,7 +336,9 @@ def export_compatibility_outputs(
         database_path,
         read_only=True,
         memory_limit_mib=memory_limit_mib,
+        spill_root=spill_root,
     ) as connection:
+        _require_complete_preprocessing_manifest(connection)
         for output in compatibility_outputs():
             destination = output_root / output.relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -346,6 +353,99 @@ def export_compatibility_outputs(
             temporary.replace(destination)
             written.append(destination)
     return written
+
+
+def verify_compatibility_outputs(
+    database_path: Path,
+    output_dir: Path,
+    *,
+    memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+    spill_root: Path | None = None,
+) -> tuple[Path, ...]:
+    """Verify one complete 36-file export against the embedded manifest.
+
+    This focused check hashes only the compatibility CSVs. It intentionally
+    avoids the broader source-table scans performed by full product validation,
+    making it suitable as the publication gate for ``export-legacy``.
+    """
+
+    output_root = Path(output_dir)
+    expected_outputs = compatibility_outputs()
+    expected_keys = {output.key for output in expected_outputs}
+    with open_combined_database(
+        database_path,
+        read_only=True,
+        memory_limit_mib=memory_limit_mib,
+        spill_root=spill_root,
+    ) as connection:
+        _require_complete_preprocessing_manifest(connection)
+        rows = connection.execute(
+            "SELECT compatibility_output_key, normalized_sha256, row_count, "
+            "columns_json FROM compatibility_output_manifest"
+        ).fetchall()
+
+    observed_keys = [str(row[0]) for row in rows]
+    if (
+        len(rows) != len(expected_outputs)
+        or len(set(observed_keys)) != len(observed_keys)
+        or set(observed_keys) != expected_keys
+    ):
+        raise ValueError(
+            "Compatibility export manifest does not contain exactly 36 outputs."
+        )
+    manifest = {
+        str(key): (str(hash_value), int(row_count), tuple(json.loads(columns)))
+        for key, hash_value, row_count, columns in rows
+    }
+
+    verified: list[Path] = []
+    for output in expected_outputs:
+        path = output_root / output.relative_path
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"Missing regular compatibility CSV: {output.key}")
+        metadata = hash_csv_with_metadata(path)
+        expected_hash, expected_count, expected_columns = manifest[output.key]
+        mismatched: list[str] = []
+        if metadata.hash != expected_hash:
+            mismatched.append("normalized hash")
+        if metadata.row_count != expected_count:
+            mismatched.append("row count")
+        if metadata.columns != expected_columns:
+            mismatched.append("ordered schema")
+        if mismatched:
+            raise ValueError(
+                f"Compatibility export mismatch for {output.key}: "
+                + ", ".join(mismatched)
+            )
+        verified.append(path)
+    return tuple(verified)
+
+
+def _require_complete_preprocessing_manifest(
+    connection: duckdb.DuckDBPyConnection,
+) -> None:
+    """Require one terminal manifest row before exporting a product."""
+
+    try:
+        rows = connection.execute(
+            "SELECT status, combined_schema_version FROM preprocessing_manifest"
+        ).fetchall()
+    except duckdb.Error as exc:
+        raise ValueError(
+            "Combined database is missing a readable preprocessing manifest."
+        ) from exc
+    if len(rows) != 1:
+        raise ValueError(
+            "Combined database preprocessing_manifest must contain exactly one run."
+        )
+    status, schema_version = rows[0]
+    if status != "complete":
+        raise ValueError(f"Combined database status is not complete: {status}")
+    if schema_version != COMBINED_SCHEMA_VERSION:
+        raise ValueError(
+            "Combined database schema version mismatch: "
+            f"{schema_version} != {COMBINED_SCHEMA_VERSION}"
+        )
 
 
 def inspect_combined_database(

@@ -8,22 +8,29 @@ import json
 import multiprocessing
 import os
 import socket
+import stat
 import subprocess
 import time
+import unicodedata
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, TextIO
 
-from ..config import Config
+from ..config import (
+    Config,
+    path_is_within,
+    paths_overlap,
+    validate_combined_path_separation,
+)
 from ..filesystem import remove_tree_strict, write_text_atomic
 from ..pipeline.run import (
     run_final_pipeline_stage,
     run_pipeline_before_final_assembly,
 )
 from ..process_locks import duplicate_lock_file_descriptors_for_spawn
-from ..regression import CsvHashResult, hash_csv_with_metadata
+from ..regression import HASH_SCRATCH_PREFIX, CsvHashResult, hash_csv_with_metadata
 from ..work_manifest import (
     STAGE_ORDER,
     StaleWorkError,
@@ -44,6 +51,7 @@ from .database import (
     load_combined_memberships,
     load_combined_observability,
     refresh_database_work_manifest_fingerprint,
+    verify_compatibility_outputs,
     write_combined_manifest,
 )
 from .scratch import (
@@ -78,6 +86,10 @@ class CombinedBuildResult:
     validation: CombinedValidationResult
 
 
+class CombinedLockError(RuntimeError):
+    """Raised when another combined operation holds a required filesystem lock."""
+
+
 @dataclass(frozen=True)
 class _CombinedBuildPaths:
     staging_output: Path
@@ -95,11 +107,18 @@ def build_preprocessed(
 ) -> CombinedBuildResult:
     """Build, validate, and transactionally publish one combined product."""
 
-    require_safe_output_location(config.work_dir, artifact_label="work directory")
-    require_safe_output_location(config.output_dir, artifact_label="output directory")
     combined_config = replace(
         config,
         combined=replace(config.combined, enabled=True),
+    )
+    validate_combined_path_separation(combined_config)
+    require_safe_output_location(
+        combined_config.work_dir,
+        artifact_label="work directory",
+    )
+    require_safe_output_location(
+        combined_config.output_dir,
+        artifact_label="output directory",
     )
     published_output = combined_config.output_dir
     database_path = published_output / combined_config.combined.database_name
@@ -136,6 +155,100 @@ def build_preprocessed(
         )
 
 
+def export_legacy_compatibility_outputs(
+    database_path: Path,
+    output_dir: Path,
+    *,
+    replace_existing: bool = False,
+) -> tuple[Path, ...]:
+    """Validate and atomically publish the 36-file compatibility export.
+
+    The destination is deliberately a compatibility-only tree. In-place
+    mutation of the canonical product directory would either follow unsafe
+    descendants or require copying/moving the multi-gigabyte database during
+    publication, so callers must use a separate external destination.
+    """
+
+    database = Path(database_path)
+    requested_output = Path(output_dir)
+    if database.is_symlink() or not database.is_file():
+        raise ValueError(f"Combined database must be a regular file: {database}")
+    if requested_output.is_symlink():
+        raise ValueError(
+            f"Compatibility export root must be a real directory: {requested_output}"
+        )
+
+    database = database.resolve()
+    output = requested_output.resolve(strict=False)
+    require_safe_output_location(
+        output,
+        artifact_label="compatibility export directory",
+    )
+    canonical_root = database.parent
+    if paths_overlap(canonical_root, output):
+        raise ValueError(
+            "Compatibility exports must use a separate destination outside "
+            f"the canonical database directory: {output}"
+        )
+
+    paths = _compatibility_export_paths(output)
+    with _compatibility_export_lock(database, output):
+        _recover_interrupted_publication(
+            output,
+            publication_journal=paths.publication_journal,
+            backup_output=paths.backup_output,
+            database_name=database.name,
+            compatibility_only=True,
+        )
+        _discard_incomplete_compatibility_staging(paths)
+        _validate_compatibility_export_tree(output, require_complete=False)
+        had_existing = output.exists()
+        if had_existing and any(output.iterdir()) and not replace_existing:
+            raise FileExistsError(
+                f"Compatibility export already exists: {output}; use --replace."
+            )
+
+        paths.staging_output.mkdir(parents=False)
+        try:
+            export_compatibility_outputs(
+                database,
+                paths.staging_output,
+                spill_root=paths.staging_output,
+            )
+            _remove_appledouble_sidecars(paths.staging_output)
+            _validate_compatibility_export_tree(
+                paths.staging_output,
+                require_complete=True,
+            )
+            verify_compatibility_outputs(
+                database,
+                paths.staging_output,
+                spill_root=paths.staging_output,
+            )
+            _fsync_compatibility_export(paths.staging_output)
+            _publish_staged_product(
+                paths,
+                published_output=output,
+                database_name=database.name,
+                replace_existing=replace_existing,
+                compatibility_only=True,
+            )
+        except BaseException:
+            if paths.staging_output.exists():
+                _validate_compatibility_export_tree(
+                    paths.staging_output,
+                    require_complete=False,
+                    allow_temporary=True,
+                )
+                remove_tree_strict(
+                    paths.staging_output,
+                    context="Incomplete compatibility export staging directory",
+                )
+            raise
+
+    return tuple(output / item.relative_path for item in compatibility_outputs())
+
+
 def _build_locked(
     config: Config,
     *,
@@ -153,6 +266,8 @@ def _build_locked(
         raise ValueError(
             f"Combined staging output must be a real directory: {paths.staging_output}"
         )
+    if paths.staging_output.is_dir():
+        _remove_staging_runtime_scratch(paths.staging_output)
     state = _load_build_state(
         paths.state_path,
         expected_identity=build_identity,
@@ -160,16 +275,30 @@ def _build_locked(
         published_output=config.output_dir,
     )
     if state is not None and not paths.staging_output.is_dir():
-        raise ValueError(
-            "Combined resumable state exists without its staging directory: "
-            f"{paths.state_path}"
-        )
+        if _phase_at_least(state, "database"):
+            raise ValueError(
+                "Combined resumable state exists without its staging directory: "
+                f"{paths.state_path}"
+            )
+        _unlink_generated_file(paths.state_path)
+        state = None
 
     pipeline_current = _pipeline_outputs_are_current(
         config,
         paths.staging_output,
         strict=strict,
     )
+    if (
+        state is not None
+        and not _phase_at_least(state, "database")
+        and not pipeline_current
+    ):
+        _remove_staging_for_restart(
+            paths.staging_output,
+            database_name=config.combined.database_name,
+        )
+        _unlink_generated_file(paths.state_path)
+        state = None
     if state is None and paths.staging_output.exists() and not pipeline_current:
         _remove_staging_for_restart(
             paths.staging_output,
@@ -209,11 +338,6 @@ def _build_locked(
         _write_build_state(paths.state_path, state)
     else:
         _deserialize_hashes(state.get("baseline"))
-        if not _phase_at_least(state, "database") and not pipeline_current:
-            raise ValueError(
-                "Resumable combined pipeline outputs no longer match the work "
-                f"manifest: {paths.staging_output}"
-            )
 
     if not _phase_at_least(state, "database"):
         phase_started = time.perf_counter()
@@ -409,6 +533,10 @@ def _run_final_pipeline_worker(
         lock_file_descriptors=retained_lock_file_descriptors,
     )
     baseline = _compatibility_hashes(paths.staging_output)
+    _fsync_export_checkpoint_inputs(
+        paths.staging_output,
+        work_manifest=work_manifest_path(config),
+    )
     state = _new_build_state(
         paths,
         build_identity=build_identity,
@@ -802,18 +930,89 @@ def _combined_build_paths(
     build_identity: str,
 ) -> _CombinedBuildPaths:
     output = Path(published_output)
-    publication_identity = hashlib.sha256(
-        str(output.resolve(strict=False)).encode()
-    ).hexdigest()
+    canonical_parent, _ = _canonicalized_path(output.parent)
+    publication_identity = hashlib.sha256(_path_identity(output).encode()).hexdigest()
     build_token = build_identity[:24]
     publication_token = publication_identity[:24]
     return _CombinedBuildPaths(
-        staging_output=output.parent / f"{COMBINED_BUILD_PREFIX}{build_token}",
-        state_path=output.parent / f"{COMBINED_BUILD_PREFIX}{build_token}.state.json",
-        backup_output=output.parent / f"{COMBINED_PREVIOUS_PREFIX}{publication_token}",
-        publication_journal=output.parent
+        staging_output=canonical_parent / f"{COMBINED_BUILD_PREFIX}{build_token}",
+        state_path=canonical_parent
+        / f"{COMBINED_BUILD_PREFIX}{build_token}.state.json",
+        backup_output=canonical_parent
+        / f"{COMBINED_PREVIOUS_PREFIX}{publication_token}",
+        publication_journal=canonical_parent
         / f"{COMBINED_PUBLICATION_PREFIX}{publication_token}.json",
     )
+
+
+def _compatibility_export_paths(output_dir: Path) -> _CombinedBuildPaths:
+    token = hashlib.sha256(
+        f"compatibility-export:{_path_identity(output_dir)}".encode()
+    ).hexdigest()[:24]
+    parent, _ = _canonicalized_path(output_dir.parent)
+    staging_output = parent / f"{COMBINED_BUILD_PREFIX}legacy-{token}"
+    return _CombinedBuildPaths(
+        staging_output=staging_output,
+        state_path=staging_output.with_name(f"{staging_output.name}.state.json"),
+        backup_output=parent / f"{COMBINED_PREVIOUS_PREFIX}legacy-{token}",
+        publication_journal=(
+            parent / f"{COMBINED_PUBLICATION_PREFIX}legacy-{token}.json"
+        ),
+    )
+
+
+def _validate_compatibility_export_tree(
+    root: Path,
+    *,
+    require_complete: bool,
+    allow_temporary: bool = False,
+) -> None:
+    """Reject symlinks and entries outside the 36-file export contract."""
+
+    if not root.exists():
+        return
+    _validate_product_tree(
+        root,
+        database_name="trinetx_preprocessed.duckdb",
+        require_complete=require_complete,
+        allow_temporary=allow_temporary,
+        compatibility_only=True,
+    )
+
+
+def _discard_incomplete_compatibility_staging(
+    paths: _CombinedBuildPaths,
+) -> None:
+    if paths.backup_output.exists() and not paths.publication_journal.exists():
+        raise ValueError(
+            "Compatibility export backup exists without its recovery journal: "
+            f"{paths.backup_output}"
+        )
+    if not paths.staging_output.exists():
+        return
+    _validate_compatibility_export_tree(
+        paths.staging_output,
+        require_complete=False,
+        allow_temporary=True,
+    )
+    remove_tree_strict(
+        paths.staging_output,
+        context="Incomplete compatibility export staging directory",
+    )
+
+
+def _fsync_compatibility_export(output_dir: Path) -> None:
+    paths = tuple(
+        output_dir / output.relative_path for output in compatibility_outputs()
+    )
+    for path in paths:
+        _fsync_file_strict(path)
+    directories = {output_dir, *(path.parent for path in paths)}
+    for path in sorted(
+        directories,
+        key=lambda item: (-len(item.parts), str(item)),
+    ):
+        _fsync_directory_strict(path)
 
 
 def _combined_build_identity(config: Config, *, strict: bool) -> str:
@@ -890,6 +1089,40 @@ def _compatibility_hashes(output_dir: Path) -> dict[str, CsvHashResult]:
         path = output_dir / output.relative_path
         hashes[output.key] = hash_csv_with_metadata(path)
     return hashes
+
+
+def _remove_hash_scratch_directories(output_dir: Path) -> None:
+    """Remove owned hash scratch left by an interrupted compatibility hash."""
+
+    parent_directories = {
+        (Path(output_dir) / output.relative_path).parent
+        for output in compatibility_outputs()
+    }
+    for parent in sorted(parent_directories, key=str):
+        if not parent.exists():
+            continue
+        if parent.is_symlink() or not parent.is_dir():
+            raise ValueError(
+                f"Compatibility output parent must be a real directory: {parent}"
+            )
+        for path in sorted(parent.glob(f"{HASH_SCRATCH_PREFIX}*"), key=str):
+            if path.is_symlink() or not path.is_dir():
+                raise ValueError(f"Hash scratch must be a real directory: {path}")
+            remove_tree_strict(path, context="Interrupted compatibility hash scratch")
+
+
+def _remove_staging_runtime_scratch(output_dir: Path) -> None:
+    """Remove recognized row-level scratch left by an interrupted build phase."""
+
+    root = Path(output_dir)
+    for prefix in (COMBINED_DUCKDB_SPILL_PREFIX, COMBINED_VALIDATION_PREFIX):
+        for path in sorted(root.glob(f"{prefix}*"), key=str):
+            if path.is_symlink() or not path.is_dir():
+                raise ValueError(
+                    f"Combined staging scratch must be a real directory: {path}"
+                )
+            remove_tree_strict(path, context="Interrupted combined staging scratch")
+    _remove_hash_scratch_directories(root)
 
 
 def _serialize_hashes(
@@ -1178,14 +1411,18 @@ def _validate_product_tree(
     database_name: str,
     require_complete: bool,
     allow_temporary: bool,
+    compatibility_only: bool = False,
 ) -> None:
     if root.is_symlink() or not root.is_dir():
         raise ValueError(f"Combined product root must be a real directory: {root}")
-    managed_files = {
-        Path(database_name),
-        Path(COMBINED_MANIFEST_FILENAME),
-        *(output.relative_path for output in compatibility_outputs()),
-    }
+    managed_files = {output.relative_path for output in compatibility_outputs()}
+    if not compatibility_only:
+        managed_files.update(
+            {
+                Path(database_name),
+                Path(COMBINED_MANIFEST_FILENAME),
+            }
+        )
     managed_directories = {
         parent
         for path in managed_files
@@ -1208,6 +1445,7 @@ def _validate_product_tree(
                 elif allow_temporary and (
                     path.name.startswith(COMBINED_DUCKDB_SPILL_PREFIX)
                     or path.name.startswith(COMBINED_VALIDATION_PREFIX)
+                    or path.name.startswith(HASH_SCRATCH_PREFIX)
                 ):
                     continue
                 else:
@@ -1225,6 +1463,7 @@ def _validate_product_tree(
                 relative,
                 managed_files=managed_files,
                 database_name=database_name,
+                compatibility_only=compatibility_only,
             ):
                 continue
             unknown.append(relative.as_posix())
@@ -1245,8 +1484,9 @@ def _is_allowed_temporary_file(
     *,
     managed_files: set[Path],
     database_name: str,
+    compatibility_only: bool = False,
 ) -> bool:
-    if relative == Path(f"{database_name}.wal"):
+    if not compatibility_only and relative == Path(f"{database_name}.wal"):
         return True
     for managed in managed_files:
         if (
@@ -1267,17 +1507,34 @@ def _publish_staged_product(
     published_output: Path,
     database_name: str,
     replace_existing: bool,
+    compatibility_only: bool = False,
 ) -> None:
     if paths.publication_journal.exists() or paths.backup_output.exists():
         raise ValueError(
             "Combined publication recovery artifacts must be reconciled before "
             "publication."
         )
-    had_existing = published_output.exists()
-    if had_existing and any(published_output.iterdir()) and not replace_existing:
-        raise FileExistsError(
-            f"Combined output already exists: {published_output}; use --replace."
+    if published_output.is_symlink() or (
+        published_output.exists() and not published_output.is_dir()
+    ):
+        raise ValueError(
+            f"Combined output must be a real directory: {published_output}"
         )
+    had_existing = published_output.exists()
+    if had_existing:
+        has_entries = any(published_output.iterdir())
+        if has_entries and not replace_existing:
+            raise FileExistsError(
+                f"Combined output already exists: {published_output}; use --replace."
+            )
+        if has_entries:
+            _validate_product_tree(
+                published_output,
+                database_name=database_name,
+                require_complete=False,
+                allow_temporary=False,
+                compatibility_only=compatibility_only,
+            )
     journal = {
         "schema_version": _PUBLICATION_JOURNAL_SCHEMA_VERSION,
         "state": "prepared",
@@ -1285,8 +1542,9 @@ def _publish_staged_product(
         "published_output": str(published_output),
         "staging_output": str(paths.staging_output),
         "backup_output": str(paths.backup_output),
-        "build_state_path": str(paths.state_path),
     }
+    if not compatibility_only:
+        journal["build_state_path"] = str(paths.state_path)
     _write_publication_journal(paths.publication_journal, journal)
     installed = False
     try:
@@ -1334,12 +1592,14 @@ def _publish_staged_product(
             database_name=database_name,
             require_complete=False,
             allow_temporary=False,
+            compatibility_only=compatibility_only,
         )
         remove_tree_strict(
             paths.backup_output,
             context="Previous combined preprocessing output",
         )
-    _unlink_generated_file(paths.state_path)
+    if not compatibility_only:
+        _unlink_generated_file(paths.state_path)
     _unlink_generated_file(paths.publication_journal)
     _fsync_directory(published_output.parent)
 
@@ -1350,6 +1610,7 @@ def _recover_interrupted_publication(
     publication_journal: Path,
     backup_output: Path,
     database_name: str,
+    compatibility_only: bool = False,
 ) -> None:
     journal_path = publication_journal
     if published_output.is_symlink() or backup_output.is_symlink():
@@ -1380,20 +1641,25 @@ def _recover_interrupted_publication(
     recorded_staging = Path(str(journal.get("staging_output", "")))
     recorded_backup = Path(str(journal.get("backup_output", "")))
     recorded_state = Path(str(journal.get("build_state_path", "")))
+    state_paths_are_valid = compatibility_only or (
+        _same_path_identity(recorded_state.parent, published_output.parent)
+        and recorded_state.name.startswith(COMBINED_BUILD_PREFIX)
+        and recorded_state.name == f"{recorded_staging.name}.state.json"
+    )
     if (
         journal.get("schema_version") != _PUBLICATION_JOURNAL_SCHEMA_VERSION
-        or recorded_published != published_output
-        or recorded_backup != backup_output
-        or recorded_staging.parent != published_output.parent
+        or not _same_path_identity(recorded_published, published_output)
+        or not _same_path_identity(recorded_backup, backup_output)
+        or not _same_path_identity(recorded_staging.parent, published_output.parent)
         or not recorded_staging.name.startswith(COMBINED_BUILD_PREFIX)
-        or recorded_state.parent != published_output.parent
-        or not recorded_state.name.startswith(COMBINED_BUILD_PREFIX)
-        or recorded_state.name != f"{recorded_staging.name}.state.json"
+        or not state_paths_are_valid
     ):
         raise ValueError(
             f"Combined publication journal paths are invalid: {journal_path}"
         )
-    if recorded_staging.is_symlink() or recorded_state.is_symlink():
+    if recorded_staging.is_symlink() or (
+        not compatibility_only and recorded_state.is_symlink()
+    ):
         raise ValueError(
             f"Combined publication recovery paths must not be symbolic links: "
             f"{journal_path}"
@@ -1402,7 +1668,11 @@ def _recover_interrupted_publication(
         raise ValueError(
             f"Combined publication staging path must be a directory: {recorded_staging}"
         )
-    if recorded_state.exists() and not recorded_state.is_file():
+    if (
+        not compatibility_only
+        and recorded_state.exists()
+        and not recorded_state.is_file()
+    ):
         raise ValueError(
             f"Combined publication state path must be a regular file: {recorded_state}"
         )
@@ -1421,6 +1691,7 @@ def _recover_interrupted_publication(
             database_name=database_name,
             require_complete=False,
             allow_temporary=False,
+            compatibility_only=compatibility_only,
         )
     if backup_exists:
         _validate_product_tree(
@@ -1428,6 +1699,7 @@ def _recover_interrupted_publication(
             database_name=database_name,
             require_complete=False,
             allow_temporary=False,
+            compatibility_only=compatibility_only,
         )
     if published_exists and not staging_exists:
         _validate_product_tree(
@@ -1435,13 +1707,15 @@ def _recover_interrupted_publication(
             database_name=database_name,
             require_complete=True,
             allow_temporary=False,
+            compatibility_only=compatibility_only,
         )
         if backup_exists:
             remove_tree_strict(
                 backup_output,
                 context="Recovered previous combined preprocessing output",
             )
-        _unlink_generated_file(recorded_state)
+        if not compatibility_only:
+            _unlink_generated_file(recorded_state)
         _unlink_generated_file(journal_path)
         _fsync_directory(published_output.parent)
         return
@@ -1500,7 +1774,7 @@ def _canonical_build_lock(config: Config) -> Iterator[tuple[int, ...]]:
     try:
         for lock_path in lock_paths:
             lock_path.parent.mkdir(parents=True, exist_ok=True)
-            handle = lock_path.open("a+", encoding="utf-8")
+            handle = _open_lock_file(lock_path)
             try:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
@@ -1508,17 +1782,70 @@ def _canonical_build_lock(config: Config) -> Iterator[tuple[int, ...]]:
                 owner = handle.read().strip()
                 handle.close()
                 details = f" ({owner})" if owner else ""
-                raise RuntimeError(
+                raise CombinedLockError(
                     "Another combined preprocessing build holds the canonical "
                     f"work/output lock: {lock_path}{details}"
                 ) from exc
+            handles.append(handle)
             handle.seek(0)
             handle.truncate()
             handle.write(json.dumps(payload, sort_keys=True) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
-            handles.append(handle)
         yield tuple(handle.fileno() for handle in handles)
+    finally:
+        for handle in reversed(handles):
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
+
+
+@contextmanager
+def _compatibility_export_lock(
+    database_path: Path,
+    output_dir: Path,
+) -> Iterator[None]:
+    """Exclude canonical publication while reading and replacing exports."""
+
+    lock_paths = sorted(
+        {
+            _lock_path(database_path.parent),
+            _lock_path(output_dir),
+        },
+        key=str,
+    )
+    handles = []
+    payload = {
+        "schema_version": 1,
+        "pid": os.getpid(),
+        "hostname": socket.gethostname(),
+        "operation": "export-legacy",
+        "database": str(database_path),
+        "output_dir": str(output_dir),
+    }
+    try:
+        for lock_path in lock_paths:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            handle = _open_lock_file(lock_path)
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                handle.seek(0)
+                owner = handle.read().strip()
+                handle.close()
+                details = f" ({owner})" if owner else ""
+                raise CombinedLockError(
+                    "Another combined preprocessing operation holds a canonical "
+                    f"database/output lock: {lock_path}{details}"
+                ) from exc
+            handles.append(handle)
+            handle.seek(0)
+            handle.truncate()
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        yield
     finally:
         for handle in reversed(handles):
             try:
@@ -1529,8 +1856,121 @@ def _canonical_build_lock(config: Config) -> Iterator[tuple[int, ...]]:
 
 def _lock_path(root: Path) -> Path:
     resolved = Path(root).resolve(strict=False)
-    token = hashlib.sha256(str(resolved).encode()).hexdigest()[:24]
-    return resolved.parent / f"{COMBINED_LOCK_PREFIX}{token}"
+    token = hashlib.sha256(_path_identity(resolved).encode()).hexdigest()[:24]
+    canonical_parent, _ = _canonicalized_path(resolved.parent)
+    return canonical_parent / f"{COMBINED_LOCK_PREFIX}{token}"
+
+
+def _path_identity(path: Path) -> str:
+    """Return a stable identity across path aliases and root creation."""
+
+    _, identity = _canonicalized_path(path)
+    return f"canonical:{identity}"
+
+
+def _same_path_identity(first: Path, second: Path) -> bool:
+    """Return whether paths have the same stable, case-aware identity."""
+
+    return _path_identity(first) == _path_identity(second)
+
+
+def _canonicalized_path(path: Path) -> tuple[Path, Path]:
+    """Return an operational path and stable case-aware identity path."""
+
+    resolved = Path(path).resolve(strict=False)
+    operational = Path(resolved.anchor)
+    identity = Path(resolved.anchor)
+    case_insensitive = _filesystem_is_case_insensitive(operational)
+    for part in resolved.parts[1:]:
+        if operational.exists():
+            case_insensitive = _filesystem_is_case_insensitive(operational)
+        requested = operational / part
+        stored_name = _canonical_entry_name(
+            operational,
+            requested,
+            fallback=part,
+        )
+        identity_name = unicodedata.normalize("NFC", stored_name)
+        if case_insensitive:
+            identity_name = identity_name.casefold()
+        operational /= stored_name
+        identity /= identity_name
+    return operational, identity
+
+
+def _filesystem_is_case_insensitive(path: Path) -> bool:
+    """Detect case folding read-only from the closest useful path component."""
+
+    candidate = Path(path)
+    while candidate != candidate.parent:
+        name = candidate.name
+        swapped = name.swapcase()
+        if candidate.exists() and swapped != name:
+            alias = candidate.with_name(swapped)
+            try:
+                return alias.exists() and alias.samefile(candidate)
+            except OSError:
+                pass
+        candidate = candidate.parent
+    try:
+        with os.scandir(candidate) as entries:
+            for entry in entries:
+                swapped = entry.name.swapcase()
+                if swapped == entry.name:
+                    continue
+                alias = candidate / swapped
+                return alias.exists() and alias.samefile(candidate / entry.name)
+    except OSError:
+        pass
+    return False
+
+
+def _canonical_entry_name(parent: Path, path: Path, *, fallback: str) -> str:
+    """Return the stored directory-entry spelling for an existing path."""
+
+    if not path.exists():
+        return fallback
+    try:
+        target_metadata = path.stat()
+        with os.scandir(parent) as entries:
+            for entry in entries:
+                try:
+                    entry_metadata = entry.stat(follow_symlinks=True)
+                except OSError:
+                    continue
+                if (entry_metadata.st_dev, entry_metadata.st_ino) == (
+                    target_metadata.st_dev,
+                    target_metadata.st_ino,
+                ):
+                    return entry.name
+    except OSError:
+        pass
+    return fallback
+
+
+def _open_lock_file(path: Path) -> TextIO:
+    """Open a regular lock file without following a pre-existing symlink."""
+
+    if path.is_symlink():
+        raise ValueError(f"Combined lock path must be a regular file: {path}")
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        descriptor_stat = os.fstat(descriptor)
+        path_stat = os.lstat(path)
+        if (
+            not stat.S_ISREG(descriptor_stat.st_mode)
+            or not stat.S_ISREG(path_stat.st_mode)
+            or (descriptor_stat.st_dev, descriptor_stat.st_ino)
+            != (path_stat.st_dev, path_stat.st_ino)
+        ):
+            raise ValueError(f"Combined lock path must be a regular file: {path}")
+        return os.fdopen(descriptor, "r+", encoding="utf-8")
+    except BaseException:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise
 
 
 def _fsync_directory(path: Path) -> None:
@@ -1619,9 +2059,7 @@ def require_safe_output_location(
     except (OSError, subprocess.CalledProcessError):
         return
     repository = Path(result.stdout.strip()).resolve()
-    try:
-        output.relative_to(repository)
-    except ValueError:
+    if not path_is_within(output, repository):
         return
     raise ValueError(
         f"Refusing repository-local combined preprocessing {artifact_label}: "

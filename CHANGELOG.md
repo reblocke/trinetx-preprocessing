@@ -68,6 +68,22 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 ### Fixed
 - Made combined-product replacement transactional across the DuckDB, sidecar,
   and all 36 compatibility CSVs, with rollback on publication failure.
+- Made standalone compatibility export fail closed on symlinks and unmanaged
+  descendants, require one complete source manifest plus exactly 36 unique
+  output-manifest rows, keep DuckDB/hash scratch in recoverable staging,
+  preserve unowned sibling files, require explicit replacement, revalidate the
+  live destination, and publish the complete export tree atomically.
+- Reject overlapping combined work/output roots and repository-local private
+  output aliases by filesystem identity before any mutation. Case aliases now
+  share publication/lock identities, and lock files cannot follow symlinks.
+- Validate that every retained clinical source row has an included,
+  domain-matched source-concept membership.
+- Recover interrupted canonical and standalone DuckDB, validation, and hash
+  scratch without retaining row-level artifacts, and report expected export
+  replacement/lock conflicts as concise CLI errors instead of tracebacks.
+- Fsync final compatibility outputs and their work manifest before recording
+  the pre-database checkpoint; a stale interrupted checkpoint is discarded and
+  safely rebuilt instead of wedging all future retries.
 - Enforced identical typed source-table contracts for CSV and Parquet work,
   source-faithful patient strings, and `include: true` source retention.
 - Aligned medication-ingredient preflight validation with ingestion, ignored

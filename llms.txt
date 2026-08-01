@@ -32,8 +32,14 @@ CSVs are compatibility exports and GLP-1 eligibility remains downstream.
 uv sync
 ./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
 ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing build-preprocessed --config config.yaml --strict
+./.venv/bin/python -m trinetx_preprocessing build-preprocessed --config config.yaml
 ```
+
+The accepted full source has 286 documented encounter-setting conflicts.
+Non-strict execution resolves them deterministically. The prescribed
+`run-final-assembly --strict` resume check is the separate fail-closed
+adjudication proof and exits before final-output writes for the current source;
+do not run a full strict replacement build against the accepted product.
 
 ## Refactor Completion Gate
 - Refactor Milestone 1 completed the replication phase under near-exact

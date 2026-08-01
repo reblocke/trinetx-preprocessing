@@ -146,6 +146,119 @@ def test_run_uses_combined_builder_when_enabled(
     assert calls == [(True, True, False)]
 
 
+def test_build_preprocessed_cli_rejects_path_overlap_during_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{shared_dir}"\n'
+        f'output_dir: "{shared_dir}"\n'
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    marker = shared_dir / "must-remain.txt"
+    marker.write_text("unchanged")
+
+    monkeypatch.setattr(
+        cli_module,
+        "_require_safe_combined_mutation_locations",
+        lambda *args, **kwargs: pytest.fail(
+            "mutation-location checks ran after invalid config validation"
+        ),
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "build_preprocessed",
+        lambda *args, **kwargs: pytest.fail("combined builder was called"),
+    )
+
+    result = cli_module.main(["build-preprocessed", "--config", str(config_path)])
+
+    assert result == 2
+    assert marker.read_text() == "unchanged"
+
+
+def test_export_legacy_cli_routes_atomic_replacement_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "product" / "trinetx_preprocessed.duckdb"
+    output_dir = tmp_path / "compatibility"
+    calls: list[tuple[Path, Path, bool]] = []
+
+    def export(
+        database_path: Path,
+        destination: Path,
+        *,
+        replace_existing: bool,
+    ) -> tuple[Path, ...]:
+        calls.append((database_path, destination, replace_existing))
+        return tuple(destination / f"output-{index}.csv" for index in range(36))
+
+    monkeypatch.setattr(
+        cli_module,
+        "export_legacy_compatibility_outputs",
+        export,
+    )
+
+    result = cli_module.main(
+        [
+            "export-legacy",
+            "--database",
+            str(database),
+            "--output-dir",
+            str(output_dir),
+            "--replace",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [(database, output_dir, True)]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        FileExistsError("use --replace"),
+        cli_module.CombinedLockError("another export holds the lock"),
+    ],
+)
+def test_export_legacy_cli_reports_expected_lifecycle_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+) -> None:
+    def fail_export(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(
+        cli_module,
+        "export_legacy_compatibility_outputs",
+        fail_export,
+    )
+
+    result = cli_module.main(
+        [
+            "export-legacy",
+            "--database",
+            str(tmp_path / "product.duckdb"),
+            "--output-dir",
+            str(tmp_path / "compatibility"),
+        ]
+    )
+
+    assert result == 2
+
+
 COMBINED_MUTATING_ROUTES = (
     "run",
     "run-all",

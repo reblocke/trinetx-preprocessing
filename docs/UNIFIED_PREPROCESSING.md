@@ -51,7 +51,7 @@ rejected.
 
 ```bash
 python -m trinetx_preprocessing build-preprocessed \
-  --config /private/path/config.yaml --strict
+  --config /private/path/config.yaml
 
 python -m trinetx_preprocessing preprocessed-status \
   --database /private/output/trinetx_preprocessed.duckdb --json
@@ -62,8 +62,18 @@ python -m trinetx_preprocessing validate-preprocessed \
 ```
 
 With `combined.enabled: true`, the existing `run` and `run-all` commands route
-to the same builder. `export-legacy` can regenerate all 36 CSV projections from
-the database without reading raw exports again.
+to the same builder. The accepted full source uses deterministic non-strict
+resolution for 286 documented encounter-setting conflicts. The prescribed
+`run-final-assembly --strict` resume check remains the separate fail-closed
+adjudication proof and exits before final-output writes for that source; do not
+run a full strict replacement build against the accepted product.
+
+`export-legacy` regenerates all 36 CSV projections without reading raw exports.
+It requires a terminal `complete` database and a separate external
+compatibility-only destination, keeps spill/scratch in owned staging, validates
+the complete set against the embedded database manifest, and atomically
+publishes it. Pass `--replace` to replace an existing compatibility-only export
+tree; the canonical database product directory is never mutated in place.
 
 ## Reproducibility and resume
 

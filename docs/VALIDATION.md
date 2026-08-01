@@ -44,7 +44,7 @@ ROOT="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_v1"
 
 ./.venv/bin/python scripts/benchmark_combined_preprocessing.py \
   --config "$ROOT/config.yaml" \
-  --strict --replace \
+  --replace \
   --out "$ROOT/manifests/combined_benchmark.json"
 
 # When supervising a background benchmark, pass its Python PID and the same
@@ -79,6 +79,12 @@ The committed 20-case synthetic test additionally requires adapter-backed and
 direct-raw GLP-1 source, analysis, cohort-flow, and evidence tables to match.
 This proves the shared source boundary; it does not move study-specific GLP-1
 eligibility decisions into preprocessing.
+
+The release benchmark is intentionally non-strict because the accepted source
+contains 286 documented encounter-setting conflicts. Run the strict
+`run-final-assembly` resume check separately to prove fail-closed behavior and
+no-write preservation; strict mode becomes the production default only after
+source adjudication removes those conflicts.
 
 ## Local gates
 
@@ -220,6 +226,29 @@ The aggregate evidence files remain external and untracked. They include
 `element_completeness_f3c1b03.json`, `adapter_contract_f3c1b03.json`,
 `strict_resume_proof_c96dc40_worktree.json`, and
 `local_release_gates_f3c1b03.json`. They contain no committed row-level data.
+
+## Post-acceptance whole-PR hardening
+
+The subsequent holistic review did not change the accepted product or its
+historical inclusion logic. It hardened pre-database recovery, filesystem
+identity and locks, standalone compatibility publication, and source-integrity
+validation. The current worktree passes all 462 synthetic tests plus Ruff,
+diff-hygiene, and lockfile checks.
+
+A bounded aggregate-only read of the unchanged accepted database verified the
+new source-integrity invariant in two parts:
+
+- labs, vitals, diagnoses, procedures, and medications each had zero retained
+  rows without an included source-concept membership; and
+- zero included source-concept memberships used a catalog domain inconsistent
+  with their logical source domain.
+
+The first pass completed in `4,479.62 s` with `3,953.656 MiB` maximum RSS; the
+domain-consistency complement completed in `39.95 s` with `1,609.391 MiB`
+maximum RSS. Database size and modification time remained unchanged across
+both reads, and their temporary DuckDB spill was removed. Exact-head GitHub CI,
+review reconciliation, and zero unresolved threads remain required before the
+hardening round is reported complete.
 
 ## Hygiene and review
 
