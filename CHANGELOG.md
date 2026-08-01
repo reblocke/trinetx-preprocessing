@@ -31,9 +31,10 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
-- Unified historical and GLP-1 source preprocessing behind one manifest-bound
-  raw-data pass; the existing GLP-1 cohort/phenotype implementation remains a
-  downstream reference rather than a second canonical preprocessor.
+- Added the canonical combined product so historical preprocessing and the
+  source-faithful tables needed by downstream GLP-1 work can be materialized in
+  one manifest-bound raw-data pass. The existing GLP-1 cohort/phenotype CLI
+  remains the standalone reference until its separate unified-database cutover.
 - Medication-ingredient exports now enter the unified source-element table
   without entering historical medication feature reduction.
 - Completed-output reuse now validates the exact configured GLP-1 public file

@@ -156,3 +156,10 @@ non-provenance analysis-value, or semantic-fingerprint differences.
 These results establish computational completion and aggregate consistency.
 They do not replace the investigator terminology review and private record-level
 validation required before clinical use.
+
+This full-data evidence is scoped to behavior head `459cbda`. PR #8 later
+rewrote the anesthesia procedure regex with an equivalent non-capturing group,
+which changed deterministic catalog identity without intending to change
+matches. The preserved run is therefore reference evidence, not current-head
+release proof; issue #6 requires a fresh full-data run at its final exact
+catalog/rule head.

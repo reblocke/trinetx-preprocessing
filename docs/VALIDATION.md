@@ -27,8 +27,14 @@ Post-Milestone 1 validation uses `docs/SPEC.md` as the behavior authority:
    cohort additions/removals, rule exclusions, setting conflict resolution,
    and screening effects. It contains no identifiers or row examples.
 
-Any behavior-code, dependency, version, or ruleset change invalidates the full
-profile evidence and requires a fresh run.
+Any change to transforms, inclusion logic, source interpretation, published
+schema/content, dependencies, package version, or the ruleset invalidates the
+full-profile evidence and requires a fresh run. A change limited to guards,
+failure/recovery handling, validators, CLI error mapping, tests, or
+documentation may reuse an unchanged accepted product only when it cannot
+alter successful product semantics and focused tests, applicable bounded
+read-only invariants, exact-head CI, and exact-head review all pass. Treat an
+uncertain effect as invalidating.
 
 ## Unified preprocessing Stage 1
 

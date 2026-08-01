@@ -57,8 +57,17 @@ migration remain downstream.
    unified-database source to the production GLP-1 CLI, preserve the standalone
    raw builder as the reference, and require full-data adapter-versus-reference
    parity before deprecating the second raw scan.
-4. **Reconcile GLP-1 issue #6.** Separate completed software/evidence work from
-   the remaining investigator terminology and private record-level review.
+4. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
+   delivered standalone CLI, eight-file contract, synthetic acceptance, and
+   behavior-head-scoped aggregate full-data reference evidence from the
+   remaining literal scope: ingest optional high-value domains when present;
+   complete and clinically review the versioned concept catalogs; move
+   remaining phenotype/label/payer policy into versioned configuration; add the
+   required smoke-query SQL/script and expand `summarize` to emit the specified
+   aggregate prevalence, indication-burden, treatment-gap, and missingness
+   results; refresh full-data evidence at the final exact catalog/rule head;
+   and complete investigator terminology and private record-level review. Keep
+   the issue open until every retained acceptance criterion has evidence.
 5. **Migrate the Stata consumer in its own repository and branch.** Freeze its
    current aggregate/output baseline, define the Python/Stata boundary, and
    replace preprocessing incrementally while retaining the 36-file contract

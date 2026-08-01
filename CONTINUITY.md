@@ -34,13 +34,17 @@
 
 ## State
 - Branch: `codex/unified-preprocessing-v1`.
-- Pushed review-request head: `d895a814c2647a955a5d52876e064e51a0eed5b1`.
-- CI run `30706764612` passed at that head.
+- Integrated implementation/evidence head:
+  `b9e79d7a84cbb8bcd707473126f1243242f843bd`.
+- Exact-head CI run `30710776011` passed in 6m50s. The fresh whole-PR Codex
+  review completed at that head and found one additional P2 encounter-flow date
+  parsing issue in thread `PRRT_kwDOLtXliM6Vp6VT`.
 - The requested holistic GitHub review found one P2 recovery issue in thread
   `PRRT_kwDOLtXliM6VpRQI`; parallel whole-diff audits found and rechecked the
   related path, lock, scratch, export, validation, and documentation issues.
-- The worktree contains the integrated fixes and documentation updates but is
-  not yet committed or pushed.
+- The original P2 thread has an exact-fix reply and is resolved. The current
+  worktree contains the new encounter-flow fix/regression plus the live ledger
+  and roadmap/evidence documentation clarifications.
 
 ## Done
 - Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
@@ -61,14 +65,28 @@
 - Updated the plan, onboarding, strict-mode guidance, and changelog for the
   accepted unified-product state and next phases; package README metadata is a
   future release-checkpoint task.
+- Clarified that output-neutral lifecycle/validation hardening may reuse an
+  unchanged accepted product only behind focused, bounded, CI, and review
+  gates, and that production GLP-1 CLI cutover is still a separate phase.
+- Corrected the roadmap for stale open issue #6: substantial standalone GLP-1
+  software/evidence is delivered, but optional-domain ingestion, catalog and
+  config completion, smoke-query/summary completion, and clinical/private
+  validation remain literal issue scope.
+- Scoped standalone GLP-1 full-data evidence to behavior head `459cbda`; the
+  later semantics-preserving procedure-regex rewrite changed catalog identity,
+  so issue #6 also needs fresh evidence at its final catalog/rule head.
+- Fixed the second review P2 by coercing malformed timestamps only in the
+  complete combined encounter-flow universe while preserving strict parsing in
+  legacy/domain transforms. The exact CSV/Parquet adapter regression plus
+  encounter-stage/transform tests pass 18/18.
 - Hardened case-insensitive containment, stable lock/publication identity,
   no-follow lock opening, terminal/exact-cardinality compatibility export,
   staging-routed spill, live-destination revalidation, unowned-state
   preservation, and canonical/standalone scratch recovery.
-- The exact current worktree passes all 462 tests in 1,194.09 seconds using the
-  external validation temp/cache. All focused regressions and three independent
-  read-only re-audits pass with no remaining confirmed implementation issue.
-  Repository Ruff, touched-file format, `git diff --check`, and
+- The exact current worktree passes all 463 tests in 545.92 seconds using the
+  external validation temp/cache. All focused regressions and independent
+  read-only re-audits pass with no remaining confirmed local implementation
+  issue. Repository Ruff, touched-file format, `git diff --check`, and
   `uv lock --check` pass.
 - A bounded read-only check against the unchanged accepted database reports
   zero retained rows missing an included source-concept membership across all
@@ -78,16 +96,16 @@
   and all spill was cleaned.
 
 ## Now
-- Commit and push the integrated hardening and evidence.
-- Commit/push the integrated review fixes, reply to and resolve the P2 thread,
-  then request exact-head re-review.
+- Commit/push the tested successor, then reply to and resolve the new P2 thread.
+- Require that successor to pass CI and exact-head review before completion is
+  reported.
 
 ## Next
 - Require final exact-head CI, clean GitHub review, zero unresolved threads,
   clean worktree, and no tracked private/generated artifacts.
 - Report the prioritized roadmap: land/release PR #8; GLP-1 production cutover;
-  issue #6 clinical reconciliation; separate Stata migration; then legacy
-  onboarding/deprecation cleanup.
+  issue #6 software/evidence/clinical reconciliation; separate Stata migration;
+  then legacy onboarding/deprecation cleanup.
 
 ## Open questions (UNCONFIRMED if needed)
 - Marking PR #8 ready or merging it remains `UNCONFIRMED` and requires explicit
@@ -99,8 +117,10 @@
 - `src/trinetx_preprocessing/combined_preprocessing/{builder,database,validation}.py`
 - `src/trinetx_preprocessing/{config,cli,regression}.py`
 - `tests/test_{config,cli,combined_preprocessing}.py`
-- `docs/{PLAN,ONBOARDING,UNIFIED_PREPROCESSING,VALIDATION}.md`
+- `docs/{PLAN,ONBOARDING,UNIFIED_PREPROCESSING,VALIDATION,GLP1_ELIGIBILITY}.md`
 - `README.md`, `CHANGELOG.md`, `llms.txt`, `pyproject.toml`
-- PR #8; holistic comment `issuecomment-5152163533`; P2 thread
-  `PRRT_kwDOLtXliM6VpRQI`; CI run `30706764612`
+- PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
+  comment `issuecomment-5152599268`; P2 threads `PRRT_kwDOLtXliM6VpRQI`
+  (resolved) and `PRRT_kwDOLtXliM6Vp6VT` (tested local fix); CI run
+  `30710776011`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`

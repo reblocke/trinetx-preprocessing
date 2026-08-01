@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
+from trinetx_preprocessing.transform.datetimes import (
+    coerce_trinetx_datetime,
+    parse_trinetx_datetime,
+)
 from trinetx_preprocessing.transform.encounter import (
     ALLOWED_ENCOUNTER_TYPES,
     ENCOUNTER_COLUMNS,
@@ -20,6 +25,18 @@ FIXTURE_PATH = (
 
 def _load_fixture() -> pd.DataFrame:
     return pd.read_csv(FIXTURE_PATH, parse_dates=["start_date", "end_date"])
+
+
+def test_trinetx_datetime_coercion_is_opt_in() -> None:
+    values = pd.Series(["20220101", "not-a-date", pd.NA], dtype="string")
+
+    with pytest.raises(ValueError, match="Could not parse 1"):
+        parse_trinetx_datetime(values)
+
+    coerced = coerce_trinetx_datetime(values)
+    assert coerced.iloc[0] == pd.Timestamp("2022-01-01")
+    assert pd.isna(coerced.iloc[1])
+    assert pd.isna(coerced.iloc[2])
 
 
 def test_normalize_encounter_chunk_filters_types() -> None:

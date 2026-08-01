@@ -9,8 +9,24 @@ from pandas.api.types import is_datetime64_any_dtype
 def parse_trinetx_datetime(series: pd.Series) -> pd.Series:
     """Parse mixed ISO, ``YYYYMMDD``, and ``YYYYMMDDHHMMSS`` values."""
 
+    parsed = coerce_trinetx_datetime(series)
     if is_datetime64_any_dtype(series.dtype):
-        return pd.to_datetime(series)
+        return parsed
+
+    text = series.astype("string").str.strip()
+    invalid = text.notna() & text.ne("") & parsed.isna()
+    if invalid.any():
+        raise ValueError(
+            f"Could not parse {int(invalid.sum())} TriNetX date/time value(s)."
+        )
+    return parsed
+
+
+def coerce_trinetx_datetime(series: pd.Series) -> pd.Series:
+    """Parse TriNetX date/time values, coercing malformed values to ``NaT``."""
+
+    if is_datetime64_any_dtype(series.dtype):
+        return pd.to_datetime(series, errors="coerce")
 
     text = series.astype("string").str.strip()
     parsed = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
@@ -32,9 +48,4 @@ def parse_trinetx_datetime(series: pd.Series) -> pd.Series:
         format="mixed",
         errors="coerce",
     )
-    invalid = text.notna() & text.ne("") & parsed.isna()
-    if invalid.any():
-        raise ValueError(
-            f"Could not parse {int(invalid.sum())} TriNetX date/time value(s)."
-        )
     return parsed

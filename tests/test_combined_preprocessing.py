@@ -742,8 +742,8 @@ def _append_pre2022_non_gas_encounter(input_root: Path) -> None:
 
     encounter_path = input_root / "Encounter/encounter.csv"
     encounters = pd.read_csv(encounter_path, dtype="string")
-    encounter = {column: "" for column in encounters.columns}
-    encounter.update(
+    flow_only_encounter = {column: "" for column in encounters.columns}
+    flow_only_encounter.update(
         {
             "encounter_id": "flow-only-encounter",
             "patient_id": "flow-only-patient",
@@ -753,7 +753,24 @@ def _append_pre2022_non_gas_encounter(input_root: Path) -> None:
             "derived_by_TriNetX": "N",
         }
     )
-    pd.concat([encounters, pd.DataFrame([encounter])], ignore_index=True).to_csv(
+    unused_invalid_encounter = {column: "" for column in encounters.columns}
+    unused_invalid_encounter.update(
+        {
+            "encounter_id": "unused-invalid-encounter",
+            "patient_id": "flow-only-patient",
+            "start_date": "not-a-date",
+            "end_date": "also-not-a-date",
+            "type": "OTHER",
+            "derived_by_TriNetX": "N",
+        }
+    )
+    pd.concat(
+        [
+            encounters,
+            pd.DataFrame([flow_only_encounter, unused_invalid_encounter]),
+        ],
+        ignore_index=True,
+    ).to_csv(
         encounter_path,
         index=False,
     )
@@ -2541,6 +2558,10 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
             ).fetchone()[0]
             == 1
         )
+        assert combined_connection.execute(
+            "SELECT start_datetime FROM source_encounter_flow "
+            "WHERE encounter_id = 'unused-invalid-encounter'"
+        ).fetchone() == (None,)
     finally:
         combined_connection.close()
     glp1_config = load_glp1_config(REPOSITORY_ROOT / "config/glp1_eligibility.yml")

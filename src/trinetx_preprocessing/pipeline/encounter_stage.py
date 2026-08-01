@@ -26,7 +26,7 @@ from ..storage import (
     iter_work_tables,
     resolve_work_table,
 )
-from ..transform.datetimes import parse_trinetx_datetime
+from ..transform.datetimes import coerce_trinetx_datetime
 from ..transform.encounter import (
     DEFAULT_END_DATE_FILL,
     DEFAULT_START_DATE,
@@ -134,7 +134,7 @@ def run_encounter_stage(config: Config, *, strict: bool = False) -> list[Path]:
                             :, ["patient_id", "encounter_id", "start_date", "type"]
                         ].copy()
                         flow = flow.rename(columns={"start_date": "start_datetime"})
-                        flow["start_datetime"] = parse_trinetx_datetime(
+                        flow["start_datetime"] = coerce_trinetx_datetime(
                             flow["start_datetime"]
                         )
                         flow_writer.write(flow.loc[:, ENCOUNTER_FLOW_COLUMNS])
