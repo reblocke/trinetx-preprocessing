@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..filesystem import write_text_atomic
+import duckdb
+
+from ..filesystem import remove_tree_strict, write_text_atomic
 from ..regression import hash_csv_with_metadata
 from .contract import compatibility_outputs, final_output_columns
 from .database import inspect_combined_database, open_combined_database
+from .scratch import COMBINED_VALIDATION_PREFIX
 from .validation import validate_preprocessed_database
 
 EVIDENCE_SCHEMA_VERSION = 1
+_DIRECT_ELEMENT_MEMBERSHIP_MAX_ROWS = 2_000_000
+_ELEMENT_MEMBERSHIP_BUCKET_COUNT = 64
 
 
 def capture_compatibility_evidence(output_dir: Path) -> dict[str, Any]:
@@ -118,7 +124,7 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
             "errors": list(validation.errors),
         }
     with open_combined_database(path, read_only=True) as connection:
-        rows = connection.execute(
+        catalog_rows = connection.execute(
             """
             WITH rule_counts AS (
                 SELECT
@@ -127,14 +133,6 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
                     count(*) FILTER (WHERE include)::BIGINT AS include_rule_count
                 FROM element_rule
                 GROUP BY element_id
-            ), membership_counts AS (
-                SELECT
-                    element_id,
-                    count(*)::BIGINT AS membership_count,
-                    count(DISTINCT source_record_id)::BIGINT
-                        AS matched_source_record_count
-                FROM element_membership
-                GROUP BY element_id
             )
             SELECT
                 catalog.element_id,
@@ -142,17 +140,27 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
                 catalog.domain,
                 catalog.description,
                 coalesce(rules.rule_count, 0) AS rule_count,
-                coalesce(rules.include_rule_count, 0) AS include_rule_count,
-                coalesce(membership.membership_count, 0) AS membership_count,
-                coalesce(membership.matched_source_record_count, 0)
-                    AS matched_source_record_count
+                coalesce(rules.include_rule_count, 0) AS include_rule_count
             FROM element_catalog AS catalog
             LEFT JOIN rule_counts AS rules USING (element_id)
-            LEFT JOIN membership_counts AS membership USING (element_id)
             WHERE catalog.element_kind = 'source_concept'
             ORDER BY catalog.domain, catalog.element_id
             """
         ).fetchall()
+        membership_row_count = int(
+            connection.execute("SELECT count(*) FROM element_membership").fetchone()[0]
+        )
+        membership_counts = {
+            str(row[0]): int(row[1])
+            for row in connection.execute(
+                "SELECT element_id, count(*)::BIGINT FROM element_membership "
+                "GROUP BY element_id"
+            ).fetchall()
+        }
+        matched_source_counts = _count_distinct_membership_sources(
+            connection,
+            membership_row_count=membership_row_count,
+        )
         elements = [
             {
                 "element_id": str(row[0]),
@@ -161,10 +169,13 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
                 "description": str(row[3]),
                 "rule_count": int(row[4]),
                 "include_rule_count": int(row[5]),
-                "membership_count": int(row[6]),
-                "matched_source_record_count": int(row[7]),
+                "membership_count": membership_counts.get(str(row[0]), 0),
+                "matched_source_record_count": matched_source_counts.get(
+                    str(row[0]),
+                    0,
+                ),
             }
-            for row in rows
+            for row in catalog_rows
         ]
         historical_count = int(
             connection.execute(
@@ -206,6 +217,86 @@ def inspect_element_completeness(database_path: Path) -> dict[str, Any]:
     }
 
 
+def _count_distinct_membership_sources(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    membership_row_count: int,
+) -> dict[str, int]:
+    """Count exact distinct source records per element with bounded memory."""
+
+    if membership_row_count <= _DIRECT_ELEMENT_MEMBERSHIP_MAX_ROWS:
+        return {
+            str(row[0]): int(row[1])
+            for row in connection.execute(
+                "SELECT element_id, count(DISTINCT source_record_id)::BIGINT "
+                "FROM element_membership GROUP BY element_id"
+            ).fetchall()
+        }
+
+    temp_directory = Path(
+        str(
+            connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
+        )
+    )
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=COMBINED_VALIDATION_PREFIX,
+            dir=temp_directory,
+        )
+    )
+    partition_root = scratch / "membership"
+    matched_source_counts: dict[str, int] = {}
+    try:
+        connection.execute(
+            f"""
+            COPY (
+                SELECT
+                    element_id,
+                    source_record_id,
+                    hash(source_record_id) % {_ELEMENT_MEMBERSHIP_BUCKET_COUNT}
+                        AS source_bucket
+                FROM element_membership
+                WHERE source_record_id IS NOT NULL
+            ) TO {_sql_string(str(partition_root))} (
+                FORMAT PARQUET,
+                PARTITION_BY (source_bucket),
+                COMPRESSION SNAPPY,
+                ROW_GROUP_SIZE 250000
+            )
+            """
+        )
+        for bucket in range(_ELEMENT_MEMBERSHIP_BUCKET_COUNT):
+            bucket_directory = partition_root / f"source_bucket={bucket}"
+            files = sorted(
+                path
+                for path in bucket_directory.glob("*.parquet")
+                if not path.name.startswith("._")
+            )
+            if not files:
+                continue
+            paths = ", ".join(_sql_string(str(path)) for path in files)
+            rows = connection.execute(
+                "SELECT element_id, count(*)::BIGINT FROM ("
+                "SELECT element_id, source_record_id "
+                f"FROM read_parquet([{paths}], hive_partitioning=false) "
+                "GROUP BY element_id, source_record_id) "
+                "GROUP BY element_id"
+            ).fetchall()
+            for element_id, distinct_count in rows:
+                key = str(element_id)
+                matched_source_counts[key] = matched_source_counts.get(key, 0) + int(
+                    distinct_count
+                )
+    finally:
+        if scratch.exists():
+            remove_tree_strict(
+                scratch,
+                context="Combined element-completeness scratch",
+            )
+    return matched_source_counts
+
+
 def write_evidence(path: Path, payload: dict[str, Any]) -> Path:
     """Write an aggregate evidence payload atomically."""
 
@@ -234,3 +325,7 @@ def _tables_by_key(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if len(result) != len(tables):
         raise ValueError("Compatibility evidence contains duplicate table keys.")
     return result
+
+
+def _sql_string(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"

@@ -20,6 +20,7 @@ import pytest
 
 import trinetx_preprocessing.combined_preprocessing.builder as combined_builder
 import trinetx_preprocessing.combined_preprocessing.database as combined_database
+import trinetx_preprocessing.combined_preprocessing.evidence as combined_evidence
 import trinetx_preprocessing.combined_preprocessing.validation as combined_validation
 from trinetx_preprocessing.combined_preprocessing.builder import (
     build_preprocessed,
@@ -1631,6 +1632,50 @@ def test_combined_validation_rejects_exclude_only_source_elements(
     completeness = inspect_element_completeness(result.database_path)
     assert completeness["complete"] is False
     assert element_id in completeness["elements_without_included_rules"]
+
+
+def test_element_completeness_bounds_distinct_membership_counts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "membership.duckdb"
+    cleanup_contexts: list[str] = []
+    real_remove_tree = combined_evidence.remove_tree_strict
+
+    def record_cleanup(path: Path, *, context: str) -> None:
+        cleanup_contexts.append(context)
+        real_remove_tree(path, context=context)
+
+    monkeypatch.setattr(
+        combined_evidence,
+        "_DIRECT_ELEMENT_MEMBERSHIP_MAX_ROWS",
+        0,
+    )
+    monkeypatch.setattr(combined_evidence, "_ELEMENT_MEMBERSHIP_BUCKET_COUNT", 2)
+    monkeypatch.setattr(combined_evidence, "remove_tree_strict", record_cleanup)
+
+    with open_combined_database(database_path) as connection:
+        connection.execute(
+            "CREATE TABLE element_membership "
+            "(element_id VARCHAR, source_record_id VARCHAR)"
+        )
+        connection.executemany(
+            "INSERT INTO element_membership VALUES (?, ?)",
+            [
+                ("element-a", "source-1"),
+                ("element-a", "source-1"),
+                ("element-a", "source-2"),
+                ("element-b", "source-1"),
+                ("element-b", None),
+            ],
+        )
+        counts = combined_evidence._count_distinct_membership_sources(
+            connection,
+            membership_row_count=5,
+        )
+
+    assert counts == {"element-a": 2, "element-b": 1}
+    assert cleanup_contexts == ["Combined element-completeness scratch"]
 
 
 def test_combined_validation_checks_source_integrity_by_domain(
