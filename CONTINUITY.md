@@ -6,6 +6,7 @@
 - The product contains the complete historical 534-column encounter payload plus the normalized source elements needed by the GLP-1 work and future additions.
 - Regenerate the 36 historical CSV files exactly as compatibility exports from the unified product; preserve the current GLP-1 derivation as downstream/reference logic rather than a second preprocessing path.
 - Plan the separate `trinetx-hypercapnia-code/stata/do/10_preprocessing.do` migration only after this shared preprocessing boundary is complete.
+- After Milestone 2 acceptance, identify the remaining overall refactor roadmap and run a new whole-PR GitHub review; integrate every confirmed finding before reporting the review complete.
 
 ## Constraints/Assumptions
 - `refactor-milestone-1` is immutable and remains the historical-replication fallback.
@@ -33,7 +34,7 @@
 - Prove the required strict fail-closed resume behavior with `run-final-assembly --strict`, whose CLI checks completed work and `encounter_conflicts.json` before marking or writing the stage. Do not run a reconstructed `build-preprocessed --strict --replace` against the accepted product: strict build identity can enter the raw pre-final pipeline before reaching the conflict guard.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`; exact-head evidence correction `f3c1b03` is pushed and matches `origin/codex/unified-preprocessing-v1`. The accepted fresh full raw product was built from behavior head `c96dc40` and remains unchanged.
+- Branch: `codex/unified-preprocessing-v1`; final release-evidence head `d6a70d2` is pushed and matches `origin/codex/unified-preprocessing-v1`. The accepted fresh full raw product was built from behavior head `c96dc40` and remains unchanged.
 - Baseline BOOK profile: final assembly `161,763.975 s`, total `281,840.675 s`, peak RSS `6,238.062 MB`.
 - Milestone 1 evidence remains external; post-Milestone 1 semantic date fixes have 203 passing tests and a clean Codex review.
 - Corrected behavior is implemented through typed rules, retained metadata, deterministic reducers, derived data screening, encounter-conflict handling, partitioned Parquet stores, fail-closed work manifests, and bucket-oriented final assembly.
@@ -428,16 +429,17 @@
 - The required strict proof passed from a clean temporary detached `c96dc40` worktree whose behavior-code SHA exactly matched the raw work manifest. `run-final-assembly --strict` exited `2` with the exact 286-conflict message; work-manifest, conflict-report, and 38-file product metadata hashes were unchanged, and residual scratch was zero. The temporary worktree was removed cleanly; active head `f3c1b03` remained untouched.
 - Fresh exact-head local release gates passed at `f3c1b03`: `git diff --check`, repository-wide Ruff, and all `430` tests (`494.95 s`) passed; product hygiene remained exactly `38` files with zero sidecars/WAL/scratch; `6,508,511,232,000` free bytes exceeded the `100 GiB` reserve. Runner SHA-256 is `84ca0c007a217a1981daea14f1f9bd60ba3373d99caf38c15b61a043ae85caa9`.
 - The supported scratch dry-run identified exactly `107` artifacts (`13,907,142` bytes): `105` synthetic-test artifacts and two root lock sidecars. Deletion removed exactly that set, and both subsequent dry-runs reported zero recognized scratch. The adapter/full-test roots (`460,324,864` and `11,514,413,056` bytes) plus their sidecars were moved recoverably to external Trash. A final exact inventory of `113` remaining AppleDouble metadata files outside the product was also moved recoverably to external Trash; the validation root now has zero AppleDouble files. Product metadata hash `ca214577cf078da6e8db2876e1f3a120136643a97b9a871bc3590310cdee72d9` remained unchanged.
-- Live PR #8 baseline is open, draft, mergeable, and exactly at local/remote head `f3c1b03`; CI run `30694736113` is successful, the review inventory has zero unresolved threads, and exact-head Codex review is clean. This must be rechecked after the final evidence commit; the PR remains draft unless the user separately authorizes readiness.
-- The thread has an active persistent recovery goal so monitoring and remaining Step 2 work continue across normal turn boundaries.
+- Final evidence commit `d6a70d2` is pushed; exact-head CI run `30698644914` passed, Codex review found no major issues, all `15` review threads are resolved, and the local/remote/GitHub heads match with a clean worktree. PR #8 remains open, draft, and mergeable.
+- The user requested the post-Milestone 2 roadmap plus a new holistic review of the entire PR against its base, with every confirmed finding integrated.
 
 ## Next
-- Commit and push the aggregate-only release decision/validation record, then reconcile exact-head CI plus every PR #8 review thread.
-- Keep the downstream Stata migration on a separate future branch after the unified preprocessing boundary is accepted.
+- Audit `docs/PLAN.md`, repository topology, and downstream boundaries to rank the remaining refactor phases.
+- Trigger a whole-PR GitHub review at the current head, integrate any confirmed findings with focused/full verification, and reconcile exact-head CI plus all review threads.
+- Keep downstream Stata migration and GLP-1 cutover on separate future branches after PR #8 is accepted.
 
 ## Open questions (UNCONFIRMED if needed)
 - Direct per-process jetsam attribution for the older interrupted run remains `UNCONFIRMED`.
-- Final release acceptance remains `UNCONFIRMED` until a fresh exact-head full run passes the memory ceiling and every Step 2 gate.
+- Whether to mark PR #8 ready or merge it remains `UNCONFIRMED`; the user requested review/integration, not promotion.
 
 ## Working set (files/ids/commands)
 - `docs/SPEC.md`, `docs/DECISIONS.md`, `config.example.yaml`
