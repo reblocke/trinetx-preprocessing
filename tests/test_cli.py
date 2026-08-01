@@ -259,6 +259,135 @@ def test_export_legacy_cli_reports_expected_lifecycle_failures(
     assert result == 2
 
 
+def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "product" / "trinetx_preprocessed.duckdb"
+    output_dir = tmp_path / "compatibility"
+    calls: list[tuple[str, Path, str | None]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append(("guard", path, artifact_label))
+
+    def validate(
+        database_path: Path,
+        *,
+        compatibility_output_dir: Path | None,
+    ) -> SimpleNamespace:
+        calls.append(("validate", database_path, str(compatibility_output_dir)))
+        return SimpleNamespace(valid=True, errors=(), warnings=(), counts={})
+
+    monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+    monkeypatch.setattr(cli_module, "validate_preprocessed_database", validate)
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(database),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    compatibility_hash_directories = sorted(
+        {
+            output_dir / output.relative_path.parent
+            for output in cli_module.compatibility_outputs()
+        },
+        key=lambda path: path.as_posix(),
+    )
+    expected_calls = [
+        ("guard", database.parent, "validation database/spill directory"),
+        (
+            "guard",
+            output_dir,
+            "validation compatibility output directory",
+        ),
+    ]
+    expected_calls.extend(
+        (
+            "guard",
+            directory,
+            "validation compatibility hash directory",
+        )
+        for directory in compatibility_hash_directories
+    )
+    expected_calls.append(("validate", database, str(output_dir)))
+    assert calls == expected_calls
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe database reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(ROOT / "private-product" / "trinetx_preprocessed.duckdb"),
+        ]
+    )
+
+    assert result == 2
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_compatibility_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe output reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(tmp_path / "product" / "trinetx_preprocessed.duckdb"),
+            "--output-dir",
+            str(ROOT / "private-compatibility"),
+        ]
+    )
+
+    assert result == 2
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_hash_parent_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "compatibility"
+    output_dir.mkdir()
+    (output_dir / "AMBULATORY").symlink_to(ROOT, target_is_directory=True)
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe hash parent reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(tmp_path / "product" / "trinetx_preprocessed.duckdb"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 2
+
+
 COMBINED_MUTATING_ROUTES = (
     "run",
     "run-all",

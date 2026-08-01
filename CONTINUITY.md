@@ -35,7 +35,7 @@
 ## State
 - Branch: `codex/unified-preprocessing-v1`.
 - Integrated review-reconciliation head:
-  `5ec0457c84dc665d790a66bc3192d63935cf9031`.
+  `2a74dc3baceede1835fcc90b827849b8dccfd52e`.
 - Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
   review found one P3 stale 462-versus-463 test-count statement in thread
   `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
@@ -47,8 +47,19 @@
   related path, lock, scratch, export, validation, and documentation issues.
 - Its final exact-head review found a third P2: the sidecar rename was not
   directory-fsynced before validation state in thread `PRRT_kwDOLtXliM6VqWae`.
-  The current change set adds the missing durability barrier and regression.
-- The earlier two P2 threads and the P3 thread have exact-fix replies and are
+  The missing durability barrier and regression are now committed; exact-head
+  CI run `30714776156` passed in 6m05s and the thread is resolved.
+- The subsequent exact-head review found one P2 in thread
+  `PRRT_kwDOLtXliM6VqeGE`: standalone `validate-preprocessed` does not reject
+  repository-local database or compatibility roots even though validation may
+  create DuckDB spill and CSV hash scratch beside those inputs.
+- The current local change set guards both validation scratch roots before any
+  scan. An independent diff audit then found that a setting-directory symlink
+  could redirect compatibility hash scratch back into the repository despite a
+  safe top-level root; the current change set also guards every distinct
+  contract CSV parent and adds a symlink regression. All four focused tests and
+  the complete 468-test suite pass.
+- The earlier three P2 threads and the P3 thread have exact-fix replies and are
   resolved.
 
 ## Done
@@ -88,11 +99,10 @@
   no-follow lock opening, terminal/exact-cardinality compatibility export,
   staging-routed spill, live-destination revalidation, unowned-state
   preservation, and canonical/standalone scratch recovery.
-- The exact current worktree passes all 464 tests in 550.79 seconds using the
-  external validation temp/cache. The focused fault regression and independent
-  read-only audit pass with no remaining confirmed local implementation issue.
-  Repository Ruff, touched-file format, `git diff --check`, and
-  `uv lock --check` pass.
+- The exact current worktree passes all 468 tests in 166.20 seconds using the
+  external validation temp/cache. Repository-wide Ruff, touched-file format,
+  `git diff --check`, and `uv lock --check` also pass after the
+  descendant-symlink follow-up.
 - A bounded read-only check against the unchanged accepted database reports
   zero retained rows missing an included source-concept membership across all
   five clinical domains and zero included memberships with a wrong catalog
@@ -101,9 +111,8 @@
   and all spill was cleaned.
 
 ## Now
-- Final durability checkpoint: completion is reported only after the sidecar
-  barrier is published, its thread is resolved, exact-head CI/review pass,
-  unresolved threads are zero, and the worktree is clean.
+- Commit/push the validation-scratch fix, reconcile its review thread, and
+  repeat exact-head CI/review, unresolved-thread, and clean-worktree checks.
 
 ## Next
 - Require final exact-head CI, clean GitHub review, zero unresolved threads,
@@ -126,7 +135,8 @@
 - `README.md`, `CHANGELOG.md`, `llms.txt`, `pyproject.toml`
 - PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
   comments `issuecomment-5152599268` and `issuecomment-5152752637`; resolved P2
-  threads `PRRT_kwDOLtXliM6VpRQI` and `PRRT_kwDOLtXliM6Vp6VT`; P3 thread
-  `PRRT_kwDOLtXliM6VqEpq`; final P2 thread `PRRT_kwDOLtXliM6VqWae`; CI runs
-  `30710776011`, `30712167025`, and `30712522979`
+  threads `PRRT_kwDOLtXliM6VpRQI`, `PRRT_kwDOLtXliM6Vp6VT`, and
+  `PRRT_kwDOLtXliM6VqWae`; P3 thread `PRRT_kwDOLtXliM6VqEpq`; open P2 thread
+  `PRRT_kwDOLtXliM6VqeGE`; CI runs `30710776011`, `30712167025`,
+  `30712522979`, and `30714776156`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`

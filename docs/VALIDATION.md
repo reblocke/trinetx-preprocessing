@@ -238,8 +238,10 @@ The aggregate evidence files remain external and untracked. They include
 The subsequent holistic review did not change the accepted product or its
 historical inclusion logic. It hardened pre-database recovery, filesystem
 identity and locks, standalone compatibility publication, and source-integrity
-validation. The exact reconciliation worktree passes all 464 synthetic tests
-plus Ruff, diff-hygiene, and lockfile checks.
+validation. Standalone validation now also rejects repository-local database,
+DuckDB-spill, and compatibility-hash roots before scanning. The exact
+reconciliation worktree passes all 468 synthetic tests plus Ruff,
+diff-hygiene, and lockfile checks.
 
 A bounded aggregate-only read of the unchanged accepted database verified the
 new source-integrity invariant in two parts:

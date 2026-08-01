@@ -28,6 +28,7 @@ from .combined_preprocessing.builder import (
     export_legacy_compatibility_outputs,
     require_safe_output_location,
 )
+from .combined_preprocessing.contract import compatibility_outputs
 from .combined_preprocessing.database import (
     inspect_combined_database,
 )
@@ -1242,6 +1243,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
 
         if args.command == "validate-preprocessed":
+            require_safe_output_location(
+                args.database.parent,
+                artifact_label="validation database/spill directory",
+            )
+            if args.output_dir is not None:
+                require_safe_output_location(
+                    args.output_dir,
+                    artifact_label="validation compatibility output directory",
+                )
+                compatibility_hash_directories = sorted(
+                    {
+                        args.output_dir / output.relative_path.parent
+                        for output in compatibility_outputs()
+                    },
+                    key=lambda path: path.as_posix(),
+                )
+                for directory in compatibility_hash_directories:
+                    require_safe_output_location(
+                        directory,
+                        artifact_label="validation compatibility hash directory",
+                    )
             result = validate_preprocessed_database(
                 args.database,
                 compatibility_output_dir=args.output_dir,
