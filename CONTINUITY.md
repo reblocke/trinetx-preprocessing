@@ -11,9 +11,10 @@
 ## Constraints/Assumptions
 - Raw TriNetX data, row-level outputs, databases, logs, manifests, profiles,
   and validation artifacts remain private, external, and untracked.
-- The accepted full-data product must remain unchanged unless a confirmed fix
-  changes product semantics. This review round currently changes only guards,
-  validation, recovery, standalone export publication, and documentation.
+- The accepted `c96dc40` full-data product remains the comparison baseline.
+  The confirmed NA-token fix changes transforms/source interpretation, so the
+  literal validation policy requires a fresh exact-behavior-head full-data
+  build, parity proof, and resource gate before release acceptance.
 - Peak RSS remains capped at 6,238 MiB and private validation roots retain at
   least 100 GiB free.
 - PR #8 remains draft until the user separately authorizes ready/merge.
@@ -35,7 +36,7 @@
 ## State
 - Branch: `codex/unified-preprocessing-v1`.
 - Integrated review-reconciliation head:
-  `75805d20411a6f177126b9750c286f4591a22b22`.
+  `eac4d5c8e94c75279faaa396761ee222c3de3a93`.
 - Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
   review found one P3 stale 462-versus-463 test-count statement in thread
   `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
@@ -74,6 +75,22 @@
   path; builder, validation, export, and benchmark routes use guarded staging.
   All nine focused validation/evidence regressions and the complete 473-test
   suite pass.
+- Commit `eac4d5c` is pushed; the evidence-scratch P2 has an exact-fix reply and
+  is resolved. Exact-head CI run `30716659186` passed in 6m37s; holistic review
+  request `issuecomment-5153240773` completed as review `4835671748` and found
+  one additional P2 in thread `PRRT_kwDOLtXliM6VqwxB`: combined-mode lab reads
+  preserve textual NA tokens for source capture but pass the same raw chunk to
+  strict legacy date parsing, unlike historical pandas NA coercion.
+- The P2 is systemic across all six clinical compatibility transforms and
+  patient demographics. The current local fix preserves each raw source frame,
+  masks the exact 19 pandas 2.3 default NA tokens only in transform copies, and
+  leaves ingredient-only medication capture plus encounter source/flow logic
+  unchanged. Focused transform/stage coverage passes 93/93; the full combined
+  contract/source/adapter subset passes 5/5.
+- Repository-wide Ruff, touched-file formatting, lockfile, diff-hygiene, and
+  the complete 482-test suite pass at the uncommitted NA-token behavior head.
+  A literal evidence-policy audit confirms the prior full profile cannot be
+  reused for this semantic transform change.
 
 ## Done
 - Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
@@ -124,13 +141,17 @@
   and all spill was cleaned.
 
 ## Now
-- Commit/push the evidence-scratch fix, reconcile its thread, and repeat
-  exact-head CI/review, unresolved-thread, PR-state, privacy, and clean-worktree
-  checks.
+- Complete independent code review for the systemic NA-token compatibility
+  fix, commit/push it, resolve the finding, and stabilize the behavior head
+  through exact-head CI and a clean holistic GitHub review.
 
 ## Next
-- Require final exact-head CI, clean GitHub review, zero unresolved threads,
-  clean worktree, and no tracked private/generated artifacts.
+- Run a fresh external exact-behavior-head full-data build, 36/36 parity,
+  resource, database/element/source-integrity, adapter, strict no-write,
+  manifest/free-space/scratch/privacy gates; then commit aggregate-only evidence
+  documentation and repeat final exact-head CI/review.
+- Require zero unresolved threads, a clean worktree, and no tracked
+  private/generated artifacts.
 - Report the prioritized roadmap: land/release PR #8; GLP-1 production cutover;
   issue #6 software/evidence/clinical reconciliation; separate Stata migration;
   then legacy onboarding/deprecation cleanup.
@@ -144,6 +165,10 @@
 ## Working set (files/ids/commands)
 - `src/trinetx_preprocessing/combined_preprocessing/{builder,database,validation}.py`
 - `src/trinetx_preprocessing/{config,cli,regression}.py`
+- `src/trinetx_preprocessing/io/csv.py`
+- `src/trinetx_preprocessing/transform/{labs,diagnosis,medications,procedure,vitals,encounter}.py`
+- `src/trinetx_preprocessing/pipeline/final_assembly.py`
+- `tests/test_{io_csv,legacy_na_compatibility,labs_stage,final_assembly}.py`
 - `tests/test_{config,cli,combined_preprocessing}.py`
 - `docs/{PLAN,ONBOARDING,UNIFIED_PREPROCESSING,VALIDATION,GLP1_ELIGIBILITY}.md`
 - `README.md`, `CHANGELOG.md`, `llms.txt`, `pyproject.toml`
@@ -152,7 +177,9 @@
   threads `PRRT_kwDOLtXliM6VpRQI`, `PRRT_kwDOLtXliM6Vp6VT`, and
   `PRRT_kwDOLtXliM6VqWae`; P3 thread `PRRT_kwDOLtXliM6VqEpq`; resolved P2
   thread `PRRT_kwDOLtXliM6VqeGE`; exact-head review request
-  `issuecomment-5153140607`; review `4835619937`; open P2 thread
-  `PRRT_kwDOLtXliM6VqoE6`; CI runs `30710776011`, `30712167025`,
-  `30712522979`, `30714776156`, and `30715666488`
+  `issuecomment-5153140607`; review `4835619937`; resolved P2 thread
+  `PRRT_kwDOLtXliM6VqoE6`; final review request `issuecomment-5153240773`; CI
+  runs `30710776011`, `30712167025`, `30712522979`, `30714776156`,
+  `30715666488`, and `30716659186`; review `4835671748`; open P2 thread
+  `PRRT_kwDOLtXliM6VqwxB`
 - `git diff --check`; `ruff check .`; external-TMP `pytest -q`

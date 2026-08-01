@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..io.csv import coerce_legacy_na_tokens
 from ..validation import require_columns
 from .clinical_rules import CodeRule, exact_code_rule
 from .code_groups import split_rows_by_code_groups
@@ -112,7 +113,7 @@ def normalize_procedure_chunk(df: pd.DataFrame) -> pd.DataFrame:
 
     require_columns(df, RAW_PROCEDURE_COLUMNS, context="Procedure raw input")
 
-    normalized = df.drop(columns=DROP_COLUMNS).copy()
+    normalized = coerce_legacy_na_tokens(df.drop(columns=DROP_COLUMNS))
     normalized = normalized.loc[:, NORMALIZED_PROCEDURE_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")

@@ -67,6 +67,9 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   phenotype and evidence values.
 
 ### Fixed
+- Restored historical pandas CSV missing-value semantics in every combined-mode
+  compatibility transform while preserving literal NA-like values in the
+  canonical source tables.
 - Made combined-product replacement transactional across the DuckDB, sidecar,
   and all 36 compatibility CSVs, with rollback on publication failure.
 - Made standalone compatibility export fail closed on symlinks and unmanaged

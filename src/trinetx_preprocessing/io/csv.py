@@ -7,6 +7,54 @@ from pathlib import Path
 
 import pandas as pd
 
+LEGACY_READ_CSV_NA_TOKENS = frozenset(
+    {
+        "",
+        "#N/A",
+        "#N/A N/A",
+        "#NA",
+        "-1.#IND",
+        "-1.#QNAN",
+        "-NaN",
+        "-nan",
+        "1.#IND",
+        "1.#QNAN",
+        "<NA>",
+        "N/A",
+        "NA",
+        "NULL",
+        "NaN",
+        "None",
+        "n/a",
+        "nan",
+        "null",
+    }
+)
+
+
+def coerce_legacy_na_tokens(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return a transform copy with legacy pandas CSV NA tokens missing.
+
+    Combined preprocessing disables pandas' default NA recognition so canonical
+    source tables can retain literal source values. Historical transforms still
+    need the default ``read_csv`` semantics they had before that source capture
+    was added. Matching is exact: values are not stripped or case-normalized.
+
+    Args:
+        frame: Raw source values to prepare for a historical transform.
+
+    Returns:
+        A copy with the pandas 2.3 default string NA tokens replaced by missing
+        values. The input frame is not modified.
+    """
+
+    coerced = frame.copy()
+    for column in coerced.columns:
+        token_mask = coerced[column].isin(LEGACY_READ_CSV_NA_TOKENS)
+        if token_mask.any():
+            coerced.loc[token_mask, column] = pd.NA
+    return coerced
+
 
 def read_csv_head(path: Path | str, n: int = 5) -> pd.DataFrame:
     """Read the first ``n`` rows of a CSV file.

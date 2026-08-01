@@ -23,6 +23,7 @@ from ..guardrails import (
     check_required_ids,
     log_row_count,
 )
+from ..io.csv import coerce_legacy_na_tokens
 from ..storage import (
     PartitionedKeyLookup,
     PartitionedParquetStore,
@@ -721,7 +722,7 @@ def _iter_demographic_frames(
 def _transform_demographics(raw_frame: pd.DataFrame, *, context: str) -> pd.DataFrame:
     require_columns(raw_frame, DEMOGRAPHIC_COLUMNS, context=context)
 
-    frame = raw_frame.loc[:, DEMOGRAPHIC_COLUMNS].copy()
+    frame = coerce_legacy_na_tokens(raw_frame.loc[:, DEMOGRAPHIC_COLUMNS])
     frame["patient_id"] = frame["patient_id"].astype("string")
     frame["sex"] = frame["sex"].astype("string")
     frame["race"] = frame["race"].astype("string")

@@ -235,15 +235,26 @@ The aggregate evidence files remain external and untracked. They include
 
 ## Post-acceptance whole-PR hardening
 
-The subsequent holistic review did not change the accepted product or its
-historical inclusion logic. It hardened pre-database recovery, filesystem
+The initial holistic-review fixes did not change the accepted product or its
+historical inclusion logic. They hardened pre-database recovery, filesystem
 identity and locks, standalone compatibility publication, and source-integrity
 validation. Standalone validation now also rejects repository-local database,
 DuckDB-spill, and compatibility-hash roots before scanning. Aggregate baseline
 and parity evidence guard the compatibility root and contract parents before
 hashing; parity and element-completeness evidence guard the database/spill
-parent before database scans. The exact reconciliation worktree passes all 473
-synthetic tests plus Ruff, diff-hygiene, and lockfile checks.
+parent before database scans.
+
+The final review identified a transform-level compatibility gap: combined-mode
+source capture preserved literal pandas NA-like tokens, but historical
+transforms no longer received the default missing values used by the legacy
+CSV reads. The fix retains literal values in canonical source tables and
+restores the exact pandas 2.3 default NA-token semantics only in transform
+copies across all six clinical domains and patient demographics. The local
+reconciliation worktree passes all 482 synthetic tests plus Ruff,
+diff-hygiene, and lockfile checks. Because this changes transforms and source
+interpretation, the earlier full profile remains baseline evidence rather than
+release proof; a fresh exact-behavior-head full-data build and parity/resource
+gate are required before final acceptance.
 
 A bounded aggregate-only read of the unchanged accepted database verified the
 new source-integrity invariant in two parts:
