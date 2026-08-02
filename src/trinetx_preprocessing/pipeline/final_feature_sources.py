@@ -91,7 +91,7 @@ class _DomainPartitionReader:
                     columns=selected_columns,
                     use_threads=False,
                 )
-            except OSError:
+            except Exception:
                 raise OSError(
                     "Final-feature Parquet partition read failed after "
                     "single-threaded retry: "

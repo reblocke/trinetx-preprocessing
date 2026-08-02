@@ -428,6 +428,66 @@ def test_combined_retry_recomputes_final_only_eligibility_after_stale_state_remo
     ]
 
 
+def test_current_pipeline_without_state_fsyncs_before_reconstructed_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    paths.staging_output.mkdir(parents=True)
+    durability_calls: list[tuple[Path, Path]] = []
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_pipeline_outputs_are_current",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_compatibility_hashes",
+        lambda *args, **kwargs: {},
+    )
+
+    def track_durability_barrier(
+        output_dir: Path,
+        *,
+        work_manifest: Path,
+    ) -> None:
+        durability_calls.append((output_dir, work_manifest))
+
+    def stop_after_reconstructed_checkpoint(
+        path: Path,
+        payload: dict[str, object],
+    ) -> None:
+        assert path == paths.state_path
+        assert payload["phase"] == "pipeline"
+        assert durability_calls == [
+            (paths.staging_output, combined_builder.work_manifest_path(config))
+        ]
+        raise RuntimeError("reconstructed pipeline checkpoint reached")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "_fsync_export_checkpoint_inputs",
+        track_durability_barrier,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_write_build_state",
+        stop_after_reconstructed_checkpoint,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="reconstructed pipeline checkpoint reached",
+    ):
+        build_preprocessed(config, strict=True)
+
+
 @pytest.mark.parametrize(
     "stale_reason",
     ["missing prerequisite artifact", "changed prerequisite artifact"],

@@ -234,6 +234,63 @@ def test_domain_partition_reader_persistent_oserror_has_partition_context_only(
     assert attempts == [True, False]
 
 
+def test_domain_partition_reader_sanitizes_non_oserror_retry_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    partition_root = tmp_path / "vitals"
+    partition_root.mkdir()
+    partition_path = partition_root / "bucket-004.parquet"
+    partition_path.touch()
+    attempts: list[bool] = []
+    first_sensitive_sentinel = "synthetic-first-row-value-P1"
+    retry_sensitive_sentinel = "synthetic-retry-row-value-P2"
+
+    def fail_read(
+        path: Path,
+        *,
+        columns: list[str] | None,
+        use_threads: bool,
+    ) -> pd.DataFrame:
+        del path, columns
+        attempts.append(use_threads)
+        if use_threads:
+            raise OSError(first_sensitive_sentinel)
+        raise ValueError(retry_sensitive_sentinel)
+
+    monkeypatch.setattr(
+        final_feature_sources,
+        "_read_verified_parquet",
+        fail_read,
+    )
+    reader = final_feature_sources._DomainPartitionReader(
+        "vitals",
+        partition_root,
+    )
+
+    with pytest.raises(OSError) as error:
+        reader.read_frame(4, columns=["patient_id"])
+
+    message = str(error.value)
+    assert "domain=vitals" in message
+    assert "bucket=4" in message
+    assert f"path={partition_path}" in message
+    assert first_sensitive_sentinel not in message
+    assert retry_sensitive_sentinel not in message
+    assert error.value.__cause__ is None
+    assert error.value.__suppress_context__ is True
+    formatted_traceback = "".join(
+        traceback.format_exception(
+            type(error.value),
+            error.value,
+            error.value.__traceback__,
+        )
+    )
+    assert first_sensitive_sentinel not in formatted_traceback
+    assert retry_sensitive_sentinel not in formatted_traceback
+    assert attempts == [True, False]
+
+
 def test_verified_parquet_read_enables_page_checksum_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

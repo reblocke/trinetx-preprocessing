@@ -344,6 +344,10 @@ def _build_locked(
         _deserialize_hashes(state.get("baseline"))
     elif state is None:
         baseline = _compatibility_hashes(paths.staging_output)
+        _fsync_export_checkpoint_inputs(
+            paths.staging_output,
+            work_manifest=work_manifest_path(config),
+        )
         state = _new_build_state(
             paths,
             build_identity=build_identity,
