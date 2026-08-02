@@ -11,7 +11,11 @@ from types import TracebackType
 import pandas as pd
 
 from .config import Config
-from .filesystem import remove_tree_strict
+from .filesystem import (
+    fsync_directory_strict,
+    fsync_file_strict,
+    remove_tree_strict,
+)
 from .io.csv import iter_csv
 
 CSV_FORMAT = "csv"
@@ -24,6 +28,7 @@ def release_unused_arrow_memory() -> None:
 
     try:
         import pyarrow as pa
+
         pa.default_memory_pool().release_unused()
     except (ImportError, RuntimeError):
         return
@@ -48,6 +53,7 @@ class PartitionedParquetStore:
         bucket_count: int = 256,
         row_group_size: int = 250_000,
         buffer_rows_per_bucket: int | None = None,
+        write_page_checksum: bool = False,
         cleanup_context: str | None = None,
     ) -> None:
         if bucket_count <= 0 or bucket_count & (bucket_count - 1):
@@ -62,6 +68,7 @@ class PartitionedParquetStore:
         self.bucket_count = bucket_count
         self.row_group_size = row_group_size
         self.buffer_rows_per_bucket = buffer_rows_per_bucket
+        self.write_page_checksum = write_page_checksum
         self.cleanup_context = cleanup_context or f"{prefix} scratch"
         self.path: Path | None = None
         self._writers: dict[int, object] = {}
@@ -164,6 +171,16 @@ class PartitionedParquetStore:
         self._sealed = True
         release_unused_tabular_memory()
 
+    def fsync(self) -> None:
+        """Close and durably flush every populated partition."""
+
+        self.seal()
+        if self.path is None:
+            raise RuntimeError("Partition store is not open.")
+        for path in sorted(self._paths.values()):
+            fsync_file_strict(path)
+        fsync_directory_strict(self.path)
+
     def _flush_bucket(self, bucket: int) -> None:
         frames = self._buffers.pop(bucket, None)
         self._buffered_rows.pop(bucket, None)
@@ -207,6 +224,7 @@ class PartitionedParquetStore:
                 self._schema,
                 compression="snappy",
                 use_dictionary=True,
+                write_page_checksum=self.write_page_checksum,
             )
             self._writers[bucket] = writer
             self._paths[bucket] = path

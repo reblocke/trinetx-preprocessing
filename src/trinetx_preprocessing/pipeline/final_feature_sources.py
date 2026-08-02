@@ -60,7 +60,8 @@ class _SourceDefinition:
 class _DomainPartitionReader:
     """Read-only access to one worker-built feature-domain partition set."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, domain: str, path: Path) -> None:
+        self.domain = domain
         self.path = path
         self._paths = {
             int(item.stem.rsplit("-", 1)[1]): item
@@ -76,10 +77,26 @@ class _DomainPartitionReader:
         path = self._paths.get(bucket)
         if path is None:
             return None
-        return pd.read_parquet(
-            path,
-            columns=list(columns) if columns is not None else None,
-        )
+        selected_columns = list(columns) if columns is not None else None
+        try:
+            return _read_verified_parquet(
+                path,
+                columns=selected_columns,
+                use_threads=True,
+            )
+        except OSError:
+            try:
+                return _read_verified_parquet(
+                    path,
+                    columns=selected_columns,
+                    use_threads=False,
+                )
+            except OSError:
+                raise OSError(
+                    "Final-feature Parquet partition read failed after "
+                    "single-threaded retry: "
+                    f"domain={self.domain}; bucket={bucket}; path={path}"
+                ) from None
 
     def populated_buckets(self) -> set[int]:
         return set(self._paths)
@@ -288,7 +305,7 @@ class FinalFeatureSourceStore:
             for source_name in metadata["source_names"]:
                 self._source_domains[str(source_name)] = domain
             self._stores[domain] = _DomainPartitionReader(
-                root / str(metadata["partition_path"])
+                domain, root / str(metadata["partition_path"])
             )
 
     def _require_scratch_root(self) -> Path:
@@ -349,6 +366,7 @@ def _build_feature_domain_worker_body(
         bucket_count=config.storage.analysis_bucket_count,
         row_group_size=config.storage.parquet_row_group_size,
         buffer_rows_per_bucket=FINAL_FEATURE_BUFFER_ROWS_PER_BUCKET,
+        write_page_checksum=True,
         cleanup_context=f"Final {domain} feature index scratch",
     )
     store.__enter__()
@@ -382,6 +400,7 @@ def _build_feature_domain_worker_body(
                     )
                     store.add_frame(indexed)
         store.seal()
+        store.fsync()
         payload = {
             "status": "complete",
             "rows_indexed": rows_indexed,
@@ -401,6 +420,27 @@ def _build_feature_domain_worker_body(
         write_text_atomic(metadata_path, json.dumps(payload, sort_keys=True))
         raise
     write_text_atomic(metadata_path, json.dumps(payload, sort_keys=True))
+
+
+def _read_verified_parquet(
+    path: Path,
+    *,
+    columns: list[str] | None,
+    use_threads: bool,
+) -> pd.DataFrame:
+    """Read one partition while verifying its Parquet page checksums."""
+
+    import pyarrow.parquet as pq
+
+    with pq.ParquetFile(
+        path,
+        page_checksum_verification=True,
+    ) as parquet_file:
+        table = parquet_file.read(
+            columns=columns,
+            use_threads=use_threads,
+        )
+    return table.to_pandas(use_threads=use_threads)
 
 
 def _peak_rss_mb() -> float:

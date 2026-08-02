@@ -31,6 +31,27 @@ def write_text_atomic(path: Path, text: str) -> None:
             temp_path.unlink()
 
 
+def fsync_file_strict(path: Path) -> None:
+    """Flush one existing regular file to its backing storage."""
+
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"Cannot fsync non-regular file: {path}")
+    with path.open("rb") as handle:
+        os.fsync(handle.fileno())
+
+
+def fsync_directory_strict(path: Path) -> None:
+    """Flush one existing directory entry set to its backing storage."""
+
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError(f"Cannot fsync non-directory: {path}")
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def remove_tree_strict(path: Path, *, context: str = "Directory") -> None:
     """Remove a directory tree and raise for real cleanup failures."""
 

@@ -32,6 +32,7 @@ from ..pipeline.run import (
 from ..process_locks import duplicate_lock_file_descriptors_for_spawn
 from ..regression import HASH_SCRATCH_PREFIX, CsvHashResult, hash_csv_with_metadata
 from ..work_manifest import (
+    FINAL_ASSEMBLY_PREREQUISITES,
     STAGE_ORDER,
     StaleWorkError,
     refresh_stage_output_metadata,
@@ -305,16 +306,30 @@ def _build_locked(
             database_name=config.combined.database_name,
         )
 
+    retry_final_assembly_only = (
+        state is None
+        and not pipeline_current
+        and _can_retry_final_assembly_only(config, strict=strict)
+    )
     if state is None and not pipeline_current:
         paths.staging_output.mkdir(parents=True)
         phase_started = time.perf_counter()
-        _run_combined_pipeline_isolated(
-            config,
-            strict=strict,
-            paths=paths,
-            build_identity=build_identity,
-            lock_file_descriptors=lock_file_descriptors,
-        )
+        if retry_final_assembly_only:
+            _run_final_pipeline_isolated(
+                config,
+                strict=strict,
+                paths=paths,
+                build_identity=build_identity,
+                lock_file_descriptors=lock_file_descriptors,
+            )
+        else:
+            _run_combined_pipeline_isolated(
+                config,
+                strict=strict,
+                paths=paths,
+                build_identity=build_identity,
+                lock_file_descriptors=lock_file_descriptors,
+            )
         _record_timing(timings, "pipeline", phase_started)
         state = _load_build_state(
             paths.state_path,
@@ -452,6 +467,25 @@ def _run_combined_pipeline_isolated(
         (config, strict),
         lock_file_descriptors=lock_file_descriptors,
     )
+    _run_final_pipeline_isolated(
+        config,
+        strict=strict,
+        paths=paths,
+        build_identity=build_identity,
+        lock_file_descriptors=lock_file_descriptors,
+    )
+
+
+def _run_final_pipeline_isolated(
+    config: Config,
+    *,
+    strict: bool,
+    paths: _CombinedBuildPaths,
+    build_identity: str,
+    lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Run final assembly in a fresh process while retaining build locks."""
+
     _run_isolated_phase_process(
         "final-assembly",
         _run_final_pipeline_worker,
@@ -526,6 +560,12 @@ def _run_final_pipeline_worker(
     *,
     retained_lock_file_descriptors: tuple[int, ...],
 ) -> None:
+    require_current_work(
+        config,
+        required_stages=FINAL_ASSEMBLY_PREREQUISITES,
+    )
+    if strict:
+        require_strict_encounter_work(config)
     run_final_pipeline_stage(
         config,
         strict=strict,
@@ -1048,6 +1088,32 @@ def _pipeline_outputs_are_current(
     except (FileNotFoundError, StaleWorkError, ValueError):
         return False
     return True
+
+
+def _can_retry_final_assembly_only(config: Config, *, strict: bool) -> bool:
+    """Return whether an interrupted final assembly has current prerequisites."""
+
+    try:
+        manifest = require_current_work(
+            config,
+            required_stages=FINAL_ASSEMBLY_PREREQUISITES,
+        )
+        if strict:
+            require_strict_encounter_work(config)
+    except (FileNotFoundError, StaleWorkError, ValueError):
+        return False
+
+    stages = manifest.get("stages")
+    if not isinstance(stages, dict):
+        return False
+    final_assembly = stages.get("final_assembly")
+    if final_assembly is None:
+        return True
+    return (
+        isinstance(final_assembly, dict)
+        and final_assembly.get("status") == "running"
+        and final_assembly.get("outputs") == []
+    )
 
 
 def _remove_staging_for_restart(

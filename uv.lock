@@ -424,7 +424,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.4,<2" },
     { name = "numpy", specifier = "<2.4" },
     { name = "pandas" },
-    { name = "pyarrow" },
+    { name = "pyarrow", specifier = ">=15" },
     { name = "pytest" },
     { name = "pyyaml" },
     { name = "ruff" },

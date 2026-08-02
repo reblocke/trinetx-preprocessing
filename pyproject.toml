@@ -12,7 +12,7 @@ dependencies = [
     "duckdb>=1.4,<2",
     "numpy<2.4",
     "pandas",
-    "pyarrow",
+    "pyarrow>=15",
     "pyyaml",
     "pytest",
     "ruff",

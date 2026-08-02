@@ -271,6 +271,229 @@ def test_combined_pipeline_uses_sequential_fresh_phase_workers(
     assert calls[1][3] == (101, 102)
 
 
+@pytest.mark.parametrize(
+    "final_assembly_record",
+    [
+        None,
+        {"status": "running", "outputs": []},
+    ],
+    ids=["not-started", "interrupted"],
+)
+def test_combined_retry_runs_only_final_assembly_when_prerequisites_are_current(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    final_assembly_record: dict[str, object] | None,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    partial_output = paths.staging_output / compatibility_outputs()[0].relative_path
+    partial_output.parent.mkdir(parents=True)
+    partial_output.write_text("partial synthetic staging row\n")
+    required_stage_calls: list[tuple[str, ...]] = []
+
+    def require_current_prerequisites(
+        config_arg,
+        *,
+        required_stages,
+        physical_output_dir=None,
+    ):
+        _ = config_arg
+        stages = tuple(required_stages)
+        required_stage_calls.append(stages)
+        if stages == combined_builder.STAGE_ORDER:
+            assert physical_output_dir == paths.staging_output
+            raise combined_builder.StaleWorkError("final assembly is incomplete")
+        assert stages == combined_builder.FINAL_ASSEMBLY_PREREQUISITES
+        assert physical_output_dir is None
+        manifest_stages = {}
+        if final_assembly_record is not None:
+            manifest_stages["final_assembly"] = final_assembly_record
+        return {"stages": manifest_stages}
+
+    def run_expected_final_only(*args, **kwargs):
+        _ = args, kwargs
+        assert paths.staging_output.is_dir()
+        assert not partial_output.exists()
+        assert list(paths.staging_output.iterdir()) == []
+        raise RuntimeError("selected final-assembly-only retry")
+
+    def unexpected_full_restart(*args, **kwargs):
+        raise AssertionError("current prerequisites triggered a full pre-final restart")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "require_current_work",
+        require_current_prerequisites,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_final_pipeline_isolated",
+        run_expected_final_only,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_combined_pipeline_isolated",
+        unexpected_full_restart,
+    )
+
+    with pytest.raises(RuntimeError, match="selected final-assembly-only retry"):
+        build_preprocessed(config, strict=True)
+
+    assert required_stage_calls == [
+        combined_builder.STAGE_ORDER,
+        combined_builder.FINAL_ASSEMBLY_PREREQUISITES,
+    ]
+
+
+def test_combined_retry_recomputes_final_only_eligibility_after_stale_state_removal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    partial_output = paths.staging_output / compatibility_outputs()[0].relative_path
+    partial_output.parent.mkdir(parents=True)
+    partial_output.write_text("partial synthetic staging row\n")
+    combined_builder._write_build_state(
+        paths.state_path,
+        combined_builder._new_build_state(
+            paths,
+            build_identity=build_identity,
+            published_output=config.output_dir,
+            baseline={},
+        ),
+    )
+    required_stage_calls: list[tuple[str, ...]] = []
+
+    def require_current_prerequisites(
+        config_arg,
+        *,
+        required_stages,
+        physical_output_dir=None,
+    ):
+        _ = config_arg
+        stages = tuple(required_stages)
+        required_stage_calls.append(stages)
+        if stages == combined_builder.STAGE_ORDER:
+            assert physical_output_dir == paths.staging_output
+            raise combined_builder.StaleWorkError("final assembly is incomplete")
+        assert stages == combined_builder.FINAL_ASSEMBLY_PREREQUISITES
+        assert physical_output_dir is None
+        return {
+            "stages": {
+                "final_assembly": {"status": "running", "outputs": []},
+            }
+        }
+
+    def run_expected_final_only(*args, **kwargs):
+        _ = args, kwargs
+        assert paths.staging_output.is_dir()
+        assert not partial_output.exists()
+        assert not paths.state_path.exists()
+        raise RuntimeError("selected final-assembly-only retry")
+
+    def unexpected_full_restart(*args, **kwargs):
+        raise AssertionError("removed stale state retained its earlier decision")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "require_current_work",
+        require_current_prerequisites,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_final_pipeline_isolated",
+        run_expected_final_only,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_combined_pipeline_isolated",
+        unexpected_full_restart,
+    )
+
+    with pytest.raises(RuntimeError, match="selected final-assembly-only retry"):
+        build_preprocessed(config, strict=True)
+
+    assert required_stage_calls == [
+        combined_builder.STAGE_ORDER,
+        combined_builder.FINAL_ASSEMBLY_PREREQUISITES,
+    ]
+
+
+@pytest.mark.parametrize(
+    "stale_reason",
+    ["missing prerequisite artifact", "changed prerequisite artifact"],
+)
+def test_combined_retry_reruns_pre_final_when_a_prerequisite_is_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stale_reason: str,
+) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    build_identity = combined_builder._combined_build_identity(config, strict=True)
+    paths = combined_builder._combined_build_paths(
+        config.output_dir,
+        build_identity=build_identity,
+    )
+    partial_output = paths.staging_output / compatibility_outputs()[0].relative_path
+    partial_output.parent.mkdir(parents=True)
+    partial_output.write_text("partial synthetic staging row\n")
+    required_stage_calls: list[tuple[str, ...]] = []
+
+    def reject_stale_work(
+        config_arg,
+        *,
+        required_stages,
+        physical_output_dir=None,
+    ):
+        _ = config_arg, physical_output_dir
+        stages = tuple(required_stages)
+        required_stage_calls.append(stages)
+        raise combined_builder.StaleWorkError(stale_reason)
+
+    def run_expected_full_restart(*args, **kwargs):
+        _ = args, kwargs
+        assert paths.staging_output.is_dir()
+        assert not partial_output.exists()
+        assert list(paths.staging_output.iterdir()) == []
+        raise RuntimeError("selected full pre-final restart")
+
+    def unexpected_final_only_retry(*args, **kwargs):
+        raise AssertionError("stale prerequisites triggered final-only retry")
+
+    monkeypatch.setattr(
+        combined_builder,
+        "require_current_work",
+        reject_stale_work,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_combined_pipeline_isolated",
+        run_expected_full_restart,
+    )
+    monkeypatch.setattr(
+        combined_builder,
+        "_run_final_pipeline_isolated",
+        unexpected_final_only_retry,
+    )
+
+    with pytest.raises(RuntimeError, match="selected full pre-final restart"):
+        build_preprocessed(config, strict=True)
+
+    assert required_stage_calls == [
+        combined_builder.STAGE_ORDER,
+        combined_builder.FINAL_ASSEMBLY_PREREQUISITES,
+    ]
+
+
 def test_isolated_phase_process_runs_target_in_fresh_process(
     tmp_path: Path,
 ) -> None:
