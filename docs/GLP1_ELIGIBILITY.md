@@ -1,8 +1,10 @@
 # GLP-1 Eligibility Augmentation
 
 GitHub issue #6 is the authoritative endpoint specification for the additive
-GLP-1 eligibility database. This work begins after immutable tags
-`refactor-milestone-2` and `v0.2.0`.
+GLP-1 eligibility database. Standalone software and behavior-head-scoped
+aggregate evidence are already delivered; the issue remains open for its
+optional-domain, catalog/configuration, smoke-summary, final-catalog evidence,
+and clinical/private-review requirements.
 
 ## Compatibility boundary
 
@@ -18,6 +20,17 @@ GLP-1 eligibility database. This work begins after immutable tags
 The standalone raw-ingestion command below remains the validated reference
 implementation during migration. The adapter-backed synthetic gate verifies
 equivalent source and downstream outputs from the unified product.
+
+## Status against issue #6
+
+Delivered but not issue closure: the standalone CLI, eight-file contract,
+versioned configuration/concept sets, 20-case synthetic acceptance/CI, and
+behavior-head-scoped aggregate full-data reference evidence. Still open are
+optional-domain ingestion when present; final catalog/rule/configuration and
+clinical terminology review; remaining data-driven policy; the required
+smoke-query interface and specified aggregate summaries; fresh evidence at the
+final catalog/rule head; and investigator/private record-level review. The
+standalone raw-ingestion implementation remains the production reference.
 
 ## Current commands
 

@@ -1,7 +1,7 @@
 # Validation
 
-Validation artifacts may contain sensitive metadata or row-level data and stay
-under `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`. Do not commit raw
+Validation artifacts may contain sensitive metadata or row-level data and must
+stay under a private external root outside the repository. Do not commit raw
 exports, subsets, work tables, manifests, logs, profiles, or output CSVs.
 
 ## Frozen replication evidence
@@ -193,16 +193,17 @@ ready, and the release does not claim `validation_status.json` has
 checklist above plus the explicit aggregate conflict policy. A future run on
 adjudicated source data should return to the strict `validation-status` gate.
 
-## Current unified Milestone 2 evidence
+## Historical Step 2 baseline and later behavior proof
 
-The accepted fresh product was built from behavior head `c96dc40`; read-only
-element-evidence head `f3c1b03` changes only bounded inspection and its
-regression, not transforms, database materialization, compatibility export, or
-the published product. The raw work manifest therefore remains correctly bound
-to `c96dc40`, while the evidence correction is independently tested and
-reviewed at `f3c1b03`.
+The historical accepted product was built from behavior head `c96dc40`; the
+read-only element-evidence head `f3c1b03` changes only bounded inspection and
+its regression. A later semantic NA-token correction required fresh
+exact-behavior evidence at `7ef967d`: the recovered build and sequential
+release gates completed there without replacing the historical baseline record.
+The output-neutral `2305f16`/`cefc861` hardening changes are separately covered
+by synthetic/local-quality evidence and do not claim a new full-data product.
 
-The completed Step 2 gates are:
+The historical Step 2 gates were:
 
 - atomic publication completed with exactly 38 product files: the canonical
   DuckDB, its manifest, and all 36 compatibility CSVs;
@@ -247,14 +248,11 @@ parent before database scans.
 The final review identified a transform-level compatibility gap: combined-mode
 source capture preserved literal pandas NA-like tokens, but historical
 transforms no longer received the default missing values used by the legacy
-CSV reads. The fix retains literal values in canonical source tables and
-restores the exact pandas 2.3 default NA-token semantics only in transform
-copies across all six clinical domains and patient demographics. The local
-reconciliation worktree passes all 482 synthetic tests plus Ruff,
-diff-hygiene, and lockfile checks. Because this changes transforms and source
-interpretation, the earlier full profile remains baseline evidence rather than
-release proof; a fresh exact-behavior-head full-data build and parity/resource
-gate are required before final acceptance.
+CSV reads. The `7ef967d` fix retains literal values in canonical source tables
+and restores the exact pandas 2.3 default NA-token semantics only in transform
+copies across all six clinical domains and patient demographics. Its fresh
+full-data recovery and sequential release gates supplied exact-behavior proof;
+the earlier full profile remains the corrected-baseline comparison record.
 
 A bounded aggregate-only read of the unchanged accepted database verified the
 new source-integrity invariant in two parts:

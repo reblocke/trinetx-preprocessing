@@ -76,10 +76,12 @@ compatibility boundary, and acceptance gates.
 
 ## Downstream GLP-1 eligibility
 
-The existing GLP-1 endpoint remains the validated downstream derivation and
-reference implementation while its source boundary moves to the unified
-product. It is not a second canonical preprocessing product. Its current
-standalone command remains available during that migration:
+The standalone raw-ingestion GLP-1 CLI remains the validated production
+reference during migration. The unified product is currently an
+adapter-validated source boundary, not a production CLI cutover or a second
+canonical preprocessing product. A separate PR must add the manifest-bound
+source and prove full-data adapter-versus-reference parity before the raw scan
+can be deprecated:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
@@ -223,6 +225,13 @@ also pass. Milestone 2 accepts deterministic non-strict resolution for 286
 source encounter IDs assigned to multiple settings. Strict execution still
 fails closed on those conflicts and remains available for upstream data-quality
 adjudication.
+
+The historical `c96dc40` product remains the corrected-baseline comparison
+point. Fresh exact-behavior release evidence was subsequently recovered for
+behavior head `7ef967d`; its parity, source, strict no-write, and recovery
+contracts are recorded privately. The later `2305f16`/`cefc861` changes are
+output-neutral lifecycle and test-fixture hardening, verified by focused
+quality evidence rather than a replacement full-data build.
 
 Hash local legacy outputs without committing row-level data:
 ```bash

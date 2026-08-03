@@ -67,6 +67,11 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   phenotype and evidence values.
 
 ### Fixed
+- Hardened interrupted final-stage recovery with `pyarrow>=15` page checksums,
+  verification, privacy-safe bounded read retry diagnostics, durable
+  publication barriers, and final-only retry eligibility. The corresponding
+  quality hardening keeps valid persistent lock AppleDouble sidecars while
+  rejecting unsafe variants.
 - Restored historical pandas CSV missing-value semantics in every combined-mode
   compatibility transform while preserving literal NA-like values in the
   canonical source tables.
