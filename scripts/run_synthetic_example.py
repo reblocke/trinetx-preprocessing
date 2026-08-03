@@ -103,9 +103,7 @@ def main() -> int:
     config_path = output_root / "config.yaml"
     write_config(config_path, data_dir, work_dir, output_dir)
 
-    result = cli_main(
-        ["build-preprocessed", "--config", str(config_path), "--replace"]
-    )
+    result = cli_main(["build-preprocessed", "--config", str(config_path), "--replace"])
     if result == 0:
         print(f"Synthetic combined product written to {output_dir}")
     return result

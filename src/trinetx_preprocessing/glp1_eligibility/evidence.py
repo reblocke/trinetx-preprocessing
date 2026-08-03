@@ -56,16 +56,11 @@ class IndicationRule:
 
 
 DEFAULT_CERTAINTY = (
-    "CASE WHEN {status} IN ('met', 'not_met') "
-    "THEN 'strict' ELSE 'not_applicable' END"
+    "CASE WHEN {status} IN ('met', 'not_met') THEN 'strict' ELSE 'not_applicable' END"
 )
-CODE_CERTAINTY = (
-    "CASE WHEN {status} = 'met' THEN 'code_only' "
-    "ELSE 'not_applicable' END"
-)
+CODE_CERTAINTY = "CASE WHEN {status} = 'met' THEN 'code_only' ELSE 'not_applicable' END"
 PROBABLE_CERTAINTY = (
-    "CASE WHEN {status} = 'met' THEN 'probable' "
-    "ELSE 'not_applicable' END"
+    "CASE WHEN {status} = 'met' THEN 'probable' ELSE 'not_applicable' END"
 )
 
 
@@ -74,22 +69,14 @@ STATUS_RULES = (
     StatusRule("t2d_status", "type_2_diabetes", "t2d_certainty"),
     StatusRule("prediabetes_status", "prediabetes", DEFAULT_CERTAINTY),
     StatusRule("prior_mi_status", "prior_mi", CODE_CERTAINTY),
-    StatusRule(
-        "prior_ischemic_stroke_status", "prior_ischemic_stroke", CODE_CERTAINTY
-    ),
+    StatusRule("prior_ischemic_stroke_status", "prior_ischemic_stroke", CODE_CERTAINTY),
     StatusRule("pad_status", "peripheral_artery_disease", CODE_CERTAINTY),
     StatusRule("symptomatic_pad_status", "symptomatic_pad", CODE_CERTAINTY),
-    StatusRule(
-        "established_cvd_any_status", "established_cvd", CODE_CERTAINTY
-    ),
+    StatusRule("established_cvd_any_status", "established_cvd", CODE_CERTAINTY),
     StatusRule("ckd_any_status", "chronic_kidney_disease", DEFAULT_CERTAINTY),
-    StatusRule(
-        "ckd_stage_3a_plus_status", "ckd_stage_3a_plus", DEFAULT_CERTAINTY
-    ),
+    StatusRule("ckd_stage_3a_plus_status", "ckd_stage_3a_plus", DEFAULT_CERTAINTY),
     StatusRule("osa_any_status", "obstructive_sleep_apnea", CODE_CERTAINTY),
-    StatusRule(
-        "osa_moderate_severe_status", "moderate_severe_osa", DEFAULT_CERTAINTY
-    ),
+    StatusRule("osa_moderate_severe_status", "moderate_severe_osa", DEFAULT_CERTAINTY),
     StatusRule("mash_status", "mash", CODE_CERTAINTY),
     StatusRule("mash_f2_f3_status", "mash_f2_f3", "mash_f2_f3_certainty"),
     StatusRule("cirrhosis_status", "cirrhosis", CODE_CERTAINTY),
@@ -115,35 +102,21 @@ STATUS_RULES = (
     ),
     StatusRule("masld_status", "masld", CODE_CERTAINTY),
     StatusRule("dyslipidemia_status", "dyslipidemia", CODE_CERTAINTY),
-    StatusRule(
-        "metabolic_syndrome_status", "metabolic_syndrome", CODE_CERTAINTY
-    ),
+    StatusRule("metabolic_syndrome_status", "metabolic_syndrome", CODE_CERTAINTY),
     StatusRule("copd_status", "copd", CODE_CERTAINTY),
     StatusRule("asthma_status", "asthma", CODE_CERTAINTY),
-    StatusRule(
-        "neuromuscular_disease_status", "neuromuscular_disease", CODE_CERTAINTY
-    ),
-    StatusRule(
-        "chest_wall_disease_status", "chest_wall_disease", CODE_CERTAINTY
-    ),
+    StatusRule("neuromuscular_disease_status", "neuromuscular_disease", CODE_CERTAINTY),
+    StatusRule("chest_wall_disease_status", "chest_wall_disease", CODE_CERTAINTY),
 )
 
 INDICATION_RULES = (
     IndicationRule("ind_fda_weight_management", "fda", "weight_management"),
     IndicationRule("ind_fda_t2d", "fda", "type_2_diabetes"),
-    IndicationRule(
-        "ind_fda_obesity_established_cvd", "fda", "obesity_established_cvd"
-    ),
+    IndicationRule("ind_fda_obesity_established_cvd", "fda", "obesity_established_cvd"),
     IndicationRule("ind_fda_t2d_ckd", "fda", "type_2_diabetes_ckd"),
-    IndicationRule(
-        "ind_fda_moderate_severe_osa", "fda", "moderate_severe_osa"
-    ),
-    IndicationRule(
-        "ind_fda_noncirrhotic_mash_f2_f3", "fda", "noncirrhotic_mash_f2_f3"
-    ),
-    IndicationRule(
-        "ind_fda_disease_specific_any", "fda", "disease_specific_any"
-    ),
+    IndicationRule("ind_fda_moderate_severe_osa", "fda", "moderate_severe_osa"),
+    IndicationRule("ind_fda_noncirrhotic_mash_f2_f3", "fda", "noncirrhotic_mash_f2_f3"),
+    IndicationRule("ind_fda_disease_specific_any", "fda", "disease_specific_any"),
     IndicationRule(
         "ind_guideline_weight_loss_for_probable_ohs",
         "guideline",
@@ -160,18 +133,12 @@ INDICATION_RULES = (
         "pcos_overweight_obesity",
     ),
     IndicationRule("ind_guideline_any", "guideline", "guideline_any"),
-    IndicationRule(
-        "ind_rct_obesity_related_hfpef", "rct", "obesity_related_hfpef"
-    ),
+    IndicationRule("ind_rct_obesity_related_hfpef", "rct", "obesity_related_hfpef"),
     IndicationRule("ind_rct_symptomatic_pad_t2d", "rct", "symptomatic_pad_t2d"),
     IndicationRule("ind_rct_knee_oa_obesity", "rct", "knee_oa_obesity"),
     IndicationRule("ind_rct_alcohol_use_disorder", "rct", "alcohol_use_disorder"),
-    IndicationRule(
-        "ind_rct_idiopathic_intracranial_hypertension", "rct", "iih"
-    ),
-    IndicationRule(
-        "ind_rct_antipsychotic_metabolic", "rct", "antipsychotic_metabolic"
-    ),
+    IndicationRule("ind_rct_idiopathic_intracranial_hypertension", "rct", "iih"),
+    IndicationRule("ind_rct_antipsychotic_metabolic", "rct", "antipsychotic_metabolic"),
     IndicationRule("ind_rct_pcos_obesity", "rct", "pcos_obesity"),
     IndicationRule("ind_rct_any", "rct", "rct_any"),
 )
@@ -329,7 +296,7 @@ def _append_status_evidence(connection: duckdb.DuckDBPyConnection) -> None:
         f"""
         SELECT
             run_id, index_event_id, patient_id,
-            {_sql_string('status:' + rule.column)}, 'component',
+            {_sql_string("status:" + rule.column)}, 'component',
             {_sql_string(rule.phenotype)}, 'derived_status', {rule.column},
             {rule.certainty_sql.format(status=rule.column)}, index_date, 'derived',
             'analysis_glp1_eligibility', NULL, NULL, encounter_id,
@@ -368,5 +335,7 @@ def _insert(connection: duckdb.DuckDBPyConnection, select_sql: str) -> None:
     connection.execute(
         f"INSERT INTO eligibility_evidence_long ({columns}) {select_sql}"
     )
+
+
 def _sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"

@@ -711,6 +711,47 @@ def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> No
     ]
 
 
+def test_clean_scratch_preserves_persistent_lock_appledouble_sidecars(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "validation"
+    work_dir = root / "refactor" / "work"
+    work_dir.mkdir(parents=True)
+
+    persistent_lock = work_dir / ".trinetx-combined-lock-persistent"
+    persistent_lock.write_text("lock metadata\n")
+    persistent_sidecar = work_dir / "._.trinetx-combined-lock-persistent"
+    persistent_sidecar.write_bytes(b"AppleDouble")
+
+    orphan_sidecar = work_dir / "._.trinetx-combined-lock-orphan"
+    orphan_sidecar.write_bytes(b"AppleDouble")
+
+    symlink_target = work_dir / "ordinary-file"
+    symlink_target.write_text("keep\n")
+    symlinked_lock = work_dir / ".trinetx-combined-lock-symlink"
+    symlinked_lock.symlink_to(symlink_target)
+    symlinked_lock_sidecar = work_dir / "._.trinetx-combined-lock-symlink"
+    symlinked_lock_sidecar.write_bytes(b"AppleDouble")
+
+    sidecar_lock = work_dir / ".trinetx-combined-lock-sidecar-symlink"
+    sidecar_lock.write_text("lock metadata\n")
+    symlinked_sidecar = work_dir / "._.trinetx-combined-lock-sidecar-symlink"
+    symlinked_sidecar.symlink_to(symlink_target)
+
+    payload = cli_module.clean_scratch_artifacts(root, delete=True)
+
+    assert payload["artifact_count"] == 3
+    assert payload["deleted_count"] == 3
+    assert persistent_lock.exists()
+    assert persistent_sidecar.exists()
+    assert not orphan_sidecar.exists()
+    assert not symlinked_lock_sidecar.exists()
+    assert not symlinked_sidecar.exists()
+    assert symlinked_lock.is_symlink()
+    assert sidecar_lock.exists()
+    assert symlink_target.exists()
+
+
 def test_clean_scratch_delete_tolerates_missing_nested_entries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

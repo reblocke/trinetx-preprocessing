@@ -42,9 +42,7 @@ def test_lab_feature_rules_use_exact_codes_and_correct_bounds() -> None:
 
 
 def test_lab_feature_rules_apply_venous_lactate_conversion() -> None:
-    grouped = classify_lab_feature_rows(
-        _labs([(" 30241-4 ", 90.08), ("2519-7", 10.0)])
-    )
+    grouped = classify_lab_feature_rows(_labs([(" 30241-4 ", 90.08), ("2519-7", 10.0)]))
 
     values = grouped["value_Lactate_Venous_Blood"]["lab_result_num_val"].tolist()
     assert values == pytest.approx([10.0, 10.0], rel=1e-3)

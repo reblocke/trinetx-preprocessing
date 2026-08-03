@@ -99,8 +99,7 @@ DOMAIN_HEADERS = {
         "units_of_measure\n"
     ),
     "Procedure/procedure.csv": (
-        "patient_id,encounter_id,date,code_system,code,"
-        "principal_procedure_indicator\n"
+        "patient_id,encounter_id,date,code_system,code,principal_procedure_indicator\n"
     ),
     "Medications/medication.csv": (
         "patient_id,encounter_id,code_system,code,start_date,route,brand,strength\n"
@@ -132,8 +131,7 @@ def _append_primary_cases(root: Path, bmi_by_patient: dict[str, float]) -> None:
     _append_rows(
         root / "Encounter" / "encounter.csv",
         *(
-            f"e_{patient},{patient},2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00,IMP,s1"
+            f"e_{patient},{patient},2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1"
             for patient in patients
         ),
     )
@@ -143,10 +141,8 @@ def _append_primary_cases(root: Path, bmi_by_patient: dict[str, float]) -> None:
         encounter = f"e_{patient}"
         lab_rows.extend(
             (
-                f"{patient},{encounter},2024-01-01 01:00:00,"
-                "LOINC,2019-8,55,,mmHg",
-                f"{patient},{encounter},2024-01-01 01:00:00,"
-                "LOINC,2744-1,7.40,,pH",
+                f"{patient},{encounter},2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+                f"{patient},{encounter},2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
             )
         )
         vital_rows.append(
@@ -161,7 +157,7 @@ def test_timestamp_precision_distinguishes_compact_dates_and_timestamps() -> Non
     try:
         rows = connection.execute(
             f"""
-            SELECT raw_value, {timestamp_precision_sql('raw_value')}
+            SELECT raw_value, {timestamp_precision_sql("raw_value")}
             FROM (VALUES
                 ('20240101'),
                 ('2024-01-01'),
@@ -478,9 +474,7 @@ def test_validate_export_rejects_sibling_flat_export_as_domain_folder(
     _write_export(tmp_path)
     sibling_export = tmp_path / "complete_export"
     sibling_export.mkdir()
-    (tmp_path / "Encounter" / "encounter.csv").replace(
-        sibling_export / "encounter.csv"
-    )
+    (tmp_path / "Encounter" / "encounter.csv").replace(sibling_export / "encounter.csv")
 
     report = validate_export(tmp_path)
 
@@ -611,9 +605,7 @@ def test_medication_chunks_allow_different_valid_header_order(tmp_path: Path) ->
     _write_export(tmp_path)
     (tmp_path / "Medications" / "medication.csv").unlink()
     ingredient = tmp_path / "Medications" / "medication_ingredient.csv"
-    ingredient.write_text(
-        "patient_id,encounter_id,code_system,code,start_date\n"
-    )
+    ingredient.write_text("patient_id,encounter_id,code_system,code,start_date\n")
     first = tmp_path / "Medications" / "medication0001.csv"
     second = tmp_path / "Medications" / "medication0002.csv"
     first.write_text(
@@ -704,9 +696,7 @@ def test_status_watch_stops_on_completed_state(
     writer = RunStateWriter(tmp_path, "synthetic-run")
     writer.complete(message="done")
 
-    result = main(
-        ["status", "--output", str(tmp_path), "--watch", "--json"]
-    )
+    result = main(["status", "--output", str(tmp_path), "--watch", "--json"])
 
     assert result == 0
     payload = json.loads(capsys.readouterr().out)
@@ -720,9 +710,7 @@ def test_status_watch_returns_failure_for_failed_build(
     writer = RunStateWriter(tmp_path, "synthetic-run")
     writer.fail(message="synthetic failure")
 
-    result = main(
-        ["status", "--output", str(tmp_path), "--watch", "--json"]
-    )
+    result = main(["status", "--output", str(tmp_path), "--watch", "--json"])
 
     assert result == 1
     payload = json.loads(capsys.readouterr().out)
@@ -735,9 +723,7 @@ def test_status_watch_returns_failure_when_local_worker_disappears(
     writer = RunStateWriter(tmp_path, "synthetic-run")
     writer.update(worker_pid=2_147_483_647)
 
-    result = main(
-        ["status", "--output", str(tmp_path), "--watch", "--json"]
-    )
+    result = main(["status", "--output", str(tmp_path), "--watch", "--json"])
 
     assert result == 1
     payload = json.loads(capsys.readouterr().out)
@@ -806,9 +792,10 @@ def test_export_metadata_is_inventoried_and_invalidates_input_identity(
         "Data Dictionary.csv",
         "export_manifest.json",
     }
-    assert {
-        item.source_file: item.row_count for item in metadata_rows
-    } == {"Data Dictionary.csv": 1, "export_manifest.json": 0}
+    assert {item.source_file: item.row_count for item in metadata_rows} == {
+        "Data Dictionary.csv": 1,
+        "export_manifest.json": 0,
+    }
     metadata.write_text('{"export": "synthetic-v2"}\n')
     second = build_input_inventory(tmp_path, validate_export(tmp_path))
     assert second.sha256 != first.sha256
@@ -865,10 +852,7 @@ def test_multifile_unmapped_sketch_preserves_cross_file_error_bound(
     )
     second.write_text(
         header
-        + "".join(
-            "p_target,e_target,2024-01-01,LOCAL,TARGET,,,\n"
-            for _ in range(100)
-        )
+        + "".join("p_target,e_target,2024-01-01,LOCAL,TARGET,,,\n" for _ in range(100))
     )
     diagnosis.unlink()
     report = validate_export(tmp_path)
@@ -979,9 +963,11 @@ def test_concept_catalog_content_changes_build_identity(tmp_path: Path) -> None:
         code_fingerprint="code",
     )
     medications = copied_catalog / "medications.csv"
-    medications.write_text(medications.read_text().replace(
-        "Semaglutide ingredient", "Semaglutide revised ingredient", 1
-    ))
+    medications.write_text(
+        medications.read_text().replace(
+            "Semaglutide ingredient", "Semaglutide revised ingredient", 1
+        )
+    )
     second = load_concept_sets(copied_catalog)
     second_run = deterministic_run_id(
         config_sha256="config",
@@ -1099,9 +1085,9 @@ def test_duckdb_metadata_bootstrap_preserves_relative_source_inventory(
             "SELECT current_setting('memory_limit'), current_setting('threads')"
         ).fetchone() == ("4.0 GiB", 1)
         mark_database_complete(connection)
-        assert connection.execute(
-            "SELECT status FROM run_manifest"
-        ).fetchone() == ("complete",)
+        assert connection.execute("SELECT status FROM run_manifest").fetchone() == (
+            "complete",
+        )
     finally:
         connection.close()
 
@@ -1217,9 +1203,10 @@ def test_core_ingestion_retains_relevant_rows_and_excludes_total_co2_as_gas(
             WHERE code = '2026-3'
             """
         ).fetchone() == (2,)
-        assert build_concept_match_summary(
-            connection, catalog.required_concept_set_ids
-        ) == ()
+        assert (
+            build_concept_match_summary(connection, catalog.required_concept_set_ids)
+            == ()
+        )
         assert connection.execute(
             """
             SELECT duplicate_rows FROM source_duplicate_summary
@@ -1404,16 +1391,17 @@ def test_partitioned_terminology_qa_matches_direct_reduction(
             """
         ).fetchall()
         assert partitioned == direct
-        assert connection.execute(
-            """
+        assert (
+            connection.execute(
+                """
             SELECT domain, duplicate_rows
             FROM source_duplicate_summary ORDER BY domain
             """
-        ).fetchall() == direct_duplicates
+            ).fetchall()
+            == direct_duplicates
+        )
         assert not list(
-            temp_dir.glob(
-                f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*"
-            )
+            temp_dir.glob(f"{terminology_qa_module._TERMINOLOGY_QA_SCRATCH_PREFIX}*")
         )
     finally:
         connection.close()
@@ -2325,21 +2313,15 @@ def test_core_cohort_scopes_reused_encounter_ids_to_patient(tmp_path: Path) -> N
     )
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
-        "shared_encounter,shared_one,2024-01-01 00:00:00,"
-        "2024-01-02 00:00:00,IMP,s1",
-        "shared_encounter,shared_two,2024-01-01 00:00:00,"
-        "2024-01-02 00:00:00,IMP,s2",
+        "shared_encounter,shared_one,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
+        "shared_encounter,shared_two,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s2",
     )
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
-        "shared_one,shared_encounter,2024-01-01 01:00:00,"
-        "LOINC,2019-8,55,,mmHg",
-        "shared_one,shared_encounter,2024-01-01 01:00:00,"
-        "LOINC,2744-1,7.40,,pH",
-        "shared_two,shared_encounter,2024-01-01 01:00:00,"
-        "LOINC,2019-8,65,,mmHg",
-        "shared_two,shared_encounter,2024-01-01 01:00:00,"
-        "LOINC,2744-1,7.35,,pH",
+        "shared_one,shared_encounter,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "shared_one,shared_encounter,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
+        "shared_two,shared_encounter,2024-01-01 01:00:00,LOINC,2019-8,65,,mmHg",
+        "shared_two,shared_encounter,2024-01-01 01:00:00,LOINC,2744-1,7.35,,pH",
     )
     _append_rows(
         export_root / "Vital Signs" / "vital_signs.csv",
@@ -2624,8 +2606,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
         *(
-            f"e_{patient},{patient},2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00,IMP,s1"
+            f"e_{patient},{patient},2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1"
             for patient in patients
         ),
     )
@@ -2635,10 +2616,8 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         encounter = f"e_{patient}"
         lab_rows.extend(
             (
-                f"{patient},{encounter},2024-01-01 01:00:00,"
-                "LOINC,2019-8,55,,mmHg",
-                f"{patient},{encounter},2024-01-01 01:00:00,"
-                "LOINC,2744-1,7.40,,pH",
+                f"{patient},{encounter},2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+                f"{patient},{encounter},2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
             )
         )
         bmi = 25 if patient == "antipsychotic_only" else 31
@@ -2647,8 +2626,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         )
     lab_rows.extend(
         (
-            "ckd_single,e_ckd_single,2023-12-01,LOINC,77147-7,45,,"
-            "mL/min/1.73m2",
+            "ckd_single,e_ckd_single,2023-12-01,LOINC,77147-7,45,,mL/min/1.73m2",
             "ckd_persistent,e_ckd_persistent,2023-05-01,LOINC,77147-7,45,,"
             "mL/min/1.73m2",
             "ckd_persistent,e_ckd_persistent,2023-12-01,LOINC,77147-7,50,,"
@@ -2691,8 +2669,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         "htn_one,e_htn_one,RXNORM,29046,2023-01-01,oral,,",
         "htn_two,e_htn_two,RXNORM,29046,2023-01-01,oral,,",
         "htn_two,e_htn_two,RXNORM,17767,2023-01-01,oral,,",
-        "antipsychotic_only,e_antipsychotic_only,RXNORM,2626,"
-        "2023-01-01,oral,,",
+        "antipsychotic_only,e_antipsychotic_only,RXNORM,2626,2023-01-01,oral,,",
         "antipsychotic_metabolic,e_antipsychotic_metabolic,RXNORM,2626,"
         "2023-01-01,oral,,",
     )
@@ -2755,7 +2732,7 @@ def test_component_phenotypes_are_temporal_and_evidence_based(
         ]
         for column in indication_columns:
             nonnull_rows = connection.execute(
-                f'SELECT COUNT(*) FROM analysis_glp1_eligibility '
+                f"SELECT COUNT(*) FROM analysis_glp1_eligibility "
                 f'WHERE "{column}" IS NOT NULL'
             ).fetchone()[0]
             evidence_rows = connection.execute(
@@ -2791,8 +2768,7 @@ def test_medication_ingredients_and_unmapped_raw_history_are_observable(
     _append_primary_cases(export_root, {"ingredient": 31, "unmapped": 31})
     _append_rows(
         ingredient_path,
-        "ingredient,e_ingredient,uid-1,RXNORM,1991302,2023-12-01,oral,"
-        "Wegovy,2.4mg,,s1",
+        "ingredient,e_ingredient,uid-1,RXNORM,1991302,2023-12-01,oral,Wegovy,2.4mg,,s1",
     )
     _append_rows(
         export_root / "Diagnosis" / "diagnosis.csv",
@@ -2917,12 +2893,9 @@ def test_component_history_uses_contract_specific_lookback_windows(
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
         "stale_history,e_stale_history,2022-12-01,LOINC,4548-4,8,,%",
-        "stale_history,e_stale_history,2022-09-01,LOINC,77147-7,45,,"
-        "mL/min/1.73m2",
-        "stale_history,e_stale_history,2022-12-15,LOINC,77147-7,50,,"
-        "mL/min/1.73m2",
-        "stale_history,e_stale_history,2022-12-01,LOINC,69990-9,20,,"
-        "events/hour",
+        "stale_history,e_stale_history,2022-09-01,LOINC,77147-7,45,,mL/min/1.73m2",
+        "stale_history,e_stale_history,2022-12-15,LOINC,77147-7,50,,mL/min/1.73m2",
+        "stale_history,e_stale_history,2022-12-01,LOINC,69990-9,20,,events/hour",
         "stale_history,e_stale_history,2022-12-01,LOINC,10230-1,55,,%",
         "stale_history,e_stale_history,2022-12-01,LOINC,48794-2,,F2,stage",
     )
@@ -2989,10 +2962,8 @@ def test_date_only_history_and_medication_boundaries_are_inclusive(
     encounter_path = export_root / "Encounter" / "encounter.csv"
     encounter_path.write_text(
         encounter_path.read_text().replace(
-            "e_boundary,boundary,2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00",
-            "e_boundary,boundary,2024-01-01 12:00:00,"
-            "2024-01-02 12:00:00",
+            "e_boundary,boundary,2024-01-01 00:00:00,2024-01-02 00:00:00",
+            "e_boundary,boundary,2024-01-01 12:00:00,2024-01-02 12:00:00",
         )
     )
     _append_rows(
@@ -3031,8 +3002,7 @@ def test_date_only_history_and_medication_boundaries_are_inclusive(
     _append_rows(
         medication_path,
         "boundary,e_boundary_old,RXNORM,29046,20220101,20240101,oral,,",
-        "boundary,e_boundary_old,RXNORM,17767,20220101,"
-        "2024-01-01 00:00:00,oral,,",
+        "boundary,e_boundary_old,RXNORM,17767,20220101,2024-01-01 00:00:00,oral,,",
     )
 
     build_glp1_eligibility(
@@ -3089,10 +3059,8 @@ def test_glp1_followup_boundaries_respect_start_precision(tmp_path: Path) -> Non
     lab_text = lab_path.read_text()
     for patient in patients:
         encounter_text = encounter_text.replace(
-            f"e_{patient},{patient},2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00",
-            f"e_{patient},{patient},2024-01-01 12:00:00,"
-            "2024-01-02 12:00:00",
+            f"e_{patient},{patient},2024-01-01 00:00:00,2024-01-02 00:00:00",
+            f"e_{patient},{patient},2024-01-01 12:00:00,2024-01-02 12:00:00",
         )
         lab_text = lab_text.replace(
             f"{patient},e_{patient},2024-01-01 01:00:00",
@@ -3155,10 +3123,8 @@ def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
     encounter_text = encounter_path.read_text()
     for patient in patients:
         encounter_text = encounter_text.replace(
-            f"e_{patient},{patient},2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00",
-            f"e_{patient},{patient},2024-01-01 12:00:00,"
-            "2024-01-02 12:00:00",
+            f"e_{patient},{patient},2024-01-01 00:00:00,2024-01-02 00:00:00",
+            f"e_{patient},{patient},2024-01-01 12:00:00,2024-01-02 12:00:00",
         )
     encounter_path.write_text(encounter_text)
     lab_path = export_root / "Lab Results" / "lab_results.csv"
@@ -3179,14 +3145,11 @@ def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
     vital_path.write_text(vital_text)
     _append_rows(
         vital_path,
-        "calculated_boundary,e_calculated_boundary,20230101,"
-        "LOINC,29463-7,93,,kg",
-        "calculated_boundary,e_calculated_boundary,20230101,"
-        "LOINC,8302-2,1.73,,m",
+        "calculated_boundary,e_calculated_boundary,20230101,LOINC,29463-7,93,,kg",
+        "calculated_boundary,e_calculated_boundary,20230101,LOINC,8302-2,1.73,,m",
         "calculated_timestamp,e_calculated_timestamp,2023-01-01 00:00:00,"
         "LOINC,29463-7,93,,kg",
-        "calculated_timestamp,e_calculated_timestamp,20221231,"
-        "LOINC,8302-2,1.73,,m",
+        "calculated_timestamp,e_calculated_timestamp,20221231,LOINC,8302-2,1.73,,m",
     )
 
     build_glp1_eligibility(
@@ -3209,9 +3172,7 @@ def test_calculated_bmi_date_only_lookback_boundary_is_inclusive(
             patient_id: (bmi_value, bmi_source)
             for patient_id, bmi_value, bmi_source in rows
         }
-        assert by_patient["calculated_boundary"][0] == pytest.approx(
-            93 / (1.73**2)
-        )
+        assert by_patient["calculated_boundary"][0] == pytest.approx(93 / (1.73**2))
         assert by_patient["calculated_boundary"][1] == "calculated_height_weight"
         assert by_patient["calculated_timestamp"] == (None, None)
     finally:
@@ -3231,10 +3192,8 @@ def test_lab_lookback_boundaries_respect_source_precision(tmp_path: Path) -> Non
     lab_text = lab_path.read_text()
     for patient in patients:
         encounter_text = encounter_text.replace(
-            f"e_{patient},{patient},2024-01-01 00:00:00,"
-            "2024-01-02 00:00:00",
-            f"e_{patient},{patient},2024-01-01 12:00:00,"
-            "2024-01-02 12:00:00",
+            f"e_{patient},{patient},2024-01-01 00:00:00,2024-01-02 00:00:00",
+            f"e_{patient},{patient},2024-01-01 12:00:00,2024-01-02 12:00:00",
         )
         lab_text = lab_text.replace(
             f"{patient},e_{patient},2024-01-01 01:00:00",
@@ -3246,8 +3205,7 @@ def test_lab_lookback_boundaries_respect_source_precision(tmp_path: Path) -> Non
         lab_path,
         "lab_date,e_lab_date,20230101,LOINC,4548-4,6.5,,%",
         "lab_date,e_lab_date,20220101,LOINC,77147-7,45,,mL/min/1.73m2",
-        "lab_timestamp,e_lab_timestamp,2023-01-01 00:00:00,"
-        "LOINC,4548-4,6.5,,%",
+        "lab_timestamp,e_lab_timestamp,2023-01-01 00:00:00,LOINC,4548-4,6.5,,%",
         "lab_timestamp,e_lab_timestamp,2022-01-01 00:00:00,"
         "LOINC,77147-7,45,,mL/min/1.73m2",
     )
@@ -3454,10 +3412,8 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
     _append_rows(
         export_root / "Diagnosis" / "diagnosis.csv",
         "mash_f2,e_mash_f2,2023-12-01,ICD10CM,K75.81,,,,",
-        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
-        "ICD10CM,K75.81,,,,",
-        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2020-01-01,"
-        "ICD10CM,K74.60,,,,",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,ICD10CM,K75.81,,,,",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2020-01-01,ICD10CM,K74.60,,,,",
         "mash_unstaged,e_mash_unstaged,2023-12-01,ICD10CM,K75.81,,,,",
     )
     _append_rows(
@@ -3468,8 +3424,7 @@ def test_mash_strict_status_requires_f2_f3_and_no_cirrhosis(
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
         "mash_f2,e_mash_f2,2023-12-01,LOINC,48794-2,,F2,stage",
-        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,"
-        "LOINC,48794-2,,F3,stage",
+        "mash_f3_cirrhosis,e_mash_f3_cirrhosis,2023-12-01,LOINC,48794-2,,F3,stage",
     )
 
     build_glp1_eligibility(
@@ -3541,15 +3496,12 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
     )
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
-        "e_missing_bmi,missing_bmi,2024-01-01 00:00:00,"
-        "2024-01-02 00:00:00,IMP,s1",
+        "e_missing_bmi,missing_bmi,2024-01-01 00:00:00,2024-01-02 00:00:00,IMP,s1",
     )
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
-        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,"
-        "LOINC,2019-8,55,,mmHg",
-        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,"
-        "LOINC,2744-1,7.40,,pH",
+        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,LOINC,2019-8,55,,mmHg",
+        "missing_bmi,e_missing_bmi,2024-01-01 01:00:00,LOINC,2744-1,7.40,,pH",
         "hfpef,e_hfpef,2023-12-01,LOINC,10230-1,55,,%",
         "prediabetes,e_prediabetes,2023-12-01,LOINC,4548-4,6.0,,%",
     )
@@ -3560,10 +3512,8 @@ def test_bridge_branches_missing_bmi_and_glp1_order_timing(
     )
     _append_rows(
         export_root / "Medications" / "medication.csv",
-        "bmi35,e_bmi35,RXNORM,1991302,2023-12-01,"
-        "subcutaneous,Wegovy,2.4mg",
-        "bmi35,e_bmi35,RXNORM,1991302,2024-01-15,"
-        "subcutaneous,Ozempic,1mg",
+        "bmi35,e_bmi35,RXNORM,1991302,2023-12-01,subcutaneous,Wegovy,2.4mg",
+        "bmi35,e_bmi35,RXNORM,1991302,2024-01-15,subcutaneous,Ozempic,1mg",
     )
 
     build_glp1_eligibility(
@@ -3820,8 +3770,7 @@ def test_date_only_context_rows_match_same_encounter_date(tmp_path: Path) -> Non
     )
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
-        "e_date_only,date_only,2024-01-01 12:00:00,"
-        "2024-01-02 12:00:00,IMP,s1",
+        "e_date_only,date_only,2024-01-01 12:00:00,2024-01-02 12:00:00,IMP,s1",
     )
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
@@ -3880,8 +3829,7 @@ def test_date_only_abg_includes_same_day_timestamped_procedure_context(
     )
     _append_rows(
         export_root / "Encounter" / "encounter.csv",
-        "e_date_only_abg,date_only_abg,2024-01-01 12:00:00,"
-        "2024-01-02 12:00:00,IMP,s1",
+        "e_date_only_abg,date_only_abg,2024-01-01 12:00:00,2024-01-02 12:00:00,IMP,s1",
     )
     _append_rows(
         export_root / "Lab Results" / "lab_results.csv",
@@ -4080,9 +4028,7 @@ def test_build_publishes_required_core_outputs_and_reuses_identical_run(
     summary = summarize_database(output_root / "glp1_hypercapnia.duckdb")
     assert summary["primary_obesity_hypercapnia"] == 1
     assert summary["warning_count"] == 0
-    dictionary_rows = list(
-        csv.DictReader((output_root / "data_dictionary.csv").open())
-    )
+    dictionary_rows = list(csv.DictReader((output_root / "data_dictionary.csv").open()))
     assert dictionary_rows
     assert all(row["description"].strip() for row in dictionary_rows)
     qa_text = (output_root / "data_quality_report.html").read_text()

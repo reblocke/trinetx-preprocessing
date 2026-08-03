@@ -163,9 +163,7 @@ def build_glp1_eligibility(
                 ).fetchone()[0]
             ),
         )
-        connection.execute(
-            "UPDATE source_file_inventory SET load_status = 'loaded'"
-        )
+        connection.execute("UPDATE source_file_inventory SET load_status = 'loaded'")
         mark_database_complete(connection)
         state.update(
             phase="output_materialization",
@@ -278,9 +276,7 @@ def _require_safe_output_location(output_dir: Path) -> None:
 
     output = Path(output_dir).resolve()
     if output.exists() and not output.is_dir():
-        raise ValueError(
-            f"GLP-1 output path exists and is not a directory: {output}"
-        )
+        raise ValueError(f"GLP-1 output path exists and is not a directory: {output}")
     existing_parent = output
     while not existing_parent.exists() and existing_parent != existing_parent.parent:
         existing_parent = existing_parent.parent

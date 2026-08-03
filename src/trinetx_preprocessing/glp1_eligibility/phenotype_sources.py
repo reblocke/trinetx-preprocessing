@@ -120,9 +120,9 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         JOIN source_diagnosis AS diagnosis
           ON diagnosis.patient_id = cohort.patient_id
          AND diagnosis.encounter_id = cohort.encounter_id
-         AND {_encounter_context_window_sql(
-             'diagnosis.event_datetime', 'diagnosis.date'
-         )}
+         AND {
+            _encounter_context_window_sql("diagnosis.event_datetime", "diagnosis.date")
+        }
         JOIN concept_set AS concept
           ON concept.domain = 'diagnosis'
          AND concept.include
@@ -130,8 +130,8 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
              'cardiac_arrest', 'major_trauma',
              'pneumonia_lri', 'heart_failure'
          )
-         AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
-         AND {_concept_match_sql('diagnosis.code')}
+         AND {_code_system_sql("diagnosis.code_system")} = concept.code_system
+         AND {_concept_match_sql("diagnosis.code")}
         GROUP BY cohort.index_event_id
         """
     )
@@ -156,9 +156,9 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
         JOIN source_procedure AS procedure
           ON procedure.patient_id = cohort.patient_id
          AND procedure.encounter_id = cohort.encounter_id
-         AND {_encounter_context_window_sql(
-             'procedure.event_datetime', 'procedure.date'
-         )}
+         AND {
+            _encounter_context_window_sql("procedure.event_datetime", "procedure.date")
+        }
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
@@ -166,8 +166,8 @@ def _build_index_context(connection: duckdb.DuckDBPyConnection) -> None:
              'invasive_ventilation', 'procedural_sedation',
              'anesthesia_procedure'
          )
-         AND {_code_system_sql('procedure.code_system')} = concept.code_system
-         AND {_concept_match_sql('procedure.code')}
+         AND {_code_system_sql("procedure.code_system")} = concept.code_system
+         AND {_concept_match_sql("procedure.code")}
         GROUP BY cohort.index_event_id
         """
     )
@@ -202,8 +202,7 @@ def _build_diagnosis_evidence(
 ) -> None:
     lookback = config.study.lookback_days
     all_history = ", ".join(
-        _sql_string(component)
-        for component in sorted(ALL_HISTORY_DIAGNOSIS_COMPONENTS)
+        _sql_string(component) for component in sorted(ALL_HISTORY_DIAGNOSIS_COMPONENTS)
     )
     in_lookback = inclusive_lookback_start_sql(
         "diagnosis.event_datetime",
@@ -229,8 +228,8 @@ def _build_diagnosis_evidence(
         JOIN concept_set AS concept
           ON concept.domain = 'diagnosis'
          AND concept.include
-         AND {_code_system_sql('diagnosis.code_system')} = concept.code_system
-         AND {_concept_match_sql('diagnosis.code')}
+         AND {_code_system_sql("diagnosis.code_system")} = concept.code_system
+         AND {_concept_match_sql("diagnosis.code")}
         WHERE concept.concept_set_id IN ({all_history})
            OR {in_lookback}
         """
@@ -256,8 +255,7 @@ def _build_procedure_evidence(
 ) -> None:
     lookback = config.study.lookback_days
     all_history = ", ".join(
-        _sql_string(component)
-        for component in sorted(ALL_HISTORY_PROCEDURE_COMPONENTS)
+        _sql_string(component) for component in sorted(ALL_HISTORY_PROCEDURE_COMPONENTS)
     )
     in_lookback = inclusive_lookback_start_sql(
         "procedure.event_datetime",
@@ -283,8 +281,8 @@ def _build_procedure_evidence(
         JOIN concept_set AS concept
           ON concept.domain = 'procedure'
          AND concept.include
-         AND {_code_system_sql('procedure.code_system')} = concept.code_system
-         AND {_concept_match_sql('procedure.code')}
+         AND {_code_system_sql("procedure.code_system")} = concept.code_system
+         AND {_concept_match_sql("procedure.code")}
         WHERE concept.concept_set_id IN ({all_history})
            OR {in_lookback}
         """
@@ -326,8 +324,8 @@ def _build_normalized_component_labs(
                  'ast', 'alt', 'platelets', 'albumin', 'inr', 'bilirubin',
                  'fibrosis_stage'
              )
-             AND {_code_system_sql('lab.code_system')} = concept.code_system
-             AND {_concept_match_sql('lab.code')}
+             AND {_code_system_sql("lab.code_system")} = concept.code_system
+             AND {_concept_match_sql("lab.code")}
         )
         SELECT
             *,
@@ -444,7 +442,7 @@ def _build_lab_summary(
             analysis.index_date,
             lab.* EXCLUDE (event_datetime),
             lab.event_datetime,
-            {timestamp_precision_sql('lab.date')} AS event_datetime_precision,
+            {timestamp_precision_sql("lab.date")} AS event_datetime_precision,
             datediff('day', lab.event_datetime, analysis.index_date)
                 AS days_before_index
         FROM analysis_glp1_eligibility AS analysis
@@ -659,8 +657,8 @@ def _build_blood_pressure_summary(
           ON concept.domain = 'vital'
          AND concept.include
          AND concept.concept_set_id IN ('systolic_bp', 'diastolic_bp')
-         AND {_code_system_sql('vital.code_system')} = concept.code_system
-         AND {_concept_match_sql('vital.code')}
+         AND {_code_system_sql("vital.code_system")} = concept.code_system
+         AND {_concept_match_sql("vital.code")}
         ), normalized AS (
             SELECT
                 *,
@@ -791,8 +789,8 @@ def _build_medication_evidence(
         JOIN concept_set AS concept
           ON concept.domain = 'medication'
          AND concept.include
-         AND {_code_system_sql('medication.code_system')} = concept.code_system
-         AND {_concept_match_sql('medication.code')}
+         AND {_code_system_sql("medication.code_system")} = concept.code_system
+         AND {_concept_match_sql("medication.code")}
         WHERE (
                 medication.event_datetime <= analysis.index_date
                 AND (
@@ -928,10 +926,7 @@ def _build_observability_summary(connection: duckdb.DuckDBPyConnection) -> None:
 
 
 def _code_system_sql(expression: str) -> str:
-    return (
-        f"regexp_replace(upper(trim({expression})), "
-        "'[^A-Z0-9]', '', 'g')"
-    )
+    return f"regexp_replace(upper(trim({expression})), '[^A-Z0-9]', '', 'g')"
 
 
 def _encounter_context_window_sql(

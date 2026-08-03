@@ -108,9 +108,7 @@ DOMAIN_DEFINITIONS = (
     ),
     DomainDefinition(
         "medication_ingredient",
-        re.compile(
-            r"^medication_ingredients?(?:_?\d+)?\.csv$", re.IGNORECASE
-        ),
+        re.compile(r"^medication_ingredients?(?:_?\d+)?\.csv$", re.IGNORECASE),
         False,
         ("patient_id", "code_system", "code", "start_date"),
     ),
@@ -174,9 +172,7 @@ def discover_export_files(input_root: Path) -> dict[str, tuple[Path, ...]]:
 
     for path in root.rglob("*"):
         relative_parts = path.relative_to(root).parts
-        if not path.is_file() or any(
-            part.startswith(".") for part in relative_parts
-        ):
+        if not path.is_file() or any(part.startswith(".") for part in relative_parts):
             continue
         matched_clinical = False
         if path.suffix.lower() == ".csv":
@@ -352,9 +348,7 @@ def _select_source_family(
 def _raise_ambiguous_source_family(
     logical_domain: str, paths: list[Path], root: Path
 ) -> None:
-    candidates = ", ".join(
-        sorted(path.relative_to(root).as_posix() for path in paths)
-    )
+    candidates = ", ".join(sorted(path.relative_to(root).as_posix() for path in paths))
     raise ExportDiscoveryError(
         f"Ambiguous nearest source family for {logical_domain}: {candidates}. "
         "Pass the root of exactly one TriNetX export."
@@ -438,9 +432,7 @@ def _medication_split_family_has_invalid_headers(
         )
     )
     try:
-        return any(
-            not required.issubset(_read_header(path)) for path in medication
-        )
+        return any(not required.issubset(_read_header(path)) for path in medication)
     except (OSError, UnicodeError, csv.Error):
         return False
 

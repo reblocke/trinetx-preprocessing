@@ -37,6 +37,7 @@ from .combined_preprocessing.elements import (
     is_medication_ingredient_export,
 )
 from .combined_preprocessing.scratch import (
+    COMBINED_LOCK_PREFIX,
     COMBINED_SCRATCH_PATH_PREFIXES,
     is_combined_scratch_name,
 )
@@ -1714,9 +1715,37 @@ def _find_scratch_artifacts(root: Path) -> list[Path]:
 
 
 def _is_known_scratch_path(path: Path) -> bool:
+    if _is_persistent_combined_lock_sidecar(path):
+        return False
     return any(
         path.name.startswith(prefix) for prefix in SCRATCH_PATH_PREFIXES
     ) or is_combined_scratch_name(path.name)
+
+
+def _is_persistent_combined_lock_sidecar(path: Path) -> bool:
+    """Return whether an AppleDouble file belongs to a durable lock file.
+
+    AppleDouble files normally match the combined-scratch family so orphaned
+    lock metadata can be cleaned. A regular sidecar paired with a regular,
+    singly linked lock file is instead persistent filesystem metadata and must
+    survive ``clean-scratch``.
+    """
+
+    if not path.name.startswith(f"._{COMBINED_LOCK_PREFIX}"):
+        return False
+
+    lock_path = path.with_name(path.name.removeprefix("._"))
+    try:
+        sidecar_stat = path.lstat()
+        lock_stat = lock_path.lstat()
+    except OSError:
+        return False
+
+    return (
+        stat.S_ISREG(sidecar_stat.st_mode)
+        and stat.S_ISREG(lock_stat.st_mode)
+        and lock_stat.st_nlink == 1
+    )
 
 
 def _path_size_bytes(path: Path) -> int:

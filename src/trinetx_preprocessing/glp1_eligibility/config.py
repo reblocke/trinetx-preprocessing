@@ -241,9 +241,7 @@ def _load_study(raw: dict[str, Any]) -> StudyConfig:
         index_encounter_types=encounter_types,
         adult_age_min=_positive_int(raw, "adult_age_min"),
         lookback_days=_nonnegative_int(raw, "lookback_days"),
-        measurement_lookback_days=_nonnegative_int(
-            raw, "measurement_lookback_days"
-        ),
+        measurement_lookback_days=_nonnegative_int(raw, "measurement_lookback_days"),
         medication_lookback_days=_nonnegative_int(raw, "medication_lookback_days"),
         followup_days=_nonnegative_int(raw, "followup_days"),
     )
@@ -277,9 +275,7 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         sorted(
             {
                 _positive_float_value(value, "pco2_sensitivity_thresholds_mm_hg")
-                for value in _required_list(
-                    raw, "pco2_sensitivity_thresholds_mm_hg"
-                )
+                for value in _required_list(raw, "pco2_sensitivity_thresholds_mm_hg")
             }
         )
     )
@@ -311,9 +307,7 @@ def _load_hypercapnia(raw: dict[str, Any]) -> HypercapniaConfig:
         ("SaO2", sao2_plausible_min, sao2_plausible_max),
     ):
         if minimum >= maximum:
-            raise GLP1ConfigError(
-                f"{label} plausible minimum must be below maximum."
-            )
+            raise GLP1ConfigError(f"{label} plausible minimum must be below maximum.")
     return HypercapniaConfig(
         index_window_hours=_positive_int(raw, "index_window_hours"),
         pco2_gt_mm_hg=_positive_float(raw, "pco2_gt_mm_hg"),
@@ -445,9 +439,7 @@ def _load_runtime(raw: Any) -> RuntimeConfig:
             else 4096
         ),
         duckdb_threads=(
-            _positive_int(raw, "duckdb_threads")
-            if "duckdb_threads" in raw
-            else 1
+            _positive_int(raw, "duckdb_threads") if "duckdb_threads" in raw else 1
         ),
     )
 

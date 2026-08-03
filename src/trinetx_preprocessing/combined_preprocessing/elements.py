@@ -158,6 +158,7 @@ def is_medication_ingredient_export(path: Path) -> bool:
 
     return _MEDICATION_INGREDIENT_STEM.fullmatch(path.stem) is not None
 
+
 OPTIONAL_SOURCE_COLUMNS = {
     "labs": ("specimen", "specimen_id", "panel_id"),
     "medications": (
@@ -415,9 +416,7 @@ class ElementCaptureWriter:
             included_memberships = memberships.loc[
                 memberships["include"].fillna(False).astype(bool)
             ]
-            retained_ids = set(
-                included_memberships["source_record_id"].astype(str)
-            )
+            retained_ids = set(included_memberships["source_record_id"].astype(str))
             retained_index = frame.index[record_ids.astype(str).isin(retained_ids)]
             memberships = memberships.loc[
                 memberships["source_record_id"].astype(str).isin(retained_ids)

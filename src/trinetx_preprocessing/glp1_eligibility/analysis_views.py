@@ -106,17 +106,14 @@ def _build_prevalence_views(connection: duckdb.DuckDBPyConnection) -> None:
 
 def _build_overlap_view(connection: duckdb.DuckDBPyConnection) -> None:
     individual_rules = tuple(
-        rule
-        for rule in INDICATION_RULES
-        if not rule.column.endswith("_any")
+        rule for rule in INDICATION_RULES if not rule.column.endswith("_any")
     )
     membership_values = ",\n                ".join(
         f"CASE WHEN {rule.column} THEN {_sql_string(rule.phenotype)} END"
         for rule in individual_rules
     )
     count_expression = " + ".join(
-        f"cast(coalesce({rule.column}, FALSE) AS INTEGER)"
-        for rule in individual_rules
+        f"cast(coalesce({rule.column}, FALSE) AS INTEGER)" for rule in individual_rules
     )
     connection.execute(
         f"""
@@ -168,8 +165,7 @@ def _build_missingness_view(connection: duckdb.DuckDBPyConnection) -> None:
         for field in MISSINGNESS_FIELDS
     ]
     connection.execute(
-        "CREATE OR REPLACE VIEW analysis_missingness AS "
-        + " UNION ALL ".join(selects)
+        "CREATE OR REPLACE VIEW analysis_missingness AS " + " UNION ALL ".join(selects)
     )
 
 
