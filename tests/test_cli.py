@@ -736,7 +736,12 @@ def test_clean_scratch_preserves_persistent_lock_appledouble_sidecars(
     sidecar_lock = work_dir / ".trinetx-combined-lock-sidecar-symlink"
     sidecar_lock.write_text("lock metadata\n")
     symlinked_sidecar = work_dir / "._.trinetx-combined-lock-sidecar-symlink"
+    # Non-APFS macOS test volumes can materialize this AppleDouble placeholder
+    # when the paired lock is created. Replace that test-owned file with the
+    # deliberately unsafe sidecar symlink exercised below.
+    symlinked_sidecar.unlink(missing_ok=True)
     symlinked_sidecar.symlink_to(symlink_target)
+    assert symlinked_sidecar.is_symlink()
 
     payload = cli_module.clean_scratch_artifacts(root, delete=True)
 
