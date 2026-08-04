@@ -39,6 +39,22 @@ trinetx_preprocessing_scaffold_md.zip
 **/.glp1_eligibility.build-*/
 **/.glp1_eligibility.previous-*/
 
+# Confidential combined preprocessing outputs
+**/trinetx_preprocessed.duckdb
+**/trinetx_preprocessed_manifest.json
+**/combined_source_*.parquet
+**/combined_source_*.csv
+**/combined_element_membership_*.parquet
+**/combined_element_membership_*.csv
+**/combined_observability_*.parquet
+**/combined_observability_*.csv
+**/combined_gas_candidate_id.parquet
+**/combined_gas_candidate_id.csv
+**/combined_encounter_flow.parquet
+**/combined_encounter_flow.csv
+**/RFS_*_ENC_*_BEFORE.csv
+**/RFS_*_ENC_*_AFTER.csv
+
 # Python
 __pycache__/
 *.pyc

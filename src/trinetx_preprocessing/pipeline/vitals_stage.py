@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ..combined_preprocessing.elements import ElementCaptureWriter
 from ..config import Config, ConfigError, collect_domain_paths
 from ..guardrails import log_row_count
 from ..io.csv import iter_csv
@@ -63,6 +64,7 @@ def run_vitals_stage(config: Config) -> list[Path]:
     chunksize = config.chunking.lines_per_chunk if config.chunking.enabled else None
 
     with ExitStack() as stack:
+        element_writer = stack.enter_context(ElementCaptureWriter(config, "vitals"))
         analysis_writer = stack.enter_context(
             WorkTableWriter(config, "analysis_vital_features.csv")
         )
@@ -85,10 +87,16 @@ def run_vitals_stage(config: Config) -> list[Path]:
                     path,
                     chunksize=chunksize,
                     usecols=RAW_VITALS_COLUMNS,
-                    dtype=RAW_DTYPE,
-                    parse_dates=["date"],
+                    dtype=(
+                        {column: "string" for column in RAW_VITALS_COLUMNS}
+                        if config.combined.enabled
+                        else RAW_DTYPE
+                    ),
+                    parse_dates=None if config.combined.enabled else ["date"],
+                    preserve_source_tokens=config.combined.enabled,
                 ):
                     rows_read += len(chunk)
+                    element_writer.add_chunk(chunk, source_path=path)
                     normalized = normalize_vitals_chunk(chunk)
                     rows_normalized += len(normalized)
                     writer.write(normalized)
@@ -156,6 +164,8 @@ def run_vitals_stage(config: Config) -> list[Path]:
                         grouped_counts[rule.name],
                         writer.written_paths[0].name,
                     )
+
+    output_paths.extend(element_writer.written_paths)
 
     return output_paths
 

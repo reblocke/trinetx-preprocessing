@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -57,6 +58,381 @@ def _write_config(path: Path) -> None:
         '    pattern: "Encounter/encounter*.csv"\n'
     )
     path.write_text(content)
+
+
+def test_validate_inputs_accepts_minimal_medication_ingredient_schema(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    medication_dir = data_dir / "Medications"
+    medication_dir.mkdir(parents=True)
+    ingredient = medication_dir / "medication_ingredient.csv"
+    ingredient.write_text(
+        "patient_id,code_system,code,start_date\nP1,RXNORM,1991302,2023-01-01\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "domains:\n"
+        "  meds:\n"
+        '    pattern: "Medications/medication*.csv"\n'
+    )
+
+    cli_module.validate_input_headers(load_config(config_path))
+
+
+def test_validate_inputs_rejects_incomplete_medication_ingredient_schema(
+    tmp_path: Path,
+) -> None:
+    data_dir = tmp_path / "data"
+    medication_dir = data_dir / "Medications"
+    medication_dir.mkdir(parents=True)
+    (medication_dir / "medication_ingredient.csv").write_text(
+        "patient_id,code_system,code\nP1,RXNORM,1991302\n"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "domains:\n"
+        "  meds:\n"
+        '    pattern: "Medications/medication*.csv"\n'
+    )
+
+    with pytest.raises(cli_module.ConfigError, match="start_date"):
+        cli_module.validate_input_headers(load_config(config_path))
+
+
+def test_run_uses_combined_builder_when_enabled(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "data_dir: data\n"
+        "work_dir: work\n"
+        "output_dir: output\n"
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    calls = []
+
+    def fake_build(config, *, strict=False, replace_existing=False):
+        calls.append((config.combined.enabled, strict, replace_existing))
+        return SimpleNamespace(
+            database_path=tmp_path / "trinetx_preprocessed.duckdb",
+            compatibility_paths=tuple(
+                Path(f"output-{index}.csv") for index in range(36)
+            ),
+        )
+
+    monkeypatch.setattr(cli_module, "validate_config", lambda config: None)
+    monkeypatch.setattr(cli_module, "build_preprocessed", fake_build)
+    monkeypatch.setattr(
+        cli_module,
+        "run_pipeline",
+        lambda *args, **kwargs: pytest.fail("legacy pipeline entry point was used"),
+    )
+
+    result = cli_module.main(["run", "--config", str(config_path), "--strict"])
+
+    assert result == 0
+    assert calls == [(True, True, False)]
+
+
+def test_build_preprocessed_cli_rejects_path_overlap_during_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_dir = tmp_path / "data"
+    shared_dir = tmp_path / "shared"
+    shared_dir.mkdir()
+    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{data_dir}"\n'
+        f'work_dir: "{shared_dir}"\n'
+        f'output_dir: "{shared_dir}"\n'
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    marker = shared_dir / "must-remain.txt"
+    marker.write_text("unchanged")
+
+    monkeypatch.setattr(
+        cli_module,
+        "_require_safe_combined_mutation_locations",
+        lambda *args, **kwargs: pytest.fail(
+            "mutation-location checks ran after invalid config validation"
+        ),
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "build_preprocessed",
+        lambda *args, **kwargs: pytest.fail("combined builder was called"),
+    )
+
+    result = cli_module.main(["build-preprocessed", "--config", str(config_path)])
+
+    assert result == 2
+    assert marker.read_text() == "unchanged"
+
+
+def test_export_legacy_cli_routes_atomic_replacement_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "product" / "trinetx_preprocessed.duckdb"
+    output_dir = tmp_path / "compatibility"
+    calls: list[tuple[Path, Path, bool]] = []
+
+    def export(
+        database_path: Path,
+        destination: Path,
+        *,
+        replace_existing: bool,
+    ) -> tuple[Path, ...]:
+        calls.append((database_path, destination, replace_existing))
+        return tuple(destination / f"output-{index}.csv" for index in range(36))
+
+    monkeypatch.setattr(
+        cli_module,
+        "export_legacy_compatibility_outputs",
+        export,
+    )
+
+    result = cli_module.main(
+        [
+            "export-legacy",
+            "--database",
+            str(database),
+            "--output-dir",
+            str(output_dir),
+            "--replace",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [(database, output_dir, True)]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        FileExistsError("use --replace"),
+        cli_module.CombinedLockError("another export holds the lock"),
+    ],
+)
+def test_export_legacy_cli_reports_expected_lifecycle_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+) -> None:
+    def fail_export(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(
+        cli_module,
+        "export_legacy_compatibility_outputs",
+        fail_export,
+    )
+
+    result = cli_module.main(
+        [
+            "export-legacy",
+            "--database",
+            str(tmp_path / "product.duckdb"),
+            "--output-dir",
+            str(tmp_path / "compatibility"),
+        ]
+    )
+
+    assert result == 2
+
+
+def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "product" / "trinetx_preprocessed.duckdb"
+    output_dir = tmp_path / "compatibility"
+    calls: list[tuple[str, Path, str | None]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append(("guard", path, artifact_label))
+
+    def record_compatibility_guard(path: Path, *, artifact_prefix: str) -> None:
+        calls.append(("compatibility_guard", path, artifact_prefix))
+
+    def validate(
+        database_path: Path,
+        *,
+        compatibility_output_dir: Path | None,
+    ) -> SimpleNamespace:
+        calls.append(("validate", database_path, str(compatibility_output_dir)))
+        return SimpleNamespace(valid=True, errors=(), warnings=(), counts={})
+
+    monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+    monkeypatch.setattr(
+        cli_module,
+        "require_safe_compatibility_hash_locations",
+        record_compatibility_guard,
+    )
+    monkeypatch.setattr(cli_module, "validate_preprocessed_database", validate)
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(database),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 0
+    assert calls == [
+        ("guard", database.parent, "validation database/spill directory"),
+        (
+            "compatibility_guard",
+            output_dir,
+            "validation compatibility",
+        ),
+        ("validate", database, str(output_dir)),
+    ]
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe database reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(ROOT / "private-product" / "trinetx_preprocessed.duckdb"),
+        ]
+    )
+
+    assert result == 2
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_compatibility_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe output reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(tmp_path / "product" / "trinetx_preprocessed.duckdb"),
+            "--output-dir",
+            str(ROOT / "private-compatibility"),
+        ]
+    )
+
+    assert result == 2
+
+
+def test_validate_preprocessed_cli_rejects_repository_local_hash_parent_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "compatibility"
+    output_dir.mkdir()
+    (output_dir / "AMBULATORY").symlink_to(ROOT, target_is_directory=True)
+    monkeypatch.setattr(
+        cli_module,
+        "validate_preprocessed_database",
+        lambda *args, **kwargs: pytest.fail("unsafe hash parent reached validation"),
+    )
+
+    result = cli_module.main(
+        [
+            "validate-preprocessed",
+            "--database",
+            str(tmp_path / "product" / "trinetx_preprocessed.duckdb"),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert result == 2
+
+
+COMBINED_MUTATING_ROUTES = (
+    "run",
+    "run-all",
+    "build-preprocessed",
+    "profile",
+    "baseline",
+    "compare",
+    "run-encounter",
+    "run-labs",
+    "run-diagnosis",
+    "run-meds",
+    "run-procedure",
+    "run-vitals",
+    "run-rfs",
+    "run-final-assembly",
+)
+
+
+@pytest.mark.parametrize("command", COMBINED_MUTATING_ROUTES)
+def test_every_combined_mutating_route_guards_work_and_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f'data_dir: "{tmp_path / "data"}"\n'
+        f'work_dir: "{tmp_path / "work"}"\n'
+        f'output_dir: "{tmp_path / "output"}"\n'
+        "combined:\n"
+        "  enabled: true\n"
+        "domains:\n"
+        "  encounter:\n"
+        '    pattern: "Encounter/encounter*.csv"\n'
+    )
+    config = load_config(config_path)
+    calls: list[tuple[Path, str]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append((path, artifact_label))
+
+    monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+
+    cli_module._require_safe_combined_mutation_locations(
+        config,
+        command=command,
+    )
+
+    assert set(COMBINED_MUTATING_ROUTES) == cli_module.COMBINED_MUTATING_COMMANDS
+    assert calls == [
+        (config.work_dir, "work directory"),
+        (config.output_dir, "output directory"),
+    ]
 
 
 def _write_encounter_config(
@@ -307,18 +683,78 @@ def test_clean_scratch_recognizes_current_partition_stores(tmp_path: Path) -> No
         ".trinetx-glp1-observability-scan-",
         ".trinetx-glp1-terminology-qa-",
         ".trinetx-glp1-vital-ingest-",
+        *cli_module.COMBINED_SCRATCH_PATH_PREFIXES,
+        ".output.combined-build-",
+        ".trinetx_preprocessed.duckdb.duckdb-tmp-",
+        "._.trinetx-combined-build-",
+        "._..trinetx-combined-publication-",
+        "._.output.combined-build-",
+        "._.trinetx-combined-lock-",
     ]
-    for prefix in prefixes:
-        scratch = work_dir / f"{prefix}test"
+    scratch_names = [f"{prefix}test-{index}" for index, prefix in enumerate(prefixes)]
+    for scratch_name in scratch_names:
+        scratch = work_dir / scratch_name
         scratch.mkdir()
         (scratch / "bucket-000.parquet").write_text("rows")
 
     payload = cli_module.clean_scratch_artifacts(root, delete=False)
 
-    assert payload["artifact_count"] == len(prefixes)
+    expected_names = sorted(
+        path.name
+        for path in work_dir.iterdir()
+        if cli_module._is_known_scratch_path(path)
+    )
+    assert set(scratch_names).issubset(expected_names)
+    assert payload["artifact_count"] == len(expected_names)
     assert sorted(entry["relative_path"] for entry in payload["artifacts"]) == [
-        f"refactor/work/{prefix}test" for prefix in sorted(prefixes)
+        f"refactor/work/{scratch_name}" for scratch_name in expected_names
     ]
+
+
+def test_clean_scratch_preserves_persistent_lock_appledouble_sidecars(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "validation"
+    work_dir = root / "refactor" / "work"
+    work_dir.mkdir(parents=True)
+
+    persistent_lock = work_dir / ".trinetx-combined-lock-persistent"
+    persistent_lock.write_text("lock metadata\n")
+    persistent_sidecar = work_dir / "._.trinetx-combined-lock-persistent"
+    persistent_sidecar.write_bytes(b"AppleDouble")
+
+    orphan_sidecar = work_dir / "._.trinetx-combined-lock-orphan"
+    orphan_sidecar.write_bytes(b"AppleDouble")
+
+    symlink_target = work_dir / "ordinary-file"
+    symlink_target.write_text("keep\n")
+    symlinked_lock = work_dir / ".trinetx-combined-lock-symlink"
+    symlinked_lock.symlink_to(symlink_target)
+    symlinked_lock_sidecar = work_dir / "._.trinetx-combined-lock-symlink"
+    symlinked_lock_sidecar.write_bytes(b"AppleDouble")
+
+    sidecar_lock = work_dir / ".trinetx-combined-lock-sidecar-symlink"
+    sidecar_lock.write_text("lock metadata\n")
+    symlinked_sidecar = work_dir / "._.trinetx-combined-lock-sidecar-symlink"
+    # Non-APFS macOS test volumes can materialize this AppleDouble placeholder
+    # when the paired lock is created. Replace that test-owned file with the
+    # deliberately unsafe sidecar symlink exercised below.
+    symlinked_sidecar.unlink(missing_ok=True)
+    symlinked_sidecar.symlink_to(symlink_target)
+    assert symlinked_sidecar.is_symlink()
+
+    payload = cli_module.clean_scratch_artifacts(root, delete=True)
+
+    assert payload["artifact_count"] == 3
+    assert payload["deleted_count"] == 3
+    assert persistent_lock.exists()
+    assert persistent_sidecar.exists()
+    assert not orphan_sidecar.exists()
+    assert not symlinked_lock_sidecar.exists()
+    assert not symlinked_sidecar.exists()
+    assert symlinked_lock.is_symlink()
+    assert sidecar_lock.exists()
+    assert symlink_target.exists()
 
 
 def test_clean_scratch_delete_tolerates_missing_nested_entries(

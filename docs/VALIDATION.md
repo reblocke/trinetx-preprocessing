@@ -1,7 +1,7 @@
 # Validation
 
-Validation artifacts may contain sensitive metadata or row-level data and stay
-under `/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`. Do not commit raw
+Validation artifacts may contain sensitive metadata or row-level data and must
+stay under a private external root outside the repository. Do not commit raw
 exports, subsets, work tables, manifests, logs, profiles, or output CSVs.
 
 ## Frozen replication evidence
@@ -27,8 +27,70 @@ Post-Milestone 1 validation uses `docs/SPEC.md` as the behavior authority:
    cohort additions/removals, rule exclusions, setting conflict resolution,
    and screening effects. It contains no identifiers or row examples.
 
-Any behavior-code, dependency, version, or ruleset change invalidates the full
-profile evidence and requires a fresh run.
+Any change to transforms, inclusion logic, source interpretation, published
+schema/content, dependencies, package version, or the ruleset invalidates the
+full-profile evidence and requires a fresh run. A change limited to guards,
+failure/recovery handling, validators, CLI error mapping, tests, or
+documentation may reuse an unchanged accepted product only when it cannot
+alter successful product semantics and focused tests, applicable bounded
+read-only invariants, exact-head CI, and exact-head review all pass. Treat an
+uncertain effect as invalidating.
+
+## Unified preprocessing Stage 1
+
+The combined-product acceptance gate supplements the historical and corrected
+release evidence above. Keep all evidence external.
+
+```bash
+ROOT="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/unified_v1"
+
+./.venv/bin/python scripts/capture_combined_baseline.py \
+  --output-dir "$ROOT/baseline/output" \
+  --out "$ROOT/manifests/compatibility_baseline.json"
+
+./.venv/bin/python scripts/benchmark_combined_preprocessing.py \
+  --config "$ROOT/config.yaml" \
+  --replace \
+  --out "$ROOT/manifests/combined_benchmark.json"
+
+# When supervising a background benchmark, pass its Python PID and the same
+# result path. Watch mode succeeds only for that observed process family and an
+# explicit terminal "complete" result.
+./.venv/bin/python scripts/monitor_combined_preprocessing.py \
+  --pid "$BENCHMARK_PID" \
+  --config "$ROOT/config.yaml" \
+  --result "$ROOT/manifests/combined_benchmark.json" \
+  --out "$ROOT/manifests/combined_monitor.json"
+
+./.venv/bin/python scripts/verify_combined_parity.py \
+  --database "$ROOT/output/trinetx_preprocessed.duckdb" \
+  --output-dir "$ROOT/output" \
+  --baseline "$ROOT/manifests/compatibility_baseline.json" \
+  --out "$ROOT/manifests/combined_parity.json"
+
+./.venv/bin/python scripts/verify_element_completeness.py \
+  --database "$ROOT/output/trinetx_preprocessed.duckdb" \
+  --out "$ROOT/manifests/element_completeness.json"
+```
+
+Acceptance requires all 36 ordered schemas, row counts, and normalized hashes
+to match; database validation to pass; every source element to have a rule;
+aggregate observed-match gaps to be reviewed; peak RSS to remain at or below
+6,238 MiB using the sampled concurrent process-family sum; and free space to
+remain above 100 GiB. Every source element must have at least one included
+rule. The element report may list unobserved rules because absence in one
+export is evidence, not necessarily an implementation failure.
+
+The committed 20-case synthetic test additionally requires adapter-backed and
+direct-raw GLP-1 source, analysis, cohort-flow, and evidence tables to match.
+This proves the shared source boundary; it does not move study-specific GLP-1
+eligibility decisions into preprocessing.
+
+The release benchmark is intentionally non-strict because the accepted source
+contains 286 documented encounter-setting conflicts. Run the strict
+`run-final-assembly` resume check separately to prove fail-closed behavior and
+no-write preservation; strict mode becomes the production default only after
+source adjudication removes those conflicts.
 
 ## Local gates
 
@@ -99,9 +161,10 @@ Required evidence:
 If a performance target is missed, correctness evidence remains useful, but the
 release waits while the measured top bottleneck is addressed.
 
-## Current corrected evidence
+## Earlier corrected profile evidence
 
-The review-clean full non-strict profile from commit `1112963` completed with:
+The earlier review-clean full non-strict profile from commit `1112963`
+completed with:
 
 - 36 final CSVs and the ordered 534-column schema;
 - 73,589.093 seconds total wall time;
@@ -130,6 +193,82 @@ ready, and the release does not claim `validation_status.json` has
 checklist above plus the explicit aggregate conflict policy. A future run on
 adjudicated source data should return to the strict `validation-status` gate.
 
+## Historical Step 2 baseline and later behavior proof
+
+The historical accepted product was built from behavior head `c96dc40`; the
+read-only element-evidence head `f3c1b03` changes only bounded inspection and
+its regression. A later semantic NA-token correction required fresh
+exact-behavior evidence at `7ef967d`: the recovered build and sequential
+release gates completed there without replacing the historical baseline record.
+The output-neutral `2305f16`/`cefc861` hardening changes are separately covered
+by synthetic/local-quality evidence and do not claim a new full-data product.
+
+The historical Step 2 gates were:
+
+- atomic publication completed with exactly 38 product files: the canonical
+  DuckDB, its manifest, and all 36 compatibility CSVs;
+- total wall time was `89,270.965 s`; authoritative concurrent process-family
+  peak RSS was `4,722,294,784` bytes (`4,503.531 MiB`), leaving
+  `1,818,722,304` bytes below the `6,238 MiB` ceiling;
+- corrected-baseline parity matched all 36 tables and all `6,949,511` rows,
+  with zero schema, row-count, or normalized-hash mismatches;
+- bounded database and element inspection passed with zero validation warnings
+  or errors, all 534 historical elements, 92 source elements, and all 118
+  included rules represented. Two transparently reported source rules had no
+  observed match in this export and are not contract failures;
+- both synthetic GLP-1 adapter cases passed without modifying any of the 38
+  product files;
+- the prescribed `run-final-assembly --strict` proof exited before writes with
+  the exact 286-conflict failure, while the work manifest, conflict report, and
+  published-product metadata remained unchanged;
+- exact-head diff, repository-wide Ruff, and all 430 tests passed; free space
+  remained above 100 GiB; product sidecars, WAL, product scratch, and recognized
+  validation scratch all rechecked at zero after approved cleanup; and
+- CI and Codex review passed at the `f3c1b03` evidence head with zero unresolved
+  review threads. The final documentation-only head is reconciled separately
+  in the live PR before completion is reported.
+
+The aggregate evidence files remain external and untracked. They include
+`combined_benchmark_c96dc40.json`, `combined_parity_c96dc40.json`,
+`element_completeness_f3c1b03.json`, `adapter_contract_f3c1b03.json`,
+`strict_resume_proof_c96dc40_worktree.json`, and
+`local_release_gates_f3c1b03.json`. They contain no committed row-level data.
+
+## Post-acceptance whole-PR hardening
+
+The initial holistic-review fixes did not change the accepted product or its
+historical inclusion logic. They hardened pre-database recovery, filesystem
+identity and locks, standalone compatibility publication, and source-integrity
+validation. Standalone validation now also rejects repository-local database,
+DuckDB-spill, and compatibility-hash roots before scanning. Aggregate baseline
+and parity evidence guard the compatibility root and contract parents before
+hashing; parity and element-completeness evidence guard the database/spill
+parent before database scans.
+
+The final review identified a transform-level compatibility gap: combined-mode
+source capture preserved literal pandas NA-like tokens, but historical
+transforms no longer received the default missing values used by the legacy
+CSV reads. The `7ef967d` fix retains literal values in canonical source tables
+and restores the exact pandas 2.3 default NA-token semantics only in transform
+copies across all six clinical domains and patient demographics. Its fresh
+full-data recovery and sequential release gates supplied exact-behavior proof;
+the earlier full profile remains the corrected-baseline comparison record.
+
+A bounded aggregate-only read of the unchanged accepted database verified the
+new source-integrity invariant in two parts:
+
+- labs, vitals, diagnoses, procedures, and medications each had zero retained
+  rows without an included source-concept membership; and
+- zero included source-concept memberships used a catalog domain inconsistent
+  with their logical source domain.
+
+The first pass completed in `4,479.62 s` with `3,953.656 MiB` maximum RSS; the
+domain-consistency complement completed in `39.95 s` with `1,609.391 MiB`
+maximum RSS. Database size and modification time remained unchanged across
+both reads, and their temporary DuckDB spill was removed. Exact-head GitHub CI,
+review reconciliation, and zero unresolved threads remain required before the
+hardening round is reported complete.
+
 ## Hygiene and review
 
 Before release:
@@ -140,7 +279,7 @@ Before release:
   correctness, security, privacy, or performance findings;
 - the aggregate Milestone 1 delta report is PHI-safe and external-only.
 
-## GLP-1 additive full-data evidence
+## GLP-1 downstream full-data evidence
 
 The exact behavior-head additive GLP-1 build from commit `459cbda` completed in
 20,941.55 seconds with 5,635,293,184 bytes maximum RSS. It used the supported

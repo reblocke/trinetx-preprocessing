@@ -22,6 +22,26 @@ from typing import Iterable, Sequence
 import yaml
 
 from . import __version__
+from .combined_preprocessing.builder import (
+    CombinedLockError,
+    build_preprocessed,
+    export_legacy_compatibility_outputs,
+    require_safe_compatibility_hash_locations,
+    require_safe_output_location,
+)
+from .combined_preprocessing.database import (
+    inspect_combined_database,
+)
+from .combined_preprocessing.elements import (
+    COMBINED_MEDICATION_REQUIRED_COLUMNS,
+    is_medication_ingredient_export,
+)
+from .combined_preprocessing.scratch import (
+    COMBINED_LOCK_PREFIX,
+    COMBINED_SCRATCH_PATH_PREFIXES,
+    is_combined_scratch_name,
+)
+from .combined_preprocessing.validation import validate_preprocessed_database
 from .config import (
     Config,
     ConfigError,
@@ -54,6 +74,7 @@ from .regression import (
     HASH_ALGORITHM,
     HASH_MANIFEST_FILENAME,
     HASH_SCOPE_VALUES,
+    HASH_SCRATCH_PREFIX,
     ManifestComparisonResult,
     TableHashEntry,
     collect_directory_entries,
@@ -181,7 +202,7 @@ REQUIRED_FILESYSTEM_LABELS = ("data_dir", "work_dir", "output_dir")
 MANIFEST_METADATA_BLOCKER_SAMPLE_LIMIT = 20
 SCRATCH_CLEANUP_SCHEMA_VERSION = 1
 SCRATCH_PATH_PREFIXES = (
-    ".trinetx-hash-",
+    HASH_SCRATCH_PREFIX,
     ".trinetx-encounter-reducer-",
     ".trinetx-rfs-membership-",
     ".trinetx-rfs-encounters-",
@@ -198,7 +219,43 @@ SCRATCH_PATH_PREFIXES = (
     ".trinetx-glp1-observability-scan-",
     ".trinetx-glp1-terminology-qa-",
     ".trinetx-glp1-vital-ingest-",
+    *COMBINED_SCRATCH_PATH_PREFIXES,
 )
+COMBINED_MUTATING_COMMANDS = {
+    "run",
+    "run-all",
+    "build-preprocessed",
+    "profile",
+    "baseline",
+    "compare",
+    "run-encounter",
+    "run-labs",
+    "run-diagnosis",
+    "run-meds",
+    "run-procedure",
+    "run-vitals",
+    "run-rfs",
+    "run-final-assembly",
+}
+
+
+def _require_safe_combined_mutation_locations(
+    config: Config,
+    *,
+    command: str,
+) -> None:
+    """Guard every combined route that can write confidential artifacts."""
+
+    if not config.combined.enabled or command not in COMBINED_MUTATING_COMMANDS:
+        return
+    require_safe_output_location(
+        config.work_dir,
+        artifact_label="work directory",
+    )
+    require_safe_output_location(
+        config.output_dir,
+        artifact_label="output directory",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -428,6 +485,107 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Enable guardrail assertions during the run.",
+    )
+
+    build_preprocessed_parser = subparsers.add_parser(
+        "build-preprocessed",
+        help="Build the canonical combined preprocessing database.",
+        description=(
+            "Run shared domain preprocessing once, publish the combined DuckDB, "
+            "and regenerate all 36 historical compatibility CSVs."
+        ),
+    )
+    build_preprocessed_parser.add_argument(
+        "--config",
+        type=Path,
+        required=True,
+        help="Path to a YAML configuration file.",
+    )
+    build_preprocessed_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enable strict encounter and guardrail validation.",
+    )
+    build_preprocessed_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace an existing combined product after a successful build.",
+    )
+
+    preprocessed_status_parser = subparsers.add_parser(
+        "preprocessed-status",
+        help="Report aggregate status for a combined preprocessing database.",
+    )
+    preprocessed_status_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    preprocessed_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    inspect_preprocessed_parser = subparsers.add_parser(
+        "inspect-preprocessed",
+        help="Inspect aggregate table counts in a combined database.",
+    )
+    inspect_preprocessed_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    inspect_preprocessed_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    validate_preprocessed_parser = subparsers.add_parser(
+        "validate-preprocessed",
+        help="Validate the combined database and optional compatibility CSVs.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional root containing the 36 compatibility CSVs.",
+    )
+    validate_preprocessed_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    export_legacy_parser = subparsers.add_parser(
+        "export-legacy",
+        help="Regenerate the 36 historical CSVs from a combined database.",
+    )
+    export_legacy_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    export_legacy_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Destination root for compatibility CSVs.",
+    )
+    export_legacy_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Atomically replace an existing compatibility-only export tree.",
     )
 
     run_all_parser = subparsers.add_parser(
@@ -1070,6 +1228,62 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
+        if args.command in {"preprocessed-status", "inspect-preprocessed"}:
+            payload = inspect_combined_database(args.database)
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                logger.info(
+                    "Combined preprocessing %s: %s (%s bytes)",
+                    payload["run_id"],
+                    payload["status"],
+                    payload["database_size_bytes"],
+                )
+                for table, count in sorted(payload["counts"].items()):
+                    logger.info("%s: %s rows", table, count)
+            return 0
+
+        if args.command == "validate-preprocessed":
+            require_safe_output_location(
+                args.database.parent,
+                artifact_label="validation database/spill directory",
+            )
+            if args.output_dir is not None:
+                require_safe_compatibility_hash_locations(
+                    args.output_dir,
+                    artifact_prefix="validation compatibility",
+                )
+            result = validate_preprocessed_database(
+                args.database,
+                compatibility_output_dir=args.output_dir,
+            )
+            payload = {
+                "valid": result.valid,
+                "errors": list(result.errors),
+                "warnings": list(result.warnings),
+                "counts": result.counts,
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for warning in result.warnings:
+                    logger.warning("%s", warning)
+                for error in result.errors:
+                    logger.error("%s", error)
+                logger.info("Combined preprocessing valid: %s", result.valid)
+            return 0 if result.valid else 1
+
+        if args.command == "export-legacy":
+            paths = export_legacy_compatibility_outputs(
+                args.database,
+                args.output_dir,
+                replace_existing=args.replace,
+            )
+            logger.info(
+                "Wrote %s compatibility CSVs to %s.", len(paths), args.output_dir
+            )
+            return 0
+
         config = load_config(args.config)
         if args.command == "inspect-inputs":
             return inspect_input_paths(
@@ -1086,6 +1300,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         validate_config(config)
+        _require_safe_combined_mutation_locations(
+            config,
+            command=args.command,
+        )
         if args.command == "validate-config":
             logger.info("Configuration validated successfully.")
             return 0
@@ -1094,12 +1312,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             logger.info("Input files validated successfully.")
             return 0
         if args.command in {"run", "run-all"}:
+            if config.combined.enabled:
+                result = build_preprocessed(config, strict=args.strict)
+                logger.info(
+                    "Combined preprocessing completed: %s (%s compatibility CSVs).",
+                    result.database_path,
+                    len(result.compatibility_paths),
+                )
+                return 0
             output_paths = run_pipeline(config, strict=args.strict)
             logger.info(
                 "Pipeline completed; wrote %s file(s) to %s and %s.",
                 len(output_paths),
                 config.work_dir,
                 config.output_dir,
+            )
+            return 0
+        if args.command == "build-preprocessed":
+            result = build_preprocessed(
+                config,
+                strict=args.strict,
+                replace_existing=args.replace,
+            )
+            logger.info(
+                "Combined preprocessing completed: %s (%s compatibility CSVs).",
+                result.database_path,
+                len(result.compatibility_paths),
             )
             return 0
         if args.command == "profile":
@@ -1255,7 +1493,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config.output_dir,
             )
             return 0
-    except (ConfigError, FileNotFoundError, StaleWorkError, ValueError) as exc:
+    except (
+        CombinedLockError,
+        ConfigError,
+        FileExistsError,
+        FileNotFoundError,
+        StaleWorkError,
+        ValueError,
+    ) as exc:
         logger.error("%s", exc)
         return 2
 
@@ -1470,7 +1715,37 @@ def _find_scratch_artifacts(root: Path) -> list[Path]:
 
 
 def _is_known_scratch_path(path: Path) -> bool:
-    return any(path.name.startswith(prefix) for prefix in SCRATCH_PATH_PREFIXES)
+    if _is_persistent_combined_lock_sidecar(path):
+        return False
+    return any(
+        path.name.startswith(prefix) for prefix in SCRATCH_PATH_PREFIXES
+    ) or is_combined_scratch_name(path.name)
+
+
+def _is_persistent_combined_lock_sidecar(path: Path) -> bool:
+    """Return whether an AppleDouble file belongs to a durable lock file.
+
+    AppleDouble files normally match the combined-scratch family so orphaned
+    lock metadata can be cleaned. A regular sidecar paired with a regular,
+    singly linked lock file is instead persistent filesystem metadata and must
+    survive ``clean-scratch``.
+    """
+
+    if not path.name.startswith(f"._{COMBINED_LOCK_PREFIX}"):
+        return False
+
+    lock_path = path.with_name(path.name.removeprefix("._"))
+    try:
+        sidecar_stat = path.lstat()
+        lock_stat = lock_path.lstat()
+    except OSError:
+        return False
+
+    return (
+        stat.S_ISREG(sidecar_stat.st_mode)
+        and stat.S_ISREG(lock_stat.st_mode)
+        and lock_stat.st_nlink == 1
+    )
 
 
 def _path_size_bytes(path: Path) -> int:
@@ -3463,8 +3738,11 @@ def validate_input_headers(config: Config) -> None:
             )
             continue
         for path in paths:
+            file_required = required
+            if domain_name == "meds" and is_medication_ingredient_export(path):
+                file_required = list(COMBINED_MEDICATION_REQUIRED_COLUMNS)
             try:
-                validate_csv_columns(path, required)
+                validate_csv_columns(path, file_required)
             except ValueError as exc:
                 raise ConfigError(f"{exc} (domain '{domain_name}')") from exc
         logger.info("Validated %s file(s) for domain '%s'.", len(paths), domain_name)

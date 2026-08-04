@@ -93,8 +93,7 @@ def summarize_database(database_path: Path) -> dict[str, object]:
     connection = duckdb.connect(str(path), read_only=True)
     try:
         manifest = connection.execute(
-            "SELECT run_id, status, rule_set_version, warning_count "
-            "FROM run_manifest"
+            "SELECT run_id, status, rule_set_version, warning_count FROM run_manifest"
         ).fetchone()
         indication_counts = connection.execute(
             """
@@ -140,9 +139,7 @@ def summarize_database(database_path: Path) -> dict[str, object]:
         connection.close()
 
 
-def _write_data_dictionary(
-    connection: duckdb.DuckDBPyConnection, path: Path
-) -> None:
+def _write_data_dictionary(connection: duckdb.DuckDBPyConnection, path: Path) -> None:
     tables = (*OUTPUT_TABLES, "cohort_hypercapnia_patient_index", "cohort_flow")
     placeholders = ", ".join("?" for _ in tables)
     rows = connection.execute(
@@ -167,9 +164,7 @@ def _write_data_dictionary(
                 "description",
             ]
         )
-        writer.writerows(
-            (*row, _column_description(row[0], row[2])) for row in rows
-        )
+        writer.writerows((*row, _column_description(row[0], row[2])) for row in rows)
 
 
 def _column_description(table_name: str, column_name: str) -> str:
@@ -351,56 +346,84 @@ th,td{{border:1px solid #bbb;padding:.4rem;text-align:left}}</style></head>
 <body><h1>GLP-1 eligibility data quality</h1>
 <p>This report contains aggregate counts only. It does not include identifiers
 or row-level examples.</p>
-<h2>Source inventory</h2>{_html_table(('Domain','Files','Rows'), source_rows)}
-<h2>Source schema and load status</h2>{_html_table(
-        ('Domain','Files','Loaded','Warnings'), schema_rows
-    )}
-<h2>Retained source date coverage</h2>{_html_table(
-        ('Domain','First retained event','Last retained event'), date_coverage
-    )}
-<h2>Cohort flow</h2>{_html_table(
-        ('Stage','Rows','Patients','Percent previous','Reason for loss'), flow_rows
-    )}
-<h2>Gas normalization</h2>{_html_table(
-        ('Considered','Unit usable','Plausible','Incompatible unit','Implausible'),
-        (gas_quality,),
-    )}
-    <h2>Concept-matched code systems</h2>{_html_table(
-        ('Domain','Code system','Rows'), code_systems
-    )}
-<h2>High-frequency unmapped source codes</h2>{_html_table(
-        ('Domain','Code system','Code','Estimated rows','Maximum error'),
-        unmapped_codes,
-    )}
+<h2>Source inventory</h2>{_html_table(("Domain", "Files", "Rows"), source_rows)}
+<h2>Source schema and load status</h2>{
+        _html_table(("Domain", "Files", "Loaded", "Warnings"), schema_rows)
+    }
+<h2>Retained source date coverage</h2>{
+        _html_table(
+            ("Domain", "First retained event", "Last retained event"), date_coverage
+        )
+    }
+<h2>Cohort flow</h2>{
+        _html_table(
+            ("Stage", "Rows", "Patients", "Percent previous", "Reason for loss"),
+            flow_rows,
+        )
+    }
+<h2>Gas normalization</h2>{
+        _html_table(
+            (
+                "Considered",
+                "Unit usable",
+                "Plausible",
+                "Incompatible unit",
+                "Implausible",
+            ),
+            (gas_quality,),
+        )
+    }
+    <h2>Concept-matched code systems</h2>{
+        _html_table(("Domain", "Code system", "Rows"), code_systems)
+    }
+<h2>High-frequency unmapped source codes</h2>{
+        _html_table(
+            ("Domain", "Code system", "Code", "Estimated rows", "Maximum error"),
+            unmapped_codes,
+        )
+    }
 <p>These PHI-safe aggregate frequencies use a bounded Space-Saving summary
 collected during the input inventory scan. Counts with nonzero maximum error are
 estimates; no patient identifiers or row examples are retained.</p>
-<h2>Concept-set match coverage</h2>{_html_table(
-        ('Domain','Concept set','Matched rows','Required'), concept_rows
-    )}
-<h2>Build warnings</h2>{_html_table(('Warning code','Message'), warning_rows)}
-<h2>Top retained units</h2>{_html_table(('Domain','Unit','Rows'), unit_rows)}
-<h2>Duplicate retained records</h2>{_html_table(
-        ('Domain','Rows beyond first identical source hash'), duplicate_rows
-    )}
-<h2>Blood-gas pairing</h2>{_html_table(
-        ('Pairing method','Pairing quality','Encounters'), pairing_rows
-    )}
-<h2>BMI source distribution</h2>{_html_table(('BMI source','Rows'), bmi_rows)}
-<h2>Phenotype missingness</h2>{_html_table(
-        ('Field','Observed','Missing','Total','Missing percent'), missingness_rows
-    )}
-<h2>Derived phenotype certainty</h2>{_html_table(
-        ('Evidence tier','Certainty','Status','Rows'), certainty_rows
-    )}
-<h2>Sensitivity cohorts</h2>{_html_table(
-        (
-            'Candidates','Primary','Later hypercapnia','VBG only',
-            'Cardiac arrest','Major trauma','Procedure/sedation',
-            'Postoperative','Probable venous specimen'
-        ),
-        sensitivity_rows,
-    )}
+<h2>Concept-set match coverage</h2>{
+        _html_table(("Domain", "Concept set", "Matched rows", "Required"), concept_rows)
+    }
+<h2>Build warnings</h2>{_html_table(("Warning code", "Message"), warning_rows)}
+<h2>Top retained units</h2>{_html_table(("Domain", "Unit", "Rows"), unit_rows)}
+<h2>Duplicate retained records</h2>{
+        _html_table(
+            ("Domain", "Rows beyond first identical source hash"), duplicate_rows
+        )
+    }
+<h2>Blood-gas pairing</h2>{
+        _html_table(("Pairing method", "Pairing quality", "Encounters"), pairing_rows)
+    }
+<h2>BMI source distribution</h2>{_html_table(("BMI source", "Rows"), bmi_rows)}
+<h2>Phenotype missingness</h2>{
+        _html_table(
+            ("Field", "Observed", "Missing", "Total", "Missing percent"),
+            missingness_rows,
+        )
+    }
+<h2>Derived phenotype certainty</h2>{
+        _html_table(("Evidence tier", "Certainty", "Status", "Rows"), certainty_rows)
+    }
+<h2>Sensitivity cohorts</h2>{
+        _html_table(
+            (
+                "Candidates",
+                "Primary",
+                "Later hypercapnia",
+                "VBG only",
+                "Cardiac arrest",
+                "Major trauma",
+                "Procedure/sedation",
+                "Postoperative",
+                "Probable venous specimen",
+            ),
+            sensitivity_rows,
+        )
+    }
 <h2>Site heterogeneity</h2>
 <p>The current export contract does not provide a reliable site/HCO field in
 the retained analytic sources. Site heterogeneity remains unclassifiable unless
@@ -430,9 +453,7 @@ def _run_manifest(connection: duckdb.DuckDBPyConnection) -> dict[str, object]:
 
 
 def _count(connection: duckdb.DuckDBPyConnection, relation: str) -> int:
-    row = connection.execute(
-        f"SELECT COUNT(*) FROM {_identifier(relation)}"
-    ).fetchone()
+    row = connection.execute(f"SELECT COUNT(*) FROM {_identifier(relation)}").fetchone()
     return int(row[0])
 
 

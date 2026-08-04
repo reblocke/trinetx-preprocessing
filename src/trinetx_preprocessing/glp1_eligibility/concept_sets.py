@@ -146,8 +146,7 @@ def load_concept_sets(directory: Path) -> ConceptSetCatalog:
     missing_safety_sets = sorted(REQUIRED_SAFETY_SETS - configured)
     if missing_safety_sets:
         raise ConceptSetError(
-            "Missing required safety concept set(s): "
-            + ", ".join(missing_safety_sets)
+            "Missing required safety concept set(s): " + ", ".join(missing_safety_sets)
         )
 
     phenotype_path = root / "phenotype_rules.yml"

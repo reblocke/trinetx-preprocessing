@@ -1463,3 +1463,363 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   worker activity remains indeterminate rather than being treated as failure.
 - References: `src/trinetx_preprocessing/glp1_eligibility/cli.py`,
   `tests/test_glp1_foundation.py`, GitHub PR #4.
+
+### 2026-07-22 — Publish one unified preprocessing product
+- Date: 2026-07-22
+- Decision: Make `trinetx_preprocessed.duckdb` the sole canonical preprocessing
+  product. Store the complete historical 534-column observations and additive
+  source-faithful elements together; generate the 36 historical CSVs as exact
+  compatibility projections. Keep GLP-1 eligibility and future Stata logic
+  downstream.
+- Context: Separate historical and GLP-1 ingestion paths duplicated raw scans,
+  provenance, normalization, and extension work. Future requests need one
+  stable preprocessing boundary that can gain elements without forking the
+  pipeline.
+- Rationale: A shared typed element catalog, source record model, manifest, and
+  database make additions reviewable and reusable while retaining the released
+  historical file contract.
+- Consequences: Combined builds fail closed on code, configuration, source,
+  intermediate-schema, or element-catalog changes. Repository-local private
+  output is rejected. The standalone GLP-1 builder remains a validation
+  reference during migration, not a second canonical preprocessing product.
+- References: `docs/UNIFIED_PREPROCESSING.md`,
+  `src/trinetx_preprocessing/combined_preprocessing`,
+  `src/trinetx_preprocessing/work_manifest.py`.
+
+### 2026-07-22 — Publish the unified product as one directory transaction
+- Date: 2026-07-22
+- Decision: Build and validate the database, sidecar, and all 36 compatibility
+  CSVs in a sibling directory, then publish the complete directory with a
+  rollback backup. Preserve explicit source-table types across CSV and Parquet
+  work formats, and retain clinical source rows only through included rules.
+- Rationale: A combined product must not expose mixed-generation files after a
+  failed replacement, and downstream behavior must not depend on physical work
+  format or exclusion-only terminology rules.
+- Consequences: `--replace` rejects unmanaged output roots, failed builds leave
+  the prior product unchanged, and intermediate schema version 8 invalidates
+  earlier combined capture work.
+- References: `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/elements.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`.
+
+### 2026-07-22 — Retain a compact complete encounter-flow inventory
+- Date: 2026-07-22
+- Decision: Capture patient ID, encounter ID, start timestamp, and encounter
+  type for every raw encounter row during the existing scan. Use this compact
+  table only for complete downstream source-universe flow denominators.
+- Rationale: Concept-filtered encounter capture and the historical 2022 window
+  cannot reproduce GLP-1 source-flow counts for pre-2022 or non-gas patients.
+- Consequences: The unified database is larger, but avoids a second raw
+  encounter scan and does not broaden the feature-bearing encounter source
+  table.
+
+### 2026-07-22 — Bound DuckDB publication memory and spill externally
+- Date: 2026-07-22
+- Decision: Run combined-database publication with one DuckDB thread and a
+  configurable internal memory limit that defaults to `3072 MiB`. Place the
+  DuckDB temporary spill directory beside the staged database and record the
+  effective settings in both database and JSON manifests.
+- Context: The full pipeline and all 36 staged compatibility CSVs completed,
+  but a large historical-encounter anti-join exceeded the process memory gate
+  when DuckDB used its unconstrained default buffer policy.
+- Rationale: A lower internal buffer leaves headroom for DuckDB operators,
+  client allocations, and the Python process while keeping spill on the
+  high-capacity external output volume.
+- Consequences: Database publication may trade additional external I/O for a
+  predictable memory ceiling. The setting is configurable for other machines,
+  validated at load time, and visible in provenance.
+- References: `src/trinetx_preprocessing/config.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `docs/CONFIG.md`.
+
+### 2026-07-24 — Aggregate source observability one domain at a time
+- Date: 2026-07-24
+- Decision: Materialize `source_observability_event` through one grouped insert
+  per logical domain instead of one global `UNION ALL` aggregation.
+- Context: The global aggregation exhausted DuckDB's `3072 MiB` internal pool
+  after the bounded historical encounter anti-join had completed. Logical
+  domains are disjoint across the five source files, so no grouping key can
+  span files.
+- Rationale: Domain-local reduction is algebraically equivalent and bounds the
+  largest aggregation to one source file while retaining a single canonical
+  output table.
+- Consequences: Full-scale evidence produced `687,903,128` unique rows and an
+  aggregate event count of `8,162,368,161`, with zero duplicate keys and a
+  `4,815,470,592`-byte observed process peak.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.
+
+### 2026-07-27 — Hash-partition encounter availability during publication
+- Date: 2026-07-27
+- Decision: Shuffle diagnosis/lab encounter IDs once into 64 DuckDB-managed
+  Parquet partitions, reduce one partition at a time, and remove the partitions
+  before database publication continues. Read only `data_*.parquet` so ExFAT
+  AppleDouble sidecars cannot be mistaken for data.
+- Context: Exact-head full publication reached `6,318.703 MiB` process RSS
+  while one query simultaneously materialized diagnosis distinct IDs, lab
+  distinct IDs, their union, and two joins. The worker then disappeared during
+  a host-wide low-memory/jetsam event. Lowering DuckDB to `2048 MiB` made the
+  unchanged query fail internally, and one global union/group aggregation also
+  exhausted the `3072 MiB` pool.
+- Rationale: Hash partitioning keeps every occurrence of an encounter ID in one
+  bucket, so bucket-local Boolean reduction is algebraically identical without
+  retaining global key sets. Full-scale candidate and bucket-local-original
+  comparators matched all `303,490,815` rows, three flag counts, and three
+  order-independent ID hashes.
+- Consequences: The measured candidate completed in `135.460 s` with
+  `2,328.656 MiB` peak process RSS and zero residual scratch. The transient
+  partitions live under the existing registered DuckDB spill root, use one
+  writer per bucket, and remain recoverable by the combined scratch cleaner
+  after an unclean exit.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.
+
+### 2026-07-27 — Rotate bounded DuckDB write sessions during publication
+- Date: 2026-07-27
+- Decision: Materialize the canonical database through three sequential write
+  sessions: core/source observability, element membership/RFS membership, and
+  availability/final metadata. Close each session and strictly remove its
+  unique spill root before opening the next session.
+- Context: The semantically valid `3072 MiB` full-scale database-only proof
+  peaked at `6,364.844 MiB`, above the `6,238 MiB` process gate. Reducing the
+  internal limit to `2816 MiB` kept process RSS to `5,088.859 MiB` but made the
+  already domain-sequential source-observability load fail after `6,552.179 s`
+  because DuckDB could not allocate another 256 KiB block.
+- Rationale: The observability aggregation requires the existing internal pool;
+  lowering it is not a viable release setting. Rotating durable connections
+  retains that pool within each query while preventing native buffer and
+  allocator state from overlapping later membership, availability, and final
+  checkpoint work.
+- Consequences: Table contents, insertion-order policy, manifests, views, and
+  the atomic publication boundary are unchanged. A failure between sessions
+  leaves an incomplete database with manifest status `building`; the existing
+  resumable builder removes that incomplete database before retrying.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `tests/test_combined_preprocessing.py`.
+
+### 2026-07-24 — Apply publication limits to every DuckDB connection
+- Date: 2026-07-24
+- Decision: Open database creation, compatibility export, provenance refresh,
+  inspection, evidence, and validation connections through one shared runtime
+  helper. Every connection uses the configured memory limit, one thread, and a
+  unique adjacent spill directory that is removed strictly on close.
+- Context: Full database creation completed within its bounded settings, but
+  the first compatibility export opened a new unconstrained read-only
+  connection and raised process-family RSS above the `6,238 MiB` gate.
+- Rationale: Resource limits are a product-wide execution contract, not only a
+  writer setting. Centralizing connection setup prevents future readers from
+  silently reverting to DuckDB host defaults.
+- Consequences: Large read-only queries may spill to the external output
+  volume and take longer, but they retain deterministic output semantics and a
+  bounded memory policy. AppleDouble metadata files are removed after the
+  sidecar manifest is written and immediately before the complete product is
+  atomically published. Source membership and uniqueness checks execute one
+  logical domain at a time; wrong-domain rows and source files assigned to
+  multiple domains fail validation explicitly. Read-only and compatibility
+  sessions disable insertion-order preservation so external hash aggregation
+  can spill; database creation retains ordered insertion for deterministic
+  materialization. Exact source-ID uniqueness checks stage one domain into 64
+  stable hash partitions and reduce one partition at a time instead of retaining
+  a full-domain string hash table.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`.
+
+### 2026-07-25 — Classify medication ingredient exports by schema
+- Date: 2026-07-25
+- Decision: Treat a `medication_ingredient*.csv` file as additive-only only
+  when it has the supported minimal ingredient schema. If it carries the full
+  historical medication schema, process it through historical feature
+  reduction and unified source capture in the same scan.
+- Context: The production canonical monolith is named
+  `medication_ingredient.csv` but carries all 11 historical medication fields.
+  Filename-only routing retained its source rows while silently zeroing the 32
+  historical medication output columns.
+- Consequences: Minimal ingredient exports remain supported. Full-schema files
+  preserve the 36-file compatibility contract without reading headerless legacy
+  split artifacts.
+- References:
+  `src/trinetx_preprocessing/pipeline/medications_stage.py`,
+  `tests/test_medications_stage.py`.
+
+### 2026-07-26 — Make combined publication recoverable and source-faithful
+- Date: 2026-07-26
+- Decision: Bind deterministic combined staging to source, configuration, code,
+  catalog, strict-mode identity, and the DuckDB memory limit; lock both canonical
+  roots; retain completed phases after late failure; and publish through a
+  durable recovery journal.
+  Validate the complete managed tree recursively before replacement and require
+  the adjacent sidecar to reconcile with the embedded database manifest.
+- Context: Exact-head PR #8 review found that alternate combined CLI routes
+  could bypass the private-path guard, nested unmanaged descendants could be
+  deleted by `--replace`, overlapping builds shared canonical state, late
+  failures forced another raw scan, and an interrupted directory swap could
+  leave no published output. The review also found source-token coercion,
+  reduced encounter rows presented as raw provenance, catalog-identity,
+  observability, monitoring, sidecar, scratch, and include-rule gaps.
+- Rationale: Confidential row-level products need fail-closed path and
+  replacement boundaries. Long raw scans need resumable late phases, while
+  provenance tables must contain only captured raw records. Release monitoring
+  must measure the concurrent process family and require explicit schema-2
+  terminal evidence.
+- Consequences: Every combined mutating route guards work and output roots;
+  `NA`, `N/A`, and `NULL` remain literal source strings; complete encounter
+  denominators live only in `source_encounter_flow`; GLP-1 adaptation requires
+  the active catalog SHA; filtered zero-event counts are zero; source elements
+  require an included rule; and all transient combined path families are
+  discoverable by `clean-scratch`. Intermediate schema version 9 invalidates
+  earlier combined work.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py`,
+  `src/trinetx_preprocessing/io/csv.py`,
+  `scripts/benchmark_combined_preprocessing.py`,
+  `scripts/monitor_combined_preprocessing.py`.
+
+### 2026-07-29 — Isolate allocation-heavy combined pipeline phases
+- Date: 2026-07-29
+- Decision: Run the pre-final pipeline and final assembly in two sequential
+  spawned workers. Build the final feature-source index before loading
+  demographics, setting lookups, and cohort rows. Hash the 36 staged outputs
+  and write the resumable pipeline checkpoint in the final-assembly worker,
+  then exit that worker. Run the three durable DuckDB write sessions,
+  compatibility export, and validation in five additional sequential spawned
+  workers; each completed product phase durably advances the existing
+  build-state file before it exits.
+- Context: The clean exact-head `8d388ea` full build passed every semantic and
+  publication check but reached `6,616.609 MiB` authoritative peak RSS, above
+  the `6,238 MiB` release ceiling. One sampled breach coincided with a spawned
+  feature-domain worker overlapping cohort-retained parent memory; later
+  handoffs retained pipeline allocator pages into otherwise bounded DuckDB
+  phases. Pipeline isolation reduced the next exact-head full peak to
+  `6,386.984 MiB`, but it still exceeded the ceiling by `148.984 MiB`. Across
+  311 retained five-minute samples, final assembly peaked at `3,572 MiB`
+  (`3,736.672 MiB` in its internal feature-worker metric), while the database
+  window reached `5,746 MiB`. The same three database write sessions pass
+  independently from a clean process at `5,162.641`, `5,069.859`, and
+  `4,842.391 MiB`, localizing the remaining transient to allocator retention
+  within the database process lifetime.
+- Rationale: Sequential process lifetimes provide a deterministic allocator
+  boundary without changing stage logic, intermediate files, output order,
+  resumable identity, or the canonical product contract.
+- Consequences: Combined builds pay seven Python spawn/import costs. Database,
+  export, and validation results cross the process boundary through the
+  fsynced resumable state rather than row-level IPC. A failed worker exits
+  nonzero and leaves the existing atomic publication and resumable-work
+  safeguards intact. Compatibility export fsyncs all regenerated CSV files,
+  their containing directories, and the refreshed work manifest before writing
+  a fsynced intent checkpoint and mutating the database's embedded
+  work-manifest fingerprint. Retry accepts only the pinned prior or pinned
+  target fingerprint, matching run identity, terminal status, table counts,
+  the unchanged target work manifest, and unchanged exported-file stats.
+  Each phase worker and every nested final-feature domain worker retain
+  duplicated descriptors for the parent's canonical work/output locks, so no
+  surviving descendant can continue unlocked if an ancestor exits
+  unexpectedly. Descriptor duplication occurs through the spawn pass-fd
+  channel and does not require a Unix socket on the external ExFAT `TMPDIR`.
+  Direct non-combined pipeline commands keep their existing in-process
+  behavior.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `src/trinetx_preprocessing/process_locks.py`,
+  `src/trinetx_preprocessing/pipeline/run.py`,
+  `src/trinetx_preprocessing/pipeline/final_assembly.py`,
+  `tests/test_combined_preprocessing.py`,
+  `tests/test_final_assembly.py`.
+
+### 2026-07-30 — Isolate source-observability materialization
+- Date: 2026-07-30
+- Decision: Close the core/source DuckDB session before materializing
+  `source_observability_event`, and run observability in its own durable spawned
+  worker before the membership and finalization workers. Keep the reviewed
+  `3072 MiB` DuckDB memory limit unchanged.
+- Context: The exact-head post-pipeline proof at `9a960b9` completed every
+  semantic phase, all 36 exports, and validation with zero warnings. Its core
+  worker peaked at `6,189.891 MiB`, but concurrent parent and resource-tracker
+  overhead raised the authoritative process-family peak to `6,251.828 MiB`,
+  `13.828 MiB` above the `6,238 MiB` release gate. The peak occurred while
+  `_load_observability_events` followed all core/source loads in one process.
+  A prior full-scale isolated observability benchmark used about `4.48 GiB`;
+  lowering DuckDB to `2816 MiB` instead had already failed internally.
+- Rationale: A fresh process releases source-loading allocator state without
+  changing the required DuckDB pool, SQL, table contents, insertion order,
+  manifests, or publication boundary.
+- Consequences: Combined builds use eight sequential spawned workers. While
+  the public phase remains `pipeline`, durable internal progress advances
+  `core` → `observability` → `membership`; any failure before finalization
+  leaves the database incomplete, and retry removes and rebuilds it from the
+  retained pipeline checkpoint.
+- References:
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/builder.py`,
+  `tests/test_combined_preprocessing.py`.
+
+### 2026-07-30 — Give core and observability separate DuckDB pools
+- Date: 2026-07-30
+- Decision: Use an explicit `2816 MiB` DuckDB limit for the isolated core/source
+  worker while retaining `3072 MiB` for observability and every later combined
+  phase. Record both limits in configuration, resumable identity, the embedded
+  database manifest, and the version-2 JSON sidecar manifest.
+- Context: The exact-head four-session post-pipeline proof disproved retained
+  observability allocations as the remaining cause. The isolated core worker
+  peaked at `7104.047 MiB`, while observability, membership, and finalization
+  peaked at `5098.719`, `4125.844`, and `3943.781 MiB`. The earlier monolithic
+  `2816 MiB` trial had completed the same core/source loads and failed only
+  inside observability, which now has its own `3072 MiB` worker.
+- Rationale: Phase-specific limits preserve the larger pool exactly where full
+  data proves it is required and recover headroom during the core worker's
+  durable terminal checkpoint. An explicit, provenance-visible setting is
+  reproducible and avoids a hidden implementation cap.
+- Consequences: Core memory still requires a fresh exact-head full-scale proof;
+  the earlier `2816 MiB` result proves query progress, not terminal core
+  completion. If the general limit is configured below `2816 MiB`, an omitted
+  core limit inherits that lower cap. Output SQL, insertion-order policy, table
+  contents, and the atomic publication boundary are unchanged.
+- References:
+  `src/trinetx_preprocessing/config.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/database.py`,
+  `src/trinetx_preprocessing/combined_preprocessing/validation.py`,
+  `tests/test_config.py`,
+  `tests/test_combined_preprocessing.py`.
+
+### 2026-08-01 — Accept unified Milestone 2 release evidence
+- Date: 2026-08-01
+- Decision: Accept the atomically published unified product built from behavior
+  head `c96dc40` after the complete Step 2 gate. Treat `f3c1b03` as a read-only
+  evidence correction: it bounds exact element-completeness inspection without
+  changing transforms, database materialization, compatibility export, or the
+  accepted product.
+- Context: The fresh build completed naturally in `89,270.965 s`, published
+  exactly 38 files, and peaked at `4,722,294,784` bytes (`4,503.531 MiB`) for
+  the concurrent process family, below the `6,238 MiB` ceiling. All 36 exports
+  and `6,949,511` rows matched the corrected baseline exactly. Database and
+  element validation passed with zero warnings/errors, all 534 historical
+  elements, 92 source elements, and all 118 included rules represented. Both
+  adapter cases passed. The prescribed strict final-assembly command failed
+  before writes on exactly 286 source encounter-setting conflicts, leaving the
+  work manifest, conflict report, and product metadata unchanged. Exact-head
+  diff/Ruff checks and all 430 tests passed; free-space, product-hygiene, and
+  post-cleanup scratch gates also passed.
+- Rationale: Product evidence must remain bound to the code that created it.
+  Because `f3c1b03` changes only the read-only verifier, the raw work manifest
+  correctly rejects a resume from that newer code-state hash. Running the
+  strict proof from a clean detached `c96dc40` worktree proves the required
+  conflict guard against the matching work identity, while independent
+  exact-head tests and review validate the bounded verifier against the
+  unchanged product.
+- Consequences: Milestone 2 has release-grade product, parity, completeness,
+  adapter, strict-failure, resource, space, scratch, and repository evidence.
+  This acceptance does not claim the strict historical `validation-status`
+  gate is ready; the documented 286 conflicts remain deterministically resolved
+  in non-strict mode and fail closed in strict mode. Aggregate evidence remains
+  external and untracked, and the PR remains draft unless separately promoted.
+- References:
+  `docs/VALIDATION.md`,
+  `src/trinetx_preprocessing/combined_preprocessing/evidence.py`,
+  `tests/test_combined_preprocessing.py`,
+  `scripts/verify_combined_parity.py`,
+  `scripts/verify_element_completeness.py`.

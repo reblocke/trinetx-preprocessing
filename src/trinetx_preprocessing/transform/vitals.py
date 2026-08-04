@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from ..io.csv import coerce_legacy_na_tokens
 from ..validation import require_columns
+from .datetimes import parse_trinetx_datetime
 
 RAW_VITALS_COLUMNS = [
     "patient_id",
@@ -180,14 +182,14 @@ def normalize_vitals_chunk(df: pd.DataFrame) -> pd.DataFrame:
 
     require_columns(df, RAW_VITALS_COLUMNS, context="Vital signs raw input")
 
-    normalized = df.drop(columns=DROP_COLUMNS).copy()
+    normalized = coerce_legacy_na_tokens(df.drop(columns=DROP_COLUMNS))
     normalized = normalized.loc[:, NORMALIZED_VITALS_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")
     normalized["code_system"] = normalized["code_system"].astype("string")
     normalized["code"] = normalized["code"].astype("string")
     normalized["units_of_measure"] = normalized["units_of_measure"].astype("string")
-    normalized["date"] = pd.to_datetime(normalized["date"])
+    normalized["date"] = parse_trinetx_datetime(normalized["date"])
     return normalized.reset_index(drop=True)
 
 

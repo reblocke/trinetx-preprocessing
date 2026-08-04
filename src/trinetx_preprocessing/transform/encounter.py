@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..io.csv import coerce_legacy_na_tokens
 from ..validation import require_columns
+from .datetimes import parse_trinetx_datetime
 
 RAW_ENCOUNTER_COLUMNS = [
     "encounter_id",
@@ -61,14 +63,14 @@ def normalize_encounter_chunk(df: pd.DataFrame) -> pd.DataFrame:
 
     require_columns(df, RAW_ENCOUNTER_COLUMNS, context="Encounter raw input")
 
-    normalized = df.drop(columns=DROP_COLUMNS).copy()
+    normalized = coerce_legacy_na_tokens(df.drop(columns=DROP_COLUMNS))
     normalized = normalized.loc[:, ENCOUNTER_COLUMNS]
     normalized["patient_id"] = normalized["patient_id"].astype("string")
     normalized["encounter_id"] = normalized["encounter_id"].astype("string")
     normalized["type"] = normalized["type"].astype("string")
     normalized = normalized.loc[normalized["type"].isin(ALLOWED_ENCOUNTER_TYPES)]
-    normalized["start_date"] = pd.to_datetime(normalized["start_date"])
-    normalized["end_date"] = pd.to_datetime(normalized["end_date"])
+    normalized["start_date"] = parse_trinetx_datetime(normalized["start_date"])
+    normalized["end_date"] = parse_trinetx_datetime(normalized["end_date"])
     return normalized.reset_index(drop=True)
 
 

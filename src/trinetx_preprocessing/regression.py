@@ -20,6 +20,7 @@ from .storage import logical_output_key
 
 HASH_MANIFEST_FILENAME = "hashes.json"
 HASH_ALGORITHM = "sha256"
+HASH_SCRATCH_PREFIX = ".trinetx-hash-"
 TABLE_SUFFIXES = {".csv", ".parquet"}
 HASH_SCOPE_VALUES = {"work", "final", "all"}
 DEFAULT_CSV_HASH_CHUNK_ROWS = 100_000
@@ -609,7 +610,7 @@ def _ensure_temp_dir(
 ) -> tempfile.TemporaryDirectory[str]:
     if temp_dir is not None:
         return temp_dir
-    return tempfile.TemporaryDirectory(prefix=".trinetx-hash-", dir=path.parent)
+    return tempfile.TemporaryDirectory(prefix=HASH_SCRATCH_PREFIX, dir=path.parent)
 
 
 def _render_csv_row(values: Sequence[str]) -> bytes:

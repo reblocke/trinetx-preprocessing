@@ -1,8 +1,9 @@
 # GLP-1 Eligibility Data Contract
 
-The additive GLP-1 build publishes one DuckDB database plus Parquet, CSV, HTML,
-and JSON companions. It does not replace or modify the 36 Milestone 2 analytic
-CSV files.
+This is the downstream eligibility and analysis contract. The standalone
+reference build publishes one DuckDB database plus Parquet, CSV, HTML, and JSON
+companions. The canonical shared preprocessing product and its 36 historical
+compatibility files are defined separately in `docs/UNIFIED_PREPROCESSING.md`.
 
 ## Published files
 

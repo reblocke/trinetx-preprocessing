@@ -4,6 +4,7 @@ import json
 import logging
 import warnings
 from contextlib import ExitStack
+from io import StringIO
 from pathlib import Path
 
 import numpy as np
@@ -723,6 +724,40 @@ def test_load_demographics_streams_chunks_and_preserves_output(tmp_path: Path) -
     ]
 
 
+def test_transform_demographics_restores_legacy_na_without_mutating_source() -> None:
+    source = pd.DataFrame(
+        {
+            "patient_id": pd.Series(["P1"], dtype="string"),
+            "sex": pd.Series(["NULL"], dtype="string"),
+            "race": pd.Series(["Null"], dtype="string"),
+            "ethnicity": pd.Series(["N/A"], dtype="string"),
+            "year_of_birth": pd.Series(["None"], dtype="string"),
+            "month_year_death": pd.Series(["NA"], dtype="string"),
+            "patient_regional_location": pd.Series(["n/a"], dtype="string"),
+        }
+    )
+    source_before = source.copy(deep=True)
+    legacy_source = pd.read_csv(StringIO(source.to_csv(index=False)), dtype="string")
+
+    transformed = final_assembly._transform_demographics(
+        source,
+        context="synthetic patient source",
+    )
+    expected = final_assembly._transform_demographics(
+        legacy_source,
+        context="synthetic patient source",
+    )
+
+    pd.testing.assert_frame_equal(transformed, expected)
+    assert pd.isna(transformed.loc[0, "sex"])
+    assert transformed.loc[0, "race"] == "Null"
+    assert pd.isna(transformed.loc[0, "ethnicity"])
+    assert transformed.loc[0, "birth_year"] == 0
+    assert transformed.loc[0, "death_year_month"] == ""
+    assert pd.isna(transformed.loc[0, "patient_regional_location"])
+    pd.testing.assert_frame_equal(source, source_before)
+
+
 def test_load_demographics_detects_duplicate_patient_ids_across_chunks(
     tmp_path: Path,
 ) -> None:
@@ -948,9 +983,7 @@ def test_final_event_selection_is_independent_per_setting() -> None:
     ]
 
 
-def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> (
-    None
-):
+def test_streamed_setting_cohort_reduces_earliest_patient_across_partitions() -> None:
     rows = pd.DataFrame(
         {
             "patient_id": ["P1", "P1", "P2"],
@@ -1733,11 +1766,25 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     rfs_calls: list[tuple[str, int | None, bool]] = []
     data_check_calls: list[int | None] = []
     demographics_calls: list[int | None] = []
+    load_order: list[str] = []
+
+    real_feature_source_store = final_assembly.FinalFeatureSourceStore
+
+    class TrackedFeatureSourceStore(real_feature_source_store):
+        def __enter__(self):
+            result = super().__enter__()
+            load_order.append("feature_sources_ready")
+            return result
 
     monkeypatch.setattr(
         final_assembly,
         "collect_domain_paths",
         lambda config: {"patient": [tmp_path / "patient.csv"]},
+    )
+    monkeypatch.setattr(
+        final_assembly,
+        "FinalFeatureSourceStore",
+        TrackedFeatureSourceStore,
     )
     monkeypatch.setattr(
         final_assembly,
@@ -1748,6 +1795,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
         stack,
         logger,
         chunksize=None: demographics_calls.append(chunksize)
+        or load_order.append("demographics")
         or pd.DataFrame(columns=final_assembly.DEMOGRAPHIC_OUTPUT_COLUMNS),
     )
 
@@ -1855,6 +1903,7 @@ def test_run_final_assembly_reuses_rfs_and_setting_inputs(
     ]
     assert demographics_calls == [config.chunking.lines_per_chunk]
     assert data_check_calls == [config.chunking.lines_per_chunk]
+    assert load_order[:2] == ["feature_sources_ready", "demographics"]
 
     expected_outputs = [
         config.output_dir

@@ -10,6 +10,9 @@ from typing import Any
 
 import yaml
 
+DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB = 3072
+DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB = 2816
+
 
 class ConfigError(ValueError):
     """Raised when configuration values are invalid."""
@@ -111,6 +114,18 @@ class StorageConfig:
 
 
 @dataclass(frozen=True)
+class CombinedPreprocessingConfig:
+    """Configuration for the canonical combined preprocessing product."""
+
+    enabled: bool = False
+    database_name: str = "trinetx_preprocessed.duckdb"
+    schema_version: str = "1.0"
+    concept_sets_dir: Path | None = None
+    duckdb_memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
+    duckdb_core_memory_limit_mib: int = DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB
+
+
+@dataclass(frozen=True)
 class Config:
     """Top-level configuration container."""
 
@@ -124,6 +139,7 @@ class Config:
     storage: StorageConfig
     cohort: CohortConfig = CohortConfig()
     data_screen: DataScreenConfig = DataScreenConfig()
+    combined: CombinedPreprocessingConfig = CombinedPreprocessingConfig()
 
 
 def load_config(path: Path) -> Config:
@@ -155,6 +171,7 @@ def load_config(path: Path) -> Config:
     data_screen = _load_data_screen(raw.get("data_screen"))
     guardrails = _load_guardrails(raw.get("guardrails"))
     storage = _load_storage(raw.get("storage"))
+    combined = _load_combined(raw.get("combined"), base_dir)
 
     return Config(
         data_dir=data_dir,
@@ -167,6 +184,7 @@ def load_config(path: Path) -> Config:
         storage=storage,
         cohort=cohort,
         data_screen=data_screen,
+        combined=combined,
     )
 
 
@@ -183,7 +201,62 @@ def validate_config(config: Config) -> None:
     _require_dir(config.data_dir, "data_dir")
     _require_dir(config.work_dir, "work_dir")
     _require_dir(config.output_dir, "output_dir")
+    validate_combined_path_separation(config)
     collect_domain_paths(config)
+
+
+def validate_combined_path_separation(config: Config) -> None:
+    """Require separate work and output trees for combined preprocessing.
+
+    Args:
+        config: ``Config`` instance to validate.
+
+    Raises:
+        ConfigError: If the resolved work and output paths overlap.
+    """
+
+    if not config.combined.enabled:
+        return
+
+    work_dir = config.work_dir.resolve(strict=False)
+    output_dir = config.output_dir.resolve(strict=False)
+    if paths_overlap(work_dir, output_dir):
+        raise ConfigError(
+            "Combined preprocessing requires non-overlapping 'work_dir' and "
+            f"'output_dir' paths: work_dir={work_dir}; output_dir={output_dir}"
+        )
+
+
+def paths_overlap(first: Path, second: Path) -> bool:
+    """Return whether two paths are equal or one contains the other.
+
+    Existing ancestors are compared by filesystem identity so case aliases on
+    case-insensitive filesystems cannot bypass lifecycle safety checks. The
+    lexical comparison remains necessary for destinations that do not exist
+    yet.
+    """
+
+    return path_is_within(first, second) or path_is_within(second, first)
+
+
+def path_is_within(path: Path, directory: Path) -> bool:
+    """Return whether ``path`` is equal to or below ``directory`` safely."""
+
+    candidate = Path(path).resolve(strict=False)
+    root = Path(directory).resolve(strict=False)
+    if candidate == root or root in candidate.parents:
+        return True
+    if not root.exists():
+        return False
+    for ancestor in (candidate, *candidate.parents):
+        if not ancestor.exists():
+            continue
+        try:
+            if ancestor.samefile(root):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def collect_domain_paths(config: Config) -> dict[str, list[Path]]:
@@ -547,6 +620,77 @@ def _load_storage(raw: Any) -> StorageConfig:
         parquet_row_group_size=parquet_row_group_size,
         analysis_bucket_count=analysis_bucket_count,
         emit_legacy_group_tables=emit_legacy_group_tables,
+    )
+
+
+def _load_combined(raw: Any, base_dir: Path) -> CombinedPreprocessingConfig:
+    if raw is None:
+        return CombinedPreprocessingConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("Config 'combined' must be a mapping if provided.")
+
+    enabled = raw.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("'combined.enabled' must be true or false.")
+    database_name = str(raw.get("database_name", "trinetx_preprocessed.duckdb")).strip()
+    if not database_name or Path(database_name).name != database_name:
+        raise ConfigError(
+            "'combined.database_name' must be a filename without directories."
+        )
+    if not database_name.endswith(".duckdb"):
+        raise ConfigError("'combined.database_name' must end with '.duckdb'.")
+
+    schema_version = str(raw.get("schema_version", "1.0")).strip()
+    if schema_version != "1.0":
+        raise ConfigError("'combined.schema_version' must be '1.0'.")
+
+    duckdb_memory_limit_mib = raw.get(
+        "duckdb_memory_limit_mib",
+        DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB,
+    )
+    if (
+        not isinstance(duckdb_memory_limit_mib, int)
+        or isinstance(duckdb_memory_limit_mib, bool)
+        or duckdb_memory_limit_mib <= 0
+    ):
+        raise ConfigError(
+            "'combined.duckdb_memory_limit_mib' must be a positive integer."
+        )
+    duckdb_core_memory_limit_mib = raw.get(
+        "duckdb_core_memory_limit_mib",
+        min(
+            DEFAULT_COMBINED_DUCKDB_CORE_MEMORY_LIMIT_MIB,
+            duckdb_memory_limit_mib,
+        ),
+    )
+    if (
+        not isinstance(duckdb_core_memory_limit_mib, int)
+        or isinstance(duckdb_core_memory_limit_mib, bool)
+        or duckdb_core_memory_limit_mib <= 0
+    ):
+        raise ConfigError(
+            "'combined.duckdb_core_memory_limit_mib' must be a positive integer."
+        )
+
+    concept_sets_value = raw.get("concept_sets_dir")
+    concept_sets_dir = None
+    if concept_sets_value is not None:
+        if not isinstance(concept_sets_value, str) or not concept_sets_value.strip():
+            raise ConfigError(
+                "'combined.concept_sets_dir' must be a non-empty path string."
+            )
+        concept_sets_dir = Path(concept_sets_value).expanduser()
+        if not concept_sets_dir.is_absolute():
+            concept_sets_dir = base_dir / concept_sets_dir
+        concept_sets_dir = concept_sets_dir.resolve(strict=False)
+
+    return CombinedPreprocessingConfig(
+        enabled=enabled,
+        database_name=database_name,
+        schema_version=schema_version,
+        concept_sets_dir=concept_sets_dir,
+        duckdb_memory_limit_mib=duckdb_memory_limit_mib,
+        duckdb_core_memory_limit_mib=duckdb_core_memory_limit_mib,
     )
 
 

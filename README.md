@@ -1,9 +1,10 @@
 # TriNetX Preprocessing Pipeline
 
-This repository refactors the TriNetX hypercapnia preprocessing notebooks into a
-deterministic, CLI-driven pipeline. The CLI reads exported CSVs, normalizes each
-domain, derives RFS cohorts, and assembles final encounter-level datasets for the
-2022 analysis window.
+This repository provides a deterministic, CLI-driven preprocessing pipeline for
+TriNetX exports. Its canonical product is one versioned
+`trinetx_preprocessed.duckdb` containing the historical encounter-level payload
+and additive source elements needed by the GLP-1 work and future studies. The
+historical 36 CSV files are generated compatibility projections of that product.
 
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
@@ -30,24 +31,57 @@ validation artifacts unless explicitly reviewed.
 mkdir -p .uv_cache
 export UV_CACHE_DIR="$PWD/.uv_cache"
 uv sync
-
-cp config.example.yaml config.yaml
-mkdir -p artifacts/synthetic_example/work artifacts/synthetic_example/output
-./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+./.venv/bin/python scripts/run_synthetic_example.py
 ```
 
-Or run the helper script that builds a config for you:
+The helper writes the canonical database and 36 compatibility CSVs under
+`/tmp/trinetx-preprocessing-synthetic-example/`. Pass `--output-root` to use a
+different location outside a Git worktree.
+
+## Unified preprocessing product
+
+Build the combined database and all 36 historical compatibility CSVs into an
+external private output directory:
+
 ```bash
-./.venv/bin/python scripts/run_synthetic_example.py --output-root artifacts/synthetic_example
+./.venv/bin/python -m trinetx_preprocessing build-preprocessed \
+  --config /private/path/config.yaml
+
+./.venv/bin/python -m trinetx_preprocessing validate-preprocessed \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --output-dir /private/output --json
 ```
 
-Outputs land under `artifacts/synthetic_example/output/`.
+Set `combined.enabled: true` to make `run` and `run-all` use this same builder.
+The accepted full source contains 286 encounter-setting conflicts, so the
+release build uses deterministic non-strict resolution. Use the prescribed
+`run-final-assembly --strict` resume check as the separate fail-closed
+data-adjudication proof; on the current source it exits before final-output
+writes. Do not run a full strict replacement build against the accepted product.
 
-## Additive GLP-1 eligibility database
+Regenerate the compatibility CSVs into a separate external destination. The
+source database must have one terminal `complete` manifest row. The command
+keeps export scratch in its owned staging tree, validates all 36 files against
+the database manifest, and publishes the set atomically; replacing an existing
+compatibility-only tree is explicit:
 
-The post-Milestone 2 GLP-1 endpoint is a separate command and output tree. It
-does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
+```bash
+./.venv/bin/python -m trinetx_preprocessing export-legacy \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --output-dir /private/compatibility-export --replace
+```
+
+See `docs/UNIFIED_PREPROCESSING.md` for the table grains, provenance contract,
+compatibility boundary, and acceptance gates.
+
+## Downstream GLP-1 eligibility
+
+The standalone raw-ingestion GLP-1 CLI remains the validated production
+reference during migration. The unified product is currently an
+adapter-validated source boundary, not a production CLI cutover or a second
+canonical preprocessing product. A separate PR must add the manifest-bound
+source and prove full-data adapter-versus-reference parity before the raw scan
+can be deprecated:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
@@ -63,9 +97,8 @@ does not alter `trinetx-preprocessing run` or the existing 36 final CSVs.
   --watch --interval-seconds 30
 ```
 
-See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub
-issue #6 for the output contract, current implementation boundary, and
-clinical-review requirements.
+See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
+#6 for the downstream analytic contract and clinical-review requirements.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:
@@ -81,17 +114,17 @@ data/
 ```
 Adjust domain patterns in `config.yaml` if your filenames differ.
 
-For the current machine, keep real-data validation on the external drive:
+Keep real-data validation under a private external root:
 ```bash
-export UV_CACHE_DIR="/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/uv-cache"
+export VALIDATION_ROOT="/private/path/trinetx-preprocessing-validation"
+export UV_CACHE_DIR="$VALIDATION_ROOT/uv-cache"
 
 ./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
-  --data-dir "/Volumes/LOCKE BOOK/TriNetX" \
-  --validation-root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation"
+  --data-dir "/private/path/TriNetX" \
+  --validation-root "$VALIDATION_ROOT"
 ```
 Use the mounted private raw-data tree as `data_dir`, and place `work_dir`,
-`output_dir`, profile output, logs, and manifests under
-`/Volumes/LOCKE BOOK/trinetx-preprocessing-validation`.
+`output_dir`, profile output, logs, and manifests under that external root.
 
 ## CLI basics
 ```bash
@@ -120,8 +153,10 @@ Profile the pipeline with cProfile and stage timers:
 ./.venv/bin/python -m trinetx_preprocessing profile --config config.yaml \
   --out artifacts/profile
 ```
-Use `--strict` with `run` or `profile` to enable guardrail checks for joins and
-required identifiers. `profile` writes metadata-only provenance with the
+For the non-combined corrected pipeline, `--strict` enables guardrail checks
+for joins and required identifiers. For the current combined full source, use
+strict mode only for the separate conflict-adjudication proof described above.
+`profile` writes metadata-only provenance with the
 config hash, package/Python version, git commit/dirty state, behavior-code
 state hash for `src/`, `pyproject.toml`, and `uv.lock`, output inventory, stage
 timings, peak RSS, and work/output disk footprint.
@@ -181,14 +216,22 @@ schema, row counts, key sets, and the documented row-parity threshold are met.
 Corrected post-milestone releases are validated against `docs/SPEC.md` and an
 aggregate delta report rather than required to reproduce known legacy defects.
 
-The review-clean corrected full profile produced all 36 outputs in 73,589.093
-seconds with 6,122.562 MB peak RSS; final assembly took 49,180.54 seconds.
-Local and GitHub review are clean, all three corrected staged tiers pass, and
-the aggregate-only Milestone 1 delta contains no identifiers or row examples.
-Milestone 2 release evidence accepts deterministic non-strict resolution for
-286 source encounter IDs assigned to multiple settings. Strict execution still
+The release-grade unified build produced the canonical DuckDB, its manifest,
+and all 36 compatibility exports in 89,270.965 seconds. Concurrent
+process-family peak RSS was 4,503.531 MiB, below the 6,238 MiB ceiling. All 36
+exports and 6,949,511 rows match the corrected baseline exactly; database,
+element-completeness, adapter, local-test, free-space, and scratch-hygiene gates
+also pass. Milestone 2 accepts deterministic non-strict resolution for 286
+source encounter IDs assigned to multiple settings. Strict execution still
 fails closed on those conflicts and remains available for upstream data-quality
 adjudication.
+
+The historical `c96dc40` product remains the corrected-baseline comparison
+point. Fresh exact-behavior release evidence was subsequently recovered for
+behavior head `7ef967d`; its parity, source, strict no-write, and recovery
+contracts are recorded privately. The later `2305f16`/`cefc861` changes are
+output-neutral lifecycle and test-fixture hardening, verified by focused
+quality evidence rather than a replacement full-data build.
 
 Hash local legacy outputs without committing row-level data:
 ```bash

@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from trinetx_preprocessing import storage
 from trinetx_preprocessing.config import (
     ChunkingConfig,
     Config,
@@ -193,6 +194,50 @@ def test_partitioned_parquet_store_round_trips_and_cleans(tmp_path: Path) -> Non
     assert not list(tmp_path.glob(".trinetx-test-partitions-*"))
 
 
+def test_partitioned_parquet_store_buffers_small_bucket_writes(
+    tmp_path: Path,
+) -> None:
+    frame = pd.DataFrame(
+        {
+            "patient_id": ["P1", "P1", "P1"],
+            "encounter_id": ["E1", "E2", "E3"],
+        }
+    )
+
+    with PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-buffered-",
+        key_columns=["patient_id"],
+        bucket_count=2,
+        row_group_size=10,
+        buffer_rows_per_bucket=2,
+    ) as store:
+        store.add_frame(frame.iloc[:1])
+        assert not store._paths
+        store.add_frame(frame.iloc[1:2])
+        assert store._paths
+        store.add_frame(frame.iloc[2:])
+        observed = pd.concat(
+            [partition for _, partition in store.iter_frames()],
+            ignore_index=True,
+        )
+
+    assert observed.equals(frame)
+    assert not list(tmp_path.glob(".trinetx-test-buffered-*"))
+
+
+def test_partitioned_parquet_store_rejects_invalid_buffer_size(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="buffer_rows_per_bucket"):
+        PartitionedParquetStore(
+            tmp_path,
+            prefix=".trinetx-test-buffered-",
+            key_columns=["patient_id"],
+            buffer_rows_per_bucket=0,
+        )
+
+
 def test_partitioned_parquet_store_rejects_writes_after_read(tmp_path: Path) -> None:
     frame = pd.DataFrame({"patient_id": ["P1"], "value": [1]})
 
@@ -210,6 +255,7 @@ def test_partitioned_parquet_store_rejects_writes_after_read(tmp_path: Path) -> 
 
 def test_partitioned_parquet_store_releases_each_writer_while_sealing(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     store = PartitionedParquetStore(
         tmp_path,
@@ -228,12 +274,43 @@ def test_partitioned_parquet_store_releases_each_writer_while_sealing(
             closed.append(self.bucket)
 
     store._writers = {bucket: _Writer(bucket) for bucket in range(4)}
+    arrow_releases: list[None] = []
+    monkeypatch.setattr(storage, "_ARROW_RELEASE_INTERVAL", 2)
+    monkeypatch.setattr(
+        storage,
+        "release_unused_arrow_memory",
+        lambda: arrow_releases.append(None),
+    )
 
     store.seal()
 
     assert sorted(closed) == [0, 1, 2, 3]
+    assert arrow_releases == [None, None, None]
     assert store._writers == {}
     assert store._sealed is True
+
+
+def test_partitioned_parquet_store_releases_unused_memory_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    releases: list[None] = []
+    monkeypatch.setattr(
+        storage,
+        "release_unused_tabular_memory",
+        lambda: releases.append(None),
+    )
+    store = PartitionedParquetStore(
+        tmp_path,
+        prefix=".trinetx-test-partitions-",
+        key_columns=["patient_id"],
+        bucket_count=2,
+    )
+
+    store.seal()
+    store.seal()
+
+    assert releases == [None]
 
 
 def test_partitioned_key_lookup_queries_and_deduplicates_membership(

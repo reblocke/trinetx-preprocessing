@@ -15,23 +15,25 @@ export UV_CACHE_DIR="$PWD/.uv_cache"
 uv sync
 
 cp config.example.yaml config.yaml
-mkdir -p artifacts/synthetic_example/work artifacts/synthetic_example/output
-./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+./.venv/bin/python scripts/run_synthetic_example.py
 ```
-Outputs land under `artifacts/synthetic_example/output/`.
+The helper writes the canonical database and all 36 compatibility CSVs under
+`/tmp/trinetx-preprocessing-synthetic-example/`.
+It is safe to rerun: the existing synthetic product is replaced only after the
+new product passes combined validation.
 
 ## Getting started example script
 The helper script writes a config for you and runs the pipeline on synthetic
 fixtures:
 ```bash
-./.venv/bin/python scripts/run_synthetic_example.py --output-root artifacts/synthetic_example
+./.venv/bin/python scripts/run_synthetic_example.py \
+  --output-root /tmp/trinetx-preprocessing-synthetic-example
 ```
 
 ## CLI run (real data)
-1. Place TriNetX exports under `data/` (git-ignored) using the folder names:
+1. Keep the TriNetX export in a private location using the folder names:
    ```
-   data/
+   /private/path/TriNetX/
      Encounter/
      Diagnosis/
      Lab Results/
@@ -40,24 +42,51 @@ fixtures:
      Vital Signs/
      Patient/
    ```
-2. Copy `config.example.yaml` to `config.yaml` and update paths/patterns.
-3. Create the `work_dir` and `output_dir` paths referenced in the config.
+2. Scaffold a non-repository validation root. The generated config keeps
+   `work_dir`, `output_dir`, logs, and manifests external and separate:
+   ```bash
+   ./.venv/bin/python -m trinetx_preprocessing scaffold-validation \
+     --data-dir /private/path/TriNetX \
+     --validation-root /private/path/trinetx-preprocessing-validation
+   ```
+3. In the generated config, add or update the `combined` block:
+   ```yaml
+   combined:
+     enabled: true
+     database_name: trinetx_preprocessed.duckdb
+     schema_version: "1.0"
+     concept_sets_dir: /absolute/path/to/repository/config/concept_sets
+     duckdb_memory_limit_mib: 3072
+     duckdb_core_memory_limit_mib: 2816
+   ```
+   Keep `work_dir` and `output_dir` disjoint; equality or either directory
+   nested under the other is rejected before any mutation.
 4. Validate configuration and inputs:
    ```bash
-   ./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-   ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
+   CONFIG=/private/path/trinetx-preprocessing-validation/config.yaml
+   ./.venv/bin/python -m trinetx_preprocessing validate-config --config "$CONFIG"
+   ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config "$CONFIG"
    ```
-5. Run the pipeline:
+5. Run the canonical builder in the accepted deterministic non-strict mode:
    ```bash
-   ./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
+   ./.venv/bin/python -m trinetx_preprocessing build-preprocessed \
+     --config "$CONFIG"
    ```
-`run-all` is an alias for the same full pipeline.
+With combined mode enabled, `run` and `run-all` route to the same builder.
+The accepted source contains 286 documented encounter-setting conflicts, so
+the prescribed `run-final-assembly --strict` resume check is the separate
+fail-closed adjudication proof. On the current source it exits before
+final-output writes; do not run a full strict replacement build against the
+accepted product.
 
 The recommended finalization config uses Parquet work tables. Final analytic
 outputs remain CSV, but intermediates under `work_dir` may have `.parquet`
 suffixes unless `storage.emit_legacy_csv_intermediates` is enabled.
 
-## Legacy notebook workflow (reference)
+## Legacy notebook workflow (reference only)
+
+This workflow is preserved for historical diagnosis and comparison. New runs
+should use the canonical CLI above.
 1. Download + unzip the TriNetX export.
 2. Organize raw files into the domain folders above (see `README.txt`).
 3. Split large CSVs with the portable Python splitter (recommended), adjusting paths to your local data directory.
@@ -83,9 +112,11 @@ suffixes unless `storage.emit_legacy_csv_intermediates` is enabled.
 8. Optional checks: `Hypercapnia Final Data Checks only.ipynb`.
 
 ## First-success checklist
-- [ ] Raw exports stay under `data/`.
-- [ ] All `*_NEW_####.csv` intermediates exist in `work_dir`.
-- [ ] Or, when Parquet storage is enabled, matching `*_NEW_####.parquet`
-      intermediates exist in `work_dir`.
-- [ ] `RFS_*.csv` exist in `work_dir`.
-- [ ] Final outputs appear under `output/AMBULATORY`, `output/EMERGENCY`, `output/INPATIENT`.
+- [ ] Raw exports and every generated row-level artifact remain external and
+      untracked.
+- [ ] `work_dir` and `output_dir` are external, real, and non-overlapping.
+- [ ] The product contains one DuckDB, one adjacent manifest, and exactly 36
+      compatibility CSVs under `AMBULATORY`, `EMERGENCY`, and `INPATIENT`.
+- [ ] `validate-preprocessed --database ... --output-dir ...` reports valid.
+- [ ] Any strict conflict check is recorded separately from the accepted
+      non-strict build.

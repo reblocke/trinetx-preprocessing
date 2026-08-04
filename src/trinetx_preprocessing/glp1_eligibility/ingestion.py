@@ -68,9 +68,7 @@ def ingest_core_sources(
     if state is not None:
         state.update(phase="source_ingestion", current_domain="labs")
     _create_lab_measurements(connection, root, inventory)
-    rows["source_lab_measurement"] = _row_count(
-        connection, "source_lab_measurement"
-    )
+    rows["source_lab_measurement"] = _row_count(connection, "source_lab_measurement")
     _create_gas_candidate_ids(connection)
     rows["gas_candidate_id"] = _row_count(connection, "gas_candidate_id")
     _create_candidate_membership_tables(connection)
@@ -422,7 +420,7 @@ def _create_gas_candidate_ids(connection: duckdb.DuckDBPyConnection) -> None:
             )
               AND concept.domain = 'lab'
               AND concept.include
-              AND {_normalized_code_system_sql('lab.code_system')}
+              AND {_normalized_code_system_sql("lab.code_system")}
                     = concept.code_system
               AND (
                     (concept.match_type = 'exact'
@@ -514,10 +512,7 @@ def _encounter_membership_sql(raw_alias: str = "raw") -> str:
 def _patient_membership_sql(raw_alias: str = "raw") -> str:
     """Return bounded membership against unique gas-candidate patients."""
 
-    return (
-        f'{raw_alias}."patient_id" IN '
-        "(SELECT patient_id FROM gas_candidate_patient)"
-    )
+    return f'{raw_alias}."patient_id" IN (SELECT patient_id FROM gas_candidate_patient)'
 
 
 def _create_patients(
@@ -783,8 +778,7 @@ def _append_candidate_patient_partitions(
 ) -> None:
     available_columns = frozenset(spec.source_columns)
     datetime_projections = (
-        f"{_timestamp_sql(f'raw.{_identifier(spec.event_column)}')} "
-        "AS event_datetime",
+        f"{_timestamp_sql(f'raw.{_identifier(spec.event_column)}')} AS event_datetime",
         *(
             f"{_timestamp_sql(f'raw.{_identifier(source_column)}')} "
             f"AS {_identifier(output_column)}"
@@ -844,8 +838,7 @@ def _domain_files_for_domains(
     )
     if not files:
         raise ValueError(
-            "No inventoried source files for required domain(s): "
-            + ", ".join(domains)
+            "No inventoried source files for required domain(s): " + ", ".join(domains)
         )
     return files
 
@@ -1064,35 +1057,26 @@ def _create_empty_raw_observability(
 def _read_csv_sql(files: tuple[Path, ...]) -> str:
     paths = ", ".join(_sql_string(str(path.resolve())) for path in files)
     return (
-        "read_csv(["
-        + paths
-        + "], header=true, all_varchar=true, union_by_name=true, "
+        "read_csv([" + paths + "], header=true, all_varchar=true, union_by_name=true, "
         "filename=true, null_padding=true)"
     )
 
 
 def _read_parquet_sql(files: tuple[Path, ...]) -> str:
     paths = ", ".join(_sql_string(str(path.resolve())) for path in files)
-    return (
-        "read_parquet(["
-        + paths
-        + "], union_by_name=true, hive_partitioning=false)"
-    )
+    return "read_parquet([" + paths + "], union_by_name=true, hive_partitioning=false)"
 
 
 def _source_projection(columns: frozenset[str], names: tuple[str, ...]) -> str:
     return ",\n            ".join(
-        f'raw."{name}" AS "{name}"'
-        if name in columns
-        else f'NULL::VARCHAR AS "{name}"'
+        f'raw."{name}" AS "{name}"' if name in columns else f'NULL::VARCHAR AS "{name}"'
         for name in names
     )
 
 
 def _hash_value_sql(columns: frozenset[str], names: tuple[str, ...]) -> str:
     return ", ".join(
-        f'coalesce(raw."{name}", \'\')' if name in columns else "''"
-        for name in names
+        f"coalesce(raw.\"{name}\", '')" if name in columns else "''" for name in names
     )
 
 
@@ -1144,10 +1128,7 @@ def _concept_membership_sql(
 
 
 def _normalized_code_system_sql(expression: str) -> str:
-    return (
-        f"regexp_replace(upper(trim({expression})), "
-        "'[^A-Z0-9]', '', 'g')"
-    )
+    return f"regexp_replace(upper(trim({expression})), '[^A-Z0-9]', '', 'g')"
 
 
 def _timestamp_sql(expression: str) -> str:

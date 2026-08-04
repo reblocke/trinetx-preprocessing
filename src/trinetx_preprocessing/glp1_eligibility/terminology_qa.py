@@ -144,8 +144,7 @@ def build_concept_match_summary(
             ).fetchall()
         )
         connection.execute(
-            "DELETE FROM build_warning "
-            "WHERE warning_code = 'required_concept_no_match'"
+            "DELETE FROM build_warning WHERE warning_code = 'required_concept_no_match'"
         )
         run_id = connection.execute("SELECT run_id FROM run_manifest").fetchone()[0]
         messages = tuple(
@@ -162,9 +161,7 @@ def build_concept_match_summary(
                         message,
                         json.dumps({"concept_set_id": concept_set_id}),
                     )
-                    for concept_set_id, message in zip(
-                        missing, messages, strict=True
-                    )
+                    for concept_set_id, message in zip(missing, messages, strict=True)
                 ],
             )
         connection.execute(

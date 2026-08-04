@@ -6,8 +6,15 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 
 ## [Unreleased]
 ### Added
-- Added an independent, versioned GLP-1 eligibility database build that leaves
-  the Milestone 2 pipeline and its 36 final CSV outputs unchanged.
+- Added one canonical `trinetx_preprocessed.duckdb` containing the historical
+  534-column observations, source-faithful additive elements, catalog/rule
+  membership, observability, provenance, quality summaries, and 36 exact
+  compatibility views.
+- Added combined-product build, status, inspection, validation, and legacy
+  export commands plus aggregate-only parity, completeness, and benchmark
+  scripts.
+- Added the versioned standalone GLP-1 eligibility build now retained as the
+  downstream derivation and validation reference for unified preprocessing.
 - Added first-available arterial PaCO2 selection, unit-aware pH pairing,
   persistent-hypercapnia and VBG sensitivity cohorts, measured/calculated BMI,
   temporal component phenotypes, indication tiers, payer-route modeling, and
@@ -24,6 +31,12 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   pytest suite on Python 3.11.
 
 ### Changed
+- Added the canonical combined product so historical preprocessing and the
+  source-faithful tables needed by downstream GLP-1 work can be materialized in
+  one manifest-bound raw-data pass. The existing GLP-1 cohort/phenotype CLI
+  remains the standalone reference until its separate unified-database cutover.
+- Medication-ingredient exports now enter the unified source-element table
+  without entering historical medication feature reduction.
 - Completed-output reuse now validates the exact configured GLP-1 public file
   set, rejects empty artifacts, and confirms the DuckDB run identity/status
   before reporting success.
@@ -54,6 +67,38 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   phenotype and evidence values.
 
 ### Fixed
+- Hardened interrupted final-stage recovery with `pyarrow>=15` page checksums,
+  verification, privacy-safe bounded read retry diagnostics, durable
+  publication barriers, and final-only retry eligibility. The corresponding
+  quality hardening keeps valid persistent lock AppleDouble sidecars while
+  rejecting unsafe variants.
+- Restored historical pandas CSV missing-value semantics in every combined-mode
+  compatibility transform while preserving literal NA-like values in the
+  canonical source tables.
+- Made combined-product replacement transactional across the DuckDB, sidecar,
+  and all 36 compatibility CSVs, with rollback on publication failure.
+- Made standalone compatibility export fail closed on symlinks and unmanaged
+  descendants, require one complete source manifest plus exactly 36 unique
+  output-manifest rows, keep DuckDB/hash scratch in recoverable staging,
+  preserve unowned sibling files, require explicit replacement, revalidate the
+  live destination, and publish the complete export tree atomically.
+- Reject overlapping combined work/output roots and repository-local private
+  output aliases by filesystem identity before any mutation. Case aliases now
+  share publication/lock identities, and lock files cannot follow symlinks.
+- Validate that every retained clinical source row has an included,
+  domain-matched source-concept membership.
+- Recover interrupted canonical and standalone DuckDB, validation, and hash
+  scratch without retaining row-level artifacts, and report expected export
+  replacement/lock conflicts as concise CLI errors instead of tracebacks.
+- Fsync final compatibility outputs and their work manifest before recording
+  the pre-database checkpoint; a stale interrupted checkpoint is discarded and
+  safely rebuilt instead of wedging all future retries.
+- Enforced identical typed source-table contracts for CSV and Parquet work,
+  source-faithful patient strings, and `include: true` source retention.
+- Aligned medication-ingredient preflight validation with ingestion, ignored
+  confidential CSV intermediates, and made the synthetic example rerunnable.
+- Preserved a complete compact encounter-flow inventory so downstream GLP-1
+  source-denominator counts include pre-2022 non-gas-candidate encounters.
 - Removed the internal build-workspace manifest before atomic publication while
   restoring it if publication fails, so completed builds contain exactly the
   eight contracted public files without weakening resumability.
@@ -194,6 +239,23 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
   fail-closed so unresolved source conflicts cannot be overlooked.
 
 ### Fixed
+- Applied the combined-product DuckDB memory, thread, and external-spill policy
+  to compatibility export, provenance refresh, inspection, evidence, and
+  validation instead of limiting only database creation.
+- Removed macOS AppleDouble metadata files from the staging tree immediately
+  before atomic publication so the canonical product contains only contracted
+  outputs.
+- Replaced global all-domain source-integrity validation with equivalent
+  domain-local orphan and duplicate checks plus explicit logical-domain and
+  cross-domain source-file guards.
+- Disabled insertion-order preservation for read-only combined-product
+  sessions so large exact validation aggregates can spill within the configured
+  memory limit; canonical database creation retains ordered insertion.
+- Replaced full-domain duplicate source-ID aggregation with an exact 64-way
+  Parquet reduction so validation remains bounded on production-sized domains.
+- Made medication-ingredient filename handling schema-aware: full historical
+  exports now retain legacy features while minimal ingredient files remain
+  additive unified-source inputs.
 - Kept precomputed `AFTER` eligibility aligned with final row sorting so mixed
   eligible/ineligible rows cannot receive one another's screen result.
 - Made strict final-assembly resumes reject encounter work that contains a

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
+import json
+import multiprocessing
+import os
+import resource
+import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -11,6 +16,8 @@ import numpy as np
 import pandas as pd
 
 from ..config import Config
+from ..filesystem import remove_tree_strict, write_text_atomic
+from ..process_locks import duplicate_lock_file_descriptors_for_spawn
 from ..storage import (
     PartitionedParquetStore,
     find_work_tables,
@@ -24,6 +31,8 @@ from ..transform.procedure import PROCEDURE_CODE_GROUPS, PROCEDURE_COLUMNS
 from ..transform.vitals import VITAL_SIGN_RULES, VITALS_COLUMNS
 
 LAB_SOURCE_NAME = "__normalized_labs__"
+FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS = 100_000
+FINAL_FEATURE_BUFFER_ROWS_PER_BUCKET = 10_000
 SOURCE_COLUMNS = [
     "source_name",
     "patient_id",
@@ -48,6 +57,54 @@ class _SourceDefinition:
     numeric_column: str | None = None
 
 
+class _DomainPartitionReader:
+    """Read-only access to one worker-built feature-domain partition set."""
+
+    def __init__(self, domain: str, path: Path) -> None:
+        self.domain = domain
+        self.path = path
+        self._paths = {
+            int(item.stem.rsplit("-", 1)[1]): item
+            for item in path.glob("bucket-*.parquet")
+        }
+
+    def read_frame(
+        self,
+        bucket: int,
+        *,
+        columns: Sequence[str] | None = None,
+    ) -> pd.DataFrame | None:
+        path = self._paths.get(bucket)
+        if path is None:
+            return None
+        selected_columns = list(columns) if columns is not None else None
+        try:
+            return _read_verified_parquet(
+                path,
+                columns=selected_columns,
+                use_threads=True,
+            )
+        except OSError:
+            try:
+                return _read_verified_parquet(
+                    path,
+                    columns=selected_columns,
+                    use_threads=False,
+                )
+            except Exception:
+                raise OSError(
+                    "Final-feature Parquet partition read failed after "
+                    "single-threaded retry: "
+                    f"domain={self.domain}; bucket={bucket}; path={path}"
+                ) from None
+
+    def populated_buckets(self) -> set[int]:
+        return set(self._paths)
+
+    def disk_size_bytes(self) -> int:
+        return sum(path.stat().st_size for path in self._paths.values())
+
+
 class FinalFeatureBucket:
     """Feature source rows for one patient hash partition."""
 
@@ -56,7 +113,7 @@ class FinalFeatureBucket:
         frame: pd.DataFrame | None = None,
         *,
         bucket: int | None = None,
-        stores: dict[str, PartitionedParquetStore] | None = None,
+        stores: dict[str, _DomainPartitionReader] | None = None,
         source_domains: dict[str, str] | None = None,
     ) -> None:
         self._bucket = bucket
@@ -126,26 +183,46 @@ class FinalFeatureBucket:
 class FinalFeatureSourceStore:
     """Build and expose all final-feature sources with one source scan."""
 
-    def __init__(self, config: Config, *, chunksize: int | None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        *,
+        chunksize: int | None,
+        lock_file_descriptors: tuple[int, ...] = (),
+    ) -> None:
         self.config = config
-        self.chunksize = chunksize
-        self._stack = ExitStack()
-        self._stores: dict[str, PartitionedParquetStore] = {}
+        self.lock_file_descriptors = lock_file_descriptors
+        requested_chunksize = chunksize or FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS
+        self.chunksize = min(
+            requested_chunksize,
+            FINAL_FEATURE_INDEX_MAX_CHUNK_ROWS,
+        )
+        self._scratch_root: Path | None = None
+        self._stores: dict[str, _DomainPartitionReader] = {}
         self._source_domains: dict[str, str] = {}
         self.rows_indexed = 0
         self.files_scanned = 0
         self.source_files_scanned: list[str] = []
+        self.peak_worker_rss_mb = 0.0
+        self.worker_metrics: dict[str, dict[str, object]] = {}
 
     def __enter__(self) -> "FinalFeatureSourceStore":
+        self.config.work_dir.mkdir(parents=True, exist_ok=True)
+        self._scratch_root = Path(
+            tempfile.mkdtemp(
+                prefix=".trinetx-final-feature-sources-",
+                dir=self.config.work_dir,
+            )
+        )
         try:
             self._build()
         except BaseException:
-            self._stack.close()
+            self._cleanup()
             raise
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        self._stack.__exit__(exc_type, exc, tb)
+        self._cleanup()
 
     def bucket(self, bucket: int) -> FinalFeatureBucket:
         """Load one source partition for reuse across all final outputs."""
@@ -176,42 +253,200 @@ class FinalFeatureSourceStore:
             definitions_by_domain.setdefault(definition.domain, []).append(definition)
 
         for domain, definitions in definitions_by_domain.items():
-            store = self._stack.enter_context(
-                PartitionedParquetStore(
-                    self.config.work_dir,
-                    prefix=".trinetx-final-feature-sources-",
-                    key_columns=["patient_id"],
-                    bucket_count=self.config.storage.analysis_bucket_count,
-                    row_group_size=self.config.storage.parquet_row_group_size,
-                    cleanup_context=f"Final {domain} feature index scratch",
-                )
+            root = self._require_scratch_root()
+            metadata_path = root / f"{domain}.json"
+            process = multiprocessing.get_context("spawn").Process(
+                target=_build_feature_domain_worker,
+                args=(
+                    self.config,
+                    self.chunksize,
+                    domain,
+                    tuple(definitions),
+                    next_row_order,
+                    root,
+                    metadata_path,
+                    duplicate_lock_file_descriptors_for_spawn(
+                        self.lock_file_descriptors
+                    ),
+                ),
+                name=f"trinetx-final-feature-{domain}",
             )
-            self._stores[domain] = store
-            for definition in definitions:
-                for path in definition.paths:
-                    self.files_scanned += 1
-                    self.source_files_scanned.append(path.name)
-                    for chunk in iter_work_tables(
-                        [path],
-                        chunksize=self.chunksize,
-                        usecols=definition.columns,
-                        dtype={
-                            "patient_id": "string",
-                            "encounter_id": "string",
-                            "code": "string",
-                        },
-                    ):
-                        indexed = _to_index_frame(
-                            chunk,
-                            definition,
-                            row_order_start=next_row_order,
-                        )
-                        next_row_order += len(indexed)
-                        self.rows_indexed += len(indexed)
-                        for source_name in indexed["source_name"].dropna().unique():
-                            self._source_domains[str(source_name)] = domain
-                        store.add_frame(indexed)
-            store.seal()
+            process.start()
+            try:
+                process.join()
+            except BaseException:
+                if process.is_alive():
+                    process.terminate()
+                process.join()
+                raise
+            if not metadata_path.exists():
+                raise RuntimeError(
+                    f"Final {domain} feature index worker exited "
+                    f"with status {process.exitcode} without metadata."
+                )
+            metadata = json.loads(metadata_path.read_text())
+            if process.exitcode != 0 or metadata.get("status") != "complete":
+                message = metadata.get("error", "feature-domain worker failed")
+                raise RuntimeError(f"Final {domain} feature index failed: {message}")
+            rows_indexed = int(metadata["rows_indexed"])
+            next_row_order += rows_indexed
+            self.rows_indexed += rows_indexed
+            self.files_scanned += int(metadata["files_scanned"])
+            self.source_files_scanned.extend(metadata["source_files_scanned"])
+            self.peak_worker_rss_mb = max(
+                self.peak_worker_rss_mb,
+                float(metadata["peak_rss_mb"]),
+            )
+            self.worker_metrics[domain] = {
+                "rows_indexed": rows_indexed,
+                "files_scanned": int(metadata["files_scanned"]),
+                "peak_rss_mb": float(metadata["peak_rss_mb"]),
+            }
+            for source_name in metadata["source_names"]:
+                self._source_domains[str(source_name)] = domain
+            self._stores[domain] = _DomainPartitionReader(
+                domain, root / str(metadata["partition_path"])
+            )
+
+    def _require_scratch_root(self) -> Path:
+        if self._scratch_root is None:
+            raise RuntimeError("Final feature source store is not open.")
+        return self._scratch_root
+
+    def _cleanup(self) -> None:
+        if self._scratch_root is None:
+            return
+        remove_tree_strict(
+            self._scratch_root,
+            context="Final feature source index scratch",
+        )
+        self._scratch_root = None
+
+
+def _build_feature_domain_worker(
+    config: Config,
+    chunksize: int,
+    domain: str,
+    definitions: tuple[_SourceDefinition, ...],
+    row_order_start: int,
+    root: Path,
+    metadata_path: Path,
+    lock_file_descriptors: tuple[int, ...],
+) -> None:
+    """Build one domain in a fresh process so allocator state cannot accumulate."""
+
+    try:
+        _build_feature_domain_worker_body(
+            config,
+            chunksize,
+            domain,
+            definitions,
+            row_order_start,
+            root,
+            metadata_path,
+        )
+    finally:
+        for descriptor in reversed(lock_file_descriptors):
+            os.close(descriptor)
+
+
+def _build_feature_domain_worker_body(
+    config: Config,
+    chunksize: int,
+    domain: str,
+    definitions: tuple[_SourceDefinition, ...],
+    row_order_start: int,
+    root: Path,
+    metadata_path: Path,
+) -> None:
+    store = PartitionedParquetStore(
+        root,
+        prefix=f".{domain}-",
+        key_columns=["patient_id"],
+        bucket_count=config.storage.analysis_bucket_count,
+        row_group_size=config.storage.parquet_row_group_size,
+        buffer_rows_per_bucket=FINAL_FEATURE_BUFFER_ROWS_PER_BUCKET,
+        write_page_checksum=True,
+        cleanup_context=f"Final {domain} feature index scratch",
+    )
+    store.__enter__()
+    rows_indexed = 0
+    files_scanned = 0
+    source_files_scanned: list[str] = []
+    source_names: set[str] = set()
+    try:
+        for definition in definitions:
+            for path in definition.paths:
+                files_scanned += 1
+                source_files_scanned.append(path.name)
+                for chunk in iter_work_tables(
+                    [path],
+                    chunksize=chunksize,
+                    usecols=definition.columns,
+                    dtype={
+                        "patient_id": "string",
+                        "encounter_id": "string",
+                        "code": "string",
+                    },
+                ):
+                    indexed = _to_index_frame(
+                        chunk,
+                        definition,
+                        row_order_start=row_order_start + rows_indexed,
+                    )
+                    rows_indexed += len(indexed)
+                    source_names.update(
+                        str(value) for value in indexed["source_name"].dropna().unique()
+                    )
+                    store.add_frame(indexed)
+        store.seal()
+        store.fsync()
+        payload = {
+            "status": "complete",
+            "rows_indexed": rows_indexed,
+            "files_scanned": files_scanned,
+            "source_files_scanned": source_files_scanned,
+            "source_names": sorted(source_names),
+            "partition_path": str(store.path.relative_to(root)),
+            "peak_rss_mb": _peak_rss_mb(),
+        }
+    except BaseException as exc:
+        payload = {
+            "status": "failed",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "peak_rss_mb": _peak_rss_mb(),
+        }
+        write_text_atomic(metadata_path, json.dumps(payload, sort_keys=True))
+        raise
+    write_text_atomic(metadata_path, json.dumps(payload, sort_keys=True))
+
+
+def _read_verified_parquet(
+    path: Path,
+    *,
+    columns: list[str] | None,
+    use_threads: bool,
+) -> pd.DataFrame:
+    """Read one partition while verifying its Parquet page checksums."""
+
+    import pyarrow.parquet as pq
+
+    with pq.ParquetFile(
+        path,
+        page_checksum_verification=True,
+    ) as parquet_file:
+        table = parquet_file.read(
+            columns=columns,
+            use_threads=use_threads,
+        )
+    return table.to_pandas(use_threads=use_threads)
+
+
+def _peak_rss_mb() -> float:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
+    return round(value / divisor, 3)
 
 
 def _source_definitions(config: Config) -> Iterable[_SourceDefinition]:

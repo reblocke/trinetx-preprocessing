@@ -1,21 +1,20 @@
 # GLP-1 Migration and Compatibility
 
-The GLP-1 eligibility endpoint is additive. Historical notebooks remain
-references for the original hypercapnia preprocessing, and Milestone 2 remains
-the fallback for its corrected 36-file output contract.
+The migration boundary is now one shared preprocessing product. Historical
+notebooks remain references, Milestone 2 remains the corrected 36-file
+fallback, and `trinetx_preprocessed.duckdb` contains both the historical
+payload and source-faithful elements required by the GLP-1 derivation.
 
-Use the GLP-1 module when the analytic target is the issue #6 eligibility
-database. It reads the original TriNetX export independently, preserves source
-provenance, and writes to a separate output root. Do not feed legacy normalized
-group tables into this build: they omit source fields and timing detail needed
-for auditable component phenotypes.
+Do not feed lossy legacy group tables into GLP-1 logic. The tested adapter reads
+typed source tables from the canonical database and reproduces the current
+downstream GLP-1 source contract without rescanning raw clinical CSVs.
 
-Existing automation can continue invoking `python -m trinetx_preprocessing`.
-The additive endpoint uses
-`python -m trinetx_preprocessing.glp1_eligibility`; no existing CLI arguments,
-configuration files, work manifests, or final CSV names are changed.
+The standalone `python -m trinetx_preprocessing.glp1_eligibility` command is
+retained as the validated derivation/reference during migration. It does not
+define a second canonical preprocessing output. Stata replication and later
+semantic improvements remain separate future branch/PR work.
 
-For migration, validate the export and concept contract, run the build into a
-new private directory, inspect aggregate QA and summary outputs, and compare
-only approved aggregate counts. Real row-level outputs and validation extracts
-must remain external and untracked.
+For migration, first validate the unified database, exact 36-file compatibility
+evidence, and additive element completeness. Then compare the adapter-backed
+GLP-1 derivation with the preserved standalone result. Real row-level outputs
+and validation extracts must remain external and untracked.

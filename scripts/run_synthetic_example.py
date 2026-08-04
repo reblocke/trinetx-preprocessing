@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import tempfile
 from pathlib import Path
 
 from trinetx_preprocessing.cli import main as cli_main
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_DIR = ROOT_DIR / "tests" / "fixtures" / "example_data"
-DEFAULT_OUTPUT_ROOT = Path("artifacts") / "synthetic_example"
+DEFAULT_OUTPUT_ROOT = (
+    Path(tempfile.gettempdir()) / "trinetx-preprocessing-synthetic-example"
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,6 +72,11 @@ def write_config(
         "  enabled: false\n"
         "  lines_per_chunk: 10000000\n"
         "\n"
+        "combined:\n"
+        "  enabled: true\n"
+        "  database_name: trinetx_preprocessed.duckdb\n"
+        '  schema_version: "1.0"\n'
+        "\n"
         "rfs:\n"
         "  enabled: true\n"
     )
@@ -95,9 +103,9 @@ def main() -> int:
     config_path = output_root / "config.yaml"
     write_config(config_path, data_dir, work_dir, output_dir)
 
-    result = cli_main(["run", "--config", str(config_path)])
+    result = cli_main(["build-preprocessed", "--config", str(config_path), "--replace"])
     if result == 0:
-        print(f"Synthetic outputs written to {output_dir}")
+        print(f"Synthetic combined product written to {output_dir}")
     return result
 
 

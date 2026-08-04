@@ -1,19 +1,36 @@
 # GLP-1 Eligibility Augmentation
 
 GitHub issue #6 is the authoritative endpoint specification for the additive
-GLP-1 eligibility database. This work begins after immutable tags
-`refactor-milestone-2` and `v0.2.0`.
+GLP-1 eligibility database. Standalone software and behavior-head-scoped
+aggregate evidence are already delivered; the issue remains open for its
+optional-domain, catalog/configuration, smoke-summary, final-catalog evidence,
+and clinical/private-review requirements.
 
 ## Compatibility boundary
 
-- The existing `trinetx-preprocessing run` command, its work tables, and its 36
-  final CSV files are unchanged.
-- GLP-1 code lives under `trinetx_preprocessing.glp1_eligibility` and writes only
-  beneath the output directory passed to that command.
-- GLP-1 ingestion must preserve source provenance independently. It must not use
-  lossy legacy feature tables as its source of truth.
+- `trinetx_preprocessed.duckdb` is the canonical shared preprocessing product;
+  its compatibility views preserve the existing 36 final CSV files.
+- GLP-1 code lives under `trinetx_preprocessing.glp1_eligibility` and remains
+  downstream of preprocessing.
+- GLP-1 source provenance comes from typed unified source tables. It must not
+  use lossy legacy feature tables as its source of truth.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
+
+The standalone raw-ingestion command below remains the validated reference
+implementation during migration. The adapter-backed synthetic gate verifies
+equivalent source and downstream outputs from the unified product.
+
+## Status against issue #6
+
+Delivered but not issue closure: the standalone CLI, eight-file contract,
+versioned configuration/concept sets, 20-case synthetic acceptance/CI, and
+behavior-head-scoped aggregate full-data reference evidence. Still open are
+optional-domain ingestion when present; final catalog/rule/configuration and
+clinical terminology review; remaining data-driven policy; the required
+smoke-query interface and specified aggregate summaries; fresh evidence at the
+final catalog/rule head; and investigator/private record-level review. The
+standalone raw-ingestion implementation remains the production reference.
 
 ## Current commands
 
@@ -152,3 +169,10 @@ non-provenance analysis-value, or semantic-fingerprint differences.
 These results establish computational completion and aggregate consistency.
 They do not replace the investigator terminology review and private record-level
 validation required before clinical use.
+
+This full-data evidence is scoped to behavior head `459cbda`. PR #8 later
+rewrote the anesthesia procedure regex with an equivalent non-capturing group,
+which changed deterministic catalog identity without intending to change
+matches. The preserved run is therefore reference evidence, not current-head
+release proof; issue #6 requires a fresh full-data run at its final exact
+catalog/rule head.

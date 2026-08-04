@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import textwrap
 from pathlib import Path
 
@@ -76,6 +77,13 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
               parquet_row_group_size: 1000
               analysis_bucket_count: 64
               emit_legacy_group_tables: true
+            combined:
+              enabled: true
+              database_name: combined.duckdb
+              schema_version: "1.0"
+              concept_sets_dir: config/concept_sets
+              duckdb_memory_limit_mib: 2048
+              duckdb_core_memory_limit_mib: 1792
             rfs:
               enabled: true
               ruleset: corrected_v1
@@ -101,11 +109,176 @@ def test_load_config_storage_options(tmp_path: Path) -> None:
     assert config.storage.parquet_row_group_size == 1000
     assert config.storage.analysis_bucket_count == 64
     assert config.storage.emit_legacy_group_tables is True
+    assert config.combined.enabled is True
+    assert config.combined.database_name == "combined.duckdb"
+    assert config.combined.schema_version == "1.0"
+    assert config.combined.duckdb_memory_limit_mib == 2048
+    assert config.combined.duckdb_core_memory_limit_mib == 1792
+    assert (
+        config.combined.concept_sets_dir
+        == (tmp_path / "config" / "concept_sets").resolve()
+    )
     assert config.rfs.abg_min_pco2_mmhg == 47
     assert config.rfs.vbg_min_pco2_mmhg == 48
     assert config.cohort.event_selection == "earliest_per_setting"
     assert config.data_screen.mode == "diagnosis_or_lab"
     validate_config(config)
+
+
+@pytest.mark.parametrize(
+    ("work_relative", "output_relative"),
+    [
+        pytest.param("shared/alias/..", "shared", id="resolved-equal"),
+        pytest.param("shared/work", "shared", id="work-under-output"),
+        pytest.param("shared", "shared/output", id="output-under-work"),
+    ],
+)
+def test_validate_config_rejects_combined_work_output_overlap(
+    tmp_path: Path,
+    work_relative: str,
+    output_relative: str,
+) -> None:
+    _write_encounter_csv(tmp_path / "data" / "Encounter" / "encounter0001.csv")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: {work_relative}
+            output_dir: {output_relative}
+            combined:
+              enabled: true
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+    config.work_dir.mkdir(parents=True, exist_ok=True)
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ConfigError, match="non-overlapping 'work_dir'.*'output_dir'"):
+        validate_config(config)
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_validate_config_rejects_case_alias_overlap(
+    tmp_path: Path,
+    nested: bool,
+) -> None:
+    shared = tmp_path / "Shared"
+    shared.mkdir()
+    alias = tmp_path / "shared"
+    if not alias.exists() or not alias.samefile(shared):
+        pytest.skip("requires a case-insensitive filesystem")
+
+    _write_encounter_csv(tmp_path / "data" / "Encounter" / "encounter0001.csv")
+    output = alias / "output" if nested else alias
+    if nested:
+        output.mkdir()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: Shared
+            output_dir: {output.relative_to(tmp_path)}
+            combined:
+              enabled: true
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+    with pytest.raises(ConfigError, match="non-overlapping 'work_dir'.*'output_dir'"):
+        validate_config(config)
+
+
+@pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1", "null"])
+def test_combined_enabled_requires_boolean(tmp_path: Path, value: str) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              enabled: {value}
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    with pytest.raises(ConfigError, match="combined.enabled"):
+        load_config(config_path)
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["duckdb_memory_limit_mib", "duckdb_core_memory_limit_mib"],
+)
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "3072"])
+def test_combined_duckdb_memory_limits_require_positive_integers(
+    tmp_path: Path,
+    key: str,
+    value: object,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            f"""
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              {key}: {json.dumps(value)}
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    with pytest.raises(ConfigError, match=key):
+        load_config(config_path)
+
+
+def test_combined_core_memory_default_respects_lower_general_limit(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            """
+            data_dir: data
+            work_dir: work
+            output_dir: output
+            combined:
+              duckdb_memory_limit_mib: 2048
+            domains:
+              encounter:
+                pattern: "Encounter/encounter*.csv"
+            """
+        ).strip()
+        + "\n"
+    )
+
+    config = load_config(config_path)
+
+    assert config.combined.duckdb_memory_limit_mib == 2048
+    assert config.combined.duckdb_core_memory_limit_mib == 2048
 
 
 def test_load_config_domain_patterns_list(tmp_path: Path) -> None:

@@ -5,7 +5,8 @@
 - Provide a single, documented entrypoint (CLI).
 - Keep the computational core pure and testable.
 - Isolate I/O, configuration, and orchestration.
-- Support low-overhead intermediates without changing final CSV outputs.
+- Build one canonical preprocessed database while preserving exact final CSV
+  compatibility.
 
 ## Legacy components (historical references)
 - Large raw exports were split manually before notebook execution.
@@ -38,7 +39,8 @@
 1. Discover inputs from config and validate paths.
 2. Initialize the versioned work manifest and fail closed on stale inputs,
    configuration, rules, package state, or incomplete dependencies.
-3. Stream and normalize encounter data, resolving cross-setting conflicts and
+3. Stream labs first to identify additive source-element candidates, then
+   stream and normalize encounter data, resolving cross-setting conflicts and
    emitting AMB/EMER/INPAT tables through bounded Parquet partitions.
 4. Stream each clinical domain once. Classify typed code rules once per chunk
    and write compact RFS and feature candidate indexes.
@@ -52,11 +54,23 @@
    across all cohorts through source row-position views, materialize only the
    requested domain columns, apply the precomputed eligibility flag to `AFTER`
    rows, and stream the 36 final CSVs.
+8. Materialize `trinetx_preprocessed.duckdb` from those historical observations
+   and the source-faithful domain capture tables. Add catalog, rule,
+   membership, observability, provenance, quality, and compatibility-manifest
+   tables.
+9. Regenerate the 36 CSVs from database views and require their normalized
+   hashes to equal the pipeline-generated files before atomic publication.
 
 Work tables are addressed by legacy logical CSV names, but
 `storage.intermediate_format` controls whether physical intermediates are CSV or
-Parquet. Final analytic outputs remain CSV for public compatibility. Legacy
+Parquet. The DuckDB database is canonical; final analytic CSVs remain public
+compatibility exports. Legacy
 complete normalized `*_NEW_*` domain tables are opt-in through
 `storage.emit_normalized_domain_tables: true`. Legacy
 `HAS_*`, `IPmed_*`, `OPmed_*`, and `value_*` group tables are emitted only when
 `storage.emit_legacy_group_tables: true`.
+
+Study-specific GLP-1 eligibility, phenotype, and analysis logic remains
+downstream. `combined_preprocessing/glp1_adapter.py` is the tested boundary from
+the canonical source tables to that derivation. See
+`docs/UNIFIED_PREPROCESSING.md`.

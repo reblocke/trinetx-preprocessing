@@ -114,8 +114,7 @@ def build_input_inventory(
                 data_rows = 0
         elif (
             matcher is not None
-            and file_validation.logical_domain
-            in _CONCEPT_DOMAIN_BY_LOGICAL_DOMAIN
+            and file_validation.logical_domain in _CONCEPT_DOMAIN_BY_LOGICAL_DOMAIN
             and {"code_system", "code"}.issubset(file_validation.columns)
         ):
             domain_counter = unmapped_counters.setdefault(
@@ -136,8 +135,7 @@ def build_input_inventory(
                     path, block_size=block_size
                 )
                 audit_warning = (
-                    "Unmapped-code audit skipped because Arrow rejected the CSV: "
-                    f"{exc}"
+                    f"Unmapped-code audit skipped because Arrow rejected the CSV: {exc}"
                 )
             else:
                 unmapped_counters[file_validation.logical_domain] = working_counter
@@ -394,15 +392,13 @@ class _ConceptMatcher:
                 rule = re.compile(concept.code)
             else:
                 rule = concept.code
-            self._rules.setdefault(
-                (concept.domain, concept.code_system), []
-            ).append((concept.match_type, rule))
+            self._rules.setdefault((concept.domain, concept.code_system), []).append(
+                (concept.match_type, rule)
+            )
 
     def matches(self, logical_domain: str, code_system: str, code: str) -> bool:
         concept_domain = _CONCEPT_DOMAIN_BY_LOGICAL_DOMAIN[logical_domain]
-        for match_type, rule in self._rules.get(
-            (concept_domain, code_system), ()
-        ):
+        for match_type, rule in self._rules.get((concept_domain, code_system), ()):
             if match_type == "exact" and code == rule:
                 return True
             if match_type == "prefix" and code.startswith(str(rule)):
@@ -513,9 +509,11 @@ def _hash_count_and_audit_codes(
         )
         for batch in stream:
             rows += batch.num_rows
-            grouped = pa.Table.from_batches([batch]).group_by(
-                ["code_system", "code"]
-            ).aggregate([("code", "count")])
+            grouped = (
+                pa.Table.from_batches([batch])
+                .group_by(["code_system", "code"])
+                .aggregate([("code", "count")])
+            )
             for code_system, code, count in zip(
                 grouped["code_system"].to_pylist(),
                 grouped["code"].to_pylist(),

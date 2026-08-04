@@ -142,9 +142,9 @@ def classify_lab_feature_rows(
 
     require_columns(frame, LAB_COLUMNS, context="Lab feature input")
     codes = frame["code"].astype("string").str.strip().str.upper()
-    raw_values = pd.to_numeric(
-        frame["lab_result_num_val"], errors="coerce"
-    ).astype("float64")
+    raw_values = pd.to_numeric(frame["lab_result_num_val"], errors="coerce").astype(
+        "float64"
+    )
     grouped: dict[str, pd.DataFrame] = {}
     for rule in LAB_VALUE_RULES:
         code_mask = codes.isin(rule.exact_codes)
@@ -173,9 +173,7 @@ def classify_lab_feature_rows(
         rows = frame.loc[value_mask.index[value_mask], LAB_COLUMNS].copy()
         if rows.empty:
             continue
-        rows["lab_result_num_val"] = float32_series(
-            visible_values.loc[value_mask]
-        )
+        rows["lab_result_num_val"] = float32_series(visible_values.loc[value_mask])
         grouped[rule.name] = rows.reset_index(drop=True)
     return grouped
 

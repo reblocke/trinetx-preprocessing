@@ -28,9 +28,7 @@ def test_twenty_case_fixture_satisfies_ticket_acceptance(tmp_path: Path) -> None
     assert result.counts.patient_index_events == 17
     assert result.counts.primary_obesity_hypercapnia == 14
 
-    connection = duckdb.connect(
-        str(output / "glp1_hypercapnia.duckdb"), read_only=True
-    )
+    connection = duckdb.connect(str(output / "glp1_hypercapnia.duckdb"), read_only=True)
     try:
         sensitivity = {
             row[0]: row[1:]

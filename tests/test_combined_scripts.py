@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import importlib.util
+import subprocess
+from pathlib import Path
+from types import ModuleType
+
+
+def _load_script(name: str) -> ModuleType:
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"test_{name}", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+benchmark_script = _load_script("benchmark_combined_preprocessing")
+monitor_script = _load_script("monitor_combined_preprocessing")
+
+
+def test_monitor_requires_explicit_terminal_success() -> None:
+    running = {"running": True}
+    vanished = {"running": False}
+
+    assert (
+        monitor_script._monitor_exit_code(
+            once=True,
+            process=running,
+            build_result={"status": None},
+        )
+        == 0
+    )
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process=running,
+            build_result={"schema_version": 2, "status": "running", "pid": 42},
+            trusted_result_pid=42,
+        )
+        is None
+    )
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process=vanished,
+            build_result={"schema_version": 2, "status": "running", "pid": 42},
+            trusted_result_pid=42,
+        )
+        == 1
+    )
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process=running,
+            build_result={"schema_version": 2, "status": "failed", "pid": 42},
+            trusted_result_pid=42,
+        )
+        == 1
+    )
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process=vanished,
+            build_result={"schema_version": 2, "status": "complete", "pid": 42},
+            trusted_result_pid=42,
+        )
+        == 0
+    )
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process=vanished,
+            build_result={"schema_version": 2, "status": "complete", "pid": 99},
+            trusted_result_pid=42,
+        )
+        == 1
+    )
+
+
+def test_monitor_rejects_unversioned_or_stale_result_schema(tmp_path: Path) -> None:
+    result_path = tmp_path / "result.json"
+    result_path.write_text('{"schema_version": 1, "status": "complete", "pid": 42}\n')
+
+    status = monitor_script._result_status(result_path)
+
+    assert status["available"] is True
+    assert status["schema_version"] == 1
+    assert status["status"] is None
+    assert status["pid"] is None
+    assert "schema mismatch" in status["error"]
+    assert (
+        monitor_script._monitor_exit_code(
+            once=False,
+            process={"running": False},
+            build_result={
+                "schema_version": 1,
+                "status": "complete",
+                "pid": 42,
+            },
+            trusted_result_pid=42,
+        )
+        == 1
+    )
+
+
+def test_benchmark_sums_concurrent_process_family_rss(
+    monkeypatch,
+) -> None:
+    ps_output = "\n".join(
+        [
+            "100 1 100",
+            "101 100 200",
+            "102 101 300",
+            "200 1 999",
+        ]
+    )
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout=ps_output)
+
+    monkeypatch.setattr(benchmark_script.subprocess, "run", fake_run)
+
+    assert benchmark_script._process_family_rss_bytes(100) == 600 * 1024
+
+
+def test_benchmark_reports_sampled_family_and_resource_floor() -> None:
+    sampler = benchmark_script._ProcessFamilyPeakSampler(
+        100,
+        interval_seconds=1.0,
+    )
+    sampler.sampled_peak_rss_bytes = 600
+    sampler.resource_peak_rss_bytes = 500
+
+    evidence = sampler.evidence()
+
+    assert evidence["peak_rss_bytes"] == 600
+    assert evidence["sampled_process_family_peak_rss_bytes"] == 600
+    assert evidence["resource_peak_rss_bytes"] == 500
+    assert "concurrent_process_family_sum" in evidence["peak_rss_method"]

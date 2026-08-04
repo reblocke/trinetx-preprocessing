@@ -65,7 +65,7 @@ def _build_normalized_gas(
                 concept.concept_set_id,
                 try_cast(lab.lab_result_num_val AS DOUBLE) AS raw_numeric_value,
                 lower(trim(coalesce(lab.units_of_measure, ''))) AS unit_key,
-                {timestamp_precision_sql('lab.date')} AS timestamp_precision
+                {timestamp_precision_sql("lab.date")} AS timestamp_precision
             FROM source_lab_measurement AS lab
             JOIN concept_set AS concept
               ON concept.domain = 'lab'
@@ -200,9 +200,7 @@ def _build_hypercapnia_encounters(
     window_hours = hypercapnia.index_window_hours
     pair_minutes = hypercapnia.pair_tolerance_minutes
     pco2_threshold = hypercapnia.pco2_gt_mm_hg
-    sensitivity_50, sensitivity_52 = (
-        hypercapnia.pco2_sensitivity_thresholds_mm_hg
-    )
+    sensitivity_50, sensitivity_52 = hypercapnia.pco2_sensitivity_thresholds_mm_hg
 
     include_vbg = "TRUE" if hypercapnia.include_vbg_secondary_cohort else "FALSE"
     encounter_end_bound = inclusive_datetime_end_sql(
@@ -827,11 +825,11 @@ def _build_normalized_anthropometrics(
             greatest(weight.event_datetime, height.event_datetime) AS event_datetime,
             CASE
                 WHEN weight.event_datetime > height.event_datetime
-                THEN {timestamp_precision_sql('weight.date')}
+                THEN {timestamp_precision_sql("weight.date")}
                 WHEN height.event_datetime > weight.event_datetime
-                THEN {timestamp_precision_sql('height.date')}
-                WHEN {timestamp_precision_sql('weight.date')} = 'date_only'
-                  OR {timestamp_precision_sql('height.date')} = 'date_only'
+                THEN {timestamp_precision_sql("height.date")}
+                WHEN {timestamp_precision_sql("weight.date")} = 'date_only'
+                  OR {timestamp_precision_sql("height.date")} = 'date_only'
                 THEN 'date_only'
                 ELSE 'timestamp'
             END AS event_datetime_precision,
@@ -1058,9 +1056,7 @@ def _build_analysis_table(
     )
 
 
-def _build_evidence_table(
-    connection: duckdb.DuckDBPyConnection, run_id: str
-) -> None:
+def _build_evidence_table(connection: duckdb.DuckDBPyConnection, run_id: str) -> None:
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE eligibility_evidence_long AS

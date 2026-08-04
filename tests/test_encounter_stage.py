@@ -8,13 +8,34 @@ import pytest
 
 from trinetx_preprocessing.config import load_config, validate_config
 from trinetx_preprocessing.pipeline.encounter_stage import (
+    _CombinedCandidateLookup,
     _EncounterReducerStore,
+    _stable_string_hashes,
     run_encounter_stage,
 )
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "encounter" / "encounter0001.csv"
 )
+
+
+def test_combined_candidate_lookup_matches_patient_or_encounter() -> None:
+    lookup = _CombinedCandidateLookup(
+        patient_hashes=pd.unique(
+            _stable_string_hashes(pd.Series(["P1"], dtype="string"))
+        ),
+        encounter_hashes=pd.unique(
+            _stable_string_hashes(pd.Series(["E2"], dtype="string"))
+        ),
+    )
+    frame = pd.DataFrame(
+        {
+            "patient_id": pd.Series(["P1", "P2", "P3", pd.NA], dtype="string"),
+            "encounter_id": pd.Series(["E1", "E2", "E3", "E2"], dtype="string"),
+        }
+    )
+
+    assert lookup.matches(frame).tolist() == [True, True, False, True]
 
 
 def _write_config(path: Path, data_dir: Path, work_dir: Path, output_dir: Path) -> None:

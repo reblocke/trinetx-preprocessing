@@ -17,15 +17,15 @@ from .config import Config, collect_domain_paths
 from .profiling import current_git_code_state_sha256
 
 WORK_MANIFEST_FILENAME = "pipeline_work_manifest.json"
-WORK_MANIFEST_SCHEMA_VERSION = 4
-INTERMEDIATE_SCHEMA_VERSION = 5
+WORK_MANIFEST_SCHEMA_VERSION = 5
+INTERMEDIATE_SCHEMA_VERSION = 9
 LEGACY_DATA_SCREEN_FILENAMES = (
     "amb_enc_screen.csv",
     "inp_enc_screen.csv",
 )
 DOMAIN_STAGES = (
-    "encounter",
     "labs",
+    "encounter",
     "diagnosis",
     "medications",
     "procedure",
@@ -103,6 +103,8 @@ def mark_stage_complete(
     config: Config,
     stage: str,
     output_paths: Iterable[Path],
+    *,
+    physical_output_dir: Path | None = None,
 ) -> None:
     """Atomically record a completed stage and its generated file metadata."""
 
@@ -117,13 +119,21 @@ def mark_stage_complete(
         )
 
     outputs = []
-    known_row_counts = _known_row_counts(config, stage)
+    known_row_counts = _known_row_counts(
+        config,
+        stage,
+        output_dir=physical_output_dir,
+    )
     for output_path in artifacts:
         candidate = Path(output_path)
         candidate_stat = candidate.stat()
         outputs.append(
             {
-                "path": _display_path(candidate, config),
+                "path": _display_path(
+                    candidate,
+                    config,
+                    physical_output_dir=physical_output_dir,
+                ),
                 "size_bytes": candidate_stat.st_size,
                 "mtime_ns": candidate_stat.st_mtime_ns,
                 "row_count": _row_count(
@@ -160,10 +170,52 @@ def mark_stage_started(config: Config, stage: str) -> None:
     _write_manifest(path, manifest)
 
 
+def refresh_stage_output_metadata(
+    config: Config,
+    stage: str,
+    *,
+    physical_output_dir: Path | None = None,
+) -> None:
+    """Refresh fingerprints after a staged artifact is regenerated in place."""
+
+    path = work_manifest_path(config)
+    manifest = _read_manifest(path)
+    stage_record = manifest["stages"].get(stage)
+    if not isinstance(stage_record, dict) or stage_record.get("status") != "complete":
+        raise StaleWorkError(f"Cannot refresh incomplete stage: {stage}")
+    known_row_counts = _known_row_counts(
+        config,
+        stage,
+        output_dir=physical_output_dir,
+    )
+    for output in stage_record.get("outputs", []):
+        display_path = str(output.get("path", ""))
+        logical_path = Path(display_path)
+        if logical_path.parts and logical_path.parts[0] == "output":
+            root = physical_output_dir or config.output_dir
+            candidate = root / Path(*logical_path.parts[1:])
+        else:
+            candidate = _manifest_output_path(display_path, config)
+        if not candidate.exists():
+            raise StaleWorkError(
+                f"Cannot refresh missing {stage} artifact: {candidate}"
+            )
+        candidate_stat = candidate.stat()
+        output["size_bytes"] = candidate_stat.st_size
+        output["mtime_ns"] = candidate_stat.st_mtime_ns
+        output["row_count"] = _row_count(
+            candidate,
+            known_row_count=known_row_counts.get(candidate.resolve()),
+        )
+    manifest["updated_at"] = _timestamp()
+    _write_manifest(path, manifest)
+
+
 def require_current_work(
     config: Config,
     *,
     required_stages: Iterable[str],
+    physical_output_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Validate identity and required stage completion for a resume command."""
 
@@ -184,7 +236,12 @@ def require_current_work(
             "Work manifest is missing completed stages: " + ", ".join(missing)
         )
     for stage in required_stages:
-        _require_stage_outputs_current(config, stage, manifest["stages"][stage])
+        _require_stage_outputs_current(
+            config,
+            stage,
+            manifest["stages"][stage],
+            physical_output_dir=physical_output_dir,
+        )
     return manifest
 
 
@@ -214,7 +271,19 @@ def work_manifest_path(config: Config) -> Path:
     return config.work_dir / WORK_MANIFEST_FILENAME
 
 
+def work_identity_sha256(config: Config) -> str:
+    """Return the deterministic identity used to bind combined staging work."""
+
+    encoded = json.dumps(_identity(config), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _identity(config: Config) -> dict[str, Any]:
+    combined_catalog_sha256 = None
+    if config.combined.enabled:
+        from .combined_preprocessing.elements import load_combined_catalog
+
+        combined_catalog_sha256 = load_combined_catalog(config).sha256
     config_payload = {
         "data_dir": str(config.data_dir),
         "work_dir": str(config.work_dir),
@@ -229,6 +298,16 @@ def _identity(config: Config) -> dict[str, Any]:
         "storage": asdict(config.storage),
         "cohort": asdict(config.cohort),
         "data_screen": asdict(config.data_screen),
+        "combined": {
+            "enabled": config.combined.enabled,
+            "database_name": config.combined.database_name,
+            "schema_version": config.combined.schema_version,
+            "concept_sets_dir": (
+                str(config.combined.concept_sets_dir)
+                if config.combined.concept_sets_dir is not None
+                else None
+            ),
+        },
     }
     encoded = json.dumps(config_payload, sort_keys=True, separators=(",", ":"))
     code_state_sha256 = current_git_code_state_sha256()
@@ -241,6 +320,7 @@ def _identity(config: Config) -> dict[str, Any]:
         "git_code_state_sha256": code_state_sha256,
         "runtime_versions": _runtime_versions(),
         "ruleset": config.rfs.ruleset,
+        "combined_element_catalog_sha256": combined_catalog_sha256,
         "config_hash": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
         "inputs": _input_fingerprints(config),
     }
@@ -298,6 +378,7 @@ def _require_identity(
         "git_code_state_sha256",
         "runtime_versions",
         "ruleset",
+        "combined_element_catalog_sha256",
         "config_hash",
         "inputs",
     )
@@ -342,9 +423,15 @@ def _require_stage_outputs_current(
     config: Config,
     stage: str,
     stage_record: dict[str, Any],
+    *,
+    physical_output_dir: Path | None = None,
 ) -> None:
     for output in stage_record.get("outputs", []):
-        path = _manifest_output_path(str(output.get("path", "")), config)
+        path = _manifest_output_path(
+            str(output.get("path", "")),
+            config,
+            physical_output_dir=physical_output_dir,
+        )
         if not path.exists():
             raise StaleWorkError(f"Completed {stage} artifact is missing: {path}")
         path_stat = path.stat()
@@ -355,16 +442,26 @@ def _require_stage_outputs_current(
             raise StaleWorkError(f"Completed {stage} artifact changed: {path}")
 
 
-def _manifest_output_path(display_path: str, config: Config) -> Path:
+def _manifest_output_path(
+    display_path: str,
+    config: Config,
+    *,
+    physical_output_dir: Path | None = None,
+) -> Path:
     path = Path(display_path)
     if path.parts and path.parts[0] == "work":
         return config.work_dir / Path(*path.parts[1:])
     if path.parts and path.parts[0] == "output":
-        return config.output_dir / Path(*path.parts[1:])
+        return (physical_output_dir or config.output_dir) / Path(*path.parts[1:])
     return path
 
 
-def _known_row_counts(config: Config, stage: str) -> dict[Path, int]:
+def _known_row_counts(
+    config: Config,
+    stage: str,
+    *,
+    output_dir: Path | None = None,
+) -> dict[Path, int]:
     if stage != "final_assembly":
         return {}
     metrics_path = config.work_dir / "final_assembly_metrics.json"
@@ -373,11 +470,12 @@ def _known_row_counts(config: Config, stage: str) -> dict[Path, int]:
     except (OSError, json.JSONDecodeError):
         return {}
     setting_dirs = {"AMB": "AMBULATORY", "EMER": "EMERGENCY", "INPAT": "INPATIENT"}
+    output_root = output_dir or config.output_dir
     counts: dict[Path, int] = {}
     for key, count in metrics.get("rows_written", {}).items():
         setting, category, suffix = key.split("/")
         path = (
-            config.output_dir
+            output_root
             / setting_dirs[setting]
             / f"RFS_{category}_ENC_{setting}_{suffix}.csv"
         )
@@ -410,8 +508,17 @@ def _runtime_versions() -> dict[str, str | None]:
     return versions
 
 
-def _display_path(path: Path, config: Config) -> str:
-    for label, root in (("work", config.work_dir), ("output", config.output_dir)):
+def _display_path(
+    path: Path,
+    config: Config,
+    *,
+    physical_output_dir: Path | None = None,
+) -> str:
+    roots = (
+        ("work", config.work_dir),
+        ("output", physical_output_dir or config.output_dir),
+    )
+    for label, root in roots:
         if path.is_relative_to(root):
             return str(Path(label) / path.relative_to(root))
     return str(path)
