@@ -34,12 +34,13 @@
 
 ## State
 - Preprocessing branch: `codex/cohort-source-contract` from
-  `149a65a` (`origin/main`), exact head `646a246`.
+  `149a65a` (`origin/main`); GitHub is the source of truth for its live head.
 - Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `6542aac`.
   It is draft; exact-head CI passed after fixes for the direct raw-root path
   and disk-bounded frozen-reference tests.
-- Contract PR: `reblocke/trinetx-preprocessing#9`, exact head `646a246`.
-  Its exact-head CI passed (500 passed, 7 skipped); it remains a draft.
+- Contract PR: `reblocke/trinetx-preprocessing#9` remains a draft. Its code
+  head `646a246` passed full CI (500 passed, 7 skipped); check GitHub for any
+  later documentation-only head's CI status.
 - GitHub Codex review requests were made for both PRs, but the connected
   reviewer is rate-limited. Both PRs have no review submissions or unresolved
   threads; independent local reviews found and reconciled all findings.
