@@ -5,6 +5,13 @@ reference build publishes one DuckDB database plus Parquet, CSV, HTML, and JSON
 companions. The canonical shared preprocessing product and its 36 historical
 compatibility files are defined separately in `docs/UNIFIED_PREPROCESSING.md`.
 
+This eight-file contract is retained as the migration reference. It is not a
+second permanent preprocessing product: GLP-1 and traditional cohort logic will
+ultimately run in the same primary workflow after consuming the shared
+cohort-source contract. See `CURRENT_STATE.md` for the current pause and
+evidence boundary. Source-element membership alone does not satisfy any
+eligibility rule defined below.
+
 ## Published files
 
 | File | Grain | Purpose |
@@ -84,3 +91,8 @@ runs are reused; a differing run requires `--replace` and is published
 atomically only after staging succeeds. Repository-local output is always
 rejected; real databases, Parquet files, manifests, logs, and reports must live
 outside Git worktrees and remain untracked.
+
+Synthetic adapter tests currently reproduce this contract from the unified
+source on fixtures. A new private full-data adapter-versus-standalone run has
+not completed at the current source/catalog head, so the standalone build
+remains the computational reference until that gate passes.

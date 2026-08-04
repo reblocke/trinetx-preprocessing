@@ -13,6 +13,39 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 
 ## Entries
 
+### 2026-08-04 — Cohort-source contract remains upstream of study cohorts
+- Date: 2026-08-04
+- Decision: Publish one versioned, manifest-bound DuckDB source contract that
+  unions current GLP-1 and typed traditional extraction rules, while keeping
+  the 36 legacy CSVs as a compatibility bridge.
+- Context: The existing combined product can reproduce current GLP-1 source
+  inputs, but its clinical capture is too narrow for later traditional cohort
+  migration; `preprocessed_encounter` is already a compatibility product rather
+  than a general cohort input.
+- Options considered:
+  - Put cohort logic into preprocessing now
+  - Publish only additional CSVs or Parquet bundles
+  - Publish a read-only DuckDB source contract and defer cohorts (chosen)
+- Rationale: A stable source-level boundary prevents raw-data rescans and lets
+  future cohort code preserve study semantics without coupling it to pipeline
+  internals.
+- Consequences: Element membership denotes source candidacy, not clinical
+  inclusion. The GLP-1 subset fingerprint remains separate from the merged
+  cohort-source fingerprint. Code/API review and synthetic CI can accept the
+  source contract, but a new exact-head private full-data source/parity gate is
+  required before raw-ingestion cutover; no cohort definitions change in this
+  phase. The documented Stata outpatient-MAT candidate retains five codes.
+  Additions `3304`, `236913`, and `28863` are separately provenance-marked and
+  require original-query/export adjudication; they do not alter any legacy
+  feature or cohort result. Traditional and GLP-1 derivations will ultimately
+  share the primary workflow, with the current adapter used only for migration
+  parity. Import waits for a stable downstream cohort-refactor behavior head.
+- References: `src/trinetx_preprocessing/combined_preprocessing/`,
+  `docs/UNIFIED_PREPROCESSING.md`, `docs/PLAN.md`, and the frozen Stata
+  reference merge `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94` from
+  `reblocke/trinetx-hypercapnia-code#4`; Stata-annotated catalog rows persist
+  that full merge SHA as their `source_version`.
+
 ### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
 - Date: 2026-07-09
 - Decision: Post-Milestone 1 releases follow `docs/SPEC.md`, including specimen-specific hypercapnia rules, structured code matching, per-setting event selection, derived diagnosis-or-lab screening, and deterministic feature reductions.

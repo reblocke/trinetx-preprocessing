@@ -21,6 +21,10 @@ from ..profiling import current_git_code_state_sha256
 from ..regression import CsvHashResult, hash_csv_with_metadata
 from ..storage import resolve_work_table
 from ..work_manifest import work_manifest_path
+from .cohort_source_contract import (
+    COHORT_SOURCE_SCHEMA_VERSION,
+    cohort_source_schema_sha256,
+)
 from .contract import (
     COMBINED_SCHEMA_VERSION,
     DATABASE_MANIFEST_SCHEMA_VERSION,
@@ -38,6 +42,7 @@ from .elements import (
     SOURCE_EVENT_DUCKDB_TYPES,
     SOURCE_TABLE_BY_DOMAIN,
     catalog_rows,
+    glp1_catalog_sha256,
     load_combined_catalog,
 )
 from .scratch import COMBINED_DUCKDB_SPILL_PREFIX
@@ -135,6 +140,8 @@ def initialize_combined_database(
     """Create core/source tables through the first durable write session."""
 
     catalog = load_combined_catalog(config)
+    glp1_catalog_digest = glp1_catalog_sha256(config)
+    cohort_source_schema_digest = cohort_source_schema_sha256()
     work_manifest = _read_work_manifest(config)
     code_state = current_git_code_state_sha256()
     if code_state is None:
@@ -157,6 +164,9 @@ def initialize_combined_database(
             run_id=run_id,
             code_state=code_state,
             catalog_sha256=catalog.sha256,
+            cohort_source_schema_sha256=cohort_source_schema_digest,
+            cohort_source_catalog_sha256=catalog.sha256,
+            glp1_catalog_sha256=glp1_catalog_digest,
             work_manifest=work_manifest,
         )
         _load_compatibility_output_manifest(connection, compatibility_hashes)
@@ -175,6 +185,10 @@ def initialize_combined_database(
         "database": str(database_path),
         "database_size_bytes": database_path.stat().st_size,
         "catalog_sha256": catalog.sha256,
+        "cohort_source_schema_version": COHORT_SOURCE_SCHEMA_VERSION,
+        "cohort_source_schema_sha256": cohort_source_schema_digest,
+        "cohort_source_catalog_sha256": catalog.sha256,
+        "glp1_catalog_sha256": glp1_catalog_digest,
         "git_code_state_sha256": code_state,
         "duckdb_memory_limit_mib": config.combined.duckdb_memory_limit_mib,
         "duckdb_core_memory_limit_mib": (config.combined.duckdb_core_memory_limit_mib),
@@ -481,6 +495,10 @@ def inspect_combined_database(
             "run_id": row.get("run_id"),
             "status": row.get("status"),
             "combined_schema_version": row.get("combined_schema_version"),
+            "cohort_source_schema_version": row.get("cohort_source_schema_version"),
+            "cohort_source_schema_sha256": row.get("cohort_source_schema_sha256"),
+            "cohort_source_catalog_sha256": row.get("cohort_source_catalog_sha256"),
+            "glp1_catalog_sha256": row.get("glp1_catalog_sha256"),
             "package_version": row.get("package_version"),
             "completed_at": _json_value(row.get("completed_at")),
             "source_work_manifest_sha256": row.get("source_work_manifest_sha256"),
@@ -500,6 +518,9 @@ def _create_manifest_table(
     run_id: str,
     code_state: str,
     catalog_sha256: str,
+    cohort_source_schema_sha256: str,
+    cohort_source_catalog_sha256: str,
+    glp1_catalog_sha256: str,
     work_manifest: dict[str, Any],
 ) -> None:
     connection.execute(
@@ -510,6 +531,10 @@ def _create_manifest_table(
             started_at TIMESTAMPTZ NOT NULL,
             completed_at TIMESTAMPTZ,
             combined_schema_version VARCHAR NOT NULL,
+            cohort_source_schema_version VARCHAR NOT NULL,
+            cohort_source_schema_sha256 VARCHAR NOT NULL,
+            cohort_source_catalog_sha256 VARCHAR NOT NULL,
+            glp1_catalog_sha256 VARCHAR NOT NULL,
             package_version VARCHAR NOT NULL,
             git_code_state_sha256 VARCHAR NOT NULL,
             source_work_manifest_sha256 VARCHAR NOT NULL,
@@ -528,11 +553,15 @@ def _create_manifest_table(
     ).hexdigest()
     connection.execute(
         "INSERT INTO preprocessing_manifest VALUES (?, 'building', ?, NULL, "
-        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             run_id,
             datetime.now(UTC).isoformat(),
             COMBINED_SCHEMA_VERSION,
+            COHORT_SOURCE_SCHEMA_VERSION,
+            cohort_source_schema_sha256,
+            cohort_source_catalog_sha256,
+            glp1_catalog_sha256,
             __version__,
             code_state,
             work_manifest_sha256,
@@ -552,7 +581,27 @@ def _create_manifest_table(
         )
     connection.register("source_inventory_frame", inventory)
     connection.execute(
-        "CREATE TABLE source_file_inventory AS SELECT * FROM source_inventory_frame"
+        """
+        CREATE TABLE source_file_inventory (
+            domain VARCHAR NOT NULL,
+            path VARCHAR NOT NULL,
+            size_bytes UBIGINT NOT NULL,
+            mtime_ns UBIGINT NOT NULL,
+            header VARCHAR NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO source_file_inventory
+        SELECT
+            cast(domain AS VARCHAR),
+            cast(path AS VARCHAR),
+            cast(size_bytes AS UBIGINT),
+            cast(mtime_ns AS UBIGINT),
+            cast(header AS VARCHAR)
+        FROM source_inventory_frame
+        """
     )
     connection.unregister("source_inventory_frame")
 
@@ -635,42 +684,80 @@ def _load_element_catalog(
     connection.register("element_registry_frame", frame)
     connection.execute(
         """
-        CREATE TABLE element_catalog AS
+        CREATE TABLE element_catalog (
+            element_id VARCHAR NOT NULL,
+            element_kind VARCHAR NOT NULL,
+            value_kind VARCHAR NOT NULL,
+            legacy_column VARCHAR,
+            concept_set_id VARCHAR,
+            domain VARCHAR,
+            description VARCHAR,
+            source_authority VARCHAR,
+            source_version VARCHAR,
+            notes VARCHAR
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO element_catalog
         SELECT
-            element_id,
-            element_kind,
-            value_kind,
-            legacy_column,
-            min(concept_set_id) AS concept_set_id,
-            min(domain) AS domain,
-            min(description) AS description,
-            min(source_authority) AS source_authority,
-            min(source_version) AS source_version,
-            min(notes) AS notes
+            cast(element_id AS VARCHAR),
+            cast(element_kind AS VARCHAR),
+            cast(value_kind AS VARCHAR),
+            cast(legacy_column AS VARCHAR),
+            cast(min(concept_set_id) AS VARCHAR) AS concept_set_id,
+            cast(min(domain) AS VARCHAR) AS domain,
+            cast(min(description) AS VARCHAR) AS description,
+            cast(min(source_authority) AS VARCHAR) AS source_authority,
+            cast(min(source_version) AS VARCHAR) AS source_version,
+            cast(min(notes) AS VARCHAR) AS notes
         FROM element_registry_frame
         GROUP BY element_id, element_kind, value_kind, legacy_column
         """
     )
     connection.execute(
         """
-        CREATE TABLE element_rule AS
+        CREATE TABLE element_rule (
+            rule_id VARCHAR NOT NULL,
+            element_id VARCHAR NOT NULL,
+            concept_set_id VARCHAR,
+            domain VARCHAR,
+            code_system VARCHAR,
+            code VARCHAR,
+            match_type VARCHAR,
+            include BOOLEAN,
+            description VARCHAR,
+            source_authority VARCHAR,
+            source_version VARCHAR,
+            effective_start DATE,
+            effective_end DATE,
+            notes VARCHAR,
+            source_file VARCHAR,
+            source_row BIGINT
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO element_rule
         SELECT
-            concat(element_id, ':', source_file, ':', source_row) AS rule_id,
-            element_id,
-            concept_set_id,
-            domain,
-            code_system,
-            code,
-            match_type,
-            include,
-            description,
-            source_authority,
-            source_version,
-            effective_start,
-            effective_end,
-            notes,
-            source_file,
-            source_row
+            cast(concat(element_id, ':', source_file, ':', source_row) AS VARCHAR),
+            cast(element_id AS VARCHAR),
+            cast(concept_set_id AS VARCHAR),
+            cast(domain AS VARCHAR),
+            cast(code_system AS VARCHAR),
+            cast(code AS VARCHAR),
+            cast(match_type AS VARCHAR),
+            cast(include AS BOOLEAN),
+            cast(description AS VARCHAR),
+            cast(source_authority AS VARCHAR),
+            cast(source_version AS VARCHAR),
+            try_cast(effective_start AS DATE),
+            try_cast(effective_end AS DATE),
+            cast(notes AS VARCHAR),
+            cast(source_file AS VARCHAR),
+            cast(source_row AS BIGINT)
         FROM element_registry_frame
         WHERE element_kind = 'source_concept'
         """

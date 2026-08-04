@@ -26,6 +26,33 @@
 - Preserve legacy notebooks by moving them (if needed) to `notebooks/legacy/` rather than deleting.
   New logic should live under `src/` and be callable from a CLI.
 
+## Current architecture and migration invariants
+- Read `docs/CURRENT_STATE.md` before changing architecture, public interfaces,
+  migration status, or validation claims.
+- The canonical reusable source product is the manifest-bound
+  `trinetx_preprocessed.duckdb`. The 36 historical CSVs remain a compatibility
+  bridge for the frozen Stata reference, not a second canonical product.
+- GLP-1 and traditional elements belong to one permanent catalog and one
+  preprocessing workflow. A row in `element_membership` records source
+  candidacy; it does **not** establish cohort inclusion or clinical eligibility.
+- Current downstream consumer surfaces are the read-only Python
+  `open_cohort_source()` / `validate_cohort_source()` API and the
+  `validate-cohort-source` CLI. Consumers must validate manifest, schema, and
+  catalog provenance before reading rows.
+- `combined_preprocessing/glp1_adapter.py`, the standalone GLP-1 ingestion
+  path, and the Stata pipeline are migration/reference paths. Do not turn the
+  GLP-1 adapter into a permanent parallel product.
+- Cohort-construction code has not been imported into this repository. Its
+  migration is paused until the downstream cohort repository exposes a stable
+  behavior head; never infer cohort semantics from the source catalog.
+- Synthetic adapter tests are not private full-data evidence. Standalone
+  ingestion and Stata remain references until frozen-head private full-data
+  parity gates pass.
+- DuckDB databases, temporary spill, manifests, logs, and row-level outputs
+  from real data must live outside the repository in validated, non-symlinked
+  locations. Preserve the existing safe-location checks and clean only
+  tool-owned scratch prefixes.
+
 
 ## Continuity Ledger (compaction-safe; recommended)
 Maintain a single Continuity Ledger for this workspace in `CONTINUITY.md` (or `http://CONTINUITY.md` if your environment uses that mapping).
@@ -67,13 +94,14 @@ When lower-level code conflicts with higher-level requirements:
 - document the divergence (and why) in `docs/DECISIONS.md` with file/line references.
 
 ## Non-negotiables (keep updated)
-Use this section to list hard constraints the assistant must not violate (and update it as the project evolves). Examples:
-- fixed dataset contract (required columns, units, and encoding)
-- required reporting conventions (tables, figures, rounding, labels)
-- approved modeling approach(es) and diagnostics
-- performance or memory ceilings in production
-
-If this section is empty or ambiguous, default to: correctness → clarity → reproducibility → measured optimization.
+- Preserve the 36-file Stata compatibility contract until the private reference
+  parity gate authorizes retirement.
+- Preserve cohort-source schema and catalog fingerprints at the consumer
+  boundary; incompatible changes require an explicit schema-version decision.
+- Never commit confidential inputs, row-level products, private manifests, or
+  DuckDB spill artifacts.
+- Default priority remains correctness → clarity → reproducibility → measured
+  optimization.
 
 ## Environment
 - Python ≥ 3.11 on macOS/Linux (use the repo’s pinned version if specified in `pyproject.toml`).

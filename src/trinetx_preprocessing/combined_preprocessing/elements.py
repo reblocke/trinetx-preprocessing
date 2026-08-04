@@ -16,6 +16,7 @@ from ..glp1_eligibility.concept_sets import (
 )
 from ..pipeline.final_output_schema import FINAL_OUTPUT_COLUMNS
 from ..storage import WorkTableWriter
+from .traditional_catalog import ANY_CODE_SYSTEM, traditional_concepts
 
 CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN = {
     "labs": "lab",
@@ -208,10 +209,40 @@ def resolve_concept_sets_dir(config: Config) -> Path:
     return root
 
 
-def load_combined_catalog(config: Config) -> ConceptSetCatalog:
-    """Load the single versioned source-element catalog."""
+def load_glp1_catalog(config: Config) -> ConceptSetCatalog:
+    """Load the unmodified GLP-1 catalog used by standalone eligibility work."""
 
     return load_concept_sets(resolve_concept_sets_dir(config))
+
+
+def glp1_catalog_sha256(config: Config) -> str:
+    """Return the stable digest of the GLP-1-only concept catalog."""
+
+    return load_glp1_catalog(config).sha256
+
+
+def load_combined_catalog(config: Config) -> ConceptSetCatalog:
+    """Load GLP-1 concepts plus historical cohort-source candidates.
+
+    Existing GLP-1 identifiers are retained verbatim. Historical candidates are
+    namespaced under ``traditional.*`` so their memberships can coexist without
+    changing GLP-1 source-element IDs.
+    """
+
+    glp1_catalog = load_glp1_catalog(config)
+    traditional = traditional_concepts()
+    glp1_ids = {concept.concept_set_id for concept in glp1_catalog.concepts}
+    traditional_ids = {concept.concept_set_id for concept in traditional}
+    overlap = sorted(glp1_ids & traditional_ids)
+    if overlap:
+        raise ValueError(
+            "GLP-1 and traditional source catalogs must use separate identifiers: "
+            + ", ".join(overlap)
+        )
+    return ConceptSetCatalog(
+        concepts=(*glp1_catalog.concepts, *traditional),
+        phenotype_rules=glp1_catalog.phenotype_rules,
+    )
 
 
 def catalog_rows(catalog: ConceptSetCatalog) -> list[dict[str, Any]]:
@@ -400,11 +431,9 @@ class ElementCaptureWriter:
         )
 
         if self.include_all:
-            retained_index = (
-                frame.index
-                if retain_mask is None
-                else frame.index[retain_mask.fillna(False).astype(bool)]
-            )
+            # Patient and encounter are complete source relations. The legacy
+            # GLP-1 candidate mask must not prune the cohort-neutral contract.
+            retained_index = frame.index
             memberships = _empty_membership_frame()
         else:
             memberships = _classify_memberships(
@@ -491,7 +520,9 @@ def _classify_memberships(
     ]
     matched_keys: list[pd.DataFrame] = []
     for concept in rules:
-        matches = unique_keys["code_system"].eq(concept.code_system)
+        matches = pd.Series(True, index=unique_keys.index)
+        if concept.code_system != ANY_CODE_SYSTEM:
+            matches &= unique_keys["code_system"].eq(concept.code_system)
         if concept.match_type == "exact":
             matches &= unique_keys["code"].eq(concept.code)
         elif concept.match_type == "prefix":

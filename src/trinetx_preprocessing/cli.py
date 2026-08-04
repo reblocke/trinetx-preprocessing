@@ -29,6 +29,7 @@ from .combined_preprocessing.builder import (
     require_safe_compatibility_hash_locations,
     require_safe_output_location,
 )
+from .combined_preprocessing.cohort_source import validate_cohort_source
 from .combined_preprocessing.database import (
     inspect_combined_database,
 )
@@ -561,6 +562,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional root containing the 36 compatibility CSVs.",
     )
     validate_preprocessed_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+
+    validate_cohort_source_parser = subparsers.add_parser(
+        "validate-cohort-source",
+        help="Validate a canonical database before downstream cohort creation.",
+    )
+    validate_cohort_source_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to trinetx_preprocessed.duckdb.",
+    )
+    validate_cohort_source_parser.add_argument(
+        "--require-element",
+        action="append",
+        default=[],
+        help="Require this element ID in the cohort-source catalog. Repeatable.",
+    )
+    validate_cohort_source_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit machine-readable JSON.",
@@ -1271,6 +1294,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for error in result.errors:
                     logger.error("%s", error)
                 logger.info("Combined preprocessing valid: %s", result.valid)
+            return 0 if result.valid else 1
+
+        if args.command == "validate-cohort-source":
+            require_safe_output_location(
+                args.database.parent,
+                artifact_label="cohort-source database/spill directory",
+            )
+            result = validate_cohort_source(
+                args.database,
+                required_elements=args.require_element,
+            )
+            payload = {
+                "valid": result.valid,
+                "errors": list(result.errors),
+                "required_elements": list(result.required_elements),
+                "metadata": (
+                    result.metadata.to_dict() if result.metadata is not None else None
+                ),
+            }
+            if args.json:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for error in result.errors:
+                    logger.error("%s", error)
+                logger.info("Cohort source valid: %s", result.valid)
             return 0 if result.valid else 1
 
         if args.command == "export-legacy":

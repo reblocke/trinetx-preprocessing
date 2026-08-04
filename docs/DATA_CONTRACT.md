@@ -3,6 +3,9 @@
 This document defines pipeline boundaries and storage grain. Corrected clinical
 semantics live in `docs/SPEC.md`.
 
+Current implementation and validation status is summarized in
+`docs/CURRENT_STATE.md`.
+
 ## Private inputs
 
 The configured raw root contains Encounter, Diagnosis, Lab Results,
@@ -87,6 +90,21 @@ one matching element rule has `include: true`; exclude-only matches do not enter
 the canonical source tables. They are the shared input boundary for downstream
 studies; downstream cohort and phenotype decisions are not preprocessing
 elements.
+
+The public cohort-source tables are `source_patient`, `source_encounter`, the
+five typed clinical `source_*` tables, `source_encounter_flow`,
+`element_catalog`, `element_rule`, `element_membership`, raw observability and
+availability tables, and their terminal preprocessing manifest. Consumers must
+validate the adjacent sidecar and manifest-bound schema/catalog fingerprints
+before reading rows. `preprocessed_encounter`, `rfs_membership`, and the 36
+compatibility views are not the future cohort API.
+
+GLP-1 and traditional source candidates share this one contract. A membership
+means source candidacy only; it does not apply numeric, temporal, index,
+phenotype, or inclusion logic. The Stata-annotated outpatient-MAT candidate
+retains five codes, including unadjudicated additions `3304`, `236913`, and
+`28863`; those three require original-query/export review before any clinical
+use.
 
 `source_encounter_flow` is the compact exception to concept-filtered clinical
 retention. It stores the four fields needed to reconstruct complete encounter

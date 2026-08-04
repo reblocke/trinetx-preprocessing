@@ -4,6 +4,27 @@ Validation artifacts may contain sensitive metadata or row-level data and must
 stay under a private external root outside the repository. Do not commit raw
 exports, subsets, work tables, manifests, logs, profiles, or output CSVs.
 
+## Current evidence map
+
+`CURRENT_STATE.md` is the status index. The cohort-source API, combined
+GLP-1/traditional catalog, safe read-only spill behavior, and five-domain GLP-1
+adapter parity have passed code review and synthetic CI. That evidence accepts
+the public contract and protects fixture behavior; it is not a current-head
+private full-data cutover result.
+
+The full-data evidence below belongs to the exact historical behavior heads it
+names. The expanded catalog has not yet completed a new private
+source-completeness run, and the current adapter has not completed a new
+full-data adapter-versus-standalone comparison. Keep standalone GLP-1 raw
+ingestion and the 36-file Stata bridge as references until those gates pass.
+
+The current Stata reference boundary is the reviewed
+`trinetx-hypercapnia-code` PR #4 merge
+`0584b0e13fe547f4a67b7d05e00aa40c0e95fa94`. Exact-head CI and post-merge
+`master` CI run `30936293016` passed. No restricted-data Stata execution was
+performed for that documentation/code merge; its private Phase 1 certification
+remains a separate gate.
+
 ## Frozen replication evidence
 
 `refactor-milestone-1` is the immutable historical-replication fallback. Its
@@ -275,11 +296,16 @@ Before release:
 
 - `clean-scratch` reports zero known scratch artifacts after approved cleanup;
 - `git status` contains no private or generated validation artifacts;
-- local holistic review and GitHub Codex review have no unresolved actionable
-  correctness, security, privacy, or performance findings;
+- exact-head independent review, available automated review, and GitHub threads
+  have no unresolved actionable correctness, security, privacy, or performance
+  findings; an automated-review service rate limit is recorded but is not
+  itself a correctness finding;
 - the aggregate Milestone 1 delta report is PHI-safe and external-only.
 
 ## GLP-1 downstream full-data evidence
+
+This section is historical reference evidence, not proof for the current
+expanded cohort-source catalog or adapter head.
 
 The exact behavior-head additive GLP-1 build from commit `459cbda` completed in
 20,941.55 seconds with 5,635,293,184 bytes maximum RSS. It used the supported

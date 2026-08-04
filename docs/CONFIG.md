@@ -4,6 +4,9 @@ The CLI reads YAML configuration. Relative paths resolve from the configuration
 file, not the process working directory. See `config.example.yaml` for a
 complete synthetic configuration.
 
+See `CURRENT_STATE.md` before configuring downstream consumers; cohort
+construction is not yet part of this repository.
+
 ## Required paths and domains
 
 - `data_dir`: private raw-export root.
@@ -62,8 +65,10 @@ combined:
 - `combined.database_name` controls the database filename beneath
   `output_dir`.
 - `combined.schema_version` must match the supported combined contract.
-- `combined.concept_sets_dir` supplies the versioned additive element rules;
-  their parsed contents are fingerprinted for stale-work detection.
+- `combined.concept_sets_dir` supplies the versioned GLP-1 concept rules. The
+  builder unions them with the typed traditional rules shipped in code and
+  fingerprints both the merged cohort-source catalog and the GLP-1 subset for
+  stale-work and consumer validation.
 - `combined.duckdb_core_memory_limit_mib` bounds DuckDB's internal buffer pool
   while the core and source tables are created. It defaults to the lower of
   `2816` and `combined.duckdb_memory_limit_mib`, preserving an explicitly lower
@@ -125,3 +130,10 @@ Use `clean-scratch` to inventory hidden interrupted-run scratch before deletion.
 
 Validation checks directory availability, glob resolution, source headers,
 supported enum values, numeric bounds, and power-of-two partition counts.
+
+Published cohort-source readers do not use YAML for their contract pins.
+`validate-cohort-source` accepts the database and repeatable required element
+IDs. Python consumers pass `expected_catalog_sha256`, `memory_limit_mib`, and an
+optional external `spill_root` directly to `open_cohort_source()` or
+`validate_cohort_source()`. Both the database parent and explicit spill root are
+rejected when they resolve inside a Git worktree.

@@ -1257,6 +1257,78 @@ def _append_pre2022_non_gas_encounter(input_root: Path) -> None:
     )
 
 
+def _append_traditional_only_candidate_rows(input_root: Path) -> None:
+    """Add source candidates the GLP-1 catalog must not retain.
+
+    Each row uses a legacy wildcard code-system rule under ``LOCAL`` so it is
+    captured by the combined traditional catalog but cannot match a GLP-1
+    concept.  ``case01`` is already a gas candidate, which exercises every
+    patient-partitioned adapter source table.
+    """
+
+    rows_by_file = {
+        "Lab Results/lab_results.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "718-7",
+            "lab_result_num_val": "7",
+            "units_of_measure": "mg/dL",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-lab",
+        },
+        "Vital Signs/vital_signs.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "75987-8",
+            "value": "1",
+            "units_of_measure": "1",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-vital",
+        },
+        "Diagnosis/diagnosis.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "J96.12",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-diagnosis",
+        },
+        "Procedure/procedure.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "94660",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-procedure",
+        },
+        "Medications/medication.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "unique_id": "traditional-only-medication",
+            "code_system": "LOCAL",
+            "code": "6902",
+            "start_date": "2024-01-01 03:00:00",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-medication",
+        },
+    }
+    for relative_path, values in rows_by_file.items():
+        path = input_root / relative_path
+        source = pd.read_csv(path, dtype="string")
+        row = {column: "" for column in source.columns}
+        row.update(values)
+        pd.concat([source, pd.DataFrame([row])], ignore_index=True).to_csv(
+            path,
+            index=False,
+        )
+
+
 def test_element_capture_preserves_duplicate_source_rows_and_membership(
     tmp_path: Path,
 ) -> None:
@@ -1332,8 +1404,13 @@ def test_element_capture_preserves_duplicate_source_rows_and_membership(
     ]
     assert source["event_datetime"].notna().all()
     assert source["numeric_value"].tolist() == [55.0, 55.0, 56.0]
-    assert set(membership["element_id"]) == {"source.arterial_pco2"}
-    assert len(membership) == 3
+    assert set(membership["element_id"]) == {
+        "source.arterial_pco2",
+        "source.traditional.lab.rfs_abg",
+        "source.traditional.lab.value_20198",
+    }
+    assert len(membership) == 9
+    assert membership.groupby("source_record_id")["element_id"].nunique().eq(3).all()
 
 
 def test_element_capture_retains_only_rows_with_included_membership(
@@ -1505,7 +1582,12 @@ def test_combined_build_exports_exact_historical_contract(
     manifest = json.loads(result.manifest_path.read_text())
     assert manifest["status"] == "complete"
     assert manifest["run_id"] == result.run_id
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
+    assert manifest["combined_schema_version"] == "2.0"
+    assert manifest["cohort_source_schema_version"] == "1.0"
+    assert len(manifest["cohort_source_schema_sha256"]) == 64
+    assert manifest["cohort_source_catalog_sha256"] == manifest["catalog_sha256"]
+    assert len(manifest["glp1_catalog_sha256"]) == 64
     assert manifest["duckdb_memory_limit_mib"] == 3072
     assert manifest["duckdb_core_memory_limit_mib"] == 2816
     assert manifest["duckdb_threads"] == 1
@@ -3140,6 +3222,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
 ) -> None:
     input_root = _copy_glp1_fixture_for_combined(tmp_path)
     _append_pre2022_non_gas_encounter(input_root)
+    _append_traditional_only_candidate_rows(input_root)
     config = load_config(
         _write_combined_config(
             tmp_path,
@@ -3158,7 +3241,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
                 "SELECT count(*) FROM source_encounter "
                 "WHERE encounter_id = 'flow-only-encounter'"
             ).fetchone()[0]
-            == 0
+            == 1
         )
         assert (
             combined_connection.execute(
@@ -3171,6 +3254,20 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
             "SELECT start_datetime FROM source_encounter_flow "
             "WHERE encounter_id = 'unused-invalid-encounter'"
         ).fetchone() == (None,)
+        traditional_only_codes = {
+            "source_lab_measurement": "718-7",
+            "source_vital_measurement": "75987-8",
+            "source_diagnosis": "J96.12",
+            "source_procedure": "94660",
+            "source_medication": "6902",
+        }
+        for table_name, code in traditional_only_codes.items():
+            count = combined_connection.execute(
+                f"SELECT count(*) FROM {table_name} "
+                "WHERE code_system_raw = 'LOCAL' AND code_raw = ?",
+                [code],
+            ).fetchone()[0]
+            assert count == 1, table_name
     finally:
         combined_connection.close()
     glp1_config = load_glp1_config(REPOSITORY_ROOT / "config/glp1_eligibility.yml")
@@ -3330,6 +3427,21 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         build_cohort_flow(adapted, glp1_config)
 
         for table in (
+            "raw_diagnosis_observability",
+            "raw_labs_observability",
+            "raw_vitals_observability",
+            "raw_procedure_observability",
+            "raw_medication_observability",
+        ):
+            direct_rows = direct.execute(
+                f"SELECT * FROM {table} ORDER BY ALL"
+            ).fetchall()
+            adapted_rows = adapted.execute(
+                f"SELECT * FROM {table} ORDER BY ALL"
+            ).fetchall()
+            assert adapted_rows == direct_rows, table
+
+        for table in (
             "analysis_glp1_eligibility",
             "cohort_flow",
             "eligibility_evidence_long",
@@ -3346,13 +3458,13 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         adapted.close()
 
 
-def test_glp1_adapter_rejects_mismatched_element_catalog(tmp_path: Path) -> None:
+def test_glp1_adapter_rejects_mismatched_glp1_catalog(tmp_path: Path) -> None:
     config = load_config(_write_combined_config(tmp_path))
     combined = build_preprocessed(config, strict=True)
     connection = duckdb.connect(str(combined.database_path))
     try:
         connection.execute(
-            "UPDATE preprocessing_manifest SET element_catalog_sha256 = ?",
+            "UPDATE preprocessing_manifest SET glp1_catalog_sha256 = ?",
             ["0" * 64],
         )
         connection.execute("CHECKPOINT")
