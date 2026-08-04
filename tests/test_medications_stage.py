@@ -163,4 +163,21 @@ def test_full_schema_ingredient_file_retains_historical_features(
         f"combined_{SOURCE_TABLE_BY_DOMAIN['medications']}.csv",
     )
     source = pd.read_csv(source_path, dtype="string")
-    assert source["code"].tolist() == ["29046"]
+    # The shared source contract retains every historical medication candidate
+    # as well as the additive GLP-1 ingredient.  Legacy feature outputs above
+    # remain unchanged; this table is intentionally broader than either one
+    # consumer's code set.
+    assert source["code"].tolist() == [
+        "6902",
+        "7242",
+        "7213",
+        "4917",
+        "1808",
+        "2193",
+        "68139",
+        "817579",
+        "6813",
+        "7407",
+        "21949",
+        "29046",
+    ]

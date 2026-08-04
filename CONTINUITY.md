@@ -59,6 +59,10 @@
   memberships. CSV/Parquet parity fixtures add traditional-only candidates in
   every domain, and now compare intentionally unfiltered raw-observability
   tables explicitly as well.
+- A broad synthetic run exposed one stale medication-stage expectation: it
+  assumed the shared source table retained only a GLP-1 ingredient. The test
+  now asserts the intended union of historical medication candidates and the
+  GLP-1 row; its focused medication suite passes.
 - Cross-repo audit confirmed coverage of core RFS, diagnosis, procedure, lab,
   vital, and existing medication rule families. The Stata outpatient-MAT
   annotation is retained as a separately marked source candidate without
@@ -67,6 +71,8 @@
 ## Now
 - Reconcile the final independent review and exact-head CI for PR #9; do not
   merge either draft without separate authority.
+- Rerun the broad synthetic suite or use exact-head CI after the medication
+  expectation correction, subject to available local scratch space.
 - Keep the source-reference and cohort-source heads frozen while CI/review are
   assessed.
 
