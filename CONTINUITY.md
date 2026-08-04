@@ -39,8 +39,9 @@
   It is draft; exact-head CI passed after fixes for the direct raw-root path
   and disk-bounded frozen-reference tests.
 - Contract PR: `reblocke/trinetx-preprocessing#9` remains a draft. Its code
-  head `646a246` passed full CI (500 passed, 7 skipped); check GitHub for any
-  later documentation-only head's CI status.
+  head `646a246` passed full CI (500 passed, 7 skipped), and later
+  documentation-only head `00b492d` also passed full CI (500 passed, 7
+  skipped). The live PR head and checks remain the GitHub source of truth.
 - GitHub Codex review requests were made for both PRs, but the connected
   reviewer is rate-limited. Both PRs have no review submissions or unresolved
   threads; independent local reviews found and reconciled all findings.
