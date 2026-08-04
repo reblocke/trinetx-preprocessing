@@ -74,6 +74,28 @@ compatibility-only tree is explicit:
 See `docs/UNIFIED_PREPROCESSING.md` for the table grains, provenance contract,
 compatibility boundary, and acceptance gates.
 
+## Cohort-source handoff
+
+The canonical DuckDB is also the handoff surface for future cohort builders.
+It retains complete patient and encounter records plus source-faithful clinical
+events matching the union of current GLP-1 and traditional hypercapnia/RFS
+extraction rules. These rows are source candidates, not a study cohort: all
+index selection, time windows, reductions, phenotype decisions, and analysis
+logic remain downstream.
+
+Validate a published source contract before a downstream process opens it:
+
+```bash
+./.venv/bin/python -m trinetx_preprocessing validate-cohort-source \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --require-element source.traditional.diagnosis.has_j9612 --json
+```
+
+The existing `export-legacy` command remains the exact 36-file CSV bridge for
+the Stata reference workflow. The next migration phase will import cohort code
+into a separate `trinetx_preprocessing.cohorts.hypercapnia` package; it will
+consume this contract rather than raw exports.
+
 ## Downstream GLP-1 eligibility
 
 The standalone raw-ingestion GLP-1 CLI remains the validated production

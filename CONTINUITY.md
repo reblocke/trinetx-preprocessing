@@ -1,185 +1,76 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Finish the whole-PR #8 holistic review, integrate every confirmed finding,
-  and reconcile the final exact head with local tests, GitHub CI/review, and
-  zero unresolved threads.
-- Preserve the accepted unified preprocessing product and exact 36-file
-  compatibility contract while documenting the remaining overall refactor
-  roadmap.
+- Deliver a cohort-neutral unified source contract and reproducible Hypercapnia
+  reference baseline so later cohort code can be imported without reopening raw
+  TriNetX exports.
+- Preserve the exact 36-file historical compatibility contract; do not import
+  or change cohort, phenotype, imputation, or analysis logic in this milestone.
 
 ## Constraints/Assumptions
-- Raw TriNetX data, row-level outputs, databases, logs, manifests, profiles,
-  and validation artifacts remain private, external, and untracked.
-- The accepted `c96dc40` full-data product remains the comparison baseline.
-  The confirmed NA-token fix changes transforms/source interpretation, so the
-  literal validation policy requires a fresh exact-behavior-head full-data
-  build, parity proof, and resource gate before release acceptance.
-- Peak RSS remains capped at 6,238 MiB and private validation roots retain at
-  least 100 GiB free.
-- PR #8 remains draft until the user separately authorizes ready/merge.
-- Expensive PID 80692 exited naturally during the recovered run and was never
-  interrupted.
+- Raw TriNetX data, row-level outputs, logs, manifests, profiles, and
+  validation artifacts remain private, external, and untracked.
+- The stable consumer surface is DuckDB plus the existing 36-CSV bridge.
+- Standalone raw ingestion remains the reference until a frozen-head full-data
+  source/parity/resource gate passes.
+- The original worktree's uncommitted recovery ledger remains user-owned and
+  untouched; this work is isolated from merged `origin/main`.
+- No full-data or other expensive pipeline process is active; do not interrupt
+  unrelated drive interrogation.
+- Merge authority for any new PR remains separate from implementation.
 
 ## Key decisions
-- Behavior head `c96dc40` produced the accepted product; `f3c1b03` changed only
-  bounded read-only completeness evidence; `d6a70d2` recorded final Step 2
-  evidence.
-- Milestone 2 accepts deterministic non-strict resolution for 286 documented
-  encounter-setting conflicts. Strict execution remains a separate fail-closed
-  adjudication proof.
-- The canonical product is one DuckDB plus its manifest and 36 generated CSVs.
-  GLP-1 eligibility and the future Stata migration remain downstream phases.
-- Standalone `export-legacy` publishes only to a separate external,
-  compatibility-only tree; it never mutates the canonical product in place.
+- `trinetx-hypercapnia-code` is the authoritative source reference and emits
+  both `FULL_DATA` and `AFTER_EXCLUSION` variants.
+- The source catalog unions the existing GLP-1 catalog and typed traditional
+  extraction/RFS rules, while source candidacy remains distinct from cohort
+  inclusion.
+- GLP-1 keeps its own catalog fingerprint so the existing adapter stays bound
+  to exactly its eligibility semantics after the catalog grows.
 
 ## State
-- Branch: `codex/unified-preprocessing-v1`.
-- Integrated review-reconciliation head:
-  `eac4d5c8e94c75279faaa396761ee222c3de3a93`.
-- Exact-head CI run `30712167025` passed in 6m16s. The fresh whole-PR Codex
-  review found one P3 stale 462-versus-463 test-count statement in thread
-  `PRRT_kwDOLtXliM6VqEpq`; the final reconciliation change set corrects it.
-- Documentation reconciliation head
-  `14b8fb758281df1787f577081170bd084b21717b` passed CI run `30712522979`
-  in 7m18s.
-- The requested holistic GitHub review found one P2 recovery issue in thread
-  `PRRT_kwDOLtXliM6VpRQI`; parallel whole-diff audits found and rechecked the
-  related path, lock, scratch, export, validation, and documentation issues.
-- Its final exact-head review found a third P2: the sidecar rename was not
-  directory-fsynced before validation state in thread `PRRT_kwDOLtXliM6VqWae`.
-  The missing durability barrier and regression are now committed; exact-head
-  CI run `30714776156` passed in 6m05s and the thread is resolved.
-- The subsequent exact-head review found one P2 in thread
-  `PRRT_kwDOLtXliM6VqeGE`: standalone `validate-preprocessed` does not reject
-  repository-local database or compatibility roots even though validation may
-  create DuckDB spill and CSV hash scratch beside those inputs.
-- The current local change set guards both validation scratch roots before any
-  scan. An independent diff audit then found that a setting-directory symlink
-  could redirect compatibility hash scratch back into the repository despite a
-  safe top-level root; the current change set also guards every distinct
-  contract CSV parent and adds a symlink regression. All four focused tests and
-  the complete 468-test suite pass.
-- Commit `75805d2` is pushed; the latest P2 has an exact-fix reply and is
-  resolved. Exact-head CI run `30715666488` passed in 6m25s; holistic review
-  request `issuecomment-5153140607` completed as review `4835619937` and found
-  one additional P2 in thread `PRRT_kwDOLtXliM6VqoE6`: baseline/parity evidence
-  hashing does not guard compatibility roots or contract CSV parents before
-  creating adjacent hash scratch.
-- The earlier four P2 threads and the P3 thread are resolved.
-- The current local fix centralizes root/contract-parent hash guards, applies
-  them before combined evidence hashing, and also guards the database spill
-  roots used by parity and element-completeness evidence. Generic pre-existing
-  `hash-outputs` remains outside this combined-evidence review finding. An
-  independent callsite audit found no other unguarded new combined-product hash
-  path; builder, validation, export, and benchmark routes use guarded staging.
-  All nine focused validation/evidence regressions and the complete 473-test
-  suite pass.
-- Commit `eac4d5c` is pushed; the evidence-scratch P2 has an exact-fix reply and
-  is resolved. Exact-head CI run `30716659186` passed in 6m37s; holistic review
-  request `issuecomment-5153240773` completed as review `4835671748` and found
-  one additional P2 in thread `PRRT_kwDOLtXliM6VqwxB`: combined-mode lab reads
-  preserve textual NA tokens for source capture but pass the same raw chunk to
-  strict legacy date parsing, unlike historical pandas NA coercion.
-- The P2 is systemic across all six clinical compatibility transforms and
-  patient demographics. The current local fix preserves each raw source frame,
-  masks the exact 19 pandas 2.3 default NA tokens only in transform copies, and
-  leaves ingredient-only medication capture plus encounter source/flow logic
-  unchanged. Focused transform/stage coverage passes 93/93; the full combined
-  contract/source/adapter subset passes 5/5.
-- Repository-wide Ruff, touched-file formatting, lockfile, diff-hygiene, and
-  the complete 482-test suite pass at the uncommitted NA-token behavior head.
-  A literal evidence-policy audit confirms the prior full profile cannot be
-  reused for this semantic transform change.
+- Preprocessing branch: `codex/cohort-source-contract` from
+  `149a65a` (`origin/main`).
+- Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `b379177`.
+  It is draft and under CI; merge authority remains separate.
+- Contract implementation is assembled through `999954c`; documentation,
+  branch-level review, and frozen-head evidence remain pending.
 
 ## Done
-- Step 2 acceptance completed: atomic 38-file publication; exact 36/36 parity
-  across 6,949,511 rows; 4,503.531 MiB peak RSS; 534 historical elements, 92
-  source elements, and 118/118 included rules; both adapter cases; strict
-  286-conflict no-write proof; 430-test/Ruff/diff gate; clean scratch/product
-  hygiene; clean exact-head CI/review.
-- Triggered a fresh whole-PR GitHub review against `main` and audited the
-  roadmap, privacy boundary, and integrated local diff in parallel.
-- Implemented early rejection of equal/nested combined work/output roots.
-- Added aggregate per-domain validation that every retained clinical source
-  row has an included source-concept membership.
-- Hardened `export-legacy` with symlink/unmanaged-tree rejection, manifest-bound
-  verification, explicit replacement, locks, durable staging, rollback, and
-  atomic whole-tree publication.
-- Added a durability barrier before the pre-database checkpoint and automatic
-  rebuild of stale interrupted pre-database staging.
-- Updated the plan, onboarding, strict-mode guidance, and changelog for the
-  accepted unified-product state and next phases; package README metadata is a
-  future release-checkpoint task.
-- Clarified that output-neutral lifecycle/validation hardening may reuse an
-  unchanged accepted product only behind focused, bounded, CI, and review
-  gates, and that production GLP-1 CLI cutover is still a separate phase.
-- Corrected the roadmap for stale open issue #6: substantial standalone GLP-1
-  software/evidence is delivered, but optional-domain ingestion, catalog and
-  config completion, smoke-query/summary completion, and clinical/private
-  validation remain literal issue scope.
-- Scoped standalone GLP-1 full-data evidence to behavior head `459cbda`; the
-  later semantics-preserving procedure-regex rewrite changed catalog identity,
-  so issue #6 also needs fresh evidence at its final catalog/rule head.
-- Fixed the second review P2 by coercing malformed timestamps only in the
-  complete combined encounter-flow universe while preserving strict parsing in
-  legacy/domain transforms. The exact CSV/Parquet adapter regression plus
-  encounter-stage/transform tests pass 18/18.
-- Hardened case-insensitive containment, stable lock/publication identity,
-  no-follow lock opening, terminal/exact-cardinality compatibility export,
-  staging-routed spill, live-destination revalidation, unowned-state
-  preservation, and canonical/standalone scratch recovery.
-- The exact current worktree passes all 473 tests in 171.34 seconds using the
-  external validation temp/cache. Repository-wide Ruff, touched-file format,
-  `git diff --check`, and `uv lock --check` also pass after the evidence-scratch
-  fix.
-- A bounded read-only check against the unchanged accepted database reports
-  zero retained rows missing an included source-concept membership across all
-  five clinical domains and zero included memberships with a wrong catalog
-  domain. The 4,479.62-second pass peaked at 3,953.656 MiB RSS; its 39.95-second
-  complement peaked at 1,609.391 MiB. Database size/mtime remained unchanged
-  and all spill was cleaned.
+- PR #8 merged at `149a65a`; exact-head CI passed and all review threads are
+  resolved.
+- Reference baseline now supports both preprocessing variants and an external
+  raw-data compatibility root; focused static tests pass. No private-data Stata
+  run has been attempted.
+- The preprocessing branch now has an expanded source catalog, a versioned
+  read-only cohort-source API/CLI, explicit schema/catalog provenance, and a
+  GLP-1-only adapter fingerprint. Focused catalog, consumer, CLI, and GLP-1
+  adapter parity tests pass.
+- Cross-repo audit confirmed coverage of core RFS, diagnosis, procedure, lab,
+  vital, and existing medication rule families. The Stata outpatient-MAT
+  annotation is retained as a separately marked source candidate without
+  changing legacy outputs or cohort logic.
 
 ## Now
-- Complete independent code review for the systemic NA-token compatibility
-  fix, commit/push it, resolve the finding, and stabilize the behavior head
-  through exact-head CI and a clean holistic GitHub review.
+- Finish documentation/verification, push the exact preprocessing head, and
+  request/reconcile holistic review for both draft PRs.
 
 ## Next
-- Run a fresh external exact-behavior-head full-data build, 36/36 parity,
-  resource, database/element/source-integrity, adapter, strict no-write,
-  manifest/free-space/scratch/privacy gates; then commit aggregate-only evidence
-  documentation and repeat final exact-head CI/review.
-- Require zero unresolved threads, a clean worktree, and no tracked
-  private/generated artifacts.
-- Report the prioritized roadmap: land/release PR #8; GLP-1 production cutover;
-  issue #6 software/evidence/clinical reconciliation; separate Stata migration;
-  then legacy onboarding/deprecation cleanup.
+- Run final complete synthetic checks subject to available scratch space, then
+  reconcile CI/review feedback for the frozen branch heads.
+- With an accepted reviewed head, run the fresh external full-data source/parity
+  and resource gate before importing downstream cohort code.
 
 ## Open questions (UNCONFIRMED if needed)
-- Marking PR #8 ready or merging it remains `UNCONFIRMED` and requires explicit
-  user authorization.
-- The next release version/tag is `UNCONFIRMED`.
-- The exact Stata migration boundary and timing remain `UNCONFIRMED`.
+- Formal package release/tag is UNCONFIRMED and outside this milestone.
+- Availability/timing of the private full-data gate is UNCONFIRMED.
+- The original TriNetX query/export must adjudicate the three Stata-annotated
+  outpatient-MAT codes (`3304`, `236913`, `28863`) before a cohort treats the
+  retained source candidate as a clinical definition.
 
 ## Working set (files/ids/commands)
-- `src/trinetx_preprocessing/combined_preprocessing/{builder,database,validation}.py`
-- `src/trinetx_preprocessing/{config,cli,regression}.py`
-- `src/trinetx_preprocessing/io/csv.py`
-- `src/trinetx_preprocessing/transform/{labs,diagnosis,medications,procedure,vitals,encounter}.py`
-- `src/trinetx_preprocessing/pipeline/final_assembly.py`
-- `tests/test_{io_csv,legacy_na_compatibility,labs_stage,final_assembly}.py`
-- `tests/test_{config,cli,combined_preprocessing}.py`
-- `docs/{PLAN,ONBOARDING,UNIFIED_PREPROCESSING,VALIDATION,GLP1_ELIGIBILITY}.md`
-- `README.md`, `CHANGELOG.md`, `llms.txt`, `pyproject.toml`
-- PR #8; initial holistic comment `issuecomment-5152163533`; exact-head review
-  comments `issuecomment-5152599268` and `issuecomment-5152752637`; resolved P2
-  threads `PRRT_kwDOLtXliM6VpRQI`, `PRRT_kwDOLtXliM6Vp6VT`, and
-  `PRRT_kwDOLtXliM6VqWae`; P3 thread `PRRT_kwDOLtXliM6VqEpq`; resolved P2
-  thread `PRRT_kwDOLtXliM6VqeGE`; exact-head review request
-  `issuecomment-5153140607`; review `4835619937`; resolved P2 thread
-  `PRRT_kwDOLtXliM6VqoE6`; final review request `issuecomment-5153240773`; CI
-  runs `30710776011`, `30712167025`, `30712522979`, `30714776156`,
-  `30715666488`, and `30716659186`; review `4835671748`; open P2 thread
-  `PRRT_kwDOLtXliM6VqwxB`
-- `git diff --check`; `ruff check .`; external-TMP `pytest -q`
+- `src/trinetx_preprocessing/combined_preprocessing/{traditional_catalog,elements,database,contract,cohort_source,cohort_source_contract,glp1_adapter}.py`
+- `tests/test_{traditional_catalog,combined_preprocessing,cohort_source}.py`
+- `README.md`, `docs/{DECISIONS,PLAN,UNIFIED_PREPROCESSING,GLP1_ELIGIBILITY}.md`
+- Source reference: `/Users/reblocke/Research/trinetx-hypercapnia-code-cohort-reference`, commit `5d86ef4`
+- `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv lock --check`, `git diff --check`

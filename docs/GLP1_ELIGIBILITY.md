@@ -14,6 +14,9 @@ and clinical/private-review requirements.
   downstream of preprocessing.
 - GLP-1 source provenance comes from typed unified source tables. It must not
   use lossy legacy feature tables as its source of truth.
+- The canonical manifest preserves the GLP-1 catalog fingerprint separately
+  from the broader cohort-source catalog, so additive traditional source rules
+  cannot silently change the validated GLP-1 reference boundary.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
 

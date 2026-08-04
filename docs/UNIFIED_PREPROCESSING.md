@@ -7,7 +7,8 @@ bounded raw-data pass produces:
 
 - the complete historical 534-column encounter observations;
 - source-faithful lab, vital, diagnosis, procedure, medication, encounter, and
-  patient tables needed by the GLP-1 work and future studies;
+  patient tables needed by the current GLP-1 reference and future cohort
+  builders;
 - a versioned element catalog and rule table;
 - source-element membership, observability, RFS membership, encounter
   availability, provenance, data-dictionary, and aggregate quality tables; and
@@ -44,6 +45,45 @@ Patient source values remain strings exactly as exported before demographic
 conversion. Dates preserve parsed timestamp precision. Source tables use the
 same explicit DuckDB types whether work tables are CSV or Parquet.
 
+## Cohort-source consumer contract
+
+The stable cohort-source surface is the complete `source_patient` and
+`source_encounter` tables; the five typed clinical `source_*` tables;
+`element_catalog`, `element_rule`, and `element_membership`; availability and
+observability tables; and the preprocessing manifest and sidecar. Its catalog
+contains current GLP-1 concepts plus the existing typed traditional
+hypercapnia, feature-candidate, and RFS extraction rules. Matching records are
+source candidates only: value ranges, time windows, reductions, index-event
+choices, and cohort inclusion remain downstream.
+
+`source.traditional.medication.stata_op_mat` preserves a documented Stata
+reference annotation so its raw records survive this source build. It is not a
+validated medication-assisted-treatment definition: adjudicate the original
+TriNetX query/export before a cohort uses it for clinical inclusion.
+
+`preprocessed_encounter`, `rfs_membership`, and the 36 compatibility views are
+compatibility surfaces, not the future cohort API. `export-legacy` remains the
+temporary CSV bridge for Stata consumers.
+
+Use the public reader only against a published product:
+
+```python
+from pathlib import Path
+
+from trinetx_preprocessing.combined_preprocessing.cohort_source import (
+    open_cohort_source,
+)
+
+with open_cohort_source(Path("/private/output/trinetx_preprocessed.duckdb")) as source:
+    result = source.connection.execute(
+        "SELECT count(*) FROM source_encounter"
+    ).fetchone()
+```
+
+The reader requires a terminal manifest, the adjacent sidecar, an exact
+cohort-source schema fingerprint, and any requested element IDs. It opens
+DuckDB read-only with owned spill cleanup.
+
 ## Build and inspect
 
 Use an external private `output_dir`; repository-local row-level output is
@@ -59,6 +99,10 @@ python -m trinetx_preprocessing preprocessed-status \
 python -m trinetx_preprocessing validate-preprocessed \
   --database /private/output/trinetx_preprocessed.duckdb \
   --output-dir /private/output --json
+
+python -m trinetx_preprocessing validate-cohort-source \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --require-element source.traditional.diagnosis.has_j9612 --json
 ```
 
 With `combined.enabled: true`, the existing `run` and `run-all` commands route

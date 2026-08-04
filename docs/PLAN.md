@@ -47,17 +47,25 @@ migration remain downstream.
 
 ## Next phases
 
-1. **Land PR #8.** Reconcile the fresh whole-PR review and exact-head CI. The PR
-   remains draft until an explicit ready/merge decision.
-2. **Create an immutable unified-product release checkpoint.** Choose the next
-   package version and tag after merge, point package metadata at the canonical
-   README, update the changelog, and normalize Milestone 2/Unified Stage 1
-   terminology. The version is `UNCONFIRMED`.
-3. **Cut over GLP-1 ingestion in a separate PR.** Add a manifest-bound
+1. **Publish the cohort-source contract.** Expand the canonical source catalog
+   to the union of the current GLP-1 requirements and all typed traditional
+   hypercapnia/RFS extraction rules. Expose a versioned, manifest-bound,
+   read-only DuckDB consumer interface. The 36 CSVs remain the legacy bridge;
+   no cohort, index, phenotype, imputation, or analysis decision belongs in
+   this phase.
+2. **Freeze the traditional reference.** In `trinetx-hypercapnia-code`, make
+   `FULL_DATA` and `AFTER_EXCLUSION` explicit reproducible variants, repair its
+   runner baseline, and retain private aggregate/schema evidence for later
+   migration parity.
+3. **Import traditional cohort construction here.** Add a separate downstream
+   `cohorts.hypercapnia` package that consumes only the cohort-source contract.
+   Port derivations and selections incrementally while the Stata/CSV route
+   remains the exact private reference.
+4. **Cut over GLP-1 ingestion separately.** Add a manifest-bound
    unified-database source to the production GLP-1 CLI, preserve the standalone
    raw builder as the reference, and require full-data adapter-versus-reference
    parity before deprecating the second raw scan.
-4. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
+5. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
    delivered standalone CLI, eight-file contract, synthetic acceptance, and
    behavior-head-scoped aggregate full-data reference evidence from the
    remaining literal scope: ingest optional high-value domains when present;
@@ -68,10 +76,6 @@ migration remain downstream.
    results; refresh full-data evidence at the final exact catalog/rule head;
    and complete investigator terminology and private record-level review. Keep
    the issue open until every retained acceptance criterion has evidence.
-5. **Migrate the Stata consumer in its own repository and branch.** Freeze its
-   current aggregate/output baseline, define the Python/Stata boundary, and
-   replace preprocessing incrementally while retaining the 36-file contract
-   until exact private full-data parity passes.
 6. **Finish onboarding and legacy cleanup.** Keep notebooks as reference-only
    material, move them under `notebooks/legacy/` only in a dedicated cleanup,
    and deprecate compatibility paths only after all downstream consumers have
@@ -79,7 +83,9 @@ migration remain downstream.
 
 ## Deferred
 
-- Migrating `trinetx-hypercapnia-code/stata/do/10_preprocessing.do`.
+- Importing `trinetx-hypercapnia-code/stata/do/10_preprocessing.do` or its
+  cohort logic before the cohort-source contract and private reference baseline
+  are accepted.
 - Changing GLP-1 cohort, phenotype, imputation, propensity, or analysis
   semantics.
 - Expanding clinical terminology beyond the current versioned element catalog.

@@ -13,6 +13,32 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 
 ## Entries
 
+### 2026-08-04 — Cohort-source contract remains upstream of study cohorts
+- Date: 2026-08-04
+- Decision: Publish one versioned, manifest-bound DuckDB source contract that
+  unions current GLP-1 and typed traditional extraction rules, while keeping
+  the 36 legacy CSVs as a compatibility bridge.
+- Context: The existing combined product can reproduce current GLP-1 source
+  inputs, but its clinical capture is too narrow for later traditional cohort
+  migration; `preprocessed_encounter` is already a compatibility product rather
+  than a general cohort input.
+- Options considered:
+  - Put cohort logic into preprocessing now
+  - Publish only additional CSVs or Parquet bundles
+  - Publish a read-only DuckDB source contract and defer cohorts (chosen)
+- Rationale: A stable source-level boundary prevents raw-data rescans and lets
+  future cohort code preserve study semantics without coupling it to pipeline
+  internals.
+- Consequences: Element membership denotes source candidacy, not clinical
+  inclusion. The GLP-1 subset fingerprint remains separate from the merged
+  cohort-source fingerprint. New full-data source/parity evidence is required
+  before acceptance; no cohort definitions change in this phase. The documented
+  Stata outpatient-MAT codes are retained as a separately provenance-marked
+  source candidate, pending original-query/export adjudication; they do not
+  alter any legacy feature or cohort result.
+- References: `src/trinetx_preprocessing/combined_preprocessing/`,
+  `docs/UNIFIED_PREPROCESSING.md`, `docs/PLAN.md`.
+
 ### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
 - Date: 2026-07-09
 - Decision: Post-Milestone 1 releases follow `docs/SPEC.md`, including specimen-specific hypercapnia rules, structured code matching, per-setting event selection, derived diagnosis-or-lab screening, and deterministic feature reductions.
