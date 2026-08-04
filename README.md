@@ -92,9 +92,10 @@ Validate a published source contract before a downstream process opens it:
 ```
 
 The existing `export-legacy` command remains the exact 36-file CSV bridge for
-the Stata reference workflow. The next migration phase will import cohort code
-into a separate `trinetx_preprocessing.cohorts.hypercapnia` package; it will
-consume this contract rather than raw exports.
+the Stata reference workflow. The next migration phase will import Hypercapnia
+cohort logic into the shared primary workflow, consuming this contract alongside
+the GLP-1 elements rather than raw exports. The current GLP-1 adapter remains a
+temporary parity bridge, not a permanent parallel product.
 
 ## Downstream GLP-1 eligibility
 

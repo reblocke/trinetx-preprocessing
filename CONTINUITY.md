@@ -72,6 +72,9 @@
   vital, and existing medication rule families. The Stata outpatient-MAT
   annotation is retained as a separately marked source candidate without
   changing legacy outputs or cohort logic.
+- Final independent architecture review corrected a stale README implication
+  that Hypercapnia would live in a separate cohort package; the documented
+  migration now explicitly uses the shared primary workflow alongside GLP-1.
 
 ## Now
 - Keep the source-reference and cohort-source heads frozen as evidence-complete
