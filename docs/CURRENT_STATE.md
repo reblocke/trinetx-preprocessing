@@ -24,7 +24,8 @@ for the repository. Historical evidence and decision detail remain in
 - The preserved Stata cohort reference is frozen at
   [`trinetx-hypercapnia-code` merge `0584b0e`](https://github.com/reblocke/trinetx-hypercapnia-code/commit/0584b0e13fe547f4a67b7d05e00aa40c0e95fa94)
   (PR #4). Its exact-head and post-merge `master` CI passed; this commit is the
-  reference boundary for the later cohort migration.
+  reference boundary for the later cohort migration and the full
+  `source_version` recorded on its Stata-annotated catalog rows.
 
 ## Boundary and pending evidence
 

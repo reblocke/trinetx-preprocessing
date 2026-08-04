@@ -43,7 +43,8 @@ Record decisions that affect behavior, reproducibility, or maintainability.
 - References: `src/trinetx_preprocessing/combined_preprocessing/`,
   `docs/UNIFIED_PREPROCESSING.md`, `docs/PLAN.md`, and the frozen Stata
   reference merge `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94` from
-  `reblocke/trinetx-hypercapnia-code#4`.
+  `reblocke/trinetx-hypercapnia-code#4`; Stata-annotated catalog rows persist
+  that full merge SHA as their `source_version`.
 
 ### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
 - Date: 2026-07-09

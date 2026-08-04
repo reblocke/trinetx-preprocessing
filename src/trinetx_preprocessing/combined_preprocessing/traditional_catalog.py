@@ -35,7 +35,10 @@ SOURCE_CANDIDACY_NOTE = (
     "and cohort inclusion remain downstream."
 )
 HYPERCAPNIA_REFERENCE_AUTHORITY = "trinetx-hypercapnia-code-stata-reference"
-HYPERCAPNIA_REFERENCE_VERSION = "5d86ef4"
+# Exact merged behavior/reference boundary from trinetx-hypercapnia-code PR #4.
+# The annotation was already present at 5d86ef4, but the merge also contains
+# the reviewed runner/configuration fixes required by the frozen reference.
+HYPERCAPNIA_REFERENCE_VERSION = "0584b0e13fe547f4a67b7d05e00aa40c0e95fa94"
 HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE = (
     "Source candidacy only; preserved from the Hypercapnia Stata reference "
     "annotation. Original TriNetX query/export adjudication is required before "

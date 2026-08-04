@@ -42,9 +42,11 @@
 - The user explicitly authorized documentation completion, ready-for-review
   promotion, and merge for both PRs on 2026-08-04; GitHub is authoritative for
   PR #9's live draft/ready state.
-- The documentation-complete PR #9 content passes local diff, Ruff check,
-  Ruff format, lockfile, CLI-help, and full pytest gates (507 passed). After
-  publication, GitHub is the source of truth for its exact head and live gates.
+- The documentation-complete PR #9 head passed local diff, Ruff check, Ruff
+  format, lockfile, CLI-help, and full pytest gates (507 passed). The later
+  review-driven provenance reconciliation passes the same static gates plus 11
+  focused catalog/consumer/adapter tests. After publication, GitHub is the
+  source of truth for the exact head and live gates.
 - Importing downstream cohort construction is paused because that codebase is
   being refactored; the stable restart commit is UNCONFIRMED.
 
@@ -64,6 +66,10 @@
 - Active human documentation now records the same boundary, current API/CLI,
   temporary adapter role, unadjudicated source candidates, and pending private
   parity gate; the exact merged Stata reference commit is bound into PR #9.
+- Exact-head review found that the Stata-annotated catalog rows still persisted
+  the earlier PR #4 ancestor `5d86ef4`. They now use the full frozen merge
+  `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94`, with a regression assertion, so
+  the machine-readable source provenance matches the documented boundary.
 
 ## Now
 - If the documentation-bound changes are still local, publish them. If PR #9
@@ -81,10 +87,8 @@
 - Formal package version or release tag is outside this merge train.
 
 ## Working set (files/ids/commands)
-- `/Users/reblocke/Research/trinetx-hypercapnia-code-cohort-reference`
-- `/Users/reblocke/Research/trinetx-preprocessing-cohort-source-contract`
-- GitHub PRs `reblocke/trinetx-hypercapnia-code#4` and
-  `reblocke/trinetx-preprocessing#9`
+- GitHub reference merge `reblocke/trinetx-hypercapnia-code#4` at `0584b0e`
+- Current GitHub PR `reblocke/trinetx-preprocessing#9`
 - `README.md`, `AGENTS.md`, `llms.txt`, `CONTINUITY.md`, and active `docs/`
 - `git diff --check`, Ruff check/format, `uv lock --check`, `pytest -q`, and
   exact-head/default-branch GitHub Actions

@@ -17,6 +17,7 @@ from trinetx_preprocessing.combined_preprocessing.elements import (
 from trinetx_preprocessing.combined_preprocessing.traditional_catalog import (
     HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE,
     HYPERCAPNIA_REFERENCE_AUTHORITY,
+    HYPERCAPNIA_REFERENCE_VERSION,
     SOURCE_CANDIDACY_NOTE,
     STATA_OP_MAT_RULE,
     traditional_concept_id,
@@ -87,6 +88,10 @@ def test_combined_catalog_preserves_glp1_catalog_and_adds_all_legacy_candidates(
     )
     assert {concept.notes for concept in stata_op_mat} == {
         HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE
+    }
+    assert HYPERCAPNIA_REFERENCE_VERSION == ("0584b0e13fe547f4a67b7d05e00aa40c0e95fa94")
+    assert {concept.source_version for concept in stata_op_mat} == {
+        HYPERCAPNIA_REFERENCE_VERSION
     }
 
     source_element_ids = {
