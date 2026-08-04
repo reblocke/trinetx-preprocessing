@@ -1,5 +1,7 @@
 # TriNetX Preprocessing Pipeline
 
+## Overview
+
 This repository provides a deterministic, CLI-driven preprocessing pipeline for
 TriNetX exports. Its canonical product is one versioned
 `trinetx_preprocessed.duckdb` containing the historical encounter-level payload
@@ -359,6 +361,12 @@ does not spill row-level data onto the internal disk.
 - `docs/CONFIG.md`: config file details
 - `docs/DATA_CONTRACT.md`: inputs, outputs, and required columns
 - `docs/ARCHITECTURE.md`: pipeline structure
+
+## Maintenance and contact
+
+Contact the repository maintainer by opening a
+[GitHub issue](https://github.com/reblocke/trinetx-preprocessing/issues) for
+setup questions, reproducibility problems, or proposed changes.
 
 ## Citation and license
 Cite the GitHub repository URL and the commit or release used. No publication DOI
