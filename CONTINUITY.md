@@ -34,15 +34,14 @@
 
 ## State
 - Preprocessing branch: `codex/cohort-source-contract` from
-  `149a65a` (`origin/main`).
-- Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `7d4e387`.
-  It is draft. Review found two source-reference defects: direct `10` must
-  load/validate the configured raw root, and frozen-reference tests must stop
-  repeatedly extracting full ~1.3-GB trees on hosted CI. Fixes are in progress.
-- Contract PR: `reblocke/trinetx-preprocessing#9`, published through
-  `e90d936`; local fixes are not yet committed. Review confirmed that the
-  GLP-1 adapter must filter source rows by active GLP-1 membership after the
-  catalog gains traditional candidates.
+  `149a65a` (`origin/main`), exact head `000df21`.
+- Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `6542aac`.
+  It is draft; exact-head CI passed after fixes for the direct raw-root path
+  and disk-bounded frozen-reference tests.
+- Contract PR: `reblocke/trinetx-preprocessing#9`, exact head `000df21`.
+  It is draft and awaiting exact-head CI/review reconciliation.
+- GitHub Codex review requests were made for both PRs, but the connected
+  reviewer is rate-limited. Independent local review is being reconciled.
 
 ## Done
 - PR #8 merged at `149a65a`; exact-head CI passed and all review threads are
@@ -56,24 +55,29 @@
   adapter parity tests pass.
 - The API spill-location guard was added locally with focused regression tests;
   it closes the direct-API counterpart to the existing CLI guard.
+- The adapter now filters all five clinical source domains by active GLP-1
+  memberships. CSV/Parquet parity fixtures add traditional-only candidates in
+  every domain, and now compare intentionally unfiltered raw-observability
+  tables explicitly as well.
 - Cross-repo audit confirmed coverage of core RFS, diagnosis, procedure, lab,
   vital, and existing medication rule families. The Stata outpatient-MAT
   annotation is retained as a separately marked source candidate without
   changing legacy outputs or cohort logic.
 
 ## Now
-- Apply the active-GLP-1 membership filters to all adapter clinical source
-  domains, with traditional-only candidate rows in the synthetic parity test.
-- Commit/push the safe-spill and adapter fixes, then reconcile fresh exact-head
-  review and CI for both draft PRs.
+- Reconcile the final independent review and exact-head CI for PR #9; do not
+  merge either draft without separate authority.
+- Keep the source-reference and cohort-source heads frozen while CI/review are
+  assessed.
 
 ## Next
 - Run final complete synthetic checks subject to available scratch space, then
   reconcile CI/review feedback for the frozen branch heads.
 - Freeze accepted heads and retain private aggregate source/reference evidence
-  before importing downstream cohort code. The separate production GLP-1
-  unified-source CLI and its adapter-versus-raw full-data runner are not yet
-  implemented, so that specific cutover gate is not currently runnable.
+  before importing downstream cohort code. A production GLP-1 unified-source
+  CLI and its full-data adapter-versus-reference runner remain a later
+  migration step, to be absorbed into the shared workflow rather than retained
+  as a separate product.
 
 ## Open questions (UNCONFIRMED if needed)
 - Formal package release/tag is UNCONFIRMED and outside this milestone.
@@ -86,5 +90,5 @@
 - `src/trinetx_preprocessing/combined_preprocessing/{traditional_catalog,elements,database,contract,cohort_source,cohort_source_contract,glp1_adapter}.py`
 - `tests/test_{traditional_catalog,combined_preprocessing,cohort_source}.py`
 - `README.md`, `docs/{DECISIONS,PLAN,UNIFIED_PREPROCESSING,GLP1_ELIGIBILITY}.md`
-- Source reference: `/Users/reblocke/Research/trinetx-hypercapnia-code-cohort-reference`, commit `5d86ef4`
+- Source reference: `/Users/reblocke/Research/trinetx-hypercapnia-code-cohort-reference`, commit `6542aac`
 - `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv lock --check`, `git diff --check`
