@@ -1806,6 +1806,17 @@ def _recover_interrupted_publication(
     ):
         _unlink_generated_file(journal_path)
         return
+    if (
+        not published_exists
+        and not staging_exists
+        and not backup_exists
+        and not had_existing
+    ):
+        if not compatibility_only:
+            _unlink_generated_file(recorded_state)
+        _unlink_generated_file(journal_path)
+        _fsync_directory(published_output.parent)
+        return
     raise ValueError(
         "Combined publication journal describes an ambiguous filesystem state: "
         f"{journal_path}"

@@ -22,6 +22,7 @@ import trinetx_preprocessing.combined_preprocessing.builder as combined_builder
 import trinetx_preprocessing.combined_preprocessing.database as combined_database
 import trinetx_preprocessing.combined_preprocessing.evidence as combined_evidence
 import trinetx_preprocessing.combined_preprocessing.validation as combined_validation
+from trinetx_preprocessing.cli import clean_scratch_artifacts
 from trinetx_preprocessing.combined_preprocessing.builder import (
     build_preprocessed,
     export_legacy_compatibility_outputs,
@@ -2623,6 +2624,134 @@ def test_compatibility_publication_recovers_old_tree_without_touching_state(
     assert paths.state_path.read_text() == "user-owned sentinel\n"
     assert not paths.backup_output.exists()
     assert not paths.publication_journal.exists()
+
+
+def test_clean_scratch_preserves_publication_recovery_artifacts(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "compatibility"
+    original_paths = _write_synthetic_compatibility_tree(output_dir, "old\n")
+    paths = combined_builder._compatibility_export_paths(output_dir)
+    _write_synthetic_compatibility_tree(paths.staging_output, "new\n")
+    os.replace(output_dir, paths.backup_output)
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "old_moved",
+            "had_existing": True,
+            "published_output": str(output_dir),
+            "staging_output": str(paths.staging_output),
+            "backup_output": str(paths.backup_output),
+        },
+    )
+
+    cleanup = clean_scratch_artifacts(tmp_path, delete=True)
+    cleaned_names = {Path(entry["path"]).name for entry in cleanup["artifacts"]}
+
+    assert paths.staging_output.name in cleaned_names
+    assert paths.backup_output.name not in cleaned_names
+    assert paths.publication_journal.name not in cleaned_names
+    assert not paths.staging_output.exists()
+    assert paths.backup_output.is_dir()
+    assert paths.publication_journal.is_file()
+
+    combined_builder._recover_interrupted_publication(
+        output_dir,
+        publication_journal=paths.publication_journal,
+        backup_output=paths.backup_output,
+        database_name="trinetx_preprocessed.duckdb",
+        compatibility_only=True,
+    )
+
+    assert all(path.read_text() == "old\n" for path in original_paths)
+    assert not paths.backup_output.exists()
+    assert not paths.publication_journal.exists()
+
+
+def test_clean_scratch_allows_first_publication_recovery_without_product(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "first-publication"
+    paths = combined_builder._combined_build_paths(
+        output_dir,
+        build_identity="first-publication",
+    )
+    paths.staging_output.mkdir()
+    paths.state_path.write_text("{}\n")
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "prepared",
+            "had_existing": False,
+            "published_output": str(output_dir),
+            "staging_output": str(paths.staging_output),
+            "backup_output": str(paths.backup_output),
+            "build_state_path": str(paths.state_path),
+        },
+    )
+
+    clean_scratch_artifacts(tmp_path, delete=True)
+
+    assert not output_dir.exists()
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
+    assert not paths.backup_output.exists()
+    assert paths.publication_journal.is_file()
+
+    for _ in range(2):
+        combined_builder._recover_interrupted_publication(
+            output_dir,
+            publication_journal=paths.publication_journal,
+            backup_output=paths.backup_output,
+            database_name="trinetx_preprocessed.duckdb",
+        )
+
+    assert not output_dir.exists()
+    assert not paths.publication_journal.exists()
+
+
+def test_clean_scratch_keeps_missing_prior_publication_fail_closed(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "missing-prior-publication"
+    paths = combined_builder._combined_build_paths(
+        output_dir,
+        build_identity="missing-prior-publication",
+    )
+    paths.staging_output.mkdir()
+    paths.state_path.write_text("{}\n")
+    combined_builder._write_publication_journal(
+        paths.publication_journal,
+        {
+            "schema_version": 1,
+            "state": "prepared",
+            "had_existing": True,
+            "published_output": str(output_dir),
+            "staging_output": str(paths.staging_output),
+            "backup_output": str(paths.backup_output),
+            "build_state_path": str(paths.state_path),
+        },
+    )
+
+    clean_scratch_artifacts(tmp_path, delete=True)
+
+    assert not output_dir.exists()
+    assert not paths.staging_output.exists()
+    assert not paths.state_path.exists()
+    assert not paths.backup_output.exists()
+    assert paths.publication_journal.is_file()
+
+    with pytest.raises(ValueError, match="ambiguous filesystem state"):
+        combined_builder._recover_interrupted_publication(
+            output_dir,
+            publication_journal=paths.publication_journal,
+            backup_output=paths.backup_output,
+            database_name="trinetx_preprocessed.duckdb",
+        )
+
+    assert paths.publication_journal.is_file()
 
 
 def test_compatibility_publication_recovers_through_case_alias(
