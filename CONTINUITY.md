@@ -27,14 +27,22 @@
   inclusion.
 - GLP-1 keeps its own catalog fingerprint so the existing adapter stays bound
   to exactly its eligibility semantics after the catalog grows.
+- The adapter is a migration-only parity bridge. The permanent design brings
+  GLP-1 elements and later cohort derivations into the same primary workflow
+  and shared cohort-source contract as the legacy elements, not a separate
+  GLP-1 product.
 
 ## State
 - Preprocessing branch: `codex/cohort-source-contract` from
   `149a65a` (`origin/main`).
-- Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `b379177`.
-  It is draft and under CI; merge authority remains separate.
-- Contract implementation is assembled through `999954c`; documentation,
-  branch-level review, and frozen-head evidence remain pending.
+- Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `7d4e387`.
+  It is draft. Review found two source-reference defects: direct `10` must
+  load/validate the configured raw root, and frozen-reference tests must stop
+  repeatedly extracting full ~1.3-GB trees on hosted CI. Fixes are in progress.
+- Contract PR: `reblocke/trinetx-preprocessing#9`, published through
+  `e90d936`; local fixes are not yet committed. Review confirmed that the
+  GLP-1 adapter must filter source rows by active GLP-1 membership after the
+  catalog gains traditional candidates.
 
 ## Done
 - PR #8 merged at `149a65a`; exact-head CI passed and all review threads are
@@ -46,20 +54,26 @@
   read-only cohort-source API/CLI, explicit schema/catalog provenance, and a
   GLP-1-only adapter fingerprint. Focused catalog, consumer, CLI, and GLP-1
   adapter parity tests pass.
+- The API spill-location guard was added locally with focused regression tests;
+  it closes the direct-API counterpart to the existing CLI guard.
 - Cross-repo audit confirmed coverage of core RFS, diagnosis, procedure, lab,
   vital, and existing medication rule families. The Stata outpatient-MAT
   annotation is retained as a separately marked source candidate without
   changing legacy outputs or cohort logic.
 
 ## Now
-- Finish documentation/verification, push the exact preprocessing head, and
-  request/reconcile holistic review for both draft PRs.
+- Apply the active-GLP-1 membership filters to all adapter clinical source
+  domains, with traditional-only candidate rows in the synthetic parity test.
+- Commit/push the safe-spill and adapter fixes, then reconcile fresh exact-head
+  review and CI for both draft PRs.
 
 ## Next
 - Run final complete synthetic checks subject to available scratch space, then
   reconcile CI/review feedback for the frozen branch heads.
-- With an accepted reviewed head, run the fresh external full-data source/parity
-  and resource gate before importing downstream cohort code.
+- Freeze accepted heads and retain private aggregate source/reference evidence
+  before importing downstream cohort code. The separate production GLP-1
+  unified-source CLI and its adapter-versus-raw full-data runner are not yet
+  implemented, so that specific cutover gate is not currently runnable.
 
 ## Open questions (UNCONFIRMED if needed)
 - Formal package release/tag is UNCONFIRMED and outside this milestone.

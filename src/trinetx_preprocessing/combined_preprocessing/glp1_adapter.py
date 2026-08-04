@@ -6,7 +6,7 @@ from pathlib import Path
 
 import duckdb
 
-from ..glp1_eligibility.concept_sets import load_concept_sets
+from ..glp1_eligibility.concept_sets import ConceptSetCatalog, load_concept_sets
 from ..glp1_eligibility.config import GLP1Config
 from ..glp1_eligibility.sql_helpers import inclusive_lookback_start_sql
 
@@ -15,6 +15,13 @@ _GAS_ELEMENT_IDS = (
     "source.venous_pco2",
     "source.unspecified_blood_pco2",
 )
+
+_PATIENT_CONCEPT_DOMAIN_BY_TABLE = {
+    "source_vital_measurement": ("vitals", "vital"),
+    "source_diagnosis": ("diagnosis", "diagnosis"),
+    "source_procedure": ("procedure", "procedure"),
+    "source_medication": ("medications", "medication"),
+}
 
 _SOURCE_HASH_COLUMNS = {
     "source_lab_measurement": (
@@ -117,16 +124,33 @@ def materialize_glp1_sources_from_preprocessed(
 
     _attach_preprocessed(connection, database_path)
     try:
-        _require_matching_glp1_catalog(connection, config)
-        _create_lab_source(connection)
+        catalog = load_concept_sets(config.concept_sets_dir)
+        _require_matching_glp1_catalog(connection, catalog)
+        _create_lab_source(connection, catalog=catalog)
         _create_gas_candidate_ids(connection)
         _create_candidate_membership(connection)
         _create_encounter_source(connection)
         _create_patient_source(connection)
-        _create_patient_concept_source(connection, "source_vital_measurement")
-        _create_patient_concept_source(connection, "source_diagnosis")
-        _create_patient_concept_source(connection, "source_procedure")
-        _create_patient_concept_source(connection, "source_medication")
+        _create_patient_concept_source(
+            connection,
+            "source_vital_measurement",
+            catalog=catalog,
+        )
+        _create_patient_concept_source(
+            connection,
+            "source_diagnosis",
+            catalog=catalog,
+        )
+        _create_patient_concept_source(
+            connection,
+            "source_procedure",
+            catalog=catalog,
+        )
+        _create_patient_concept_source(
+            connection,
+            "source_medication",
+            catalog=catalog,
+        )
         _create_source_cohort_flow_base(connection, config)
         return {
             table: int(
@@ -164,7 +188,11 @@ def materialize_glp1_observability_from_preprocessed(
         connection.execute("DETACH preprocessed")
 
 
-def _create_lab_source(connection: duckdb.DuckDBPyConnection) -> None:
+def _create_lab_source(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    catalog: ConceptSetCatalog,
+) -> None:
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE source_lab_measurement AS
@@ -185,7 +213,15 @@ def _create_lab_source(connection: duckdb.DuckDBPyConnection) -> None:
             event_datetime,
             source_file,
             {_source_hash_sql("source_lab_measurement")} AS source_record_hash
-        FROM preprocessed.source_lab_measurement
+        FROM preprocessed.source_lab_measurement AS source
+        WHERE {
+            _glp1_source_membership_sql(
+                catalog,
+                source_alias="source",
+                logical_domain="labs",
+                concept_domain="lab",
+            )
+        }
         """
     )
 
@@ -284,6 +320,8 @@ def _create_patient_source(connection: duckdb.DuckDBPyConnection) -> None:
 def _create_patient_concept_source(
     connection: duckdb.DuckDBPyConnection,
     table_name: str,
+    *,
+    catalog: ConceptSetCatalog,
 ) -> None:
     source_columns = {
         "source_vital_measurement": (
@@ -343,6 +381,7 @@ def _create_patient_concept_source(
             "end_datetime",
         ),
     }[table_name]
+    logical_domain, concept_domain = _PATIENT_CONCEPT_DOMAIN_BY_TABLE[table_name]
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE {table_name} AS
@@ -350,10 +389,18 @@ def _create_patient_concept_source(
             {", ".join(source_columns)},
             source_file,
             {_source_hash_sql(table_name)} AS source_record_hash
-        FROM preprocessed.{table_name}
+        FROM preprocessed.{table_name} AS source
         WHERE cast(patient_id AS VARCHAR) IN (
             SELECT patient_id FROM gas_candidate_patient
         )
+          AND {
+            _glp1_source_membership_sql(
+                catalog,
+                source_alias="source",
+                logical_domain=logical_domain,
+                concept_domain=concept_domain,
+            )
+        }
         """
     )
 
@@ -457,7 +504,7 @@ def _create_observability_table(
 
 def _require_matching_glp1_catalog(
     connection: duckdb.DuckDBPyConnection,
-    config: GLP1Config,
+    catalog: ConceptSetCatalog,
 ) -> None:
     """Reject an adapter run whose active GLP-1 catalog differs from the product.
 
@@ -481,12 +528,47 @@ def _require_matching_glp1_catalog(
         raise ValueError(
             f"Combined preprocessing database is not complete: {status!r}."
         )
-    active_sha256 = load_concept_sets(config.concept_sets_dir).sha256
+    active_sha256 = catalog.sha256
     if str(stored_sha256) != active_sha256:
         raise ValueError(
             "GLP-1 concept catalog does not match the combined preprocessing "
             f"GLP-1 catalog: active {active_sha256}, stored {stored_sha256}."
         )
+
+
+def _glp1_source_membership_sql(
+    catalog: ConceptSetCatalog,
+    *,
+    source_alias: str,
+    logical_domain: str,
+    concept_domain: str,
+) -> str:
+    """Return an EXISTS predicate for rows matched by the active GLP-1 catalog.
+
+    The canonical preprocessed database intentionally retains candidates from
+    multiple downstream consumers.  An adapter consumer must select only the
+    memberships belonging to its own active catalog; otherwise traditional
+    source candidates would leak into the standalone GLP-1 source contract.
+    """
+
+    element_ids = tuple(
+        f"source.{concept.concept_set_id}"
+        for concept in catalog.concepts
+        if concept.domain == concept_domain and concept.include
+    )
+    if not element_ids:
+        return "FALSE"
+    elements = ", ".join(_sql_string(element_id) for element_id in element_ids)
+    return f"""
+        EXISTS (
+            SELECT 1
+            FROM preprocessed.element_membership AS membership
+            WHERE membership.source_record_id = {source_alias}.source_record_id
+              AND membership.logical_domain = {_sql_string(logical_domain)}
+              AND membership.include
+              AND membership.element_id IN ({elements})
+        )
+    """
 
 
 def _source_hash_sql(table_name: str) -> str:

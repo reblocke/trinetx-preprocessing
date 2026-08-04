@@ -57,14 +57,17 @@ migration remain downstream.
    `FULL_DATA` and `AFTER_EXCLUSION` explicit reproducible variants, repair its
    runner baseline, and retain private aggregate/schema evidence for later
    migration parity.
-3. **Import traditional cohort construction here.** Add a separate downstream
-   `cohorts.hypercapnia` package that consumes only the cohort-source contract.
-   Port derivations and selections incrementally while the Stata/CSV route
-   remains the exact private reference.
-4. **Cut over GLP-1 ingestion separately.** Add a manifest-bound
-   unified-database source to the production GLP-1 CLI, preserve the standalone
-   raw builder as the reference, and require full-data adapter-versus-reference
-   parity before deprecating the second raw scan.
+3. **Import cohort construction into the primary workflow.** Port the
+   Hypercapnia derivations and selections incrementally under the shared cohort
+   layer, consuming only the cohort-source contract while the Stata/CSV route
+   remains the exact private reference. Bring GLP-1 source elements and later
+   derivations into that same registry and workflow; do not create a permanent
+   standalone GLP-1 product or second preprocessing path.
+4. **Use the GLP-1 adapter only for migration parity.** Add a manifest-bound
+   unified-database source to the current reference CLI, preserve standalone
+   raw ingestion until full-data adapter-versus-reference parity passes, then
+   absorb the validated GLP-1 path into the shared workflow and retire the
+   second raw scan.
 5. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
    delivered standalone CLI, eight-file contract, synthetic acceptance, and
    behavior-head-scoped aggregate full-data reference evidence from the

@@ -17,12 +17,18 @@ and clinical/private-review requirements.
 - The canonical manifest preserves the GLP-1 catalog fingerprint separately
   from the broader cohort-source catalog, so additive traditional source rules
   cannot silently change the validated GLP-1 reference boundary.
+- The unified-source adapter also selects clinical rows through active GLP-1
+  element memberships. Traditional-only source candidates remain available to
+  future cohort consumers but cannot enter GLP-1 source or analytic tables.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
 
 The standalone raw-ingestion command below remains the validated reference
 implementation during migration. The adapter-backed synthetic gate verifies
-equivalent source and downstream outputs from the unified product.
+equivalent source and downstream outputs from the unified product. It is a
+temporary compatibility bridge: the permanent design integrates GLP-1 elements
+and later cohort derivations into the shared legacy workflow rather than a
+separate GLP-1 product.
 
 ## Status against issue #6
 

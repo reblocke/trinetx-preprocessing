@@ -101,9 +101,11 @@ consume this contract rather than raw exports.
 The standalone raw-ingestion GLP-1 CLI remains the validated production
 reference during migration. The unified product is currently an
 adapter-validated source boundary, not a production CLI cutover or a second
-canonical preprocessing product. A separate PR must add the manifest-bound
-source and prove full-data adapter-versus-reference parity before the raw scan
-can be deprecated:
+canonical preprocessing product. The adapter is temporary: GLP-1 elements and
+later cohort derivations belong in the same shared workflow as the legacy
+elements, not in a permanent standalone module. A separate PR must add the
+manifest-bound source and prove full-data adapter-versus-reference parity
+before the raw scan can be deprecated:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \

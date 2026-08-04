@@ -1257,6 +1257,78 @@ def _append_pre2022_non_gas_encounter(input_root: Path) -> None:
     )
 
 
+def _append_traditional_only_candidate_rows(input_root: Path) -> None:
+    """Add source candidates the GLP-1 catalog must not retain.
+
+    Each row uses a legacy wildcard code-system rule under ``LOCAL`` so it is
+    captured by the combined traditional catalog but cannot match a GLP-1
+    concept.  ``case01`` is already a gas candidate, which exercises every
+    patient-partitioned adapter source table.
+    """
+
+    rows_by_file = {
+        "Lab Results/lab_results.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "718-7",
+            "lab_result_num_val": "7",
+            "units_of_measure": "mg/dL",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-lab",
+        },
+        "Vital Signs/vital_signs.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "75987-8",
+            "value": "1",
+            "units_of_measure": "1",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-vital",
+        },
+        "Diagnosis/diagnosis.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "J96.12",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-diagnosis",
+        },
+        "Procedure/procedure.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "date": "2024-01-01 03:00:00",
+            "code_system": "LOCAL",
+            "code": "94660",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-procedure",
+        },
+        "Medications/medication.csv": {
+            "patient_id": "case01",
+            "encounter_id": "e01",
+            "unique_id": "traditional-only-medication",
+            "code_system": "LOCAL",
+            "code": "6902",
+            "start_date": "2024-01-01 03:00:00",
+            "derived_by_TriNetX": "N",
+            "source_id": "traditional-only-medication",
+        },
+    }
+    for relative_path, values in rows_by_file.items():
+        path = input_root / relative_path
+        source = pd.read_csv(path, dtype="string")
+        row = {column: "" for column in source.columns}
+        row.update(values)
+        pd.concat([source, pd.DataFrame([row])], ignore_index=True).to_csv(
+            path,
+            index=False,
+        )
+
+
 def test_element_capture_preserves_duplicate_source_rows_and_membership(
     tmp_path: Path,
 ) -> None:
@@ -3150,6 +3222,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
 ) -> None:
     input_root = _copy_glp1_fixture_for_combined(tmp_path)
     _append_pre2022_non_gas_encounter(input_root)
+    _append_traditional_only_candidate_rows(input_root)
     config = load_config(
         _write_combined_config(
             tmp_path,
@@ -3181,6 +3254,20 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
             "SELECT start_datetime FROM source_encounter_flow "
             "WHERE encounter_id = 'unused-invalid-encounter'"
         ).fetchone() == (None,)
+        traditional_only_codes = {
+            "source_lab_measurement": "718-7",
+            "source_vital_measurement": "75987-8",
+            "source_diagnosis": "J96.12",
+            "source_procedure": "94660",
+            "source_medication": "6902",
+        }
+        for table_name, code in traditional_only_codes.items():
+            count = combined_connection.execute(
+                f"SELECT count(*) FROM {table_name} "
+                "WHERE code_system_raw = 'LOCAL' AND code_raw = ?",
+                [code],
+            ).fetchone()[0]
+            assert count == 1, table_name
     finally:
         combined_connection.close()
     glp1_config = load_glp1_config(REPOSITORY_ROOT / "config/glp1_eligibility.yml")
