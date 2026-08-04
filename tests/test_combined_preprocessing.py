@@ -1510,7 +1510,12 @@ def test_combined_build_exports_exact_historical_contract(
     manifest = json.loads(result.manifest_path.read_text())
     assert manifest["status"] == "complete"
     assert manifest["run_id"] == result.run_id
-    assert manifest["schema_version"] == 2
+    assert manifest["schema_version"] == 3
+    assert manifest["combined_schema_version"] == "2.0"
+    assert manifest["cohort_source_schema_version"] == "1.0"
+    assert len(manifest["cohort_source_schema_sha256"]) == 64
+    assert manifest["cohort_source_catalog_sha256"] == manifest["catalog_sha256"]
+    assert len(manifest["glp1_catalog_sha256"]) == 64
     assert manifest["duckdb_memory_limit_mib"] == 3072
     assert manifest["duckdb_core_memory_limit_mib"] == 2816
     assert manifest["duckdb_threads"] == 1
@@ -3351,13 +3356,13 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         adapted.close()
 
 
-def test_glp1_adapter_rejects_mismatched_element_catalog(tmp_path: Path) -> None:
+def test_glp1_adapter_rejects_mismatched_glp1_catalog(tmp_path: Path) -> None:
     config = load_config(_write_combined_config(tmp_path))
     combined = build_preprocessed(config, strict=True)
     connection = duckdb.connect(str(combined.database_path))
     try:
         connection.execute(
-            "UPDATE preprocessing_manifest SET element_catalog_sha256 = ?",
+            "UPDATE preprocessing_manifest SET glp1_catalog_sha256 = ?",
             ["0" * 64],
         )
         connection.execute("CHECKPOINT")

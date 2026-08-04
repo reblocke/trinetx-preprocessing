@@ -117,7 +117,7 @@ def materialize_glp1_sources_from_preprocessed(
 
     _attach_preprocessed(connection, database_path)
     try:
-        _require_matching_element_catalog(connection, config)
+        _require_matching_glp1_catalog(connection, config)
         _create_lab_source(connection)
         _create_gas_candidate_ids(connection)
         _create_candidate_membership(connection)
@@ -455,15 +455,20 @@ def _create_observability_table(
     )
 
 
-def _require_matching_element_catalog(
+def _require_matching_glp1_catalog(
     connection: duckdb.DuckDBPyConnection,
     config: GLP1Config,
 ) -> None:
-    """Reject an adapter run whose active catalog differs from the product."""
+    """Reject an adapter run whose active GLP-1 catalog differs from the product.
+
+    The canonical source catalog may contain traditional cohort candidates in
+    addition to GLP-1 concepts.  Its broader digest must therefore not gate the
+    GLP-1 adapter; the manifest carries a separately versioned GLP-1 digest.
+    """
 
     rows = connection.execute(
         """
-        SELECT status, element_catalog_sha256
+        SELECT status, glp1_catalog_sha256
         FROM preprocessed.preprocessing_manifest
         """
     ).fetchall()
@@ -480,7 +485,7 @@ def _require_matching_element_catalog(
     if str(stored_sha256) != active_sha256:
         raise ValueError(
             "GLP-1 concept catalog does not match the combined preprocessing "
-            f"catalog: active {active_sha256}, stored {stored_sha256}."
+            f"GLP-1 catalog: active {active_sha256}, stored {stored_sha256}."
         )
 
 
