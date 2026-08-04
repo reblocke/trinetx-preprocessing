@@ -18,6 +18,7 @@ from typing import Any
 import duckdb
 
 from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
+from .builder import require_safe_output_location
 from .cohort_source_contract import (
     COHORT_SOURCE_SCHEMA_VERSION,
     COHORT_SOURCE_TABLE_SCHEMAS,
@@ -111,6 +112,9 @@ def validate_cohort_source(
     if path.is_symlink() or not path.is_file():
         errors.append(f"Cohort-source database must be a regular file: {path}")
         return _validation_result(errors, None, required)
+    _guard_cohort_source_spill_locations(path, spill_root=spill_root, errors=errors)
+    if errors:
+        return _validation_result(errors, None, required)
 
     sidecar = _load_sidecar(path.parent / COMBINED_MANIFEST_FILENAME, errors)
     if sidecar is None:
@@ -135,6 +139,30 @@ def validate_cohort_source(
         errors.append(f"Cannot validate cohort-source database {path}: {exc}")
         metadata = None
     return _validation_result(errors, metadata, required)
+
+
+def _guard_cohort_source_spill_locations(
+    database_path: Path,
+    *,
+    spill_root: Path | None,
+    errors: list[str],
+) -> None:
+    """Reject repository-local locations before read-only DuckDB opens spill.
+
+    ``open_combined_database`` creates an owned spill directory beside the
+    database by default. The public consumer surface must therefore apply the
+    same confidential-artifact guard as the CLI, including a caller-provided
+    spill root.
+    """
+
+    locations = [(database_path.parent, "cohort-source database/spill directory")]
+    if spill_root is not None:
+        locations.append((Path(spill_root), "cohort-source spill directory"))
+    for location, artifact_label in locations:
+        try:
+            require_safe_output_location(location, artifact_label=artifact_label)
+        except ValueError as exc:
+            errors.append(str(exc))
 
 
 @contextmanager

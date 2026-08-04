@@ -6,6 +6,9 @@ from pathlib import Path
 import duckdb
 import pytest
 
+from trinetx_preprocessing.combined_preprocessing import (
+    cohort_source as cohort_source_module,
+)
 from trinetx_preprocessing.combined_preprocessing.builder import build_preprocessed
 from trinetx_preprocessing.combined_preprocessing.cohort_source import (
     CohortSourceValidationError,
@@ -192,3 +195,53 @@ def test_cohort_source_rejects_schema_and_required_table_loss(tmp_path: Path) ->
     with pytest.raises(CohortSourceValidationError, match="Invalid cohort source"):
         with open_cohort_source(database_path):
             pass
+
+
+def test_cohort_source_guards_default_and_explicit_spill_locations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = _build_cohort_source_product(tmp_path)
+    spill_root = tmp_path / "spill"
+    spill_root.mkdir()
+    calls: list[tuple[Path, str]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append((path, artifact_label))
+
+    monkeypatch.setattr(
+        cohort_source_module,
+        "require_safe_output_location",
+        record_guard,
+    )
+
+    result = validate_cohort_source(database_path, spill_root=spill_root)
+
+    assert result.valid, result.errors
+    assert calls == [
+        (database_path.parent, "cohort-source database/spill directory"),
+        (spill_root, "cohort-source spill directory"),
+    ]
+
+
+def test_cohort_source_returns_unsafe_spill_location_as_invalid_product(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = _build_cohort_source_product(tmp_path)
+
+    def reject_guard(path: Path, *, artifact_label: str) -> None:
+        raise ValueError(f"unsafe {artifact_label}: {path}")
+
+    monkeypatch.setattr(
+        cohort_source_module,
+        "require_safe_output_location",
+        reject_guard,
+    )
+
+    result = validate_cohort_source(database_path)
+
+    assert not result.valid
+    assert result.errors == (
+        f"unsafe cohort-source database/spill directory: {database_path.parent}",
+    )
