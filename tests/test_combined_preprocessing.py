@@ -3427,6 +3427,21 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         build_cohort_flow(adapted, glp1_config)
 
         for table in (
+            "raw_diagnosis_observability",
+            "raw_labs_observability",
+            "raw_vitals_observability",
+            "raw_procedure_observability",
+            "raw_medication_observability",
+        ):
+            direct_rows = direct.execute(
+                f"SELECT * FROM {table} ORDER BY ALL"
+            ).fetchall()
+            adapted_rows = adapted.execute(
+                f"SELECT * FROM {table} ORDER BY ALL"
+            ).fetchall()
+            assert adapted_rows == direct_rows, table
+
+        for table in (
             "analysis_glp1_eligibility",
             "cohort_flow",
             "eligibility_evidence_long",

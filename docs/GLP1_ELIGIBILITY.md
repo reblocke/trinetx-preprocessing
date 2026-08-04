@@ -19,7 +19,9 @@ and clinical/private-review requirements.
   cannot silently change the validated GLP-1 reference boundary.
 - The unified-source adapter also selects clinical rows through active GLP-1
   element memberships. Traditional-only source candidates remain available to
-  future cohort consumers but cannot enter GLP-1 source or analytic tables.
+  future cohort consumers but cannot enter GLP-1 clinical source tables.
+  Raw observability intentionally remains concept-independent in both paths,
+  so it continues to represent all raw clinical activity.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
 
