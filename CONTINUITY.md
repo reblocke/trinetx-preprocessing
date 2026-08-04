@@ -34,14 +34,15 @@
 
 ## State
 - Preprocessing branch: `codex/cohort-source-contract` from
-  `149a65a` (`origin/main`), exact head `000df21`.
+  `149a65a` (`origin/main`), exact head `646a246`.
 - Reference PR: `reblocke/trinetx-hypercapnia-code#4`, exact head `6542aac`.
   It is draft; exact-head CI passed after fixes for the direct raw-root path
   and disk-bounded frozen-reference tests.
-- Contract PR: `reblocke/trinetx-preprocessing#9`, exact head `000df21`.
-  It is draft and awaiting exact-head CI/review reconciliation.
+- Contract PR: `reblocke/trinetx-preprocessing#9`, exact head `646a246`.
+  Its exact-head CI passed (500 passed, 7 skipped); it remains a draft.
 - GitHub Codex review requests were made for both PRs, but the connected
-  reviewer is rate-limited. Independent local review is being reconciled.
+  reviewer is rate-limited. Both PRs have no review submissions or unresolved
+  threads; independent local reviews found and reconciled all findings.
 
 ## Done
 - PR #8 merged at `149a65a`; exact-head CI passed and all review threads are
@@ -63,24 +64,21 @@
   assumed the shared source table retained only a GLP-1 ingredient. The test
   now asserts the intended union of historical medication candidates and the
   GLP-1 row; its focused medication suite passes.
+- PR #9 exact-head CI run `30923502126` passed (500 passed, 7 skipped). PR #4
+  exact-head CI run `30922466259` passed. Both draft heads are mergeable CLEAN.
 - Cross-repo audit confirmed coverage of core RFS, diagnosis, procedure, lab,
   vital, and existing medication rule families. The Stata outpatient-MAT
   annotation is retained as a separately marked source candidate without
   changing legacy outputs or cohort logic.
 
 ## Now
-- Reconcile the final independent review and exact-head CI for PR #9; do not
-  merge either draft without separate authority.
-- Rerun the broad synthetic suite or use exact-head CI after the medication
-  expectation correction, subject to available local scratch space.
-- Keep the source-reference and cohort-source heads frozen while CI/review are
-  assessed.
+- Keep the source-reference and cohort-source heads frozen as evidence-complete
+  drafts; do not merge either without separate authority.
 
 ## Next
-- Run final complete synthetic checks subject to available scratch space, then
-  reconcile CI/review feedback for the frozen branch heads.
-- Freeze accepted heads and retain private aggregate source/reference evidence
-  before importing downstream cohort code. A production GLP-1 unified-source
+- After a separate merge decision, verify post-merge `main` CI and retain
+  private aggregate source/reference evidence before importing downstream
+  cohort code. A production GLP-1 unified-source
   CLI and its full-data adapter-versus-reference runner remain a later
   migration step, to be absorbed into the shared workflow rather than retained
   as a separate product.
