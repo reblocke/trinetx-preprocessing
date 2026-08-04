@@ -1,5 +1,7 @@
 # Architecture
 
+For the delivered/pending boundary, see `CURRENT_STATE.md`.
+
 ## Design goals
 - Implement the corrected analytic contract in `docs/SPEC.md`.
 - Provide a single, documented entrypoint (CLI).
@@ -74,3 +76,17 @@ Study-specific GLP-1 eligibility, phenotype, and analysis logic remains
 downstream. `combined_preprocessing/glp1_adapter.py` is the tested boundary from
 the canonical source tables to that derivation. See
 `docs/UNIFIED_PREPROCESSING.md`.
+
+## Cohort-source boundary
+
+The permanent architecture is one preprocessing and cohort workflow with a
+single catalog that contains GLP-1 and typed traditional source candidates.
+`element_membership` records code-rule matches only; value, time, index,
+phenotype, exclusion, and cohort decisions remain downstream. The read-only,
+manifest-bound consumer surface is defined in `UNIFIED_PREPROCESSING.md`.
+
+The GLP-1 adapter and standalone raw ingestion are migration references, not a
+second product architecture. Current synthetic tests establish adapter parity
+on fixtures, but the new exact-head private full-data parity run is still
+pending. Cohort-layer import is also paused until the downstream cohort
+repository publishes a stable refactor behavior head.

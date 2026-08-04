@@ -1,70 +1,72 @@
 # TriNetX Preprocessing
 
 Repository: https://github.com/reblocke/trinetx-preprocessing
-Purpose: build one deterministic Python preprocessing product containing the
-historical hypercapnia payload and additive source elements for downstream
-studies.
-Status: Milestone 1 is the immutable replication fallback; post-milestone work
-implements the corrected contract in `docs/SPEC.md`. Full corrected performance,
-output-reproducibility, and aggregate-delta evidence is complete. Milestone 2
-accepts deterministic non-strict resolution of documented source conflicts
-while strict execution remains fail-closed.
-The active Stage 1 endpoint is `trinetx_preprocessed.duckdb`; the 36 historical
-CSVs are compatibility exports and GLP-1 eligibility remains downstream.
+Purpose: build one deterministic, reusable TriNetX preprocessing product for
+traditional Hypercapnia-era elements and additive GLP-1 elements.
 
-## Human-Readable Entry Points
-- `README.md`: primary overview and quickstart.
-- `docs/ONBOARDING.md`: setup, real-data placement, and legacy workflow notes.
-- `docs/SPEC.md`: authoritative corrected analytic contract.
-- `docs/UNIFIED_PREPROCESSING.md`: canonical product and table-grain contract.
-- `docs/PLAN.md`: unified Stage 1 completion plan.
-- `docs/VALIDATION.md`: golden-master parity workflow.
-- `docs/DATA_CONTRACT.md`: input, intermediate, and final output contracts.
+## Current State
+- `docs/CURRENT_STATE.md` is the durable status map for delivered capability,
+  migration references, pending validation, and external blockers.
+- The canonical product is the manifest-bound
+  `trinetx_preprocessed.duckdb`. The 36 historical CSVs are the compatibility
+  bridge for the frozen Stata reference.
+- GLP-1 and traditional source candidates share one permanent catalog and
+  workflow. `element_membership` expresses source candidacy, not cohort
+  inclusion or eligibility.
+- No downstream cohort-construction code has been imported. Migration resumes
+  after the downstream repository exposes a stable behavior head.
+- The GLP-1 adapter, standalone GLP-1 raw ingestion, and Stata implementation
+  remain migration/reference paths pending private frozen-head full-data gates.
 
-## Data and Reuse Boundaries
-- Raw TriNetX exports and row-level outputs are confidential clinical data.
-- Keep real inputs under ignored `data/`.
-- Do not commit raw exports, row-level extracts, private manifests, caches, or
-  generated local artifacts unless explicitly reviewed.
+## Stable Consumer Surfaces
+- Python: `open_cohort_source()` and `validate_cohort_source()` in
+  `trinetx_preprocessing.combined_preprocessing.cohort_source`.
+- CLI: `validate-cohort-source --database ... [--require-element ...] [--json]`.
+- Consumers must validate the adjacent manifest, schema fingerprint, catalog
+  fingerprint, and any required element IDs before reading source rows.
+- Consumer access is read-only and bounded-memory. Database and spill
+  locations must be external, real directories; repository-local row-level
+  products and spill are rejected.
 
-## Current Workflow
+## Authoritative Reading Order
+1. `AGENTS.md`: contributor and privacy guardrails.
+2. `docs/CURRENT_STATE.md`: current delivery and migration status.
+3. `README.md`: human overview and commands.
+4. `docs/SPEC.md`: corrected analytic contract.
+5. `docs/UNIFIED_PREPROCESSING.md` and `docs/DATA_CONTRACT.md`: canonical
+   product and data contracts.
+6. `docs/VALIDATION.md`: evidence classes and parity gates.
+
+`docs/prompts/`, legacy notebooks, and `README.txt` are historical references,
+not current machine instructions or runtime contracts.
+
+## Primary Commands
 ```bash
 uv sync
-./.venv/bin/python -m trinetx_preprocessing validate-config --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing build-preprocessed --config config.yaml
+uv run python -m trinetx_preprocessing validate-config --config config.yaml
+uv run python -m trinetx_preprocessing validate-inputs --config config.yaml
+uv run python -m trinetx_preprocessing build-preprocessed --config config.yaml
+uv run python -m trinetx_preprocessing validate-cohort-source \
+  --database /external/path/trinetx_preprocessed.duckdb --json
 ```
 
-The accepted full source has 286 documented encounter-setting conflicts.
-Non-strict execution resolves them deterministically. The prescribed
-`run-final-assembly --strict` resume check is the separate fail-closed
-adjudication proof and exits before final-output writes for the current source;
-do not run a full strict replacement build against the accepted product.
+## Public-Repository Boundaries
+- Never commit raw TriNetX exports, row-level extracts or products, private
+  manifests, logs, profiles, DuckDB files, spill, credentials, or PHI.
+- Use synthetic/de-identified fixtures only. Do not copy private validation
+  evidence into public documentation.
+- Preserve safe-location checks, bounded-memory DuckDB settings, deterministic
+  cleanup of tool-owned scratch, manifest/catalog binding, and final CSV
+  compatibility until a documented migration decision changes them.
 
-## Refactor Completion Gate
-- Refactor Milestone 1 completed the replication phase under near-exact
-  row-level parity: `4,412,875 / 4,412,932` final analytic rows matched exactly
-  (`99.998708%`), with `57` documented residual Weight/previous-Weight row
-  differences and no schema, row-count, or key-set differences.
-- Use `hash-outputs` to hash approved local legacy `work` and `output`
-  directories.
-- Use `compare-manifests --baseline <legacy-manifest-dir> --current
-  <refactor-manifest-dir>` to compare the refactor to that golden master.
-  Exact hashes remain useful diagnostics, but this milestone is accepted by the
-  aggregate row-parity evidence.
-- Parquet intermediates are supported; final analytic outputs remain CSV.
+## Verification
+```bash
+git diff --check
+uv run ruff check .
+uv run ruff format --check .
+uv lock --check
+uv run pytest -q
+```
 
-## Citation and License
-- Cite the GitHub repository URL and the commit or release used.
-- No publication DOI is assigned to this repository.
-- Code is MIT licensed; see `LICENSE`. Third-party and publisher materials
-  remain under their original terms.
-
-## Agent Cautions
-- Do not replace the richer `AGENTS.md` project instructions with this compact
-  index.
-- Follow `docs/SPEC.md`; notebooks are historical references when behavior differs.
-- Prefer concise, linked summaries over copied notebook or row-level output
-  content.
-- Do not re-add a README appendix aimed primarily at LLMs; integrate
-  user-facing details into normal README sections.
+Synthetic tests verify implementation behavior; they do not prove private
+full-data Stata or adapter parity.

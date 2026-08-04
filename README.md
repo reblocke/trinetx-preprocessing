@@ -6,6 +6,11 @@ TriNetX exports. Its canonical product is one versioned
 and additive source elements needed by the GLP-1 work and future studies. The
 historical 36 CSV files are generated compatibility projections of that product.
 
+See `docs/CURRENT_STATE.md` for the current delivered/pending boundary. In
+brief, GLP-1 and traditional elements now share one permanent source catalog;
+cohort construction has not yet moved here, and the current-head private
+full-data adapter/source parity gate remains pending.
+
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
 matched exactly (`99.998708%`), with no schema, row-count, or key-set
@@ -94,19 +99,21 @@ Validate a published source contract before a downstream process opens it:
 The existing `export-legacy` command remains the exact 36-file CSV bridge for
 the Stata reference workflow. The next migration phase will import Hypercapnia
 cohort logic into the shared primary workflow, consuming this contract alongside
-the GLP-1 elements rather than raw exports. The current GLP-1 adapter remains a
-temporary parity bridge, not a permanent parallel product.
+the GLP-1 elements rather than raw exports. That import is paused while the
+downstream cohort-creation repository is refactored; it resumes from a frozen
+stable behavior head. The current GLP-1 adapter remains a temporary parity
+bridge, not a permanent parallel product or package.
 
 ## Downstream GLP-1 eligibility
 
-The standalone raw-ingestion GLP-1 CLI remains the validated production
-reference during migration. The unified product is currently an
+The standalone raw-ingestion GLP-1 CLI remains the computational reference
+during migration. The unified product is currently an
 adapter-validated source boundary, not a production CLI cutover or a second
 canonical preprocessing product. The adapter is temporary: GLP-1 elements and
 later cohort derivations belong in the same shared workflow as the legacy
-elements, not in a permanent standalone module. A separate PR must add the
-manifest-bound source and prove full-data adapter-versus-reference parity
-before the raw scan can be deprecated:
+elements, not in a permanent standalone module. A later migration PR must wire
+the manifest-bound source into the standalone reference CLI and prove full-data
+adapter-versus-reference parity before the raw scan can be deprecated:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
@@ -124,6 +131,8 @@ before the raw scan can be deprecated:
 
 See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
 #6 for the downstream analytic contract and clinical-review requirements.
+The adapter has synthetic parity evidence at the current head; a new private
+full-data adapter-versus-reference run has not yet been completed.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:
@@ -345,6 +354,7 @@ does not spill row-level data onto the internal disk.
 ```
 
 ## More docs
+- `docs/CURRENT_STATE.md`: delivered capabilities, pending gates, and restart boundary
 - `docs/ONBOARDING.md`: step-by-step setup + legacy notebook notes
 - `docs/CONFIG.md`: config file details
 - `docs/DATA_CONTRACT.md`: inputs, outputs, and required columns

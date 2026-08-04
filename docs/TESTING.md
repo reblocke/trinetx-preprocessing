@@ -11,13 +11,21 @@
 3. Integration tests: end-to-end on synthetic mini-cohort in default CSV mode
    and chunked Parquet intermediate mode, including `run`, `baseline`,
    `compare`, and `profile` command paths
+4. Cohort-source contract tests: manifest/schema/catalog validation, required
+   element and catalog-pin failures, read-only external spill cleanup, and
+   traditional-rule coverage
+5. GLP-1 migration tests: direct-raw versus adapter-backed source and downstream
+   parity across all five clinical domains, including traditional-only source
+   candidates and concept-independent raw observability
 
 ## Commands
 ```bash
-ruff format
-ruff check
-pytest -q
-python -m trinetx_preprocessing --help
+uv run ruff format --check .
+uv run ruff check .
+uv lock --check
+uv run pytest -q
+uv run python -m trinetx_preprocessing --help
+uv run python -m trinetx_preprocessing validate-cohort-source --help
 ```
 
 ## Fixtures
@@ -37,3 +45,6 @@ python -m trinetx_preprocessing --help
   corrected release evidence is the explicit exception documented in
   `docs/VALIDATION.md`; it does not claim a ready strict status while source
   encounter-setting conflicts remain unadjudicated.
+- Current code/API and synthetic CI acceptance does not claim a private
+  full-data run for the expanded traditional catalog or current GLP-1 adapter.
+  See `CURRENT_STATE.md` and `VALIDATION.md` before making cutover claims.

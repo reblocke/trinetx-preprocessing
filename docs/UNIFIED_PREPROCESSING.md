@@ -1,5 +1,8 @@
 # Unified Preprocessing Product
 
+See `CURRENT_STATE.md` for the current accepted evidence, pending private gate,
+and downstream refactor blocker.
+
 ## Endpoint
 
 `trinetx_preprocessed.duckdb` is the sole canonical preprocessed product. One
@@ -16,9 +19,11 @@ bounded raw-data pass produces:
 
 The product does not contain GLP-1 eligibility decisions, study cohorts,
 imputation, propensity models, or outcome analyses. Those remain downstream
-logic. The adapter in `combined_preprocessing/glp1_adapter.py` proves that the
-existing GLP-1 derivation can consume the unified source tables without a
-second raw clinical-data scan.
+logic. The adapter in `combined_preprocessing/glp1_adapter.py` proves on
+synthetic fixtures that the existing GLP-1 derivation can consume the unified
+source tables without a second raw clinical-data scan. It remains a temporary
+parity bridge; the current exact head has not completed a new private full-data
+adapter-versus-reference run.
 
 ## Stable grains
 
@@ -57,9 +62,11 @@ source candidates only: value ranges, time windows, reductions, index-event
 choices, and cohort inclusion remain downstream.
 
 `source.traditional.medication.stata_op_mat` preserves a documented Stata
-reference annotation so its raw records survive this source build. It is not a
-validated medication-assisted-treatment definition: adjudicate the original
-TriNetX query/export before a cohort uses it for clinical inclusion.
+reference annotation so its raw records survive this source build. Codes
+`3304`, `236913`, and `28863` are the three annotated additions beyond the
+existing Python `OPmed_list3` source rule. They are not a validated
+medication-assisted-treatment definition: adjudicate the original TriNetX
+query/export before a cohort uses them for clinical inclusion.
 
 `preprocessed_encounter`, `rfs_membership`, and the 36 compatibility views are
 compatibility surfaces, not the future cohort API. `export-legacy` remains the
@@ -74,15 +81,31 @@ from trinetx_preprocessing.combined_preprocessing.cohort_source import (
     open_cohort_source,
 )
 
-with open_cohort_source(Path("/private/output/trinetx_preprocessed.duckdb")) as source:
+with open_cohort_source(
+    Path("/private/output/trinetx_preprocessed.duckdb"),
+    required_elements=("source.traditional.diagnosis.has_j9612",),
+    expected_catalog_sha256="<approved-cohort-source-catalog-sha256>",
+    memory_limit_mib=3072,
+    spill_root=Path("/private/scratch/duckdb"),
+) as source:
     result = source.connection.execute(
         "SELECT count(*) FROM source_encounter"
     ).fetchone()
 ```
 
-The reader requires a terminal manifest, the adjacent sidecar, an exact
-cohort-source schema fingerprint, and any requested element IDs. It opens
-DuckDB read-only with owned spill cleanup.
+The context manager signature is
+`open_cohort_source(database_path, *, required_elements=(),
+expected_catalog_sha256=None, memory_limit_mib=3072, spill_root=None)` (the
+memory default follows the package configuration constant). The reader requires
+a terminal manifest, the adjacent sidecar, an exact cohort-source schema
+fingerprint, an optional pinned merged-catalog digest, and any requested element
+IDs. It opens DuckDB read-only with owned spill cleanup. The database parent and
+an explicit spill root must both be external to Git worktrees.
+
+`validate_cohort_source()` accepts the same arguments and returns a structured
+validation result. The `validate-cohort-source` CLI exposes `--database`,
+repeatable `--require-element`, and `--json`; catalog pinning, memory selection,
+and explicit spill placement are Python-only controls in the current interface.
 
 ## Build and inspect
 
@@ -144,6 +167,12 @@ Literal source values such as `NA`, `N/A`, and `NULL` remain source strings;
 only empty CSV fields are treated as missing.
 
 ## Acceptance evidence
+
+The following list records the historical combined-product acceptance gate.
+The expanded shared catalog and cohort-source API additionally pass current
+code review and synthetic CI. No new private full-data source-completeness or
+adapter-versus-reference run has been completed at this exact head, so the
+standalone raw-ingestion reference remains in service.
 
 Stage 1 is accepted only after:
 

@@ -4,6 +4,12 @@ GitHub issue #6 is the authoritative analytic specification. Versioned concept
 sets under `config/concept_sets/` define source code membership; the build
 records their version and source rows in DuckDB.
 
+These are the preserved standalone-reference semantics for later import into
+the shared primary cohort workflow. The unified catalog makes required source
+rows available, but `element_membership` does not implement the thresholds,
+timing, index selection, exclusions, or cohort decisions below. See
+`CURRENT_STATE.md` for the migration and evidence status.
+
 ## Core cohort
 
 - The index measurement candidate is the first observed arterial PaCO2 in the
@@ -98,3 +104,7 @@ trauma and anesthesia/procedure families, supplemental arterial-gas
 measurements, medication
 mappings, and site-specific units or code systems. Record-level validation must
 occur in an approved private environment.
+
+When migration resumes after the downstream cohort refactor stabilizes, these
+semantics must remain unchanged unless a separately reviewed clinical decision
+and its own correction/parity evidence explicitly supersede them.

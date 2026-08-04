@@ -1,5 +1,9 @@
 # Reproducibility
 
+See `CURRENT_STATE.md` for the distinction between accepted historical
+full-data evidence, accepted current code/synthetic evidence, and the pending
+current-head private parity gate.
+
 ## Environment
 - Use `uv` to manage dependencies.
 - Commit `pyproject.toml` and `uv.lock`.
@@ -37,6 +41,18 @@ strict-mode flag, package/Python version, git commit and dirty-state metadata,
 behavior-code dirty-state plus a SHA-256 hash of `src/`, `pyproject.toml`, and
 `uv.lock`, stage timings, output-file inventory, peak RSS, and work/output disk
 footprint. It does not record row-level output contents.
+
+For cohort-source consumers, pin the published
+`cohort_source_catalog_sha256` with `expected_catalog_sha256` and record the
+`cohort_source_schema_version`, schema digest, GLP-1 subset digest, run ID,
+package version, code-state digest, and source-work-manifest digest returned by
+`open_cohort_source()`. Require every element ID the cohort implementation uses.
+Keep the database and any DuckDB `spill_root` on an approved external private
+volume; the reader is read-only and cleans its owned spill directory on exit.
+
+These identity checks make a consumer reproducible but do not substitute for
+data parity. The expanded catalog/current adapter still requires a frozen-head
+private full-data comparison before raw-ingestion references can be retired.
 
 ## Intermediate storage
 - Default code behavior remains CSV for backwards compatibility.

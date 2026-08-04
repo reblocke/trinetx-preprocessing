@@ -31,13 +31,19 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   internals.
 - Consequences: Element membership denotes source candidacy, not clinical
   inclusion. The GLP-1 subset fingerprint remains separate from the merged
-  cohort-source fingerprint. New full-data source/parity evidence is required
-  before acceptance; no cohort definitions change in this phase. The documented
-  Stata outpatient-MAT codes are retained as a separately provenance-marked
-  source candidate, pending original-query/export adjudication; they do not
-  alter any legacy feature or cohort result.
+  cohort-source fingerprint. Code/API review and synthetic CI can accept the
+  source contract, but a new exact-head private full-data source/parity gate is
+  required before raw-ingestion cutover; no cohort definitions change in this
+  phase. The documented Stata outpatient-MAT candidate retains five codes.
+  Additions `3304`, `236913`, and `28863` are separately provenance-marked and
+  require original-query/export adjudication; they do not alter any legacy
+  feature or cohort result. Traditional and GLP-1 derivations will ultimately
+  share the primary workflow, with the current adapter used only for migration
+  parity. Import waits for a stable downstream cohort-refactor behavior head.
 - References: `src/trinetx_preprocessing/combined_preprocessing/`,
-  `docs/UNIFIED_PREPROCESSING.md`, `docs/PLAN.md`.
+  `docs/UNIFIED_PREPROCESSING.md`, `docs/PLAN.md`, and the frozen Stata
+  reference merge `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94` from
+  `reblocke/trinetx-hypercapnia-code#4`.
 
 ### 2026-07-09 — Corrected semantics supersede legacy notebook quirks
 - Date: 2026-07-09

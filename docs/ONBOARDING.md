@@ -3,6 +3,10 @@
 This guide covers the CLI-driven pipeline plus a reference for the legacy
 notebook workflow.
 
+Read `CURRENT_STATE.md` before planning downstream work. The source contract is
+implemented, but cohort construction is not yet part of this repository and
+current-head private full-data adapter parity remains pending.
+
 ## Prerequisites
 - Python >= 3.11 with `uv`
 - Jupyter + `nbconvert` (for legacy notebooks)
@@ -79,6 +83,18 @@ fail-closed adjudication proof. On the current source it exits before
 final-output writes; do not run a full strict replacement build against the
 accepted product.
 
+6. Validate the downstream source boundary before any cohort consumer opens
+   it. Repeat `--require-element` for every element the consumer requires:
+   ```bash
+   ./.venv/bin/python -m trinetx_preprocessing validate-cohort-source \
+     --database /private/path/trinetx-preprocessing-validation/output/trinetx_preprocessed.duckdb \
+     --require-element source.traditional.diagnosis.has_j9612 \
+     --json
+   ```
+   Python consumers should use `open_cohort_source()` and pin
+   `expected_catalog_sha256`; see `UNIFIED_PREPROCESSING.md`. Keep any explicit
+   `spill_root` external to Git worktrees.
+
 The recommended finalization config uses Parquet work tables. Final analytic
 outputs remain CSV, but intermediates under `work_dir` may have `.parquet`
 suffixes unless `storage.emit_legacy_csv_intermediates` is enabled.
@@ -118,5 +134,7 @@ should use the canonical CLI above.
 - [ ] The product contains one DuckDB, one adjacent manifest, and exactly 36
       compatibility CSVs under `AMBULATORY`, `EMERGENCY`, and `INPATIENT`.
 - [ ] `validate-preprocessed --database ... --output-dir ...` reports valid.
+- [ ] `validate-cohort-source --database ...` reports valid and every required
+      element ID is present.
 - [ ] Any strict conflict check is recorded separately from the accepted
       non-strict build.

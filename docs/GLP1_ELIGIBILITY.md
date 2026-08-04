@@ -6,6 +6,11 @@ aggregate evidence are already delivered; the issue remains open for its
 optional-domain, catalog/configuration, smoke-summary, final-catalog evidence,
 and clinical/private-review requirements.
 
+`CURRENT_STATE.md` is the current repository-status source. The GLP-1 catalog
+now participates in the same permanent source contract as traditional elements;
+the standalone derivation described here remains a migration reference, not the
+intended final module boundary.
+
 ## Compatibility boundary
 
 - `trinetx_preprocessed.duckdb` is the canonical shared preprocessing product;
@@ -25,11 +30,11 @@ and clinical/private-review requirements.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
 
-The standalone raw-ingestion command below remains the validated reference
+The standalone raw-ingestion command below remains the computational reference
 implementation during migration. The adapter-backed synthetic gate verifies
 equivalent source and downstream outputs from the unified product. It is a
 temporary compatibility bridge: the permanent design integrates GLP-1 elements
-and later cohort derivations into the shared legacy workflow rather than a
+and later cohort derivations into the shared primary workflow rather than a
 separate GLP-1 product.
 
 ## Status against issue #6
@@ -41,7 +46,11 @@ optional-domain ingestion when present; final catalog/rule/configuration and
 clinical terminology review; remaining data-driven policy; the required
 smoke-query interface and specified aggregate summaries; fresh evidence at the
 final catalog/rule head; and investigator/private record-level review. The
-standalone raw-ingestion implementation remains the production reference.
+standalone raw-ingestion implementation remains the full-data computational
+reference. The current expanded source/adapter head has synthetic CI evidence,
+but no new private full-data adapter-versus-reference result. Cohort integration
+is paused until the downstream cohort repository provides a stable refactor
+behavior head.
 
 ## Current commands
 
@@ -152,6 +161,10 @@ phenotypes still require investigator terminology and record-level validation
 before clinical use.
 
 ## Full-data validation
+
+The evidence in this section is historical reference evidence for the named
+behavior head. It does not validate the current expanded cohort-source catalog
+or authorize the unified-source cutover.
 
 The exact behavior-head build from commit `459cbda` completed against the
 restored full export with the supported 4,096 MiB/one-thread DuckDB settings.

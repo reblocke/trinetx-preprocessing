@@ -1,4 +1,4 @@
-# Unified Preprocessing Stage 1
+# Unified Preprocessing Roadmap
 
 ## Endpoint
 
@@ -6,8 +6,8 @@ Stage 1 establishes one canonical Python preprocessing product,
 `trinetx_preprocessed.duckdb`. It contains all historical 534-column
 observations plus the source-faithful elements required by the GLP-1 pipeline.
 The 36 historical CSVs are generated compatibility exports, not a parallel
-preprocessed product. Study-specific GLP-1 eligibility and the future Stata
-migration remain downstream.
+preprocessed product. Study-specific cohort and GLP-1 eligibility derivations
+remain downstream. See `CURRENT_STATE.md` for the current handoff boundary.
 
 ## Implemented
 
@@ -45,30 +45,38 @@ migration remain downstream.
    exact-head review gates passed. The detailed aggregate record is in
    `docs/VALIDATION.md`; private and row-level evidence remains external.
 
+## Cohort-source foundation — complete
+
+1. The source catalog now unions current GLP-1 requirements and typed
+   traditional Hypercapnia/RFS extraction rules.
+2. The versioned, manifest-bound, read-only DuckDB API and CLI validator are
+   implemented. The 36 CSVs remain the legacy bridge; no cohort, index,
+   phenotype, imputation, or analysis decision was added.
+3. The traditional reference repository exposes reproducible `FULL_DATA` and
+   `AFTER_EXCLUSION` variants for later migration parity, merged in
+   `trinetx-hypercapnia-code` PR #4 at
+   `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94` with green post-merge CI.
+4. Code/API review and synthetic CI are accepted. A fresh private full-data
+   source-completeness and GLP-1 adapter-versus-reference run at the exact
+   current head remains pending.
+
 ## Next phases
 
-1. **Publish the cohort-source contract.** Expand the canonical source catalog
-   to the union of the current GLP-1 requirements and all typed traditional
-   hypercapnia/RFS extraction rules. Expose a versioned, manifest-bound,
-   read-only DuckDB consumer interface. The 36 CSVs remain the legacy bridge;
-   no cohort, index, phenotype, imputation, or analysis decision belongs in
-   this phase.
-2. **Freeze the traditional reference.** In `trinetx-hypercapnia-code`, make
-   `FULL_DATA` and `AFTER_EXCLUSION` explicit reproducible variants, repair its
-   runner baseline, and retain private aggregate/schema evidence for later
-   migration parity.
-3. **Import cohort construction into the primary workflow.** Port the
+1. **Wait for the downstream refactor boundary.** Freeze the stable behavior
+   head of the cohort-creation repository once its current refactor completes.
+   Do not import from a moving target.
+2. **Import cohort construction into the primary workflow.** Port the
    Hypercapnia derivations and selections incrementally under the shared cohort
    layer, consuming only the cohort-source contract while the Stata/CSV route
    remains the exact private reference. Bring GLP-1 source elements and later
    derivations into that same registry and workflow; do not create a permanent
    standalone GLP-1 product or second preprocessing path.
-4. **Use the GLP-1 adapter only for migration parity.** Add a manifest-bound
+3. **Use the GLP-1 adapter only for migration parity.** Add a manifest-bound
    unified-database source to the current reference CLI, preserve standalone
    raw ingestion until full-data adapter-versus-reference parity passes, then
    absorb the validated GLP-1 path into the shared workflow and retire the
    second raw scan.
-5. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
+4. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
    delivered standalone CLI, eight-file contract, synthetic acceptance, and
    behavior-head-scoped aggregate full-data reference evidence from the
    remaining literal scope: ingest optional high-value domains when present;
@@ -79,16 +87,15 @@ migration remain downstream.
    results; refresh full-data evidence at the final exact catalog/rule head;
    and complete investigator terminology and private record-level review. Keep
    the issue open until every retained acceptance criterion has evidence.
-6. **Finish onboarding and legacy cleanup.** Keep notebooks as reference-only
+5. **Finish onboarding and legacy cleanup.** Keep notebooks as reference-only
    material, move them under `notebooks/legacy/` only in a dedicated cleanup,
    and deprecate compatibility paths only after all downstream consumers have
    migrated.
 
 ## Deferred
 
-- Importing `trinetx-hypercapnia-code/stata/do/10_preprocessing.do` or its
-  cohort logic before the cohort-source contract and private reference baseline
-  are accepted.
+- Importing cohort logic before the downstream repository refactor provides a
+  stable, reviewable behavior head.
 - Changing GLP-1 cohort, phenotype, imputation, propensity, or analysis
   semantics.
 - Expanding clinical terminology beyond the current versioned element catalog.
@@ -96,9 +103,12 @@ migration remain downstream.
 Those changes require separate branches, explicit clinical decisions where
 applicable, and their own parity/correction gates.
 
-## Acceptance
+## Evidence boundary
 
 Stage 1 was accepted because the unified database validates, all 36
 compatibility files match the approved baseline exactly, the combined GLP-1
 adapter gate passes, resource constraints are met, aggregate evidence is
 complete, and no private or generated validation artifact is tracked.
+That historical acceptance does not establish full-data parity for the expanded
+traditional catalog or authorize retirement of the standalone GLP-1 raw scan;
+those are later exact-head gates.
