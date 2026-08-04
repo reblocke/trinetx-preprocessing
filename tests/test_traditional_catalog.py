@@ -29,6 +29,7 @@ from trinetx_preprocessing.config import (
     RfsConfig,
     StorageConfig,
 )
+from trinetx_preprocessing.transform import rfs
 from trinetx_preprocessing.transform.diagnosis import DIAGNOSIS_CODE_GROUPS
 from trinetx_preprocessing.transform.lab_features import LAB_VALUE_RULES
 from trinetx_preprocessing.transform.medications import MEDICATION_CODE_GROUPS
@@ -54,6 +55,7 @@ def test_combined_catalog_preserves_glp1_catalog_and_adds_all_legacy_candidates(
     )
     assert combined_catalog.sha256 != glp1_catalog.sha256
     assert {concept.concept_set_id for concept in traditional} == _expected_rule_ids()
+    assert len(traditional) == _expected_rule_row_count()
     assert len(
         {
             (
@@ -214,6 +216,42 @@ def _expected_rule_ids() -> set[str]:
         "traditional.procedure.rfs_ventsupport",
         "traditional.diagnosis.rfs_predisposition",
     }
+
+
+def _expected_rule_row_count() -> int:
+    standard_rules = (
+        *DIAGNOSIS_CODE_GROUPS,
+        *PROCEDURE_CODE_GROUPS,
+        *MEDICATION_CODE_GROUPS,
+        *LAB_VALUE_RULES,
+        *VITAL_SIGN_RULES,
+    )
+    rfs_rules = (
+        rfs._pco2_rule(
+            "rfs_abg",
+            ("2019-8", "32771-8"),
+            rfs.DEFAULT_ABG_VALUE_MIN,
+        ),
+        rfs._pco2_rule(
+            "rfs_vbg",
+            ("2021-4",),
+            rfs.DEFAULT_VBG_VALUE_MIN,
+        ),
+        rfs.RESPFAIL_RULE,
+        rfs.OBESITY_DIAGNOSIS_RULE,
+        rfs.OBESITY_BMI_RULE,
+        rfs.VENTSUPPORT_RULE,
+        rfs.PREDISPOSITION_RULE,
+    )
+    return sum(_rule_row_count(rule) for rule in (*standard_rules, *rfs_rules))
+
+
+def _rule_row_count(rule: object) -> int:
+    code_count = len(getattr(rule, "exact_codes", ())) + len(
+        getattr(rule, "prefixes", ())
+    )
+    code_system_count = len(getattr(rule, "allowed_code_systems", ())) or 1
+    return code_count * code_system_count
 
 
 def _memberships(
