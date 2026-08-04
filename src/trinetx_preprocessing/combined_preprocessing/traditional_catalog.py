@@ -15,6 +15,7 @@ from collections.abc import Iterable
 
 from ..glp1_eligibility.concept_sets import Concept
 from ..transform import rfs
+from ..transform.clinical_rules import CodeRule
 from ..transform.diagnosis import DIAGNOSIS_CODE_GROUPS
 from ..transform.lab_features import LAB_VALUE_RULES
 from ..transform.medications import MEDICATION_CODE_GROUPS
@@ -32,6 +33,17 @@ TRADITIONAL_SOURCE_VERSION = "1.0"
 SOURCE_CANDIDACY_NOTE = (
     "Source candidacy only; numeric thresholds, units, temporal/index selection, "
     "and cohort inclusion remain downstream."
+)
+HYPERCAPNIA_REFERENCE_AUTHORITY = "trinetx-hypercapnia-code-stata-reference"
+HYPERCAPNIA_REFERENCE_VERSION = "5d86ef4"
+HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE = (
+    "Source candidacy only; preserved from the Hypercapnia Stata reference "
+    "annotation. Original TriNetX query/export adjudication is required before "
+    "clinical interpretation or cohort inclusion."
+)
+STATA_OP_MAT_RULE = CodeRule(
+    name="STATA_OP_MAT",
+    exact_codes=("1819", "3304", "236913", "28863", "6813"),
 )
 
 
@@ -72,6 +84,7 @@ def traditional_concepts() -> tuple[Concept, ...]:
         source_file="transform/medications.py",
         description_prefix="Historical medication feature candidate",
     )
+    _add_hypercapnia_reference_candidates(builder)
     builder.add_rules(
         domain="lab",
         rules=LAB_VALUE_RULES,
@@ -86,6 +99,28 @@ def traditional_concepts() -> tuple[Concept, ...]:
     )
     _add_rfs_candidates(builder)
     return builder.concepts
+
+
+def _add_hypercapnia_reference_candidates(
+    builder: "_TraditionalConceptBuilder",
+) -> None:
+    """Preserve source candidates annotated by the frozen Stata reference.
+
+    This list is intentionally separate from the executable Python medication
+    feature rule. It makes the documented raw codes available to a later cohort
+    migration without changing the historical feature-output contract.
+    """
+
+    builder.add_rules(
+        domain="medication",
+        rules=(STATA_OP_MAT_RULE,),
+        source_file="trinetx-hypercapnia-code/stata/do/10_preprocessing.do",
+        description_prefix="Hypercapnia Stata-reference annotation candidate",
+        element_names=("stata_op_mat",),
+        source_authority=HYPERCAPNIA_REFERENCE_AUTHORITY,
+        source_version=HYPERCAPNIA_REFERENCE_VERSION,
+        notes=HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE,
+    )
 
 
 def _add_rfs_candidates(builder: "_TraditionalConceptBuilder") -> None:
@@ -167,6 +202,9 @@ class _TraditionalConceptBuilder:
         source_file: str,
         description_prefix: str,
         element_names: tuple[str, ...] | None = None,
+        source_authority: str = TRADITIONAL_SOURCE_AUTHORITY,
+        source_version: str = TRADITIONAL_SOURCE_VERSION,
+        notes: str = SOURCE_CANDIDACY_NOTE,
     ) -> None:
         """Add typed code rules with their legacy matching semantics only."""
 
@@ -185,6 +223,9 @@ class _TraditionalConceptBuilder:
                 rule=rule,
                 source_file=source_file,
                 description=f"{description_prefix}: {rule.name}",
+                source_authority=source_authority,
+                source_version=source_version,
+                notes=notes,
             )
 
     def _add_rule_rows(
@@ -195,6 +236,9 @@ class _TraditionalConceptBuilder:
         rule: object,
         source_file: str,
         description: str,
+        source_authority: str,
+        source_version: str,
+        notes: str,
     ) -> None:
         exact_codes = tuple(getattr(rule, "exact_codes", ()))
         prefixes = tuple(getattr(rule, "prefixes", ()))
@@ -215,11 +259,11 @@ class _TraditionalConceptBuilder:
                             match_type=match_type,
                             include=True,
                             description=description,
-                            source_authority=TRADITIONAL_SOURCE_AUTHORITY,
-                            source_version=TRADITIONAL_SOURCE_VERSION,
+                            source_authority=source_authority,
+                            source_version=source_version,
                             effective_start=None,
                             effective_end=None,
-                            notes=SOURCE_CANDIDACY_NOTE,
+                            notes=notes,
                             source_file=source_file,
                             source_row=self._source_rows[source_file],
                         )

@@ -15,7 +15,10 @@ from trinetx_preprocessing.combined_preprocessing.elements import (
     load_glp1_catalog,
 )
 from trinetx_preprocessing.combined_preprocessing.traditional_catalog import (
+    HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE,
+    HYPERCAPNIA_REFERENCE_AUTHORITY,
     SOURCE_CANDIDACY_NOTE,
+    STATA_OP_MAT_RULE,
     traditional_concept_id,
     traditional_concepts,
 )
@@ -69,7 +72,22 @@ def test_combined_catalog_preserves_glp1_catalog_and_adds_all_legacy_candidates(
         }
     ) == len(traditional)
     assert all(concept.include for concept in traditional)
-    assert all(concept.notes == SOURCE_CANDIDACY_NOTE for concept in traditional)
+    assert all(
+        concept.notes == SOURCE_CANDIDACY_NOTE
+        for concept in traditional
+        if concept.source_authority != HYPERCAPNIA_REFERENCE_AUTHORITY
+    )
+    stata_op_mat = [
+        concept
+        for concept in traditional
+        if concept.concept_set_id == "traditional.medication.stata_op_mat"
+    ]
+    assert {concept.code for concept in stata_op_mat} == set(
+        STATA_OP_MAT_RULE.exact_codes
+    )
+    assert {concept.notes for concept in stata_op_mat} == {
+        HYPERCAPNIA_REFERENCE_ANNOTATION_NOTE
+    }
 
     source_element_ids = {
         row["element_id"]
@@ -135,6 +153,15 @@ def test_source_candidacy_uses_codes_without_legacy_value_or_cohort_gates(
     assert "source.traditional.diagnosis.has_e662" in diagnosis_ids
     assert "source.traditional.diagnosis.rfs_respfail" in diagnosis_ids
     assert "source.ohs" not in diagnosis_ids
+
+    medication_memberships = _memberships(
+        catalog,
+        "medications",
+        pd.DataFrame({"code_system": ["LOCAL"], "code": ["3304"]}),
+    )
+    assert _element_ids_for(medication_memberships, "row-0") == {
+        "source.traditional.medication.stata_op_mat"
+    }
 
 
 @pytest.mark.parametrize(
@@ -215,6 +242,7 @@ def _expected_rule_ids() -> set[str]:
         "traditional.vital.rfs_obesity_bmi",
         "traditional.procedure.rfs_ventsupport",
         "traditional.diagnosis.rfs_predisposition",
+        "traditional.medication.stata_op_mat",
     }
 
 
@@ -243,7 +271,10 @@ def _expected_rule_row_count() -> int:
         rfs.VENTSUPPORT_RULE,
         rfs.PREDISPOSITION_RULE,
     )
-    return sum(_rule_row_count(rule) for rule in (*standard_rules, *rfs_rules))
+    return sum(
+        _rule_row_count(rule)
+        for rule in (*standard_rules, *rfs_rules, STATA_OP_MAT_RULE)
+    )
 
 
 def _rule_row_count(rule: object) -> int:
