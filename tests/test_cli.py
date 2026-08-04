@@ -311,6 +311,68 @@ def test_validate_preprocessed_cli_guards_scratch_roots_before_validation(
     ]
 
 
+def test_validate_cohort_source_cli_accepts_repeated_elements_and_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    database = tmp_path / "product" / "trinetx_preprocessed.duckdb"
+    calls: list[tuple[str, object]] = []
+
+    def record_guard(path: Path, *, artifact_label: str) -> None:
+        calls.append(("guard", (path, artifact_label)))
+
+    def validate(database_path: Path, *, required_elements: list[str]):
+        calls.append(("validate", (database_path, required_elements)))
+        return SimpleNamespace(
+            valid=True,
+            errors=(),
+            required_elements=tuple(required_elements),
+            metadata=None,
+        )
+
+    monkeypatch.setattr(cli_module, "require_safe_output_location", record_guard)
+    monkeypatch.setattr(cli_module, "validate_cohort_source", validate)
+
+    result = cli_module.main(
+        [
+            "validate-cohort-source",
+            "--database",
+            str(database),
+            "--require-element",
+            "source.arterial_pco2",
+            "--require-element",
+            "source.traditional.lab.rfs_abg",
+            "--json",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [
+        (
+            "guard",
+            (database.parent, "cohort-source database/spill directory"),
+        ),
+        (
+            "validate",
+            (
+                database,
+                ["source.arterial_pco2", "source.traditional.lab.rfs_abg"],
+            ),
+        ),
+    ]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "errors": [],
+        "metadata": None,
+        "required_elements": [
+            "source.arterial_pco2",
+            "source.traditional.lab.rfs_abg",
+        ],
+        "valid": True,
+    }
+
+
 def test_validate_preprocessed_cli_rejects_repository_local_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

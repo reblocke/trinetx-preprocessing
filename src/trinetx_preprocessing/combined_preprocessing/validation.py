@@ -12,6 +12,10 @@ import duckdb
 from ..config import DEFAULT_COMBINED_DUCKDB_MEMORY_LIMIT_MIB
 from ..filesystem import remove_tree_strict
 from ..regression import hash_csv_with_metadata
+from .cohort_source_contract import (
+    COHORT_SOURCE_SCHEMA_VERSION,
+    cohort_source_schema_sha256,
+)
 from .contract import (
     COMBINED_SCHEMA_VERSION,
     DATABASE_MANIFEST_SCHEMA_VERSION,
@@ -113,6 +117,10 @@ def validate_preprocessed_database(
                 run_id,
                 status,
                 combined_schema_version,
+                cohort_source_schema_version,
+                cohort_source_schema_sha256,
+                cohort_source_catalog_sha256,
+                glp1_catalog_sha256,
                 git_code_state_sha256,
                 element_catalog_sha256,
                 output_root,
@@ -130,6 +138,10 @@ def validate_preprocessed_database(
                 run_id,
                 status,
                 schema_version,
+                cohort_source_version,
+                cohort_source_schema_digest,
+                cohort_source_catalog_digest,
+                glp1_catalog_digest,
                 git_code_state_sha256,
                 element_catalog_sha256,
                 output_root,
@@ -141,6 +153,10 @@ def validate_preprocessed_database(
                 "run_id": str(run_id),
                 "status": str(status),
                 "combined_schema_version": str(schema_version),
+                "cohort_source_schema_version": str(cohort_source_version),
+                "cohort_source_schema_sha256": str(cohort_source_schema_digest),
+                "cohort_source_catalog_sha256": str(cohort_source_catalog_digest),
+                "glp1_catalog_sha256": str(glp1_catalog_digest),
                 "git_code_state_sha256": str(git_code_state_sha256),
                 "element_catalog_sha256": str(element_catalog_sha256),
                 "output_root": str(output_root),
@@ -154,6 +170,17 @@ def validate_preprocessed_database(
                 errors.append(
                     "Combined schema version mismatch: "
                     f"{schema_version} != {COMBINED_SCHEMA_VERSION}"
+                )
+            if cohort_source_version != COHORT_SOURCE_SCHEMA_VERSION:
+                errors.append(
+                    "Cohort-source schema version mismatch: "
+                    f"{cohort_source_version} != {COHORT_SOURCE_SCHEMA_VERSION}"
+                )
+            if cohort_source_schema_digest != cohort_source_schema_sha256():
+                errors.append("Cohort-source schema digest is invalid.")
+            if cohort_source_catalog_digest != element_catalog_sha256:
+                errors.append(
+                    "Cohort-source catalog digest does not match the element catalog."
                 )
 
         if sidecar is not None and embedded_manifest is not None:
@@ -429,6 +456,14 @@ def _validate_product_sidecar(
     expected_values = {
         "schema_version": DATABASE_MANIFEST_SCHEMA_VERSION,
         "combined_schema_version": COMBINED_SCHEMA_VERSION,
+        "cohort_source_schema_version": embedded_manifest[
+            "cohort_source_schema_version"
+        ],
+        "cohort_source_schema_sha256": embedded_manifest["cohort_source_schema_sha256"],
+        "cohort_source_catalog_sha256": embedded_manifest[
+            "cohort_source_catalog_sha256"
+        ],
+        "glp1_catalog_sha256": embedded_manifest["glp1_catalog_sha256"],
         "run_id": embedded_manifest["run_id"],
         "status": embedded_manifest["status"],
         "git_code_state_sha256": embedded_manifest["git_code_state_sha256"],
