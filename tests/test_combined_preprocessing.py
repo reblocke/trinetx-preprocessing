@@ -1332,8 +1332,13 @@ def test_element_capture_preserves_duplicate_source_rows_and_membership(
     ]
     assert source["event_datetime"].notna().all()
     assert source["numeric_value"].tolist() == [55.0, 55.0, 56.0]
-    assert set(membership["element_id"]) == {"source.arterial_pco2"}
-    assert len(membership) == 3
+    assert set(membership["element_id"]) == {
+        "source.arterial_pco2",
+        "source.traditional.lab.rfs_abg",
+        "source.traditional.lab.value_20198",
+    }
+    assert len(membership) == 9
+    assert membership.groupby("source_record_id")["element_id"].nunique().eq(3).all()
 
 
 def test_element_capture_retains_only_rows_with_included_membership(
@@ -3158,7 +3163,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
                 "SELECT count(*) FROM source_encounter "
                 "WHERE encounter_id = 'flow-only-encounter'"
             ).fetchone()[0]
-            == 0
+            == 1
         )
         assert (
             combined_connection.execute(
