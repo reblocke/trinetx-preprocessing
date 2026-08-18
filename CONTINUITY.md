@@ -1,94 +1,67 @@
 # CONTINUITY
 
 ## Goal (incl. success criteria)
-- Make the cohort-source and Stata-reference PRs documentation-complete, merge
-  reference PR #4 first, then merge preprocessing PR #9, and verify both
-  default branches after merge.
-- Leave both repositories ready to resume one shared cohort-workflow migration
-  when the downstream cohort refactor reaches a stable behavior head.
+- Keep the public unified-preprocessing handoff concise, current, and free of
+  machine-specific or private validation details.
+- Prepare a future GLP-1 source cutover that preserves the accepted cohort,
+  phenotype, inclusion, and output contracts and proves exact adapter/reference
+  parity before either reference path is retired.
 
 ## Constraints/Assumptions
-- Raw TriNetX data, row-level outputs, logs, manifests, profiles, and private
-  validation artifacts remain external and untracked.
-- This release train changes documentation and merge state only; it does not
-  import cohort logic, alter clinical semantics, run restricted data, tag a
-  release, delete branches, or clean worktrees.
-- The original worktree's user-owned `CONTINUITY.md` edit remains untouched;
-  all work occurs in isolated PR worktrees.
-- Standalone Stata and GLP-1 raw ingestion remain references until their
-  frozen-head private parity gates pass.
+- Raw TriNetX data, row-level outputs, databases, logs, manifests, profiles,
+  process details, and private validation artifacts remain external and
+  untracked.
+- Source-catalog membership is candidacy, not cohort inclusion; clinical
+  semantics and the 36-file compatibility contract remain unchanged.
+- Static and synthetic validation do not replace the approved private-data and
+  licensed-runtime gates required for release acceptance.
+- This documentation update does not tag a release, change package versions,
+  alter repository settings, or claim completion of the private gates.
 
 ## Key decisions
-- Update active human and machine documentation in both repositories; retain
-  historical prompts, notebooks, archives, and frozen evidence as references.
-- Use merge commits and expected-head protection, matching repository history.
-- Merge `trinetx-hypercapnia-code#4` into `master` before
-  `trinetx-preprocessing#9` into `main`, then bind preprocessing documentation
-  to the exact merged reference commit.
-- GLP-1 and traditional elements belong to one permanent source catalog and
-  workflow. Element membership is source candidacy, not cohort inclusion; the
-  GLP-1 adapter is a migration-only bridge.
-- A reviewer service rate limit is not itself a correctness finding. If it
-  persists, require clean independent read-only reviews plus zero unresolved
-  GitHub threads before merge.
+- The unified DuckDB/catalog contract is the permanent source interface for
+  traditional and GLP-1 workflows.
+- The GLP-1 adapter and standalone raw ingestion remain migration references
+  until frozen-head parity is demonstrated on approved inputs.
+- The future cutover is an orchestration change: existing cohort, phenotype,
+  flow, evidence, and output logic must run unchanged after source materialization.
+- Public continuity records durable product decisions and validation boundaries,
+  not local paths, process identifiers, transient resource observations, or
+  private run inventories.
 
 ## State
-- Reference PR #4 merged into `trinetx-hypercapnia-code/master` as
-  `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94`; exact-head CI and post-merge
-  `master` CI run `30936293016` passed.
-- Cohort-source PR #9 starts from
-  `360eabdbb520a691d42844a1a2045cd788a15e68`; its prior exact-head CI passed
-  with 500 tests passed and 7 skipped, and GitHub reports CLEAN.
-- The user explicitly authorized documentation completion, ready-for-review
-  promotion, and merge for both PRs on 2026-08-04; GitHub is authoritative for
-  PR #9's live draft/ready state.
-- The documentation-complete PR #9 head passed local diff, Ruff check, Ruff
-  format, lockfile, CLI-help, and full pytest gates (507 passed). The later
-  review-driven provenance reconciliation passes the same static gates plus 11
-  focused catalog/consumer/adapter tests. After publication, GitHub is the
-  source of truth for the exact head and live gates.
-- Importing downstream cohort construction is paused because that codebase is
-  being refactored; the stable restart commit is UNCONFIRMED.
-
-## Done
-- PR #8 merged at `149a65a`; exact-head and post-merge CI passed and all review
-  threads were resolved.
-- PR #4 merged deterministic `FULL_DATA` and `AFTER_EXCLUSION` reference
-  variants with disk-bounded synthetic tests and reconciled active docs.
+- `main` includes merged cohort-source PR #9 and the subsequent repository
+  overview update.
 - PR #9 provides the unified catalog, manifest-bound read-only cohort-source
   API/CLI, safe DuckDB spill handling, and synthetic adapter parity across all
   five clinical domains.
-- Independent implementation and architecture reviews found no remaining
-  P1/P2 code issue at the starting heads.
-- Preprocessing machine guidance (`AGENTS.md`, `llms.txt`, the code-agent
-  workflow, and repository inventory) now records the unified-product,
-  consumer-interface, privacy, evidence, and downstream-blocker invariants.
-- Active human documentation now records the same boundary, current API/CLI,
-  temporary adapter role, unadjudicated source candidates, and pending private
-  parity gate; the exact merged Stata reference commit is bound into PR #9.
-- Exact-head review found that the Stata-annotated catalog rows still persisted
-  the earlier PR #4 ancestor `5d86ef4`. They now use the full frozen merge
-  `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94`, with a regression assertion, so
-  the machine-readable source provenance matches the documented boundary.
+- The merged Stata reference is provenance-bound in the catalog, and the final
+  PR #9 head passed its documented local and GitHub checks.
+- Importing downstream cohort construction remains paused until that codebase
+  exposes a named stable behavior head.
+
+## Done
+- Unified preprocessing and source-catalog interfaces are public and merged.
+- Human- and machine-facing documentation records the privacy, provenance,
+  compatibility, and downstream-migration boundaries.
+- The prior machine-specific operational ledger was retained locally and is
+  intentionally excluded from the public repository.
 
 ## Now
-- If the documentation-bound changes are still local, publish them. If PR #9
-  remains open, merge only after live exact-head CI, reconciled P1/P2 review,
-  zero unresolved threads, and clean expected-head mergeability. If merged,
-  verify post-merge `main` CI and final repository topology.
+- Publish this sanitized continuity update as a documentation-only draft PR.
 
 ## Next
-- Merge PR #9 with expected-head protection, verify post-merge `main` CI, and
-  confirm both repositories' final topology and preserved local worktrees.
+- Identify the stable downstream cohort behavior head.
+- Implement the GLP-1 cutover as a separate reviewed change with exact contract
+  tests, synthetic parity, and explicit private-data/licensed-runtime gates.
 
 ## Open questions (UNCONFIRMED if needed)
 - The stable downstream cohort-refactor behavior head is UNCONFIRMED.
-- Availability and timing of the private full-data/Stata gates are UNCONFIRMED.
-- Formal package version or release tag is outside this merge train.
+- Availability and timing of the private full-data and licensed-runtime gates
+  are UNCONFIRMED.
+- A formal package version or release tag remains outside this work.
 
 ## Working set (files/ids/commands)
-- GitHub reference merge `reblocke/trinetx-hypercapnia-code#4` at `0584b0e`
-- Current GitHub PR `reblocke/trinetx-preprocessing#9`
 - `README.md`, `AGENTS.md`, `llms.txt`, `CONTINUITY.md`, and active `docs/`
-- `git diff --check`, Ruff check/format, `uv lock --check`, `pytest -q`, and
-  exact-head/default-branch GitHub Actions
+- `git diff --check`, privacy/restricted-artifact scan, and documentation review
+- GitHub PR #9 and the merged Stata reference provenance recorded in the catalog
