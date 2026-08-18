@@ -48,7 +48,8 @@
   intentionally excluded from the public repository.
 
 ## Now
-- Publish this sanitized continuity update as a documentation-only draft PR.
+- Await a named, stable downstream cohort behavior head before beginning the
+  contract-preserving GLP-1 cutover.
 
 ## Next
 - Identify the stable downstream cohort behavior head.
