@@ -1,30 +1,10 @@
 # AGENTS.md
 
-## Project overview
-- This repository is a **Python-first** project for statistical programming, experimental analysis, and scientific computing.
-- The primary language is **Python**. Do not propose implementations in R, Julia, or SQL unless explicitly asked.
-- Priorities (in order):
-  1) **Human time**: readability, maintainability, debuggability
-  2) **Reproducibility**: deterministic runs, stable environments
-  3) **Performance**: only when needed and measured
-
-## Project-specific overlays: TriNetX preprocessing
-- The pipeline may touch **confidential clinical export data**. Treat all raw TriNetX exports as sensitive:
-  - Never commit raw data or row-level extracts.
-  - Keep all real inputs under `data/` (git-ignored).
-  - Tests must use **synthetic** or de-identified fixtures under `tests/fixtures/`.
-- Treat this repository as public. Do not add PHI, restricted datasets,
-  credentials, private drafts, publisher-formatted article text, local
-  row-level output, or generated validation artifacts unless explicitly
-  reviewed.
-- No manuscript version is expected in this repository.
-- Primary refactor goal: preserve **outputs and inclusion logic** while improving:
-  - onboarding and ease-of-use (first)
-  - reproducibility (second)
-  - performance (third, only when measured)
-  - modularity (fourth)
-- Preserve legacy notebooks by moving them (if needed) to `notebooks/legacy/` rather than deleting.
-  New logic should live under `src/` and be callable from a CLI.
+## Scope and data boundaries
+- Python-first TriNetX preprocessing. Preserve outputs and inclusion logic during refactoring; use `src/` and CLI entry points for new reusable logic. Do not introduce a different implementation language unless requested.
+- Treat this repository as public. Never commit raw TriNetX exports, PHI, row-level products, credentials, private drafts, publisher text, private manifests, or DuckDB spill artifacts. Generated validation artifacts require explicit review before publication. No manuscript version is expected here.
+- Raw inputs are immutable. Real export inputs may use ignored `data/` paths; databases, spill, manifests, logs, and row-level products from real runs follow the external-location requirements below.
+- Tests use synthetic or approved de-identified fixtures under `tests/fixtures/`. Preserve legacy notebooks by archiving them under `notebooks/legacy/` if a requested move is needed.
 
 ## Current architecture and migration invariants
 - Read `docs/CURRENT_STATE.md` before changing architecture, public interfaces,
@@ -39,7 +19,7 @@
   `open_cohort_source()` / `validate_cohort_source()` API and the
   `validate-cohort-source` CLI. Consumers must validate manifest, schema, and
   catalog provenance before reading rows.
-- `combined_preprocessing/glp1_adapter.py`, the standalone GLP-1 ingestion
+- `src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py`, the standalone GLP-1 ingestion
   path, and the Stata pipeline are migration/reference paths. Do not turn the
   GLP-1 adapter into a permanent parallel product.
 - Cohort-construction code has not been imported into this repository. Its
@@ -52,195 +32,24 @@
   from real data must live outside the repository in validated, non-symlinked
   locations. Preserve the existing safe-location checks and clean only
   tool-owned scratch prefixes.
+- Preserve the 36-file Stata compatibility contract until the private reference parity gate authorizes retirement.
+- Preserve cohort-source schema and catalog fingerprints at the consumer boundary; incompatible changes require an explicit schema-version decision.
 
+## Context and scientific decisions
+- Use `README.md` for entry points, `docs/TESTING.md` for check selection, and `docs/SPEC.md` / `docs/DATA_CONTRACT.md` for affected data behavior.
+- Study requirements and approved specifications take precedence over implementation. A discrepancy affecting definitions, inclusion, or accepted outputs needs an explicit scientific decision before changing that behavior. Record authorized divergences in `docs/DECISIONS.md`; do not infer cohort semantics or adjust expected results to obtain a pass.
 
-## Continuity Ledger (compaction-safe; recommended)
-Maintain a single Continuity Ledger for this workspace in `CONTINUITY.md` (or `http://CONTINUITY.md` if your environment uses that mapping).
+## Continuity
+- Read the local `CONTINUITY.md` when resuming work or when the task depends on prior decisions, checkpoints, or handoff state.
+- Update it at meaningful decisions, validated checkpoints, scope changes, or handoff. Keep the existing headings and mark uncertain facts `UNCONFIRMED`.
+- Reconcile stale ledger entries with the current user request and observed files. Routine turns and typo fixes do not require ledger edits or a ledger snapshot in the response.
 
-The ledger is the canonical session briefing designed to survive context compaction; do not rely on earlier chat text unless it’s reflected in the ledger.
+## Implementation and verification
+An implementation request covers the necessary local edits, applicable safe checks, and fixes for regressions caused by the change. Continue through verification within that scope. Ask only for unresolved decisions that affect scientific meaning, authorized data access, external cost, publication, deployment, or the requested scope. Preserve unrelated work; a dirty checkout alone is not a reason to stop.
 
-### How it works
-- At the start of every assistant turn: read `http://CONTINUITY.md`, update it to reflect the latest goal/constraints/decisions/state, then proceed.
-- Update `http://CONTINUITY.md` again whenever any of these change: goal, constraints/assumptions, key decisions, progress state (Done/Now/Next), or important tool outcomes.
-- Keep it short and stable: facts only, no transcripts. Prefer bullets.
-- Mark uncertainty as `UNCONFIRMED` (never guess).
-
-### `functions.update_plan` vs the Ledger
-- Use `functions.update_plan` only for short-term execution scaffolding (a small 3–7 step plan).
-- Use `http://CONTINUITY.md` for long-running continuity across compaction (the “what/why/current state”), not a step-by-step task list.
-
-### In replies
-- Begin with a brief **Ledger Snapshot** (Goal + Now/Next + Open Questions).
-- Print the full ledger only when it materially changes or when the user asks.
-
-### `http://CONTINUITY.md` format (keep headings)
-- Goal (incl. success criteria):
-- Constraints/Assumptions:
-- Key decisions:
-- State:
-- Done:
-- Now:
-- Next:
-- Open questions (UNCONFIRMED if needed):
-- Working set (files/ids/commands):
-
-## Authority hierarchy (resolve conflicts in this order)
-1) The study protocol / analysis plan / primary papers and domain requirements (if applicable)
-2) Repository docs: `README.md`, `docs/SPEC.md`, `docs/DECISIONS.md`, and this `AGENTS.md`
-3) Existing code and notebooks (reference only)
-
-When lower-level code conflicts with higher-level requirements:
-- implement the higher-level requirement,
-- document the divergence (and why) in `docs/DECISIONS.md` with file/line references.
-
-## Non-negotiables (keep updated)
-- Preserve the 36-file Stata compatibility contract until the private reference
-  parity gate authorizes retirement.
-- Preserve cohort-source schema and catalog fingerprints at the consumer
-  boundary; incompatible changes require an explicit schema-version decision.
-- Never commit confidential inputs, row-level products, private manifests, or
-  DuckDB spill artifacts.
-- Default priority remains correctness → clarity → reproducibility → measured
-  optimization.
-
-## Environment
-- Python ≥ 3.11 on macOS/Linux (use the repo’s pinned version if specified in `pyproject.toml`).
-- Dependency management uses **uv** (`pyproject.toml` + `uv.lock`).
-  - Commit `pyproject.toml` and `uv.lock`.
-  - Do **not** add `pip install ...` / `conda install ...` commands to committed code (scripts, modules, notebooks).
-  - If dependencies must change, propose the `pyproject.toml` edits and the corresponding uv workflow needed to update the lockfile.
-- Code quality uses **Ruff only**:
-  - Formatting: `ruff format`
-  - Linting: `ruff check` (use `--fix` when appropriate)
-  - Do not introduce Black, isort, flake8, pylint, or additional formatters/linters.
-- Jupyter is allowed.
-
-## Repository structure and design
-- Prefer a **src layout** for importable code:
-  - `src/<package_name>/...`
-  - `tests/...`
-  - optional: `notebooks/`, `scripts/`, `docs/`, `artifacts/`
-- Keep the computational core **pure** (no I/O, no hidden state). Isolate I/O in dedicated modules (e.g., `io.py`, `data.py`).
-- Follow “functional core, imperative shell”:
-  - pure functions for transforms/statistics/models
-  - thin orchestration layer for reading/writing, CLI, notebook glue
-
-## Coding style (human-centered)
-- **Clarity beats cleverness.** Optimize for the next reader (often future-you).
-- Prefer **deep modules** over shallow wrappers:
-  - simple interface (few arguments, sensible defaults)
-  - hide complexity behind well-named functions/classes
-- Avoid deep nesting:
-  - use guard clauses / early returns
-  - keep control flow flat and readable
-- Use meaningful names:
-  - descriptive is good (even if long)
-  - avoid single-letter names outside tight mathematical contexts
-- Limit function arguments:
-  - if a function needs >5 parameters, consider:
-    - a dataclass/typed config object
-    - grouping related parameters into a single structure
-    - splitting responsibilities
-- Prefer explicit data flow:
-  - no hidden global state
-  - no reliance on implicit working directory
-  - pass dependencies explicitly
-- Imports:
-  - avoid `from x import *`
-  - avoid heavy imports inside tight loops unless profiling supports it
-  - standard library first; third-party next; local imports last
-- Use docstrings for public functions/classes:
-  - what the function does
-  - inputs/outputs (units, shapes, dtypes)
-  - important assumptions and edge cases
-- Use type hints for public APIs and cross-module boundaries.
-
-## Code delivery in assistant responses
-- Provide **paste-ready** code blocks: complete imports, functions, and example usage.
-- Prefer stable, widely used packages over custom implementations of standard methods.
-- If changes span multiple files, show a clear file-by-file patch or the full new file contents.
-- If you’re unsure about a project choice, make the smallest safe assumption and flag it explicitly as `UNCONFIRMED`.
-
-## Data manipulation and I/O
-- Use `pandas` for tabular work, `numpy` for arrays, and `scipy` where appropriate.
-- Prefer vectorized operations over row-wise Python loops.
-  - Avoid `df.apply(..., axis=1)` and `iterrows()` unless there is a clear, documented need.
-- Avoid chained assignment in pandas; use `.loc[...]`.
-- Use `pathlib.Path` for paths.
-  - Never hard-code absolute paths.
-  - Do not change the global working directory in committed code (`os.chdir`).
-- Validate inputs at boundaries:
-  - schema/columns, dtypes, ranges, units
-  - fail fast with informative error messages
-- Prefer stable intermediate data formats for derived artifacts (often Parquet for tables) when appropriate.
-
-## Reproducibility
-- All examples must run from a fresh Python session.
-- Always show required imports in examples.
-- Randomness:
-  - Prefer `rng = np.random.default_rng(1234)` and pass `rng` explicitly.
-  - For libraries with their own RNG controls, set seeds explicitly and document where.
-- Avoid manual, non-reproducible steps. If something changes data, it should be executable code.
-
-## Notebooks and Quarto
-- Jupyter notebooks (`.ipynb`) are allowed for exploration and reporting.
-- Notebooks should be restartable and deterministic:
-  - “Restart & Run All” should succeed without hidden state.
-  - move heavy logic into importable modules under `src/`.
-- If Quarto (`.qmd`) is used:
-  - label chunks clearly
-  - keep reports narrative; keep heavy lifting in modules
-
-## Modeling
-Choose tools that match the inferential goal:
-- Classical/statistical inference: `statsmodels` (including formula interfaces when helpful)
-- Predictive modeling / ML: `scikit-learn` (pipelines, CV, proper train/test splits)
-- Bayesian modeling: **PyMC + ArviZ**
-
-General modeling expectations:
-- State the estimand and assumptions.
-- Include basic diagnostics appropriate to the model class.
-  - e.g., residual checks, convergence checks, calibration/leakage checks
-- Prefer returning tidy/tabular outputs (`pandas.DataFrame`) with clear column names and metadata.
-
-## Visualization
-- Prefer `matplotlib` for publication-quality plots.
-- Every plot should:
-  - label axes and units
-  - include a clear title/caption
-  - avoid misleading scales
-  - be generated from deterministic code
-
-## Performance and optimization
-- Default stance: **do not optimize prematurely**. Write correct, clear code first.
-- If performance matters:
-  - profile to find bottlenecks
-  - optimize the bottleneck (not everything)
-  - benchmark before/after to confirm improvement
-  - stop when it’s “fast enough” (avoid over-optimization)
-- Prefer algorithmic and data-structure improvements over micro-optimizations.
-- Use vectorization and compiled backends (NumPy/SciPy) where appropriate.
-- Consider parallelization only when tasks are independent and I/O won’t bottleneck.
-- Introduce heavier tools (Numba/Cython/custom C/C++) only after profiling and with tests.
-
-## Tests and checks
-- Use `pytest` for unit tests under `tests/`.
-- When creating/modifying functions, add or update tests and state how to run them (e.g., `pytest -q`).
-- Use small, de-identified fixtures (or synthetic data) under `tests/fixtures/`.
-- Before publishing changes, run `git diff --check`.
-- Validate `CITATION.cff` as YAML after citation edits if that file exists.
-- Confirm no row-level restricted data or identifiers are included in tracked
-  changes.
-
-## Milestone discipline and definition of done (recommended)
-Every milestone should end with:
-- tests passing locally (`pytest`)
-- artifacts updated under `artifacts/` (small tables/figures/markdown summaries), if outputs changed
-- documentation updated (`README.md` / `docs/DECISIONS.md`) if behavior or assumptions changed
-- a commit with a clear message is ready to be made
-
-## What not to do
-- Do not add interactive-only calls to pipelines (`breakpoint()`, `pdb.set_trace()`, `input()`).
-- Do not introduce hidden global state or non-determinism without clear explanation.
-- Do not restructure the project into new orchestration frameworks (Kedro/Dagster/Prefect/etc.) unless explicitly asked.
-- Do not commit secrets, credentials, patient identifiers, or large raw extracts.
+- Use the pinned Python environment, `uv`, `pyproject.toml`, and `uv.lock`. Keep dependency changes and the lockfile together; Ruff is the only formatter/linter.
+- Keep transformations in importable code and I/O at explicit boundaries; use `pathlib.Path`, configurable paths, and no `os.chdir` in committed code. Validate schemas, units, ranges, and missingness. Report notebooks must run from a clean session.
+- For documentation-only changes, check affected references and `git diff --check`; validate `CITATION.cff` only if its metadata changes.
+- For Python behavior changes, run affected tests with `uv run pytest -q <test-path>` and Ruff checks on touched code. Add a regression test when it can catch the failure. Broaden checks for shared interfaces or unresolved failures; repeat only as needed after changes.
+- For performance work, measure before/after and preserve exact output behavior. Small synthetic checks do not satisfy frozen-head private full-data parity.
+- Recheck affected public documentation and artifact claims. Report commands actually run and any remaining restricted-data or runtime gates; do not regenerate real-data products merely to validate a prose edit.
