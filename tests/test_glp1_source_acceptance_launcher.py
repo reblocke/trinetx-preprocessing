@@ -35,3 +35,28 @@ def test_dry_run_lists_all_private_acceptance_gates(tmp_path: Path, capsys) -> N
     assert "--raw-reference" in output
     assert "compare-reference-outputs" in output
     assert not (tmp_path / "receipts").exists()
+
+
+def test_dry_run_includes_full_source_evidence_gates_when_baseline_is_supplied(
+    tmp_path: Path, capsys
+) -> None:
+    module = _module()
+    result = module.main(
+        [
+            "--database", str(tmp_path / "canonical.duckdb"),
+            "--compatibility-output", str(tmp_path / "compatibility"),
+            "--raw-input", str(tmp_path / "raw"),
+            "--raw-output", str(tmp_path / "raw-output"),
+            "--canonical-output", str(tmp_path / "canonical-output"),
+            "--config", str(tmp_path / "config.yml"),
+            "--receipt-dir", str(tmp_path / "receipts"),
+            "--compatibility-baseline", str(tmp_path / "baseline.json"),
+            "--compatibility-parity-out", str(tmp_path / "parity.json"),
+            "--element-completeness-out", str(tmp_path / "elements.json"),
+            "--dry-run",
+        ]
+    )
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "verify_combined_parity.py" in output
+    assert "verify_element_completeness.py" in output
