@@ -51,6 +51,7 @@ from trinetx_preprocessing.combined_preprocessing.evidence import (
     write_evidence,
 )
 from trinetx_preprocessing.combined_preprocessing.glp1_adapter import (
+    canonical_inventory_from_preprocessed,
     materialize_glp1_observability_from_preprocessed,
     materialize_glp1_sources_from_preprocessed,
 )
@@ -67,6 +68,7 @@ from trinetx_preprocessing.config import (
     ConfigError,
     load_config,
 )
+from trinetx_preprocessing.glp1_eligibility.builder import build_glp1_eligibility
 from trinetx_preprocessing.glp1_eligibility.cohort import (
     build_cohort_flow,
     build_core_cohort,
@@ -3396,6 +3398,7 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         direct.close()
         adapted.close()
 
+
     direct = duckdb.connect(str(direct_path))
     adapted = duckdb.connect(str(adapted_path))
     try:
@@ -3456,6 +3459,85 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
     finally:
         direct.close()
         adapted.close()
+
+
+def test_glp1_reference_build_reads_canonical_source_without_raw_exports(
+    tmp_path: Path,
+) -> None:
+    """The database source mode must not recreate a second raw-source scan."""
+
+    input_root = _copy_glp1_fixture_for_combined(tmp_path)
+    config = load_config(_write_combined_config(tmp_path, data_dir=input_root))
+    combined = build_preprocessed(config, strict=True)
+    glp1_config = REPOSITORY_ROOT / "config/glp1_eligibility.yml"
+
+    raw_output = tmp_path / "raw-reference"
+    raw = build_glp1_eligibility(
+        input_root=input_root,
+        output_dir=raw_output,
+        config_path=glp1_config,
+    )
+
+    unavailable_raw_root = tmp_path / "raw-unavailable"
+    input_root.rename(unavailable_raw_root)
+    database_output = tmp_path / "canonical-reference"
+    database = build_glp1_eligibility(
+        database_path=combined.database_path,
+        output_dir=database_output,
+        config_path=glp1_config,
+    )
+
+    assert database.counts == raw.counts
+    raw_connection = duckdb.connect(
+        str(raw_output / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    database_connection = duckdb.connect(
+        str(database_output / "glp1_hypercapnia.duckdb"), read_only=True
+    )
+    try:
+        for table_name in (
+            "analysis_glp1_eligibility",
+            "eligibility_evidence_long",
+            "cohort_flow",
+            "source_file_inventory",
+            "unmapped_code_frequency",
+        ):
+            columns = [
+                row[1]
+                for row in raw_connection.execute(
+                    f"PRAGMA table_info({table_name})"
+                ).fetchall()
+                if row[1] not in {"run_id", "index_event_id"}
+            ]
+            projection = ", ".join(columns)
+            raw_rows = raw_connection.execute(
+                f"SELECT {projection} FROM {table_name} ORDER BY ALL"
+            ).fetchall()
+            database_rows = database_connection.execute(
+                f"SELECT {projection} FROM {table_name} ORDER BY ALL"
+            ).fetchall()
+            assert database_rows == raw_rows, table_name
+    finally:
+        raw_connection.close()
+        database_connection.close()
+
+
+def test_canonical_glp1_consumer_rejects_missing_source_audit(tmp_path: Path) -> None:
+    config = load_config(_write_combined_config(tmp_path))
+    combined = build_preprocessed(config, strict=True)
+    connection = duckdb.connect(str(combined.database_path))
+    try:
+        connection.execute("DROP TABLE canonical_source_audit_manifest")
+        connection.execute("CHECKPOINT")
+    finally:
+        connection.close()
+
+    catalog = load_concept_sets(REPOSITORY_ROOT / "config/concept_sets")
+    with pytest.raises(ValueError, match="Canonical source validation failed"):
+        canonical_inventory_from_preprocessed(
+            combined.database_path,
+            catalog=catalog,
+        )
 
 
 def test_glp1_adapter_rejects_mismatched_glp1_catalog(tmp_path: Path) -> None:

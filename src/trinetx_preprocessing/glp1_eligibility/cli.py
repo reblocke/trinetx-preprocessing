@@ -41,9 +41,26 @@ def build_parser() -> argparse.ArgumentParser:
     validate_export_parser.add_argument("--json-out", type=Path)
 
     build_command = subparsers.add_parser(
-        "build", help="Build the versioned GLP-1 DuckDB and Parquet outputs."
+        "build", help="Build reference GLP-1 outputs from one validated source mode."
     )
-    build_command.add_argument("--input", type=Path, required=True)
+    source_mode = build_command.add_mutually_exclusive_group(required=True)
+    source_mode.add_argument(
+        "--input",
+        type=Path,
+        help="Raw export root; retained only for parity and historical reproduction.",
+    )
+    source_mode.add_argument(
+        "--database",
+        type=Path,
+        help=(
+            "Published canonical preprocessing database; never falls back to raw CSVs."
+        ),
+    )
+    build_command.add_argument(
+        "--raw-reference",
+        action="store_true",
+        help="Acknowledge that --input is retained only for parity and reproduction.",
+    )
     build_command.add_argument("--output", type=Path, required=True)
     build_command.add_argument("--config", type=Path, required=True)
     build_command.add_argument(
@@ -101,8 +118,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if report.valid else 2
 
         if args.command == "build":
+            if args.input is not None and not args.raw_reference:
+                raise ValueError("--input requires explicit --raw-reference.")
+            if args.database is not None and args.raw_reference:
+                raise ValueError("--raw-reference cannot be used with --database.")
             result = build_glp1_eligibility(
                 input_root=args.input,
+                database_path=args.database,
                 output_dir=args.output,
                 config_path=args.config,
                 replace=args.replace,

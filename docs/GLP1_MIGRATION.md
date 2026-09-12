@@ -12,7 +12,10 @@ rescanning raw clinical CSVs. Element membership is source candidacy, not a
 GLP-1 phenotype or cohort decision.
 
 The standalone `python -m trinetx_preprocessing.glp1_eligibility` command is
-retained as the computational reference during migration.
+retained as a computational reference during migration. Its `--database` mode
+validates the canonical source contract and consumes the shared domain tables
+and source-audit evidence without opening raw CSVs. Its explicit `--input` mode
+is retained only for private parity and historical reproduction.
 `combined_preprocessing/glp1_adapter.py` is likewise a temporary parity bridge.
 Neither defines a second canonical preprocessing output, and neither should
 remain as a permanent parallel workflow after full-data parity.

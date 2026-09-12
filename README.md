@@ -108,21 +108,27 @@ bridge, not a permanent parallel product or package.
 
 ## Downstream GLP-1 eligibility
 
-The standalone raw-ingestion GLP-1 CLI remains the computational reference
-during migration. The unified product is currently an
-adapter-validated source boundary, not a production CLI cutover or a second
-canonical preprocessing product. The adapter is temporary: GLP-1 elements and
-later cohort derivations belong in the same shared workflow as the legacy
-elements, not in a permanent standalone module. A later migration PR must wire
-the manifest-bound source into the standalone reference CLI and prove full-data
-adapter-versus-reference parity before the raw scan can be deprecated:
+The standalone GLP-1 CLI remains a reference/parity consumer during migration.
+It accepts either an explicit raw-reference export or the manifest-bound
+canonical database. Database mode validates the source contract and reads its
+shared domain tables plus canonical audit evidence; it does not reopen raw
+clinical CSVs or create a second source product. The adapter remains temporary:
+GLP-1 elements and later cohort derivations belong in the same shared workflow
+as the legacy elements. Private full-data parity remains required before raw
+reference processing can be deprecated:
 
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
   --input /path/to/trinetx_export
 
+# Reference-only raw mode requires an explicit acknowledgement.
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility build \
-  --input /path/to/trinetx_export \
+  --input /path/to/trinetx_export --raw-reference \
+  --output /path/to/output/glp1_eligibility \
+  --config config/glp1_eligibility.yml
+
+./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility build \
+  --database /private/output/trinetx_preprocessed.duckdb \
   --output /path/to/output/glp1_eligibility \
   --config config/glp1_eligibility.yml
 

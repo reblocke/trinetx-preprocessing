@@ -19,6 +19,10 @@ for the repository. Historical evidence and decision detail remain in
   show that the existing GLP-1 derivation reads the same five clinical-domain
   inputs and produces the same downstream fixture outputs from raw ingestion
   and from the canonical database.
+- Canonical publication includes reusable file-level audit evidence. The
+  reference GLP-1 CLI can consume that validated database without reopening raw
+  exports; this does not make its study-specific output a second canonical
+  source product.
 - Historical combined-build and 36-file compatibility evidence remains valid
   for the behavior heads named in `VALIDATION.md`.
 - The preserved Stata cohort reference is frozen at

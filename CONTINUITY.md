@@ -23,6 +23,9 @@
   traditional and GLP-1 workflows.
 - The GLP-1 adapter and standalone raw ingestion remain migration references
   until frozen-head parity is demonstrated on approved inputs.
+- Canonical preprocessing owns reusable source-file audit evidence. The
+  reference GLP-1 consumer may read that evidence and the validated shared
+  tables, but may not rescan raw exports in database mode.
 - The future cutover is an orchestration change: existing cohort, phenotype,
   flow, evidence, and output logic must run unchanged after source materialization.
 - Public continuity records durable product decisions and validation boundaries,
@@ -48,13 +51,13 @@
   intentionally excluded from the public repository.
 
 ## Now
-- Await a named, stable downstream cohort behavior head before beginning the
-  contract-preserving GLP-1 cutover.
+- Complete reviewable synthetic and private-data gates for canonical-source
+  GLP-1 reference consumption; keep the shared source product canonical.
 
 ## Next
 - Identify the stable downstream cohort behavior head.
-- Implement the GLP-1 cutover as a separate reviewed change with exact contract
-  tests, synthetic parity, and explicit private-data/licensed-runtime gates.
+- Run frozen-head private full-data adapter/reference parity with explicit
+  private-data and licensed-runtime gates.
 
 ## Open questions (UNCONFIRMED if needed)
 - The stable downstream cohort-refactor behavior head is UNCONFIRMED.
