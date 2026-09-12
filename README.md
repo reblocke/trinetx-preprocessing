@@ -132,6 +132,12 @@ reference processing can be deprecated:
   --output /path/to/output/glp1_eligibility \
   --config config/glp1_eligibility.yml
 
+# Private acceptance gate after running both source modes at the same head.
+./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility \
+  compare-reference-outputs \
+  --raw-output /path/to/output/glp1_raw_reference \
+  --canonical-output /path/to/output/glp1_canonical --json
+
 ./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility status \
   --output /path/to/output/glp1_eligibility \
   --watch --interval-seconds 30

@@ -88,6 +88,9 @@ from trinetx_preprocessing.glp1_eligibility.ingestion import (
     build_raw_observability_summaries,
     ingest_core_sources,
 )
+from trinetx_preprocessing.glp1_eligibility.parity import (
+    compare_glp1_reference_outputs,
+)
 from trinetx_preprocessing.glp1_eligibility.provenance import build_input_inventory
 from trinetx_preprocessing.process_locks import SpawnedLockFileDescriptor
 from trinetx_preprocessing.regression import (
@@ -3398,7 +3401,6 @@ def test_glp1_source_adapter_matches_direct_synthetic_ingestion(
         direct.close()
         adapted.close()
 
-
     direct = duckdb.connect(str(direct_path))
     adapted = duckdb.connect(str(adapted_path))
     try:
@@ -3488,6 +3490,8 @@ def test_glp1_reference_build_reads_canonical_source_without_raw_exports(
     )
 
     assert database.counts == raw.counts
+    parity = compare_glp1_reference_outputs(raw_output, database_output)
+    assert parity.valid, parity.errors
     raw_connection = duckdb.connect(
         str(raw_output / "glp1_hypercapnia.duckdb"), read_only=True
     )

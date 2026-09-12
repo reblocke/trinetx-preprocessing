@@ -15,6 +15,7 @@ from .config import GLP1ConfigError, load_glp1_config
 from .discovery import validate_export
 from .monitoring import process_appears_active, read_run_state
 from .outputs import summarize_database
+from .parity import compare_glp1_reference_outputs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -74,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     summarize_parser.add_argument("--database", type=Path, required=True)
     summarize_parser.add_argument("--json", action="store_true")
+
+    compare_parser = subparsers.add_parser(
+        "compare-reference-outputs",
+        help="Compare raw-reference and canonical-source GLP-1 outputs.",
+    )
+    compare_parser.add_argument("--raw-output", type=Path, required=True)
+    compare_parser.add_argument("--canonical-output", type=Path, required=True)
+    compare_parser.add_argument("--json", action="store_true")
 
     status_parser = subparsers.add_parser(
         "status", help="Read a long-running build's atomic progress state."
@@ -163,6 +172,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     + ", ".join(f"{key}={value}" for key, value in summary.items())
                 )
             return 0
+
+        if args.command == "compare-reference-outputs":
+            result = compare_glp1_reference_outputs(
+                args.raw_output,
+                args.canonical_output,
+            )
+            payload = result.to_dict()
+            if args.json:
+                print(json.dumps(payload, indent=2))
+            else:
+                print(
+                    "GLP-1 source-mode parity: "
+                    + ("passed" if result.valid else "failed")
+                )
+                for error in result.errors:
+                    print(f"- {error}")
+            return 0 if result.valid else 1
 
         if args.command == "status":
             while True:
