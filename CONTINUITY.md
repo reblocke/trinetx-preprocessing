@@ -42,6 +42,11 @@
   PR #9 head passed its documented local and GitHub checks.
 - Importing downstream cohort construction remains paused until that codebase
   exposes a named stable behavior head.
+- The active GLP-1 source-contract branch adds canonical source audit tables,
+  raw-free database consumption, exact GLP output comparison, and a sequential
+  private acceptance launcher. The launcher now requires aggregate 36-file
+  baseline parity and shared-element completeness evidence before it can write
+  a completed acceptance receipt.
 
 ## Done
 - Unified preprocessing and source-catalog interfaces are public and merged.
@@ -56,8 +61,10 @@
 
 ## Next
 - Identify the stable downstream cohort behavior head.
-- Run frozen-head private full-data adapter/reference parity with explicit
-  private-data and licensed-runtime gates.
+- Finish the active frozen-head private full-data acceptance sequence: validate
+  the canonical product, compare its 36 compatibility projections with the
+  approved aggregate baseline, record shared-element completeness, and compare
+  raw-reference with database-backed GLP-1 outputs.
 
 ## Open questions (UNCONFIRMED if needed)
 - The stable downstream cohort-refactor behavior head is UNCONFIRMED.
