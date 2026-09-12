@@ -143,6 +143,11 @@ reference processing can be deprecated:
   --watch --interval-seconds 30
 ```
 
+The comparator checks all contracted database rows and schemas, plus the
+byte-identical public data dictionary and aggregate QA report. It excludes only
+documented run identifiers, index-event identifiers, timestamps, and input
+paths where those operational fields are expected to differ.
+
 See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
 #6 for the downstream analytic contract and clinical-review requirements.
 The adapter has synthetic parity evidence at the current head; a new private

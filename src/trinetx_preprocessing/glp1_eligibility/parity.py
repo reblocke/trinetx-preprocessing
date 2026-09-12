@@ -39,6 +39,10 @@ _OPERATIONAL_COLUMNS = frozenset({"run_id", "index_event_id"})
 _OPERATIONAL_MANIFEST_KEYS = frozenset(
     {"run_id", "run_started_at", "run_completed_at", "input_root"}
 )
+_STABLE_PUBLIC_ARTIFACTS = (
+    "data_dictionary.csv",
+    "data_quality_report.html",
+)
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,7 @@ def compare_glp1_reference_outputs(
     errors: list[str] = []
     _compare_output_inventory(raw_root, canonical_root, errors)
     _compare_json_manifest(raw_root, canonical_root, errors)
+    _compare_stable_public_artifacts(raw_root, canonical_root, errors)
     raw_database = raw_root / _DATABASE_NAME
     canonical_database = canonical_root / _DATABASE_NAME
     if not raw_database.is_file() or not canonical_database.is_file():
@@ -149,6 +154,23 @@ def _compare_json_manifest(
         errors.append(
             "Output run manifests differ outside declared operational fields."
         )
+
+
+def _compare_stable_public_artifacts(
+    raw_root: Path,
+    canonical_root: Path,
+    errors: list[str],
+) -> None:
+    """Require byte identity for public artifacts with no run-specific fields."""
+
+    for name in _STABLE_PUBLIC_ARTIFACTS:
+        raw_path = raw_root / name
+        canonical_path = canonical_root / name
+        if not raw_path.is_file() or not canonical_path.is_file():
+            errors.append(f"Both output roots must contain {name}.")
+            continue
+        if raw_path.read_bytes() != canonical_path.read_bytes():
+            errors.append(f"Contents differ for stable public artifact: {name}")
 
 
 def _compare_table(

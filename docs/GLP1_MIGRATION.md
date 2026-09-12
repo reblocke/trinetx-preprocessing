@@ -30,8 +30,9 @@ At restart, validate the unified database, required catalog elements, exact
 36-file compatibility evidence, and additive element completeness; then compare
 the adapter-backed GLP-1 derivation with the frozen standalone result using
 `compare-reference-outputs`. It checks schemas and exact rows across source,
-observability, cohort, evidence, and source-QA tables, plus public-output
-inventory and manifests, excluding only declared run and index-event
-identifiers. Retire a raw-data path only after exact-head private full-data
+observability, cohort, evidence, and source-QA tables; verifies byte-identical
+data dictionaries and aggregate QA reports; and checks public-output inventory
+and manifests, excluding only declared run and index-event identifiers. Retire
+a raw-data path only after exact-head private full-data
 parity. Real row-level outputs and validation extracts must remain external and
 untracked.

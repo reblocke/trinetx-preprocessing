@@ -3492,6 +3492,13 @@ def test_glp1_reference_build_reads_canonical_source_without_raw_exports(
     assert database.counts == raw.counts
     parity = compare_glp1_reference_outputs(raw_output, database_output)
     assert parity.valid, parity.errors
+    (database_output / "data_dictionary.csv").write_text("tampered\n")
+    tampered = compare_glp1_reference_outputs(raw_output, database_output)
+    assert not tampered.valid
+    assert (
+        "Contents differ for stable public artifact: data_dictionary.csv"
+        in tampered.errors
+    )
     raw_connection = duckdb.connect(
         str(raw_output / "glp1_hypercapnia.duckdb"), read_only=True
     )
