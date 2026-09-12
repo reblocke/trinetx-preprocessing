@@ -148,6 +148,21 @@ byte-identical public data dictionary and aggregate QA report. It excludes only
 documented run identifiers, index-event identifiers, timestamps, and input
 paths where those operational fields are expected to differ.
 
+For the private full acceptance sequence, use the launcher to run that order
+without manually skipping a gate; it writes one receipt per command and stops
+on the first failure:
+
+```bash
+./.venv/bin/python scripts/run_glp1_source_acceptance.py \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --compatibility-output /private/output \
+  --raw-input /private/TriNetX \
+  --raw-output /private/validation/glp1_raw_reference \
+  --canonical-output /private/validation/glp1_canonical \
+  --config config/glp1_eligibility.yml \
+  --receipt-dir /private/validation/glp1_acceptance_receipts
+```
+
 See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
 #6 for the downstream analytic contract and clinical-review requirements.
 The adapter has synthetic parity evidence at the current head; a new private
