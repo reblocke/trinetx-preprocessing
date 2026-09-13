@@ -3195,6 +3195,11 @@ def test_combined_validation_checks_source_integrity_by_domain(
         "_DIRECT_DUPLICATE_SOURCE_MAX_ROWS",
         0,
     )
+    monkeypatch.setattr(
+        combined_validation,
+        "_DIRECT_ORPHAN_MEMBERSHIP_MAX_ROWS",
+        0,
+    )
     monkeypatch.setattr(combined_validation, "remove_tree_strict", record_cleanup)
     validation = validate_preprocessed_database(result.database_path)
 
@@ -3218,6 +3223,7 @@ def test_combined_validation_checks_source_integrity_by_domain(
     )
     assert "Combined labs duplicate-source scratch" in cleanup_contexts
     assert "Combined duplicate-source validation scratch" in cleanup_contexts
+    assert "Combined orphan-membership validation scratch" in cleanup_contexts
 
 
 @pytest.mark.parametrize("intermediate_format", ["parquet", "csv"])

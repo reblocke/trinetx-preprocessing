@@ -40,6 +40,8 @@ from .scratch import COMBINED_VALIDATION_PREFIX
 
 _DIRECT_DUPLICATE_SOURCE_MAX_ROWS = 2_000_000
 _DUPLICATE_SOURCE_BUCKET_COUNT = 64
+_DIRECT_ORPHAN_MEMBERSHIP_MAX_ROWS = 2_000_000
+_ORPHAN_MEMBERSHIP_BUCKET_COUNT = 256
 
 
 @dataclass(frozen=True)
@@ -571,23 +573,148 @@ def _count_orphan_memberships(connection: duckdb.DuckDBPyConnection) -> int:
     orphan_count = int(
         connection.execute(
             "SELECT count(*) FROM element_membership "
-            f"WHERE logical_domain IS NULL OR logical_domain NOT IN ({placeholders})",
+            "WHERE source_record_id IS NULL OR logical_domain IS NULL "
+            f"OR logical_domain NOT IN ({placeholders})",
             list(allowed_domains),
         ).fetchone()[0]
     )
-    for domain in allowed_domains:
-        table_name = SOURCE_TABLE_BY_DOMAIN[domain]
-        orphan_count += int(
-            connection.execute(
-                "SELECT count(*) FROM element_membership AS membership "
-                f"LEFT JOIN {_identifier(table_name)} AS source "
-                "USING (source_record_id) "
-                "WHERE membership.logical_domain = ? "
-                "AND source.source_record_id IS NULL",
-                [domain],
-            ).fetchone()[0]
+    temp_directory = Path(
+        str(
+            connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
         )
+    )
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=COMBINED_VALIDATION_PREFIX,
+            dir=temp_directory,
+        )
+    )
+    try:
+        for domain in allowed_domains:
+            table_name = SOURCE_TABLE_BY_DOMAIN[domain]
+            membership_rows = int(
+                connection.execute(
+                    "SELECT count(*) FROM element_membership "
+                    "WHERE logical_domain = ? AND source_record_id IS NOT NULL",
+                    [domain],
+                ).fetchone()[0]
+            )
+            if membership_rows <= _DIRECT_ORPHAN_MEMBERSHIP_MAX_ROWS:
+                orphan_count += _count_orphans_for_relations(
+                    connection,
+                    membership_relation=(
+                        "(SELECT source_record_id FROM element_membership "
+                        f"WHERE logical_domain = {_sql_string(domain)} "
+                        "AND source_record_id IS NOT NULL)"
+                    ),
+                    source_relation=_identifier(table_name),
+                )
+                continue
+
+            domain_scratch = scratch / domain
+            try:
+                source_root = domain_scratch / "source"
+                membership_root = domain_scratch / "membership"
+                _write_id_buckets(
+                    connection,
+                    relation=_identifier(table_name),
+                    output_root=source_root,
+                )
+                _write_id_buckets(
+                    connection,
+                    relation=(
+                        "(SELECT source_record_id FROM element_membership "
+                        f"WHERE logical_domain = {_sql_string(domain)} "
+                        "AND source_record_id IS NOT NULL)"
+                    ),
+                    output_root=membership_root,
+                )
+                for bucket in range(_ORPHAN_MEMBERSHIP_BUCKET_COUNT):
+                    membership_files = _partition_files(membership_root, bucket)
+                    if not membership_files:
+                        continue
+                    source_files = _partition_files(source_root, bucket)
+                    membership_relation = _parquet_relation(membership_files)
+                    source_relation = (
+                        _parquet_relation(source_files)
+                        if source_files
+                        else "(SELECT CAST(NULL AS VARCHAR) AS source_record_id WHERE false)"
+                    )
+                    orphan_count += _count_orphans_for_relations(
+                        connection,
+                        membership_relation=membership_relation,
+                        source_relation=source_relation,
+                    )
+            finally:
+                if domain_scratch.exists():
+                    remove_tree_strict(
+                        domain_scratch,
+                        context=f"Combined {domain} orphan-membership scratch",
+                    )
+    finally:
+        if scratch.exists():
+            remove_tree_strict(
+                scratch,
+                context="Combined orphan-membership validation scratch",
+            )
     return orphan_count
+
+
+def _write_id_buckets(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    relation: str,
+    output_root: Path,
+) -> None:
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    connection.execute(
+        f"""
+        COPY (
+            SELECT
+                source_record_id,
+                hash(source_record_id) % {_ORPHAN_MEMBERSHIP_BUCKET_COUNT}
+                    AS source_bucket
+            FROM {relation}
+            WHERE source_record_id IS NOT NULL
+        ) TO {_sql_string(str(output_root))} (
+            FORMAT PARQUET,
+            PARTITION_BY (source_bucket),
+            COMPRESSION SNAPPY,
+            ROW_GROUP_SIZE 250000
+        )
+        """
+    )
+
+
+def _partition_files(root: Path, bucket: int) -> list[Path]:
+    bucket_directory = root / f"source_bucket={bucket}"
+    return sorted(
+        path
+        for path in bucket_directory.glob("*.parquet")
+        if not path.name.startswith("._")
+    )
+
+
+def _parquet_relation(files: list[Path]) -> str:
+    paths = ", ".join(_sql_string(str(path)) for path in files)
+    return f"read_parquet([{paths}], hive_partitioning=false)"
+
+
+def _count_orphans_for_relations(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    membership_relation: str,
+    source_relation: str,
+) -> int:
+    return int(
+        connection.execute(
+            "SELECT count(*) FROM "
+            f"{membership_relation} AS membership "
+            f"LEFT JOIN {source_relation} AS source USING (source_record_id) "
+            "WHERE source.source_record_id IS NULL"
+        ).fetchone()[0]
+    )
 
 
 def _count_retained_sources_without_included_membership(

@@ -47,6 +47,9 @@
   private acceptance launcher. The launcher now requires aggregate 36-file
   baseline parity and shared-element completeness evidence before it can write
   a completed acceptance receipt.
+- Full-scale source-membership referential integrity is validated through
+  bounded hash partitions and temporary local spill storage; it must remain an
+  exact check rather than being relaxed for large products.
 
 ## Done
 - Unified preprocessing and source-catalog interfaces are public and merged.
