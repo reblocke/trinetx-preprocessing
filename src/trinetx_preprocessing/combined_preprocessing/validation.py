@@ -639,7 +639,10 @@ def _count_orphan_memberships(connection: duckdb.DuckDBPyConnection) -> int:
                     source_relation = (
                         _parquet_relation(source_files)
                         if source_files
-                        else "(SELECT CAST(NULL AS VARCHAR) AS source_record_id WHERE false)"
+                        else (
+                            "(SELECT CAST(NULL AS VARCHAR) AS source_record_id "
+                            "WHERE false)"
+                        )
                     )
                     orphan_count += _count_orphans_for_relations(
                         connection,
