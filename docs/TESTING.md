@@ -48,3 +48,9 @@ uv run python -m trinetx_preprocessing validate-cohort-source --help
 - Current code/API and synthetic CI acceptance does not claim a private
   full-data run for the expanded traditional catalog or current GLP-1 adapter.
   See `CURRENT_STATE.md` and `VALIDATION.md` before making cutover claims.
+
+## Selecting checks for an update
+
+Use [UPDATE_VERIFICATION.md](UPDATE_VERIFICATION.md) for change-based routing,
+exact source-mode comparison, safe staged-product reuse, and compact private
+receipts. Public checks do not authorize source cutover.

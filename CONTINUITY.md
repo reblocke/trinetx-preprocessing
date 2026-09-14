@@ -54,6 +54,10 @@
   memory and substantially less filesystem overhead for future runs.
 
 ## Done
+- Added change-based `verify-update` planning/execution, provenance-checked
+  staged-product promotion through existing publication locks, and bounded
+  exact GLP-1 comparison with private aggregate receipts. Private acceptance
+  remains pending; promotion alone does not close that gate.
 - Unified preprocessing and source-catalog interfaces are public and merged.
 - Human- and machine-facing documentation records the privacy, provenance,
   compatibility, and downstream-migration boundaries.

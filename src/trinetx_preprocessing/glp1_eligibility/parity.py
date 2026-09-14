@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import duckdb
 
+from ..combined_preprocessing.builder import require_safe_output_location
+from ..combined_preprocessing.database import open_combined_database
 from .outputs import OUTPUT_TABLES
 
 _DATABASE_NAME = "glp1_hypercapnia.duckdb"
@@ -35,11 +37,12 @@ _CONTRACT_TABLES = (
     *OUTPUT_TABLES,
     "cohort_flow",
 )
-_OPERATIONAL_COLUMNS = frozenset({"run_id", "index_event_id"})
+_OPERATIONAL_COLUMNS = frozenset({"run_id"})
 _OPERATIONAL_MANIFEST_KEYS = frozenset(
     {"run_id", "run_started_at", "run_completed_at", "input_root"}
 )
 _STABLE_PUBLIC_ARTIFACTS = (
+    "cohort_flow.csv",
     "data_dictionary.csv",
     "data_quality_report.html",
 )
@@ -52,12 +55,15 @@ class ParityResult:
     valid: bool
     errors: tuple[str, ...]
     tables_checked: tuple[str, ...]
+    table_evidence: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "valid": self.valid,
             "errors": list(self.errors),
             "tables_checked": list(self.tables_checked),
+            "table_evidence": self.table_evidence,
+            "comparison": "bidirectional_except_all",
         }
 
 
@@ -67,9 +73,10 @@ def compare_glp1_reference_outputs(
 ) -> ParityResult:
     """Compare every contracted table and public output without PHI disclosure.
 
-    The two builds have intentionally distinct run and index-event identifiers.
-    Those operational identifiers are excluded only after exact schemas are
-    checked. All source evidence, clinical values, multiplicities, dates,
+    The two builds have intentionally distinct run identifiers. Only run IDs
+    are excluded after exact schema checks. Index-event IDs are deterministic
+    from patient, encounter and date and remain part of exact comparison.
+    All source evidence, clinical values, multiplicities, dates,
     missingness, QA counts, and non-operational manifest fields remain exact.
     """
 
@@ -86,17 +93,66 @@ def compare_glp1_reference_outputs(
         return ParityResult(False, tuple(errors), ())
 
     checked: list[str] = []
-    raw = duckdb.connect(str(raw_database), read_only=True)
-    canonical = duckdb.connect(str(canonical_database), read_only=True)
-    try:
-        for table_name in _CONTRACT_TABLES:
-            _compare_table(raw, canonical, table_name, errors)
-            checked.append(table_name)
-        _compare_run_manifest(raw, canonical, errors)
-    finally:
-        raw.close()
-        canonical.close()
-    return ParityResult(not errors, tuple(errors), tuple(checked))
+    evidence: dict[str, object] = {}
+    for root in (raw_root, canonical_root):
+        require_safe_output_location(root, artifact_label="GLP parity/spill")
+    with open_combined_database(
+        raw_database, read_only=True, memory_limit_mib=2048
+    ) as raw:
+        literal = str(canonical_database.resolve()).replace("'", "''")
+        raw.execute(f"ATTACH '{literal}' AS verification_candidate (READ_ONLY)")
+        canonical = duckdb.connect(str(canonical_database), read_only=True)
+        try:
+            for table_name in _CONTRACT_TABLES:
+                evidence[table_name] = _compare_table(
+                    raw, canonical, table_name, errors
+                )
+                checked.append(table_name)
+            _compare_run_manifest(raw, canonical, errors)
+            for root, label, catalog in (
+                (raw_root, "raw", "main"),
+                (canonical_root, "canonical", "verification_candidate.main"),
+            ):
+                for table in OUTPUT_TABLES:
+                    path = root / f"{table}.parquet"
+                    if path.exists():
+                        literal = str(path.resolve()).replace("'", "''")
+                        left = f"SELECT * FROM {catalog}.{_identifier(table)}"
+                        right = f"SELECT * FROM read_parquet('{literal}')"
+                        left_schema = [
+                            r[:2] for r in raw.execute("DESCRIBE " + left).fetchall()
+                        ]
+                        right_schema = [
+                            r[:2] for r in raw.execute("DESCRIBE " + right).fetchall()
+                        ]
+                        if left_schema != right_schema:
+                            errors.append(
+                                f"Published Parquet schema differs: {label}.{table}"
+                            )
+                            continue
+                        difference = _difference_counts(raw, left, right)
+                        evidence[f"{label}.{table}.parquet"] = difference
+                        if any(difference.values()):
+                            errors.append(f"Published Parquet differs: {label}.{table}")
+        finally:
+            canonical.close()
+    return ParityResult(not errors, tuple(errors), tuple(checked), evidence)
+
+
+def _difference_counts(connection, left: str, right: str) -> dict[str, int]:
+    """Return only aggregate differences; retain NULLs and duplicate counts."""
+    return {
+        "left_only": int(
+            connection.execute(
+                f"SELECT count(*) FROM (({left}) EXCEPT ALL ({right}))"
+            ).fetchone()[0]
+        ),
+        "right_only": int(
+            connection.execute(
+                f"SELECT count(*) FROM (({right}) EXCEPT ALL ({left}))"
+            ).fetchone()[0]
+        ),
+    }
 
 
 def _compare_output_inventory(
@@ -178,7 +234,7 @@ def _compare_table(
     canonical: duckdb.DuckDBPyConnection,
     table_name: str,
     errors: list[str],
-) -> None:
+) -> dict[str, object] | None:
     raw_schema = _table_schema(raw, table_name)
     canonical_schema = _table_schema(canonical, table_name)
     if raw_schema is None or canonical_schema is None:
@@ -189,14 +245,21 @@ def _compare_table(
         return
     columns = [name for name, _ in raw_schema if name not in _OPERATIONAL_COLUMNS]
     projection = ", ".join(_identifier(name) for name in columns)
-    raw_rows = raw.execute(
-        f"SELECT {projection} FROM {_identifier(table_name)} ORDER BY ALL"
-    ).fetchall()
-    canonical_rows = canonical.execute(
-        f"SELECT {projection} FROM {_identifier(table_name)} ORDER BY ALL"
-    ).fetchall()
-    if raw_rows != canonical_rows:
+    left = f"SELECT {projection} FROM {_identifier(table_name)}"
+    right = (
+        f"SELECT {projection} FROM "
+        f"verification_candidate.main.{_identifier(table_name)}"
+    )
+    difference = _difference_counts(raw, left, right)
+    if any(difference.values()):
         errors.append(f"Rows differ for table: {table_name}")
+    return {
+        "schema": raw_schema,
+        "row_count": int(
+            raw.execute(f"SELECT count(*) FROM {_identifier(table_name)}").fetchone()[0]
+        ),
+        **difference,
+    }
 
 
 def _compare_run_manifest(
@@ -209,9 +272,7 @@ def _compare_run_manifest(
     if raw_schema != canonical_schema or raw_schema is None:
         errors.append("Schema differs for table: run_manifest")
         return
-    columns = [
-        name for name, _ in raw_schema if name not in _OPERATIONAL_MANIFEST_KEYS
-    ]
+    columns = [name for name, _ in raw_schema if name not in _OPERATIONAL_MANIFEST_KEYS]
     projection = ", ".join(_identifier(name) for name in columns)
     raw_rows = raw.execute(
         f"SELECT {projection} FROM run_manifest ORDER BY ALL"
@@ -229,7 +290,8 @@ def _table_schema(
 ) -> tuple[tuple[str, str], ...] | None:
     rows = connection.execute(
         "SELECT column_name, data_type FROM information_schema.columns "
-        "WHERE table_schema = 'main' AND table_name = ? ORDER BY ordinal_position",
+        "WHERE table_catalog = current_database() AND table_schema = 'main' "
+        "AND table_name = ? ORDER BY ordinal_position",
         [table_name],
     ).fetchall()
     if not rows:
