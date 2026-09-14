@@ -86,14 +86,24 @@ def test_historical_fingerprint_is_not_a_commit_label(tmp_path: Path):
     git("add", ".")
     git("commit", "-qm", "first")
     first = code_fingerprint("HEAD", root=tmp_path)
+    raw_first = code_fingerprint("HEAD", root=tmp_path, raw_reference=True)
     (tmp_path / "README.md").write_text("Documentation\n")
     git("add", ".")
     git("commit", "-qm", "docs")
     assert code_fingerprint("HEAD", root=tmp_path) == first
+    adapter = (
+        tmp_path / "src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py"
+    )
+    adapter.parent.mkdir(parents=True)
+    adapter.write_text("adapter = 1\n")
+    git("add", ".")
+    git("commit", "-qm", "adapter only")
+    assert code_fingerprint("HEAD", root=tmp_path, raw_reference=True) == raw_first
     (tmp_path / "src/a.py").write_text("a=2\n")
     git("add", ".")
     git("commit", "-qm", "behavior")
     assert code_fingerprint("HEAD", root=tmp_path) != first
+    assert code_fingerprint("HEAD", root=tmp_path, raw_reference=True) != raw_first
 
 
 def test_aggregate_drift_preserves_missing_and_added_metrics():
@@ -277,9 +287,161 @@ def test_receipt_fingerprint_detects_reassignment_with_unchanged_totals():
         assert table_fingerprint(con, "results", columns) != initial
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        "code",
+        "source",
+        "config",
+        "phase",
+        "file",
+        "manifest",
+        "database",
+        "counts",
+    ],
+)
+def test_completed_raw_reuse_requires_bound_evidence(
+    reference_output, tmp_path, monkeypatch, mutation
+):
+    import hashlib
+    import shutil
+    from types import SimpleNamespace
+
+    from trinetx_preprocessing.glp1_eligibility.outputs import summarize_database
+    from trinetx_preprocessing.verification import reuse
+
+    output = tmp_path / "prior/.verification-outputs/raw"
+    shutil.copytree(reference_output, output)
+    manifest = json.loads((output / "run_manifest.json").read_text())
+    config = Path(__file__).resolve().parents[1] / "config/glp1_eligibility.yml"
+    summary = summarize_database(output / "glp1_hypercapnia.duckdb")
+    counts = {
+        k: summary[k]
+        for k in (
+            "hypercapnia_encounters",
+            "patient_index_events",
+            "primary_obesity_hypercapnia",
+            "evidence_rows",
+        )
+    }
+    prior = {
+        "schema_version": 1,
+        "status": "failed",
+        "phase": "glp1_canonical",
+        "private_full_data": True,
+        "plan": {"head": manifest["pipeline_git_sha"]},
+        "source_identity": {"run_id": "source"},
+        "config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+        "steps": [
+            {
+                "name": "glp1_raw",
+                "result": {
+                    "run_id": manifest["run_id"],
+                    "counts": counts,
+                    "warnings": summary["warning_count"],
+                },
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        reuse,
+        "code_fingerprint",
+        lambda ref, **kw: ref if mutation == "code" else "same",
+    )
+    monkeypatch.setattr(
+        reuse,
+        "canonical_inventory_from_preprocessed",
+        lambda *a, **kw: SimpleNamespace(sha256=manifest["input_manifest_sha256"]),
+    )
+    if mutation == "source":
+        prior["source_identity"] = {}
+    if mutation == "config":
+        prior["config_sha256"] = "changed"
+    if mutation == "phase":
+        prior["phase"] = "glp1_raw"
+    if mutation == "counts":
+        counts["evidence_rows"] += 1
+    if mutation == "file":
+        (output / "cohort_flow.csv").unlink()
+    if mutation == "manifest":
+        altered = {**manifest, "pipeline_git_sha": "wrong"}
+        (output / "run_manifest.json").write_text(json.dumps(altered))
+    if mutation == "database":
+        with duckdb.connect(str(output / "glp1_hypercapnia.duckdb")) as con:
+            con.execute("UPDATE run_manifest SET pipeline_git_sha='wrong'")
+    receipt_path = tmp_path / "prior/status.json"
+    receipt_path.write_text(json.dumps(prior))
+    kwargs = dict(
+        plan={"base": manifest["pipeline_git_sha"], "head": "next"},
+        source_identity={"run_id": "source"},
+        database=tmp_path / "source.duckdb",
+        raw_input=Path(manifest["input_root"]),
+        config_path=config,
+    )
+    if mutation:
+        with pytest.raises((ValueError, RuntimeError)):
+            reuse.reuse_raw_reference(receipt_path, **kwargs)
+    else:
+        borrowed, result, proof = reuse.reuse_raw_reference(receipt_path, **kwargs)
+        assert borrowed == output
+        assert result["counts"] == counts and result["reused_existing"]
+        assert proof["producer_revision"] == manifest["pipeline_git_sha"]
+        assert len(proof["files"]) == 8
+        assert receipt_path.read_text() == json.dumps(prior)
+
+
+def test_proven_producer_change_preserves_scientific_comparison(
+    reference_output, tmp_path
+):
+    import shutil
+
+    from trinetx_preprocessing.glp1_eligibility.outputs import OUTPUT_TABLES
+    from trinetx_preprocessing.glp1_eligibility.parity import (
+        compare_glp1_reference_outputs,
+    )
+    from trinetx_preprocessing.verification.metrics import scientific_metrics
+
+    target = tmp_path / "candidate"
+    shutil.copytree(reference_output, target)
+    manifest = json.loads((target / "run_manifest.json").read_text())
+    old = manifest["pipeline_git_sha"]
+    new = "b" * 40
+    manifest["pipeline_git_sha"] = new
+    (target / "run_manifest.json").write_text(json.dumps(manifest))
+    database = target / "glp1_hypercapnia.duckdb"
+    with duckdb.connect(str(database)) as con:
+        tables = con.execute(
+            "SELECT DISTINCT c.table_name FROM information_schema.columns c "
+            "JOIN duckdb_tables() t ON t.table_name=c.table_name "
+            "WHERE c.column_name='pipeline_git_sha'"
+        ).fetchall()
+        for (table,) in tables:
+            con.execute(f'UPDATE "{table}" SET pipeline_git_sha=?', [new])
+        for table in OUTPUT_TABLES:
+            path = str(target / f"{table}.parquet").replace("'", "''")
+            con.execute(f"COPY {table} TO '{path}' (FORMAT PARQUET)")
+    assert not compare_glp1_reference_outputs(reference_output, target).valid
+    assert compare_glp1_reference_outputs(
+        reference_output, target, expected_producer_revisions=(old, new)
+    ).valid
+    assert not compare_glp1_reference_outputs(
+        reference_output, target, expected_producer_revisions=(old, "wrong")
+    ).valid
+    assert scientific_metrics(database) == scientific_metrics(
+        reference_output / "glp1_hypercapnia.duckdb"
+    )
+    with duckdb.connect(str(database)) as con:
+        con.execute("UPDATE analysis_glp1_eligibility SET ind_fda_t2d=NULL")
+    assert not compare_glp1_reference_outputs(
+        reference_output, target, expected_producer_revisions=(old, new)
+    ).valid
+
+
 @pytest.mark.parametrize("parity_passes", [True, False])
+@pytest.mark.parametrize("reuse_reference", [True, False])
 def test_run_receipt_and_owned_cleanup(
-    reference_output, tmp_path, monkeypatch, parity_passes
+    reference_output, tmp_path, monkeypatch, parity_passes, reuse_reference
 ):
     import argparse
     import shutil
@@ -319,18 +481,40 @@ def test_run_receipt_and_owned_cleanup(
         ),
     )
 
+    modes_built = []
+
     def build(**kwargs):
+        modes_built.append(kwargs["output_dir"].name)
         shutil.copytree(reference_output, kwargs["output_dir"])
         return SimpleNamespace(
             run_id="fixture", counts=SimpleNamespace(rows=1), warning_count=0
         )
 
     monkeypatch.setattr(builder, "build_glp1_eligibility", build)
+    if reuse_reference:
+        from trinetx_preprocessing.verification import reuse
+
+        monkeypatch.setattr(
+            reuse,
+            "reuse_raw_reference",
+            lambda *a, **kw: (
+                reference_output,
+                {"reused_existing": True},
+                {"producer_revision": "old", "output": str(reference_output)},
+            ),
+        )
+        compare = parity.compare_glp1_reference_outputs
+
+        def compare_reuse(*args, **kwargs):
+            assert kwargs["expected_producer_revisions"] == ("old", "abc")
+            return compare(*args)
+
+        monkeypatch.setattr(parity, "compare_glp1_reference_outputs", compare_reuse)
     if not parity_passes:
         monkeypatch.setattr(
             parity,
             "compare_glp1_reference_outputs",
-            lambda *a: parity.ParityResult(False, ("fixture mismatch",), ()),
+            lambda *a, **kw: parity.ParityResult(False, ("fixture mismatch",), ()),
         )
     config = tmp_path / "config.yml"
     config.write_text("synthetic")
@@ -350,6 +534,7 @@ def test_run_receipt_and_owned_cleanup(
         preprocessing_config=None,
         compatibility_baseline=None,
         receipt_dir=tmp_path / "receipt",
+        reuse_raw_receipt=tmp_path / "prior.json" if reuse_reference else None,
     )
     assert cli.run(args) == (0 if parity_passes else 1)
     receipt = json.loads((args.receipt_dir / "status.json").read_text())
@@ -357,3 +542,5 @@ def test_run_receipt_and_owned_cleanup(
     assert (args.receipt_dir / ".verification-outputs").exists() != parity_passes
     assert (args.receipt_dir / "acceptance_complete.json").exists() == parity_passes
     assert sentinel.read_text() == "immutable raw"
+    assert modes_built == (["canonical"] if reuse_reference else ["raw", "canonical"])
+    assert (reference_output / "run_manifest.json").is_file()

@@ -70,6 +70,8 @@ class ParityResult:
 def compare_glp1_reference_outputs(
     raw_output: Path,
     canonical_output: Path,
+    *,
+    expected_producer_revisions: tuple[str, str] | None = None,
 ) -> ParityResult:
     """Compare every contracted table and public output without PHI disclosure.
 
@@ -78,13 +80,18 @@ def compare_glp1_reference_outputs(
     from patient, encounter and date and remain part of exact comparison.
     All source evidence, clinical values, multiplicities, dates,
     missingness, QA counts, and non-operational manifest fields remain exact.
+    A verifier with a raw-code reuse proof may supply both expected producer
+    revisions. In that case every stored producer value is checked against its
+    expected revision before excluding that provenance field from row equality.
     """
 
     raw_root = Path(raw_output)
     canonical_root = Path(canonical_output)
     errors: list[str] = []
     _compare_output_inventory(raw_root, canonical_root, errors)
-    _compare_json_manifest(raw_root, canonical_root, errors)
+    _compare_json_manifest(
+        raw_root, canonical_root, errors, expected_producer_revisions
+    )
     _compare_stable_public_artifacts(raw_root, canonical_root, errors)
     raw_database = raw_root / _DATABASE_NAME
     canonical_database = canonical_root / _DATABASE_NAME
@@ -105,10 +112,10 @@ def compare_glp1_reference_outputs(
         try:
             for table_name in _CONTRACT_TABLES:
                 evidence[table_name] = _compare_table(
-                    raw, canonical, table_name, errors
+                    raw, canonical, table_name, errors, expected_producer_revisions
                 )
                 checked.append(table_name)
-            _compare_run_manifest(raw, canonical, errors)
+            _compare_run_manifest(raw, canonical, errors, expected_producer_revisions)
             for root, label, catalog in (
                 (raw_root, "raw", "main"),
                 (canonical_root, "canonical", "verification_candidate.main"),
@@ -182,6 +189,7 @@ def _compare_json_manifest(
     raw_root: Path,
     canonical_root: Path,
     errors: list[str],
+    expected_producer_revisions: tuple[str, str] | None = None,
 ) -> None:
     paths = (raw_root / "run_manifest.json", canonical_root / "run_manifest.json")
     if not all(path.is_file() for path in paths):
@@ -196,15 +204,17 @@ def _compare_json_manifest(
     if not isinstance(raw, dict) or not isinstance(canonical, dict):
         errors.append("Output run manifests must be JSON objects.")
         return
-    raw_stable = {
-        key: value
-        for key, value in raw.items()
-        if key not in _OPERATIONAL_MANIFEST_KEYS
-    }
+    operational = _OPERATIONAL_MANIFEST_KEYS
+    if expected_producer_revisions is not None:
+        for manifest, revision in zip(
+            (raw, canonical), expected_producer_revisions, strict=True
+        ):
+            if manifest.get("pipeline_git_sha") != revision:
+                errors.append("Output manifest has an unexpected producer revision.")
+        operational = operational | {"pipeline_git_sha"}
+    raw_stable = {key: value for key, value in raw.items() if key not in operational}
     canonical_stable = {
-        key: value
-        for key, value in canonical.items()
-        if key not in _OPERATIONAL_MANIFEST_KEYS
+        key: value for key, value in canonical.items() if key not in operational
     }
     if raw_stable != canonical_stable:
         errors.append(
@@ -234,6 +244,7 @@ def _compare_table(
     canonical: duckdb.DuckDBPyConnection,
     table_name: str,
     errors: list[str],
+    expected_producer_revisions: tuple[str, str] | None = None,
 ) -> dict[str, object] | None:
     raw_schema = _table_schema(raw, table_name)
     canonical_schema = _table_schema(canonical, table_name)
@@ -243,7 +254,15 @@ def _compare_table(
     if raw_schema != canonical_schema:
         errors.append(f"Schema differs for table: {table_name}")
         return
-    columns = [name for name, _ in raw_schema if name not in _OPERATIONAL_COLUMNS]
+    operational = _OPERATIONAL_COLUMNS
+    if expected_producer_revisions is not None and any(
+        name == "pipeline_git_sha" for name, _ in raw_schema
+    ):
+        _check_producer_revisions(
+            raw, canonical, table_name, expected_producer_revisions, errors
+        )
+        operational = operational | {"pipeline_git_sha"}
+    columns = [name for name, _ in raw_schema if name not in operational]
     projection = ", ".join(_identifier(name) for name in columns)
     left = f"SELECT {projection} FROM {_identifier(table_name)}"
     right = (
@@ -266,13 +285,20 @@ def _compare_run_manifest(
     raw: duckdb.DuckDBPyConnection,
     canonical: duckdb.DuckDBPyConnection,
     errors: list[str],
+    expected_producer_revisions: tuple[str, str] | None = None,
 ) -> None:
     raw_schema = _table_schema(raw, "run_manifest")
     canonical_schema = _table_schema(canonical, "run_manifest")
     if raw_schema != canonical_schema or raw_schema is None:
         errors.append("Schema differs for table: run_manifest")
         return
-    columns = [name for name, _ in raw_schema if name not in _OPERATIONAL_MANIFEST_KEYS]
+    operational = _OPERATIONAL_MANIFEST_KEYS
+    if expected_producer_revisions is not None:
+        _check_producer_revisions(
+            raw, canonical, "run_manifest", expected_producer_revisions, errors
+        )
+        operational = operational | {"pipeline_git_sha"}
+    columns = [name for name, _ in raw_schema if name not in operational]
     projection = ", ".join(_identifier(name) for name in columns)
     raw_rows = raw.execute(
         f"SELECT {projection} FROM run_manifest ORDER BY ALL"
@@ -282,6 +308,18 @@ def _compare_run_manifest(
     ).fetchall()
     if raw_rows != canonical_rows:
         errors.append("Rows differ for table: run_manifest")
+
+
+def _check_producer_revisions(raw, canonical, table, revisions, errors):
+    """Validate provenance before allowing a proven raw-reference reuse."""
+    for connection, revision in zip((raw, canonical), revisions, strict=True):
+        count = connection.execute(
+            f"SELECT count(*) FROM {_identifier(table)} "
+            "WHERE pipeline_git_sha IS DISTINCT FROM ?",
+            [revision],
+        ).fetchone()[0]
+        if count:
+            errors.append(f"Unexpected producer revision in table: {table}")
 
 
 def _table_schema(

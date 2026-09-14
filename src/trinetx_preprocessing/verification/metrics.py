@@ -69,7 +69,11 @@ def table_fingerprint(connection, table: str, columns: list[tuple[str, str]]) ->
     Only an aggregate digest leaves this function. The engine can spill sorting
     externally; Python retains at most 4096 hashes. Run IDs are operational.
     """
-    stable = [(name, dtype) for name, dtype in columns if name != "run_id"]
+    stable = [
+        (name, dtype)
+        for name, dtype in columns
+        if name not in {"run_id", "pipeline_git_sha"}
+    ]
     from .policy import sha
 
     digest = hashlib.sha256(sha(stable).encode())

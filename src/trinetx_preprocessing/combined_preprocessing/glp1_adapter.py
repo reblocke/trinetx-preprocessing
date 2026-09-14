@@ -632,12 +632,16 @@ def _glp1_source_membership_sql(
     logical_domain: str,
     concept_domain: str,
 ) -> str:
-    """Return an EXISTS predicate for rows matched by the active GLP-1 catalog.
+    """Return a semijoin predicate for the active GLP-1 catalog.
 
     The canonical preprocessed database intentionally retains candidates from
     multiple downstream consumers.  An adapter consumer must select only the
     memberships belonging to its own active catalog; otherwise traditional
     source candidates would leak into the standalone GLP-1 source contract.
+    Keep the subquery uncorrelated: a correlated EXISTS creates a delimiter
+    join over the full source at private scale and can exhaust bounded memory.
+    IN in a WHERE predicate retains the same rows, including duplicate source
+    records, without multiplying rows for multiple matching memberships.
     """
 
     element_ids = tuple(
@@ -649,11 +653,10 @@ def _glp1_source_membership_sql(
         return "FALSE"
     elements = ", ".join(_sql_string(element_id) for element_id in element_ids)
     return f"""
-        EXISTS (
-            SELECT 1
+        {source_alias}.source_record_id IN (
+            SELECT membership.source_record_id
             FROM preprocessed.element_membership AS membership
-            WHERE membership.source_record_id = {source_alias}.source_record_id
-              AND membership.logical_domain = {_sql_string(logical_domain)}
+            WHERE membership.logical_domain = {_sql_string(logical_domain)}
               AND membership.include
               AND membership.element_id IN ({elements})
         )

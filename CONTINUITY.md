@@ -19,6 +19,13 @@
   alter repository settings, or claim completion of the private gates.
 
 ## Key decisions
+- Adapter membership filters use uncorrelated semijoins to avoid the large
+  delimiter-join intermediate that exhausted memory at private scale. This
+  preserves source multiplicity, catalog membership, and clinical definitions.
+- A completed raw reference may be borrowed after a canonical-build failure
+  only with unchanged raw-producing code, dependencies, configuration, catalog
+  and source identity. Reuse records both producer revisions and retains the
+  exact comparison gate; it does not rewrite historical provenance.
 - The unified DuckDB/catalog contract is the permanent source interface for
   traditional and GLP-1 workflows.
 - The GLP-1 adapter and standalone raw ingestion remain migration references
@@ -65,6 +72,9 @@
   intentionally excluded from the public repository.
 
 ## Now
+- Recover the database adapter's private-scale memory failure using the completed
+  raw reference and guarded reuse. Full-data equivalence remains unproven until
+  the recovered database build and exact comparison pass.
 - Complete reviewable synthetic and private-data gates for canonical-source
   GLP-1 reference consumption; keep the shared source product canonical.
 

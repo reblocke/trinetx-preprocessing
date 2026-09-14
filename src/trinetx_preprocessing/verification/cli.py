@@ -58,6 +58,8 @@ def run(args: argparse.Namespace) -> int:
     if decision and baseline is None:
         raise ValueError("Scientific drift review requires --baseline-receipt")
     private = plan["gate"] != "static" or args.full_glp1
+    if getattr(args, "reuse_raw_receipt", None) and not private:
+        raise ValueError("Reference reuse requires a private verification run")
     if private and not args.full_glp1 and baseline is None:
         raise ValueError(
             "Updates require --baseline-receipt; initial source parity uses --full-glp1"
@@ -176,7 +178,26 @@ def run(args: argparse.Namespace) -> int:
             }
             outputs = root / ".verification-outputs"
             outputs.mkdir()
+            raw_output = outputs / "raw"
+            producer_revisions = None
+            previous = getattr(args, "reuse_raw_receipt", None)
+            if previous is not None:
+                from .reuse import reuse_raw_reference
+
+                raw_output, raw_result, proof = reuse_raw_reference(
+                    previous,
+                    plan=plan,
+                    source_identity=receipt["source_identity"],
+                    database=args.database,
+                    raw_input=args.raw_input,
+                    config_path=args.config,
+                )
+                receipt["raw_reference_reuse"] = proof
+                producer_revisions = (proof["producer_revision"], plan["head"])
             for mode in ("raw", "canonical"):
+                if mode == "raw" and previous is not None:
+                    stage("glp1_raw", lambda: raw_result)
+                    continue
 
                 def build_glp(mode=mode):
                     result = build_glp1_eligibility(
@@ -195,7 +216,13 @@ def run(args: argparse.Namespace) -> int:
             parity = stage(
                 "glp1_parity",
                 lambda: compare_glp1_reference_outputs(
-                    outputs / "raw", outputs / "canonical"
+                    raw_output,
+                    outputs / "canonical",
+                    **(
+                        {"expected_producer_revisions": producer_revisions}
+                        if producer_revisions
+                        else {}
+                    ),
                 ).to_dict(),
             )
             if not parity["valid"]:
@@ -359,6 +386,7 @@ def main(argv=None) -> int:
                 "preprocessing-config",
                 "compatibility-baseline",
                 "baseline-receipt",
+                "reuse-raw-receipt",
                 "decision",
             ):
                 p.add_argument("--" + option, type=Path)

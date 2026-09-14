@@ -32,7 +32,11 @@ def sha(payload: object) -> str:
 
 
 def code_fingerprint(
-    ref: str, *, root: Path = ROOT, materialization: bool = False
+    ref: str,
+    *,
+    root: Path = ROOT,
+    materialization: bool = False,
+    raw_reference: bool = False,
 ) -> str:
     """Reproduce the producer's historical content hash, including path/mode."""
     paths = (
@@ -54,6 +58,11 @@ def code_fingerprint(
     digest = hashlib.sha256()
     for path in sorted(p for p in paths if p):
         if materialization and path.startswith(NON_PRODUCERS):
+            continue
+        if raw_reference and path.startswith(
+            NON_PRODUCERS
+            + ("src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py",)
+        ):
             continue
         entry = git("ls-tree", ref, "--", path, root=root).decode()
         content = git("show", f"{ref}:{path}", root=root)
