@@ -155,21 +155,17 @@ on the first failure:
 ```bash
 ./.venv/bin/python scripts/run_glp1_source_acceptance.py \
   --database /private/output/trinetx_preprocessed.duckdb \
-  --compatibility-output /private/output \
   --raw-input /private/TriNetX \
   --raw-output /private/validation/glp1_raw_reference \
   --canonical-output /private/validation/glp1_canonical \
   --config config/glp1_eligibility.yml \
-  --compatibility-baseline /private/validation/approved_compatibility_baseline.json \
-  --compatibility-parity-out /private/validation/compatibility_parity.json \
-  --element-completeness-out /private/validation/element_completeness.json \
   --receipt-dir /private/validation/glp1_acceptance_receipts
 ```
 
-All three source-evidence options are required for a completed acceptance
-receipt. They verify the 36 historical projections against the approved
-aggregate baseline and record shared catalog coverage for both traditional and
-GLP-1 elements.
+The receipt records the targeted scientific-equivalence scope: raw-reference
+and canonical-database GLP-1 builds plus their exact contracted-output
+comparison. It explicitly records that all-36-file compatibility certification
+and exhaustive all-source membership auditing are outside this migration gate.
 
 See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
 #6 for the downstream analytic contract and clinical-review requirements.

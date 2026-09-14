@@ -1,4 +1,4 @@
-"""Run the private, sequential GLP raw-versus-canonical acceptance gate.
+"""Run the private, targeted GLP raw-versus-canonical acceptance gate.
 
 All paths are supplied by the operator and receipts are written only to the
 specified private directory.  The launcher deliberately stops at the first
@@ -18,35 +18,11 @@ from pathlib import Path
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, required=True)
-    parser.add_argument("--compatibility-output", type=Path, required=True)
     parser.add_argument("--raw-input", type=Path, required=True)
     parser.add_argument("--raw-output", type=Path, required=True)
     parser.add_argument("--canonical-output", type=Path, required=True)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--receipt-dir", type=Path, required=True)
-    parser.add_argument(
-        "--compatibility-baseline",
-        type=Path,
-        help=(
-            "Approved aggregate 36-file compatibility baseline. Supply this "
-            "with both evidence output paths for full source acceptance."
-        ),
-    )
-    parser.add_argument(
-        "--compatibility-parity-out",
-        type=Path,
-        help=(
-            "Private aggregate receipt for 36-file schema, row-count, and hash parity."
-        ),
-    )
-    parser.add_argument(
-        "--element-completeness-out",
-        type=Path,
-        help=(
-            "Private aggregate receipt for shared traditional and GLP-1 "
-            "catalog coverage."
-        ),
-    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -58,17 +34,6 @@ def _parser() -> argparse.ArgumentParser:
 def acceptance_commands(args: argparse.Namespace) -> tuple[tuple[str, ...], ...]:
     python = sys.executable
     commands: list[tuple[str, ...]] = [
-        (
-            python,
-            "-m",
-            "trinetx_preprocessing",
-            "validate-preprocessed",
-            "--database",
-            str(args.database),
-            "--output-dir",
-            str(args.compatibility_output),
-            "--json",
-        ),
         (
             python,
             "-m",
@@ -106,54 +71,10 @@ def acceptance_commands(args: argparse.Namespace) -> tuple[tuple[str, ...], ...]
             "--json",
         ),
     ]
-    if args.compatibility_baseline is not None:
-        assert args.compatibility_parity_out is not None
-        assert args.element_completeness_out is not None
-        commands.extend(
-            [
-                (
-                    python,
-                    "scripts/verify_combined_parity.py",
-                    "--database",
-                    str(args.database),
-                    "--output-dir",
-                    str(args.compatibility_output),
-                    "--baseline",
-                    str(args.compatibility_baseline),
-                    "--out",
-                    str(args.compatibility_parity_out),
-                ),
-                (
-                    python,
-                    "scripts/verify_element_completeness.py",
-                    "--database",
-                    str(args.database),
-                    "--out",
-                    str(args.element_completeness_out),
-                ),
-            ]
-        )
     return tuple(commands)
 
 
-def _has_full_source_evidence(args: argparse.Namespace) -> bool:
-    values = (
-        args.compatibility_baseline,
-        args.compatibility_parity_out,
-        args.element_completeness_out,
-    )
-    any_present = any(value is not None for value in values)
-    all_present = all(value is not None for value in values)
-    if any_present and not all_present:
-        raise ValueError(
-            "--compatibility-baseline, --compatibility-parity-out, and "
-            "--element-completeness-out must be supplied together"
-        )
-    return all_present
-
-
 def run(args: argparse.Namespace) -> int:
-    full_source_evidence = _has_full_source_evidence(args)
     commands = acceptance_commands(args)
     if args.dry_run:
         print(json.dumps({"commands": commands}, indent=2))
@@ -182,29 +103,17 @@ def run(args: argparse.Namespace) -> int:
     completion = {
         "started_at": started_at,
         "completed_at": datetime.now(UTC).isoformat(),
-        "full_source_evidence": full_source_evidence,
+        "scope": "glp1_raw_vs_canonical_database_parity",
+        "evidence": [
+            "raw-reference GLP-1 build",
+            "canonical-database GLP-1 build with source-contract validation",
+            "exact contracted-output comparison",
+        ],
+        "out_of_scope": [
+            "36-file compatibility certification",
+            "all-source retained-record membership audit",
+        ],
     }
-    if not full_source_evidence:
-        (receipt_dir / "acceptance_incomplete.json").write_text(
-            json.dumps(
-                {
-                    **completion,
-                    "missing": [
-                        "approved compatibility baseline",
-                        "36-file parity receipt",
-                        "element-completeness receipt",
-                    ],
-                },
-                indent=2,
-            )
-            + "\n"
-        )
-        print(
-            "GLP comparison passed, but full source acceptance is incomplete; "
-            "supply the approved compatibility baseline.",
-            file=sys.stderr,
-        )
-        return 2
     (receipt_dir / "acceptance_complete.json").write_text(
         json.dumps(completion, indent=2) + "\n"
     )

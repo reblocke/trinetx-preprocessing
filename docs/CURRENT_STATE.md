@@ -45,9 +45,9 @@ for the repository. Historical evidence and decision detail remain in
   until a frozen exact head passes private full-data adapter-versus-reference
   parity.
 - The expanded cohort-source catalog and current adapter have code/API and
-  synthetic evidence, but no new private full-data source-completeness or
-  adapter-parity run has been completed at this exact head. Earlier full-data
-  GLP-1 evidence is reference evidence only.
+  synthetic evidence, but no new private full-data raw-versus-database GLP-1
+  parity run has been completed at this exact head. Earlier full-data GLP-1
+  evidence is reference evidence only.
 - Cohort import is paused because the downstream cohort-creation repository is
   being refactored. Work resumes when that repository exposes a stable behavior
   head; the exact restart commit is not yet known.

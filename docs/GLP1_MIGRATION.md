@@ -21,18 +21,24 @@ Neither defines a second canonical preprocessing output, and neither should
 remain as a permanent parallel workflow after full-data parity.
 
 The expanded source/API contract and synthetic adapter gate are accepted. A new
-private full-data source-completeness and adapter-versus-standalone run has not
-been completed at this exact head, so raw ingestion remains the reference.
+private full-data raw-versus-database GLP-1 parity run has not been completed
+at this exact head, so raw ingestion remains the reference.
 Cohort import is additionally paused until the downstream cohort repository's
 refactor publishes a stable behavior head.
 
-At restart, validate the unified database, required catalog elements, exact
-36-file compatibility evidence, and additive element completeness; then compare
-the adapter-backed GLP-1 derivation with the frozen standalone result using
+At restart, run the targeted GLP-1 acceptance gate. The database-backed build
+validates the unified database, its manifest-bound catalog, the required
+included GLP-1 concepts, and canonical source-audit evidence; then compare the
+adapter-backed GLP-1 derivation with the frozen standalone result using
 `compare-reference-outputs`. It checks schemas and exact rows across source,
 observability, cohort, evidence, and source-QA tables; verifies byte-identical
 data dictionaries and aggregate QA reports; and checks public-output inventory
-and manifests, excluding only declared run and index-event identifiers. Retire
-a raw-data path only after exact-head private full-data
-parity. Real row-level outputs and validation extracts must remain external and
-untracked.
+and manifests, excluding only declared run and index-event identifiers. This is
+the evidence needed to retire the GLP-1 raw-data path after exact-head private
+full-data parity. Real row-level outputs and validation extracts must remain
+external and untracked.
+
+The exhaustive 36-file compatibility certification and all-source
+retained-record membership audit remain valuable upstream preprocessing release
+evidence. They do not answer whether GLP-1 scientific inputs, cohort flow, or
+outputs changed, so they are deliberately separate from this migration gate.

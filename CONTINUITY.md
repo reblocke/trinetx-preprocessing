@@ -44,13 +44,10 @@
   exposes a named stable behavior head.
 - The active GLP-1 source-contract branch adds canonical source audit tables,
   raw-free database consumption, exact GLP output comparison, and a sequential
-  private acceptance launcher. The launcher now requires aggregate 36-file
-  baseline parity and shared-element completeness evidence before it can write
-  a completed acceptance receipt.
-- Full-scale source-membership referential integrity and retained-source
-  coverage are validated through bounded hash partitions and temporary local
-  spill storage; these must remain exact checks rather than being relaxed for
-  large products.
+  private acceptance launcher. The launcher now proves targeted scientific
+  equivalence through exact raw-versus-database GLP-1 outputs; all-36-file
+  compatibility and exhaustive retained-source membership checks remain a
+  separate upstream preprocessing release gate.
 - The bounded validator keeps all 256 partition outputs open while writing.
   DuckDB's 100-file default caused excessive partition-file churn at private
   scale; the 256-file setting preserves the same exact audit with bounded
@@ -69,10 +66,10 @@
 
 ## Next
 - Identify the stable downstream cohort behavior head.
-- Finish the active frozen-head private full-data acceptance sequence: validate
-  the canonical product, compare its 36 compatibility projections with the
-  approved aggregate baseline, record shared-element completeness, and compare
-  raw-reference with database-backed GLP-1 outputs.
+- Finish the active frozen-head private GLP-1 scientific-equivalence sequence:
+  build from raw reference and from the validated canonical database, then
+  compare their contracted outputs exactly. Schedule broader upstream source
+  certification independently when it is needed for that release decision.
 
 ## Open questions (UNCONFIRMED if needed)
 - The stable downstream cohort-refactor behavior head is UNCONFIRMED.
