@@ -51,6 +51,10 @@
   coverage are validated through bounded hash partitions and temporary local
   spill storage; these must remain exact checks rather than being relaxed for
   large products.
+- The bounded validator keeps all 256 partition outputs open while writing.
+  DuckDB's 100-file default caused excessive partition-file churn at private
+  scale; the 256-file setting preserves the same exact audit with bounded
+  memory and substantially less filesystem overhead for future runs.
 
 ## Done
 - Unified preprocessing and source-catalog interfaces are public and merged.
