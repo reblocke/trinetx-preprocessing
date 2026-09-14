@@ -42,6 +42,8 @@ _DIRECT_DUPLICATE_SOURCE_MAX_ROWS = 2_000_000
 _DUPLICATE_SOURCE_BUCKET_COUNT = 64
 _DIRECT_ORPHAN_MEMBERSHIP_MAX_ROWS = 2_000_000
 _ORPHAN_MEMBERSHIP_BUCKET_COUNT = 256
+_DIRECT_RETAINED_SOURCE_MEMBERSHIP_MAX_ROWS = 2_000_000
+_RETAINED_SOURCE_MEMBERSHIP_BUCKET_COUNT = 256
 
 
 @dataclass(frozen=True)
@@ -669,6 +671,7 @@ def _write_id_buckets(
     *,
     relation: str,
     output_root: Path,
+    bucket_count: int = _ORPHAN_MEMBERSHIP_BUCKET_COUNT,
 ) -> None:
     output_root.parent.mkdir(parents=True, exist_ok=True)
     connection.execute(
@@ -676,7 +679,7 @@ def _write_id_buckets(
         COPY (
             SELECT
                 source_record_id,
-                hash(source_record_id) % {_ORPHAN_MEMBERSHIP_BUCKET_COUNT}
+                hash(source_record_id) % {bucket_count}
                     AS source_bucket
             FROM {relation}
             WHERE source_record_id IS NOT NULL
@@ -723,31 +726,129 @@ def _count_orphans_for_relations(
 def _count_retained_sources_without_included_membership(
     connection: duckdb.DuckDBPyConnection,
 ) -> dict[str, int]:
-    """Count retained clinical rows lacking a valid included membership."""
+    """Count retained clinical rows lacking a valid included membership.
+
+    Large source and membership relations are compared in hash partitions so a
+    full private build remains bounded by the configured DuckDB memory limit.
+    """
 
     missing_counts: dict[str, int] = {}
-    for domain, concept_domain in CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN.items():
-        table_name = SOURCE_TABLE_BY_DOMAIN[domain]
-        missing_counts[domain] = int(
-            connection.execute(
-                f"""
-                SELECT count(*)::BIGINT
-                FROM {_identifier(table_name)} AS source
-                ANTI JOIN (
-                    SELECT membership.source_record_id
-                    FROM element_membership AS membership
-                    JOIN element_catalog AS catalog USING (element_id)
-                    WHERE membership.logical_domain = ?
-                      AND coalesce(membership.include, false)
-                      AND catalog.element_kind = 'source_concept'
-                      AND catalog.domain = ?
-                ) AS included_membership
-                  ON source.source_record_id = included_membership.source_record_id
-                """,
-                [domain, concept_domain],
-            ).fetchone()[0]
+    temp_directory = Path(
+        str(
+            connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
         )
+    )
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    scratch = Path(
+        tempfile.mkdtemp(
+            prefix=COMBINED_VALIDATION_PREFIX,
+            dir=temp_directory,
+        )
+    )
+    try:
+        for domain, concept_domain in CONCEPT_DOMAIN_BY_PIPELINE_DOMAIN.items():
+            table_name = SOURCE_TABLE_BY_DOMAIN[domain]
+            source_relation = _identifier(table_name)
+            included_membership_relation = (
+                "(SELECT membership.source_record_id "
+                "FROM element_membership AS membership "
+                "JOIN element_catalog AS catalog USING (element_id) "
+                f"WHERE membership.logical_domain = {_sql_string(domain)} "
+                "AND coalesce(membership.include, false) "
+                "AND catalog.element_kind = 'source_concept' "
+                f"AND catalog.domain = {_sql_string(concept_domain)} "
+                "AND membership.source_record_id IS NOT NULL)"
+            )
+            source_rows = _count(connection, table_name)
+            included_membership_rows = int(
+                connection.execute(
+                    "SELECT count(*) FROM "
+                    f"{included_membership_relation}"
+                ).fetchone()[0]
+            )
+            if (
+                source_rows <= _DIRECT_RETAINED_SOURCE_MEMBERSHIP_MAX_ROWS
+                and included_membership_rows
+                <= _DIRECT_RETAINED_SOURCE_MEMBERSHIP_MAX_ROWS
+            ):
+                missing_counts[domain] = _count_sources_without_membership(
+                    connection,
+                    source_relation=source_relation,
+                    included_membership_relation=included_membership_relation,
+                )
+                continue
+
+            domain_scratch = scratch / domain
+            try:
+                source_root = domain_scratch / "source"
+                membership_root = domain_scratch / "membership"
+                _write_id_buckets(
+                    connection,
+                    relation=source_relation,
+                    output_root=source_root,
+                    bucket_count=_RETAINED_SOURCE_MEMBERSHIP_BUCKET_COUNT,
+                )
+                _write_id_buckets(
+                    connection,
+                    relation=included_membership_relation,
+                    output_root=membership_root,
+                    bucket_count=_RETAINED_SOURCE_MEMBERSHIP_BUCKET_COUNT,
+                )
+                missing_count = int(
+                    connection.execute(
+                        f"SELECT count(*) FROM {source_relation} "
+                        "WHERE source_record_id IS NULL"
+                    ).fetchone()[0]
+                )
+                for bucket in range(_RETAINED_SOURCE_MEMBERSHIP_BUCKET_COUNT):
+                    source_files = _partition_files(source_root, bucket)
+                    if not source_files:
+                        continue
+                    membership_files = _partition_files(membership_root, bucket)
+                    missing_count += _count_sources_without_membership(
+                        connection,
+                        source_relation=_parquet_relation(source_files),
+                        included_membership_relation=(
+                            _parquet_relation(membership_files)
+                            if membership_files
+                            else (
+                                "(SELECT CAST(NULL AS VARCHAR) AS source_record_id "
+                                "WHERE false)"
+                            )
+                        ),
+                    )
+                missing_counts[domain] = missing_count
+            finally:
+                if domain_scratch.exists():
+                    remove_tree_strict(
+                        domain_scratch,
+                        context=(
+                            f"Combined {domain} retained-source-membership scratch"
+                        ),
+                    )
+    finally:
+        if scratch.exists():
+            remove_tree_strict(
+                scratch,
+                context="Combined retained-source-membership validation scratch",
+            )
     return missing_counts
+
+
+def _count_sources_without_membership(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    source_relation: str,
+    included_membership_relation: str,
+) -> int:
+    return int(
+        connection.execute(
+            "SELECT count(*) FROM "
+            f"{source_relation} AS source "
+            f"ANTI JOIN {included_membership_relation} AS included_membership "
+            "USING (source_record_id)"
+        ).fetchone()[0]
+    )
 
 
 def _count_duplicate_source_ids(connection: duckdb.DuckDBPyConnection) -> int:
