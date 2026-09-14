@@ -44,6 +44,12 @@ _DIRECT_ORPHAN_MEMBERSHIP_MAX_ROWS = 2_000_000
 _ORPHAN_MEMBERSHIP_BUCKET_COUNT = 256
 _DIRECT_RETAINED_SOURCE_MEMBERSHIP_MAX_ROWS = 2_000_000
 _RETAINED_SOURCE_MEMBERSHIP_BUCKET_COUNT = 256
+# DuckDB defaults to only 100 open partitioned-output files.  Every bounded
+# validation relation uses 256 buckets, so that default repeatedly evicts and
+# recreates output files while writing large domains.  Keeping one descriptor
+# per bucket avoids that filesystem churn without increasing the data held in
+# memory.
+_PARTITIONED_WRITE_MAX_OPEN_FILES = 256
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,10 @@ def validate_preprocessed_database(
         read_only=True,
         memory_limit_mib=memory_limit_mib,
     ) as connection:
+        connection.execute(
+            "SET partitioned_write_max_open_files = "
+            f"{_PARTITIONED_WRITE_MAX_OPEN_FILES}"
+        )
         required_tables = {
             "preprocessing_manifest",
             PREPROCESSED_ENCOUNTER_TABLE,
