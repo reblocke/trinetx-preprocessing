@@ -58,7 +58,10 @@ def run(args: argparse.Namespace) -> int:
     if decision and baseline is None:
         raise ValueError("Scientific drift review requires --baseline-receipt")
     private = plan["gate"] != "static" or args.full_glp1
-    if getattr(args, "reuse_raw_receipt", None) and not private:
+    reuse_builds = getattr(args, "reuse_build_receipt", None)
+    if reuse_builds and getattr(args, "reuse_raw_receipt", None):
+        raise ValueError("Choose one completed-build reuse receipt")
+    if (getattr(args, "reuse_raw_receipt", None) or reuse_builds) and not private:
         raise ValueError("Reference reuse requires a private verification run")
     if private and not args.full_glp1 and baseline is None:
         raise ValueError(
@@ -179,9 +182,28 @@ def run(args: argparse.Namespace) -> int:
             outputs = root / ".verification-outputs"
             outputs.mkdir()
             raw_output = outputs / "raw"
+            canonical_output = outputs / "canonical"
             producer_revisions = None
+            reused_results = None
             previous = getattr(args, "reuse_raw_receipt", None)
-            if previous is not None:
+            if reuse_builds is not None:
+                from .reuse import reuse_completed_builds
+
+                borrowed, reused_results, proof = reuse_completed_builds(
+                    reuse_builds,
+                    plan=plan,
+                    source_identity=receipt["source_identity"],
+                    database=args.database,
+                    raw_input=args.raw_input,
+                    config_path=args.config,
+                )
+                receipt["build_reuse"] = proof
+                raw_output, canonical_output = borrowed["raw"], borrowed["canonical"]
+                producer_revisions = tuple(
+                    proof["outputs"][mode]["producer_revision"]
+                    for mode in ("raw", "canonical")
+                )
+            elif previous is not None:
                 from .reuse import reuse_raw_reference
 
                 raw_output, raw_result, proof = reuse_raw_reference(
@@ -195,6 +217,9 @@ def run(args: argparse.Namespace) -> int:
                 receipt["raw_reference_reuse"] = proof
                 producer_revisions = (proof["producer_revision"], plan["head"])
             for mode in ("raw", "canonical"):
+                if reused_results is not None:
+                    stage("glp1_" + mode, lambda: reused_results[mode])
+                    continue
                 if mode == "raw" and previous is not None:
                     stage("glp1_raw", lambda: raw_result)
                     continue
@@ -217,7 +242,12 @@ def run(args: argparse.Namespace) -> int:
                 "glp1_parity",
                 lambda: compare_glp1_reference_outputs(
                     raw_output,
-                    outputs / "canonical",
+                    canonical_output,
+                    scratch_root=outputs,
+                    progress=lambda event: write(
+                        root / "comparison_progress.json",
+                        {**event, "updated_at": datetime.now(UTC).isoformat()},
+                    ),
                     **(
                         {"expected_producer_revisions": producer_revisions}
                         if producer_revisions
@@ -232,7 +262,7 @@ def run(args: argparse.Namespace) -> int:
             receipt["scientific_metrics"] = stage(
                 "scientific_summary",
                 lambda: scientific_metrics(
-                    outputs / "canonical" / "glp1_hypercapnia.duckdb"
+                    canonical_output / "glp1_hypercapnia.duckdb"
                 ),
             )
             if baseline:
@@ -387,6 +417,7 @@ def main(argv=None) -> int:
                 "compatibility-baseline",
                 "baseline-receipt",
                 "reuse-raw-receipt",
+                "reuse-build-receipt",
                 "decision",
             ):
                 p.add_argument("--" + option, type=Path)

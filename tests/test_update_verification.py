@@ -439,7 +439,7 @@ def test_proven_producer_change_preserves_scientific_comparison(
 
 
 @pytest.mark.parametrize("parity_passes", [True, False])
-@pytest.mark.parametrize("reuse_reference", [True, False])
+@pytest.mark.parametrize("reuse_reference", [True, False, "both"])
 def test_run_receipt_and_owned_cleanup(
     reference_output, tmp_path, monkeypatch, parity_passes, reuse_reference
 ):
@@ -491,7 +491,7 @@ def test_run_receipt_and_owned_cleanup(
         )
 
     monkeypatch.setattr(builder, "build_glp1_eligibility", build)
-    if reuse_reference:
+    if reuse_reference is True:
         from trinetx_preprocessing.verification import reuse
 
         monkeypatch.setattr(
@@ -510,6 +510,33 @@ def test_run_receipt_and_owned_cleanup(
             return compare(*args)
 
         monkeypatch.setattr(parity, "compare_glp1_reference_outputs", compare_reuse)
+    if reuse_reference == "both":
+        from trinetx_preprocessing.verification import reuse
+
+        monkeypatch.setattr(
+            reuse,
+            "reuse_completed_builds",
+            lambda *a, **kw: (
+                {"raw": reference_output, "canonical": reference_output},
+                {mode: {"reused_existing": True} for mode in ("raw", "canonical")},
+                {
+                    "outputs": {
+                        mode: {"producer_revision": mode + "_producer"}
+                        for mode in ("raw", "canonical")
+                    }
+                },
+            ),
+        )
+        compare = parity.compare_glp1_reference_outputs
+
+        def compare_both(*a, **kw):
+            assert kw["expected_producer_revisions"] == (
+                "raw_producer",
+                "canonical_producer",
+            )
+            return compare(*a)
+
+        monkeypatch.setattr(parity, "compare_glp1_reference_outputs", compare_both)
     if not parity_passes:
         monkeypatch.setattr(
             parity,
@@ -534,7 +561,10 @@ def test_run_receipt_and_owned_cleanup(
         preprocessing_config=None,
         compatibility_baseline=None,
         receipt_dir=tmp_path / "receipt",
-        reuse_raw_receipt=tmp_path / "prior.json" if reuse_reference else None,
+        reuse_raw_receipt=tmp_path / "prior.json" if reuse_reference is True else None,
+        reuse_build_receipt=tmp_path / "prior.json"
+        if reuse_reference == "both"
+        else None,
     )
     assert cli.run(args) == (0 if parity_passes else 1)
     receipt = json.loads((args.receipt_dir / "status.json").read_text())
@@ -542,5 +572,216 @@ def test_run_receipt_and_owned_cleanup(
     assert (args.receipt_dir / ".verification-outputs").exists() != parity_passes
     assert (args.receipt_dir / "acceptance_complete.json").exists() == parity_passes
     assert sentinel.read_text() == "immutable raw"
-    assert modes_built == (["canonical"] if reuse_reference else ["raw", "canonical"])
+    assert modes_built == (
+        []
+        if reuse_reference == "both"
+        else ["canonical"]
+        if reuse_reference
+        else ["raw", "canonical"]
+    )
+    assert reference_output.is_dir()
     assert (reference_output / "run_manifest.json").is_file()
+
+
+@pytest.mark.parametrize("buckets", [1, 4, 16])
+@pytest.mark.parametrize("mutation", ["equal", "changed", "empty_left", "empty_both"])
+def test_partitioned_multiset_matches_exact_oracle(tmp_path, buckets, mutation):
+    from trinetx_preprocessing.verification.multiset import exact_difference_counts
+
+    with duckdb.connect() as con:
+        con.execute("SET threads=1")
+        con.execute("SET memory_limit='128MiB'")
+        con.execute("SET temp_directory=?", [str(tmp_path)])
+        con.execute("""CREATE TABLE a AS SELECT x,
+            ('é' || chr(0) || 'value')::VARCHAR AS text,
+            12345678901234567890.1234567890::DECIMAL(38,10) AS precise,
+            make_timestamp_ns(1700000000000000001) AS instant,
+            DATE '2020-01-01' AS day, true AS flag, from_hex('00ff') AS payload
+            FROM (VALUES (0.0::DOUBLE), ('-0.0'::DOUBLE), ('NaN'::DOUBLE),
+                ('NaN'::DOUBLE), ('Infinity'::DOUBLE),
+                ('-Infinity'::DOUBLE), (NULL)) t(x)
+        """)
+        con.execute("CREATE TABLE b AS SELECT * FROM a ORDER BY x DESC")
+        if mutation == "changed":
+            con.execute("DELETE FROM b WHERE rowid=(SELECT min(rowid) FROM b)")
+            con.execute(
+                "INSERT INTO b SELECT * REPLACE ('different' AS text) "
+                "FROM a WHERE x=0 LIMIT 1"
+            )
+        if mutation in ("empty_left", "empty_both"):
+            con.execute("DELETE FROM a")
+        if mutation == "empty_both":
+            con.execute("DELETE FROM b")
+        oracle = _difference_counts(con, "SELECT * FROM a", "SELECT * FROM b")
+        events = []
+        actual = exact_difference_counts(
+            con,
+            "SELECT * FROM a",
+            "SELECT * FROM b",
+            scratch_root=tmp_path,
+            threshold=-1,
+            bucket_count=buckets,
+            progress=events.append,
+        )
+        assert actual == oracle
+        assert not list(tmp_path.glob(".glp1-multiset-*"))
+        assert events[-1]["completed_units"] == buckets
+
+
+def test_all_contract_tables_and_parquets_use_partitioned_comparison(
+    reference_output, tmp_path, monkeypatch
+):
+    import shutil
+
+    from trinetx_preprocessing.glp1_eligibility import parity
+
+    original = parity.exact_difference_counts
+    monkeypatch.setattr(
+        parity,
+        "exact_difference_counts",
+        lambda *a, **kw: original(*a, **kw, threshold=-1, bucket_count=4),
+    )
+    target = tmp_path / "canonical"
+    shutil.copytree(reference_output, target)
+    (target / "._filesystem-metadata").write_bytes(b"AppleDouble metadata")
+    events = []
+    result = parity.compare_glp1_reference_outputs(
+        reference_output, target, progress=events.append
+    )
+    assert result.valid, result.errors
+    assert len(result.tables_checked) == 24
+    assert (
+        len([name for name in result.table_evidence if name.endswith(".parquet")]) == 6
+    )
+    assert len([event for event in events if event["phase"] == "table_complete"]) == 24
+    (target / "analysis_glp1_eligibility.parquet").unlink()
+    assert not parity.compare_glp1_reference_outputs(reference_output, target).valid
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        "raw_code",
+        "canonical_code",
+        "source",
+        "config",
+        "phase",
+        "canonical_file",
+        "canonical_manifest",
+        "canonical_database",
+        "counts",
+        "duplicate_step",
+    ],
+)
+def test_both_completed_builds_require_provenance(
+    reference_output, tmp_path, monkeypatch, mutation
+):
+    import hashlib
+    import shutil
+    from types import SimpleNamespace
+
+    from trinetx_preprocessing.glp1_eligibility.outputs import summarize_database
+    from trinetx_preprocessing.verification import reuse
+
+    root = tmp_path / "prior"
+    raw = root / ".verification-outputs/raw"
+    canonical = root / ".verification-outputs/canonical"
+    shutil.copytree(reference_output, raw)
+    shutil.copytree(reference_output, canonical)
+    manifest = json.loads((raw / "run_manifest.json").read_text())
+    config = Path(__file__).resolve().parents[1] / "config/glp1_eligibility.yml"
+    database = tmp_path / "source.duckdb"
+    changed_manifest = {**manifest, "input_root": str(database.resolve())}
+    (canonical / "run_manifest.json").write_text(json.dumps(changed_manifest))
+    with duckdb.connect(str(canonical / "glp1_hypercapnia.duckdb")) as con:
+        con.execute("UPDATE run_manifest SET input_root=?", [str(database.resolve())])
+    summary = summarize_database(raw / "glp1_hypercapnia.duckdb")
+    counts = {
+        k: summary[k]
+        for k in (
+            "hypercapnia_encounters",
+            "patient_index_events",
+            "primary_obesity_hypercapnia",
+            "evidence_rows",
+        )
+    }
+    prior = {
+        "schema_version": 1,
+        "status": "failed",
+        "phase": "glp1_parity",
+        "private_full_data": True,
+        "plan": {"head": manifest["pipeline_git_sha"]},
+        "source_identity": {"run_id": "source"},
+        "config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+        "steps": [
+            {
+                "name": "glp1_" + mode,
+                "seconds": 100,
+                "result": {
+                    "run_id": manifest["run_id"],
+                    "counts": dict(counts),
+                    "warnings": summary["warning_count"],
+                },
+            }
+            for mode in ("raw", "canonical")
+        ],
+    }
+
+    def fingerprint(ref, **kwargs):
+        target = "raw_code" if kwargs.get("raw_reference") else "canonical_code"
+        return ref if mutation == target else "same"
+
+    monkeypatch.setattr(reuse, "code_fingerprint", fingerprint)
+    monkeypatch.setattr(
+        reuse,
+        "canonical_inventory_from_preprocessed",
+        lambda *a, **kw: SimpleNamespace(sha256=manifest["input_manifest_sha256"]),
+    )
+    if mutation == "source":
+        prior["source_identity"] = {}
+    if mutation == "config":
+        prior["config_sha256"] = "wrong"
+    if mutation == "phase":
+        prior["phase"] = "glp1_canonical"
+    if mutation == "counts":
+        prior["steps"][1]["result"]["counts"]["evidence_rows"] += 1
+    if mutation == "duplicate_step":
+        prior["steps"].append(prior["steps"][1])
+    if mutation == "canonical_file":
+        (canonical / "cohort_flow.csv").unlink()
+    if mutation == "canonical_manifest":
+        (canonical / "run_manifest.json").write_text(
+            json.dumps({**changed_manifest, "input_root": "wrong"})
+        )
+    if mutation == "canonical_database":
+        with duckdb.connect(str(canonical / "glp1_hypercapnia.duckdb")) as con:
+            con.execute("UPDATE run_manifest SET pipeline_git_sha='wrong'")
+    path = root / "status.json"
+    path.write_text(json.dumps(prior))
+    args = dict(
+        plan={"base": manifest["pipeline_git_sha"], "head": "next"},
+        source_identity={"run_id": "source"},
+        database=database,
+        raw_input=Path(manifest["input_root"]),
+        config_path=config,
+    )
+    if mutation:
+        with pytest.raises((ValueError, RuntimeError)):
+            reuse.reuse_completed_builds(path, **args)
+    else:
+        before = {
+            p: (p.stat().st_size, p.stat().st_mtime_ns)
+            for output in (raw, canonical)
+            for p in output.iterdir()
+            if p.is_file()
+        }
+        outputs, results, proof = reuse.reuse_completed_builds(path, **args)
+        assert outputs == {"raw": raw, "canonical": canonical}
+        assert all(results[mode]["reused_existing"] for mode in outputs)
+        assert all(len(proof["outputs"][mode]["files"]) == 8 for mode in outputs)
+        assert all(
+            (p.stat().st_size, p.stat().st_mtime_ns) == stat
+            for p, stat in before.items()
+        )
+        assert path.read_text() == json.dumps(prior)

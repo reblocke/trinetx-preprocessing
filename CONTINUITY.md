@@ -22,6 +22,10 @@
 - Adapter membership filters use uncorrelated semijoins to avoid the large
   delimiter-join intermediate that exhausted memory at private scale. This
   preserves source multiplicity, catalog membership, and clinical definitions.
+- A comparison failure may borrow both completed builds only after independently
+  checking their producing code, dependencies, configuration, catalog, source
+  identity and output provenance. Hash partitions preserve full-value equality
+  and duplicate multiplicity; hashes only route rows.
 - A completed raw reference may be borrowed after a canonical-build failure
   only with unchanged raw-producing code, dependencies, configuration, catalog
   and source identity. Reuse records both producer revisions and retains the
@@ -72,9 +76,11 @@
   intentionally excluded from the public repository.
 
 ## Now
-- Recover the database adapter's private-scale memory failure using the completed
-  raw reference and guarded reuse. Full-data equivalence remains unproven until
-  the recovered database build and exact comparison pass.
+- Both private GLP-1 builds completed. The subsequent monolithic comparison
+  exhausted its configured memory limit. Recover using exact full-value hash
+  partitions and provenance-checked reuse of both completed output packages;
+  do not rebuild them solely to retry comparison. Full-data equivalence and
+  source adoption remain pending until that comparison passes.
 - Complete reviewable synthetic and private-data gates for canonical-source
   GLP-1 reference consumption; keep the shared source product canonical.
 

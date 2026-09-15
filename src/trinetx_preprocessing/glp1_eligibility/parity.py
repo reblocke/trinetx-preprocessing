@@ -10,6 +10,7 @@ import duckdb
 
 from ..combined_preprocessing.builder import require_safe_output_location
 from ..combined_preprocessing.database import open_combined_database
+from ..verification.multiset import exact_difference_counts
 from .outputs import OUTPUT_TABLES
 
 _DATABASE_NAME = "glp1_hypercapnia.duckdb"
@@ -63,7 +64,7 @@ class ParityResult:
             "errors": list(self.errors),
             "tables_checked": list(self.tables_checked),
             "table_evidence": self.table_evidence,
-            "comparison": "bidirectional_except_all",
+            "comparison": "exact_partitioned_multiset",
         }
 
 
@@ -72,6 +73,8 @@ def compare_glp1_reference_outputs(
     canonical_output: Path,
     *,
     expected_producer_revisions: tuple[str, str] | None = None,
+    scratch_root: Path | None = None,
+    progress=None,
 ) -> ParityResult:
     """Compare every contracted table and public output without PHI disclosure.
 
@@ -103,18 +106,50 @@ def compare_glp1_reference_outputs(
     evidence: dict[str, object] = {}
     for root in (raw_root, canonical_root):
         require_safe_output_location(root, artifact_label="GLP parity/spill")
+    scratch_root = (
+        Path(scratch_root) if scratch_root is not None else canonical_root.parent
+    )
+    require_safe_output_location(scratch_root, artifact_label="GLP parity scratch")
+    scratch_root.mkdir(parents=True, exist_ok=True)
     with open_combined_database(
-        raw_database, read_only=True, memory_limit_mib=2048
+        raw_database, read_only=True, memory_limit_mib=2048, spill_root=scratch_root
     ) as raw:
         literal = str(canonical_database.resolve()).replace("'", "''")
         raw.execute(f"ATTACH '{literal}' AS verification_candidate (READ_ONLY)")
         canonical = duckdb.connect(str(canonical_database), read_only=True)
         try:
             for table_name in _CONTRACT_TABLES:
+                if progress:
+                    progress(
+                        {
+                            "phase": "table_start",
+                            "table": table_name,
+                            "tables_completed": len(checked),
+                            "total_tables": len(_CONTRACT_TABLES),
+                        }
+                    )
                 evidence[table_name] = _compare_table(
-                    raw, canonical, table_name, errors, expected_producer_revisions
+                    raw,
+                    canonical,
+                    table_name,
+                    errors,
+                    expected_producer_revisions,
+                    scratch_root=scratch_root,
+                    progress=(lambda event: progress({**event, "table": table_name}))
+                    if progress
+                    else None,
                 )
                 checked.append(table_name)
+                if progress:
+                    progress(
+                        {
+                            "phase": "table_complete",
+                            "table": table_name,
+                            "tables_completed": len(checked),
+                            "total_tables": len(_CONTRACT_TABLES),
+                            "evidence": evidence[table_name],
+                        }
+                    )
             _compare_run_manifest(raw, canonical, errors, expected_producer_revisions)
             for root, label, catalog in (
                 (raw_root, "raw", "main"),
@@ -137,7 +172,19 @@ def compare_glp1_reference_outputs(
                                 f"Published Parquet schema differs: {label}.{table}"
                             )
                             continue
-                        difference = _difference_counts(raw, left, right)
+                        difference = _difference_counts(
+                            raw,
+                            left,
+                            right,
+                            scratch_root=scratch_root,
+                            progress=(
+                                lambda event: progress(
+                                    {**event, "table": f"{label}.{table}.parquet"}
+                                )
+                            )
+                            if progress
+                            else None,
+                        )
                         evidence[f"{label}.{table}.parquet"] = difference
                         if any(difference.values()):
                             errors.append(f"Published Parquet differs: {label}.{table}")
@@ -146,20 +193,13 @@ def compare_glp1_reference_outputs(
     return ParityResult(not errors, tuple(errors), tuple(checked), evidence)
 
 
-def _difference_counts(connection, left: str, right: str) -> dict[str, int]:
-    """Return only aggregate differences; retain NULLs and duplicate counts."""
-    return {
-        "left_only": int(
-            connection.execute(
-                f"SELECT count(*) FROM (({left}) EXCEPT ALL ({right}))"
-            ).fetchone()[0]
-        ),
-        "right_only": int(
-            connection.execute(
-                f"SELECT count(*) FROM (({right}) EXCEPT ALL ({left}))"
-            ).fetchone()[0]
-        ),
-    }
+def _difference_counts(
+    connection, left: str, right: str, *, scratch_root=None, progress=None
+) -> dict[str, int]:
+    """Compare complete typed rows exactly, using bounded partitions at scale."""
+    return exact_difference_counts(
+        connection, left, right, scratch_root=scratch_root, progress=progress
+    )
 
 
 def _compare_output_inventory(
@@ -172,8 +212,29 @@ def _compare_output_inventory(
             errors.append(f"{label} output root is not a directory: {root}")
     if errors:
         return
-    raw_files = {path.name for path in raw_root.iterdir() if path.is_file()}
-    canonical_files = {path.name for path in canonical_root.iterdir() if path.is_file()}
+    # AppleDouble files are filesystem metadata, never published study outputs.
+    raw_files = {
+        path.name
+        for path in raw_root.iterdir()
+        if path.is_file() and not path.name.startswith("._")
+    }
+    canonical_files = {
+        path.name
+        for path in canonical_root.iterdir()
+        if path.is_file() and not path.name.startswith("._")
+    }
+    required = {
+        _DATABASE_NAME,
+        "run_manifest.json",
+        *_STABLE_PUBLIC_ARTIFACTS,
+        *(f"{name}.parquet" for name in OUTPUT_TABLES),
+    }
+    for files, label in ((raw_files, "raw"), (canonical_files, "canonical")):
+        if files != required:
+            errors.append(
+                f"{label} published output inventory must contain "
+                "exactly the eight contracted files."
+            )
     if raw_files != canonical_files:
         errors.append("Published output file inventories differ.")
     for root, label, files in (
@@ -245,6 +306,9 @@ def _compare_table(
     table_name: str,
     errors: list[str],
     expected_producer_revisions: tuple[str, str] | None = None,
+    *,
+    scratch_root=None,
+    progress=None,
 ) -> dict[str, object] | None:
     raw_schema = _table_schema(raw, table_name)
     canonical_schema = _table_schema(canonical, table_name)
@@ -269,7 +333,9 @@ def _compare_table(
         f"SELECT {projection} FROM "
         f"verification_candidate.main.{_identifier(table_name)}"
     )
-    difference = _difference_counts(raw, left, right)
+    difference = _difference_counts(
+        raw, left, right, scratch_root=scratch_root, progress=progress
+    )
     if any(difference.values()):
         errors.append(f"Rows differ for table: {table_name}")
     return {

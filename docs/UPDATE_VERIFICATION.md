@@ -28,8 +28,15 @@ Changes to this registry or observer-only exclusions require particular review.
 
 The public suite includes synthetic source-mode equivalence, duplicates,
 missingness, row identities, schema drift, serialization, publication, and
-negative contract tests. Exact SQL comparison uses bidirectional `EXCEPT ALL`:
-row order does not matter; multiplicity and missing values do. Ordinarily only
+negative contract tests. Small relations use bidirectional `EXCEPT ALL`. Large
+relations are written once into 256 hash partitions, then compared by grouping
+complete typed rows and summing signed multiplicities within each partition.
+Hashes only route rows: collisions do not establish equality. The positive and
+negative multiplicity differences equal the two `EXCEPT ALL` counts. Typed
+Parquet round trips and complete row coverage are checked explicitly. This
+bounds each aggregation and preserves duplicate counts, nulls and row values.
+The eight required output files are checked; AppleDouble filesystem metadata
+is excluded from that inventory. Ordinarily only
 `run_id` is excluded from table values; deterministic index-event IDs remain
 exact. Proven raw-reference reuse additionally permits the two recorded producer
 revisions to differ, after checking every stored producer value against its
@@ -143,6 +150,36 @@ The new run owns only its new output directory. Borrowed reference outputs and
 the failed run remain intact, including after successful recovery; remove their
 owned temporary products only after reviewing the acceptance evidence.
 
+## Retrying comparison without rebuilding either dataset
+
+If both builds completed and comparison failed, commit the observer-only repair
+and borrow both completed packages in a new verification run:
+
+```bash
+uv run python -m trinetx_preprocessing verify-update run \
+  --base <failed-comparison-head> --full-glp1 \
+  --database /private/preprocessed/trinetx_preprocessed.duckdb \
+  --raw-input /private/approved-export \
+  --config config/glp1_eligibility.yml \
+  --reuse-build-receipt /private/verification/failed-comparison/status.json \
+  --receipt-dir /private/verification/comparison-recovery
+```
+
+This cannot be combined with `--reuse-raw-receipt`. Each build's original
+producer, producing-code/dependency fingerprint, source identity, configuration,
+catalog, complete output inventory, database provenance and recorded counts
+must still match. A producing-code change requires rebuilding the affected
+product. The new receipt retains both original producer revisions and a hash
+of the failed receipt; historical manifests and failed receipts are unchanged.
+Both packages remain borrowed through comparison and evidence sealing.
+
+`comparison_progress.json` reports the current table and partition counts.
+Partition hashes are never used as scientific content checksums. Synthetic
+regressions compare forced partitions against the original exact operator,
+including forced bucket collisions, duplicates, nulls, signed zero, NaNs,
+precision-sensitive numeric/timestamp values and every output-table contract.
+The private all-table comparison still has to pass before adoption.
+
 ## Runtime and evidence discipline
 
 Run on the Mini with approved external storage; the Air is needed only for a
@@ -158,7 +195,7 @@ summaries. Failures preserve private diagnostics and comparison products.
 Success writes aggregate evidence before removing only `.verification-outputs`;
 canonical databases, raw inputs, and unrelated directories are untouched.
 A rerun uses a new receipt directory; failed-run resumption is deliberately not
-automatic. The explicit guarded reuse option above recovers adapter failures.
+automatic. The explicit guarded reuse options above recover adapter or comparison failures.
 Preserve an accepted baseline receipt to avoid rebuilding historical
 reference products for later updates. The verifier does not claim a static-only
 pass is private acceptance, or relabel incomplete work as passed.
