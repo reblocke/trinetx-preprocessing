@@ -29,8 +29,10 @@ replay them as current work instructions.
   reference implementations. Do not create a permanent parallel GLP-1 product.
 - Cohort construction has not been imported. Its migration remains paused
   until the downstream cohort repository identifies a stable behavior head.
-- Synthetic adapter parity is implementation evidence only. Private frozen-head
-  GLP-1/full-data and Stata parity gates remain pending.
+- Synthetic adapter parity is implementation evidence only. Private GLP-1
+  source-mode equivalence is accepted at behavior head `9fe392b`; see
+  `GLP1_SOURCE_ACCEPTANCE.md`. Broader source and Stata compatibility gates keep
+  their separate scope and are not closed by this acceptance.
 
 ## Implementation and data safety
 

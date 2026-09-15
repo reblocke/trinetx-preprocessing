@@ -102,6 +102,14 @@ def exact_difference_counts(
             (FORMAT PARQUET, PARTITION_BY ({_identifier(_BUCKET)}),
              COMPRESSION ZSTD, ROW_GROUP_SIZE {PARTITION_ROW_GROUP_SIZE})
         """)
+        if progress:
+            progress(
+                {
+                    "phase": "partition_compare",
+                    "completed_units": 0,
+                    "total_units": bucket_count,
+                }
+            )
         result = {"left_only": 0, "right_only": 0}
         observed = [0, 0]
         for bucket in range(bucket_count):
@@ -137,7 +145,7 @@ def exact_difference_counts(
                 """).fetchone()
                 result["left_only"] += int(excess[0])
                 result["right_only"] += int(excess[1])
-            if progress and ((bucket + 1) % 16 == 0 or bucket + 1 == bucket_count):
+            if progress:
                 progress(
                     {
                         "phase": "partition_compare",

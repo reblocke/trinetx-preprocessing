@@ -4,8 +4,9 @@ This guide covers the CLI-driven pipeline plus a reference for the legacy
 notebook workflow.
 
 Read `CURRENT_STATE.md` before planning downstream work. The source contract is
-implemented, but cohort construction is not yet part of this repository and
-current-head private full-data adapter parity remains pending.
+implemented, and private GLP-1 source-mode equivalence is accepted at behavior head `9fe392b`
+(see `GLP1_SOURCE_ACCEPTANCE.md`). Broader cohort construction is not yet part of
+this repository; its migration and traditional source certification remain separate.
 
 ## Prerequisites
 - Python >= 3.11 with `uv`

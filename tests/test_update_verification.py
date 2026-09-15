@@ -625,7 +625,9 @@ def test_partitioned_multiset_matches_exact_oracle(tmp_path, buckets, mutation):
         )
         assert actual == oracle
         assert not list(tmp_path.glob(".glp1-multiset-*"))
-        assert events[-1]["completed_units"] == buckets
+        assert events[0]["phase"] == "partition_write"
+        comparisons = [e for e in events if e["phase"] == "partition_compare"]
+        assert [e["completed_units"] for e in comparisons] == list(range(buckets + 1))
 
 
 def test_all_contract_tables_and_parquets_use_partitioned_comparison(

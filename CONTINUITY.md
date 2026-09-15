@@ -32,8 +32,9 @@
   exact comparison gate; it does not rewrite historical provenance.
 - The unified DuckDB/catalog contract is the permanent source interface for
   traditional and GLP-1 workflows.
-- The GLP-1 adapter and standalone raw ingestion remain migration references
-  until frozen-head parity is demonstrated on approved inputs.
+- Database-backed GLP-1 processing is accepted at behavior head `9fe392b`.
+  Preserve raw-reference ingestion for reproduction and retain the explicit
+  precision-repair provenance with the original producer receipts.
 - Canonical preprocessing owns reusable source-file audit evidence. The
   reference GLP-1 consumer may read that evidence and the validated shared
   tables, but may not rescan raw exports in database mode.
@@ -59,16 +60,16 @@
   equivalence through exact raw-versus-database GLP-1 outputs; all-36-file
   compatibility and exhaustive retained-source membership checks remain a
   separate upstream preprocessing release gate.
-- The bounded validator keeps all 256 partition outputs open while writing.
+- The bounded validator keeps all 64 partition outputs open while writing.
   DuckDB's 100-file default caused excessive partition-file churn at private
-  scale; the 256-file setting preserves the same exact audit with bounded
+  scale; the matching open-file setting preserves the same exact audit with bounded
   memory and substantially less filesystem overhead for future runs.
 
 ## Done
 - Added change-based `verify-update` planning/execution, provenance-checked
   staged-product promotion through existing publication locks, and bounded
   exact GLP-1 comparison with private aggregate receipts. Private acceptance
-  remains pending; promotion alone does not close that gate.
+  is recorded at `9fe392b`; promotion alone did not close that gate.
 - Unified preprocessing and source-catalog interfaces are public and merged.
 - Human- and machine-facing documentation records the privacy, provenance,
   compatibility, and downstream-migration boundaries.
@@ -76,30 +77,18 @@
   intentionally excluded from the public repository.
 
 ## Now
-- Full private comparison completed at `5ebf82f`: 22 of 24 database tables
-  and all six Parquet-to-database checks matched. Two encounter tables differed.
-  Aggregate diagnosis locates the differences at missing encounter-end precision:
-  reference ingestion emits `timestamp`, whereas canonical capture retains NULL.
-  The adapter now uses the unchanged reference classifier on the retained raw
-  end-date field. Targeted full-row confirmation remains pending; do not accept
-  source cutover or discard either completed output package yet.
-- Both private GLP-1 builds completed. The subsequent monolithic comparison
-  exhausted its configured memory limit. Recover using exact full-value hash
-  partitions and provenance-checked reuse of both completed output packages;
-  do not rebuild them solely to retry comparison. Full-data equivalence and
-  source adoption remain pending until that comparison passes.
-- A bounded external-drive benchmark identified partition-buffer spill and
-  filesystem overhead. The GLP-1 comparator uses 64 partitions and larger row
-  groups; exact equality, schemas and duplicate multiplicities are unchanged.
-- Complete reviewable synthetic and private-data gates for canonical-source
-  GLP-1 reference consumption; keep the shared source product canonical.
+- Private source-mode equivalence is accepted at `9fe392b` through composed
+  full-data evidence: the complete 24-table comparison, exact confirmation of
+  two repaired encounter-precision projections, corrected-package readback,
+  regenerated Parquet comparison and baseline fingerprints. See
+  `docs/GLP1_SOURCE_ACCEPTANCE.md` for the precise producer and repair boundaries.
+- Database-backed GLP-1 processing is the production route for this validated
+  contract. Retain explicit raw-reference mode for reproduction.
 
 ## Next
-- Identify the stable downstream cohort behavior head.
-- Finish the active frozen-head private GLP-1 scientific-equivalence sequence:
-  build from raw reference and from the validated canonical database, then
-  compare their contracted outputs exactly. Schedule broader upstream source
-  certification independently when it is needed for that release decision.
+- Finish publication and remove owned temporary packages after evidence sealing.
+- Use change-based verification against the accepted private baseline for future
+  updates. Broader cohort import and traditional source certification stay separate.
 
 ## Open questions (UNCONFIRMED if needed)
 - The stable downstream cohort-refactor behavior head is UNCONFIRMED.

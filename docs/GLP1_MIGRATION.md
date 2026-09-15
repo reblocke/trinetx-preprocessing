@@ -20,20 +20,22 @@ is retained only for private parity and historical reproduction.
 Neither defines a second canonical preprocessing output, and neither should
 remain as a permanent parallel workflow after full-data parity.
 
-The expanded source/API contract and synthetic adapter gate are accepted. A new
-private full-data raw-versus-database GLP-1 parity run has not been completed
-at this exact head, so raw ingestion remains the reference.
+Full-data raw-versus-database equivalence passed at behavior head `9fe392b`, as recorded in
+`GLP1_SOURCE_ACCEPTANCE.md`. Database-backed processing is the documented
+production route; explicit raw-reference mode remains for reproduction.
 Cohort import is additionally paused until the downstream cohort repository's
 refactor publishes a stable behavior head.
 
-At restart, run the targeted GLP-1 acceptance gate. The database-backed build
+For subsequent updates, use `verify-update` as described in
+`UPDATE_VERIFICATION.md`. The database-backed build
 validates the unified database, its manifest-bound catalog, the required
 included GLP-1 concepts, and canonical source-audit evidence; then compare the
 adapter-backed GLP-1 derivation with the frozen standalone result using
 `compare-reference-outputs`. It checks schemas and exact rows across source,
 observability, cohort, evidence, and source-QA tables; verifies byte-identical
 data dictionaries and aggregate QA reports; and checks public-output inventory
-and manifests, excluding only declared run and index-event identifiers. This is
+and manifests, excluding only declared operational run fields; deterministic index-event
+identifiers are compared exactly. This is
 the evidence needed to retire the GLP-1 raw-data path after exact-head private
 full-data parity. Real row-level outputs and validation extracts must remain
 external and untracked.

@@ -25,9 +25,11 @@
 - Cohort-construction code has not been imported into this repository. Its
   migration is paused until the downstream cohort repository exposes a stable
   behavior head; never infer cohort semantics from the source catalog.
-- Synthetic adapter tests are not private full-data evidence. Standalone
-  ingestion and Stata remain references until frozen-head private full-data
-  parity gates pass.
+- Private GLP-1 source equivalence is accepted at `9fe392b`; see
+  `docs/GLP1_SOURCE_ACCEPTANCE.md` for the composed comparison and repair receipt.
+  Database-backed GLP-1 processing is the production route. Preserve raw-reference
+  mode for reproduction and the separate Stata compatibility boundary. Synthetic
+  adapter tests alone never authorize another source cutover.
 - DuckDB databases, temporary spill, manifests, logs, and row-level outputs
   from real data must live outside the repository in validated, non-symlinked
   locations. Preserve the existing safe-location checks and clean only

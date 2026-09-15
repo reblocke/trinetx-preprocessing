@@ -179,7 +179,9 @@ product. The new receipt retains both original producer revisions and a hash
 of the failed receipt; historical manifests and failed receipts are unchanged.
 Both packages remain borrowed through comparison and evidence sealing.
 
-`comparison_progress.json` reports the current table and partition counts.
+`comparison_progress.json` reports the current table and partition counts. The comparison
+phase is reported immediately after writing finishes and after every completed
+partition, so a long first group does not retain a stale writing label.
 Partition hashes are never used as scientific content checksums. Synthetic
 regressions compare forced partitions against the original exact operator,
 including forced bucket collisions, duplicates, nulls, signed zero, NaNs,

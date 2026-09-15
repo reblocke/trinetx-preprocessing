@@ -1,6 +1,6 @@
 # Current Repository State
 
-Status date: 2026-08-04. This page is the durable human-readable status source
+Status date: 2026-09-15. This page is the durable human-readable status source
 for the repository. Historical evidence and decision detail remain in
 `VALIDATION.md` and `DECISIONS.md`; future work is ordered in `PLAN.md`.
 
@@ -44,10 +44,11 @@ for the repository. Historical evidence and decision detail remain in
   command are temporary migration references. Raw ingestion cannot be retired
   until a frozen exact head passes private full-data adapter-versus-reference
   parity.
-- The expanded cohort-source catalog and current adapter have code/API and
-  synthetic evidence, but no new private full-data raw-versus-database GLP-1
-  parity run has been completed at this exact head. Earlier full-data GLP-1
-  evidence is reference evidence only.
+- Full-data raw-versus-database GLP-1 equivalence passed at behavior head
+  `9fe392b`; database-backed processing is the documented production route for
+  that validated contract. Raw-reference mode remains for reproduction.
+  See [GLP1_SOURCE_ACCEPTANCE.md](GLP1_SOURCE_ACCEPTANCE.md). This acceptance
+  does not certify all traditional source rows or retire the 36-file bridge.
 - Cohort import is paused because the downstream cohort-creation repository is
   being refactored. Work resumes when that repository exposes a stable behavior
   head; the exact restart commit is not yet known.
