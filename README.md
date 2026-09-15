@@ -9,9 +9,11 @@ and additive source elements needed by the GLP-1 work and future studies. The
 historical 36 CSV files are generated compatibility projections of that product.
 
 See `docs/CURRENT_STATE.md` for the current delivered/pending boundary. In
-brief, GLP-1 and traditional elements now share one permanent source catalog;
-cohort construction has not yet moved here, and the current-head private
-full-data adapter/source parity gate remains pending.
+brief, GLP-1 and traditional elements share one permanent source catalog.
+Database-backed GLP-1 processing is the documented production route for the
+validated source contract; raw-reference mode remains for reproduction.
+Broader cohort construction has not yet moved here. See
+`docs/GLP1_SOURCE_ACCEPTANCE.md` for the evidence and its scope.
 
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
@@ -108,33 +110,48 @@ bridge, not a permanent parallel product or package.
 
 ## Downstream GLP-1 eligibility
 
-The standalone raw-ingestion GLP-1 CLI remains the computational reference
-during migration. The unified product is currently an
-adapter-validated source boundary, not a production CLI cutover or a second
-canonical preprocessing product. The adapter is temporary: GLP-1 elements and
-later cohort derivations belong in the same shared workflow as the legacy
-elements, not in a permanent standalone module. A later migration PR must wire
-the manifest-bound source into the standalone reference CLI and prove full-data
-adapter-versus-reference parity before the raw scan can be deprecated:
+The GLP-1 command consumes the manifest-bound canonical database in production.
+Diagnoses, vitals, labs, procedures and medications remain in the shared source
+domains. The study outputs are derivations of that source, not a second
+preprocessing product. Database mode validates the source contract and reads
+stored audit evidence without reopening raw CSVs.
 
 ```bash
-./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility validate-export \
-  --input /path/to/trinetx_export
-
-./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility build \
-  --input /path/to/trinetx_export \
-  --output /path/to/output/glp1_eligibility \
+uv run python -m trinetx_preprocessing.glp1_eligibility build \
+  --database /private/output/trinetx_preprocessed.duckdb \
+  --output /private/output/glp1_eligibility \
   --config config/glp1_eligibility.yml
-
-./.venv/bin/python -m trinetx_preprocessing.glp1_eligibility status \
-  --output /path/to/output/glp1_eligibility \
-  --watch --interval-seconds 30
 ```
 
-See `docs/GLP1_ELIGIBILITY.md`, `docs/GLP1_DATA_CONTRACT.md`, and GitHub issue
-#6 for the downstream analytic contract and clinical-review requirements.
-The adapter has synthetic parity evidence at the current head; a new private
-full-data adapter-versus-reference run has not yet been completed.
+Preserve explicit raw-reference mode for reproduction and source-equivalence
+checks:
+
+```bash
+uv run python -m trinetx_preprocessing.glp1_eligibility build \
+  --input /private/TriNetX --raw-reference \
+  --output /private/validation/glp1_raw_reference \
+  --config config/glp1_eligibility.yml
+```
+
+Use the reusable verifier for subsequent updates:
+
+```bash
+uv run python -m trinetx_preprocessing verify-update plan --base <accepted-commit>
+```
+
+`docs/UPDATE_VERIFICATION.md` describes execution, private baseline receipts,
+scientific-drift review and temporary-output cleanup. The exact comparator
+preserves schema, values, dates, missingness, duplicates, source evidence and
+deterministic index-event IDs. Only documented operational run fields differ.
+It also checks the published Parquet, flow CSV, data dictionary, QA report and
+manifest.
+
+`docs/GLP1_SOURCE_ACCEPTANCE.md` records the accepted source-mode comparison.
+All-36-file compatibility certification and exhaustive retained-source auditing
+remain separate upstream release gates. Preserve the compatibility bridge and
+approved clinical definitions. Broader cohort integration still awaits a stable
+downstream behavior head. See `docs/GLP1_ELIGIBILITY.md`,
+`docs/GLP1_DATA_CONTRACT.md`, and issue #6 for separate clinical-review scope.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:

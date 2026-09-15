@@ -46,6 +46,7 @@ from .elements import (
     load_combined_catalog,
 )
 from .scratch import COMBINED_DUCKDB_SPILL_PREFIX
+from .source_audit import CanonicalSourceAudit, build_canonical_source_audit
 
 COMBINED_MANIFEST_FILENAME = "trinetx_preprocessed_manifest.json"
 COMBINED_DUCKDB_THREADS = 1
@@ -63,6 +64,8 @@ COMBINED_COUNT_TABLES = (
     "compatibility_output_manifest",
     *SOURCE_TABLE_BY_DOMAIN.values(),
     "source_encounter_flow",
+    "canonical_source_file_audit",
+    "canonical_unmapped_code_frequency",
 )
 
 
@@ -140,6 +143,7 @@ def initialize_combined_database(
     """Create core/source tables through the first durable write session."""
 
     catalog = load_combined_catalog(config)
+    source_audit = build_canonical_source_audit(config.data_dir, catalog=catalog)
     glp1_catalog_digest = glp1_catalog_sha256(config)
     cohort_source_schema_digest = cohort_source_schema_sha256()
     work_manifest = _read_work_manifest(config)
@@ -175,6 +179,7 @@ def initialize_combined_database(
             compatibility_output_dir or config.output_dir,
         )
         _load_element_catalog(connection, catalog_rows(catalog))
+        _load_canonical_source_audit(connection, source_audit)
         _load_source_tables(connection, config)
         _load_encounter_flow(connection, config)
     return {
@@ -606,6 +611,84 @@ def _create_manifest_table(
     connection.unregister("source_inventory_frame")
 
 
+def _load_canonical_source_audit(
+    connection: duckdb.DuckDBPyConnection,
+    audit: CanonicalSourceAudit,
+) -> None:
+    """Persist reusable source audit evidence in the canonical product only."""
+
+    connection.execute(
+        """
+        CREATE TABLE canonical_source_audit_manifest (
+            audit_profile VARCHAR NOT NULL,
+            input_inventory_sha256 VARCHAR NOT NULL,
+            catalog_sha256 VARCHAR NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO canonical_source_audit_manifest VALUES (?, ?, ?)",
+        [audit.profile, audit.inventory.sha256, audit.catalog_sha256],
+    )
+    connection.execute(
+        """
+        CREATE TABLE canonical_source_file_audit (
+            logical_domain VARCHAR NOT NULL,
+            source_file VARCHAR NOT NULL,
+            source_file_sha256 VARCHAR NOT NULL,
+            file_size_bytes UBIGINT NOT NULL,
+            source_mtime_ns UBIGINT NOT NULL,
+            row_count UBIGINT NOT NULL,
+            column_names JSON NOT NULL,
+            detected_schema_version VARCHAR NOT NULL,
+            warning VARCHAR
+        )
+        """
+    )
+    connection.executemany(
+        "INSERT INTO canonical_source_file_audit VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                item.logical_domain,
+                item.source_file,
+                item.source_file_sha256,
+                item.file_size_bytes,
+                item.source_mtime_ns,
+                item.row_count,
+                json.dumps(item.column_names),
+                item.detected_schema_version,
+                item.warning,
+            )
+            for item in audit.inventory.files
+        ],
+    )
+    connection.execute(
+        """
+        CREATE TABLE canonical_unmapped_code_frequency (
+            logical_domain VARCHAR NOT NULL,
+            code_system VARCHAR NOT NULL,
+            code VARCHAR NOT NULL,
+            estimated_count UBIGINT NOT NULL,
+            max_error UBIGINT NOT NULL
+        )
+        """
+    )
+    if audit.inventory.unmapped_code_frequencies:
+        connection.executemany(
+            "INSERT INTO canonical_unmapped_code_frequency VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    item.logical_domain,
+                    item.code_system,
+                    item.code,
+                    item.estimated_count,
+                    item.max_error,
+                )
+                for item in audit.inventory.unmapped_code_frequencies
+            ],
+        )
+
+
 def _load_compatibility_observations(
     connection: duckdb.DuckDBPyConnection,
     output_dir: Path,
@@ -1021,6 +1104,9 @@ def _create_data_dictionary(connection: duckdb.DuckDBPyConnection) -> None:
     for table_name in (
         "preprocessing_manifest",
         "source_file_inventory",
+        "canonical_source_audit_manifest",
+        "canonical_source_file_audit",
+        "canonical_unmapped_code_frequency",
         "source_encounter_flow",
         PREPROCESSED_ENCOUNTER_TABLE,
         "rfs_membership",
@@ -1057,6 +1143,9 @@ def _create_quality_summary(connection: duckdb.DuckDBPyConnection) -> None:
     for table_name in (
         "preprocessing_manifest",
         "source_file_inventory",
+        "canonical_source_audit_manifest",
+        "canonical_source_file_audit",
+        "canonical_unmapped_code_frequency",
         "source_encounter_flow",
         PREPROCESSED_ENCOUNTER_TABLE,
         "rfs_membership",

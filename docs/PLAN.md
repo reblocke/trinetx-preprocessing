@@ -56,9 +56,10 @@ remain downstream. See `CURRENT_STATE.md` for the current handoff boundary.
    `AFTER_EXCLUSION` variants for later migration parity, merged in
    `trinetx-hypercapnia-code` PR #4 at
    `0584b0e13fe547f4a67b7d05e00aa40c0e95fa94` with green post-merge CI.
-4. Code/API review and synthetic CI are accepted. A fresh private full-data
-   source-completeness and GLP-1 adapter-versus-reference run at the exact
-   current head remains pending.
+4. Code/API review and synthetic CI are accepted. Private GLP-1 source-mode
+   equivalence passed at behavior head `9fe392b`; `GLP1_SOURCE_ACCEPTANCE.md` records the scope.
+   Broader retained-source completeness and current-schema all-36-file
+   certification remain separate upstream release gates.
 
 ## Next phases
 
@@ -71,11 +72,11 @@ remain downstream. See `CURRENT_STATE.md` for the current handoff boundary.
    remains the exact private reference. Bring GLP-1 source elements and later
    derivations into that same registry and workflow; do not create a permanent
    standalone GLP-1 product or second preprocessing path.
-3. **Use the GLP-1 adapter only for migration parity.** Add a manifest-bound
-   unified-database source to the current reference CLI, preserve standalone
-   raw ingestion until full-data adapter-versus-reference parity passes, then
-   absorb the validated GLP-1 path into the shared workflow and retire the
-   second raw scan.
+3. **Integrate the validated GLP-1 derivation with the future cohort layer.**
+   The current command already consumes the shared database as its documented
+   production source, with raw-reference mode retained for reproduction. Future
+   cohort integration should reuse that validated path under the shared workflow
+   and preserve its exact behavior; routine processing needs no second raw scan.
 4. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
    delivered standalone CLI, eight-file contract, synthetic acceptance, and
    behavior-head-scoped aggregate full-data reference evidence from the

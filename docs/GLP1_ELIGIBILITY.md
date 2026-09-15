@@ -8,8 +8,8 @@ and clinical/private-review requirements.
 
 `CURRENT_STATE.md` is the current repository-status source. The GLP-1 catalog
 now participates in the same permanent source contract as traditional elements;
-the standalone derivation described here remains a migration reference, not the
-intended final module boundary.
+the existing derivation consumes that shared contract. Broader cohort
+integration remains a separate migration.
 
 ## Compatibility boundary
 
@@ -30,8 +30,8 @@ intended final module boundary.
 - Real databases, Parquet files, manifests, logs, and validation artifacts stay
   external and untracked.
 
-The standalone raw-ingestion command below remains the computational reference
-implementation during migration. The adapter-backed synthetic gate verifies
+Explicit `build --input <export> --raw-reference` remains available as the
+computational reference for reproduction and source-equivalence checks. The adapter-backed synthetic gate verifies
 equivalent source and downstream outputs from the unified product. It is a
 temporary compatibility bridge: the permanent design integrates GLP-1 elements
 and later cohort derivations into the shared primary workflow rather than a
@@ -47,8 +47,9 @@ clinical terminology review; remaining data-driven policy; the required
 smoke-query interface and specified aggregate summaries; fresh evidence at the
 final catalog/rule head; and investigator/private record-level review. The
 standalone raw-ingestion implementation remains the full-data computational
-reference. The current expanded source/adapter head has synthetic CI evidence,
-but no new private full-data adapter-versus-reference result. Cohort integration
+reference. The current source-mode migration has private full-data equivalence evidence
+at behavior head `9fe392b` (`GLP1_SOURCE_ACCEPTANCE.md`); database input is the documented
+production route. This does not close separate clinical requirements. Cohort integration
 is paused until the downstream cohort repository provides a stable refactor
 behavior head.
 
@@ -84,11 +85,11 @@ file is available. Ingredient exports must provide
 `patient_id`, `code_system`, `code`, and `start_date` because those fields
 define medication phenotype membership and timing.
 
-Build the additive database and study files:
+Build the study files from the shared preprocessing database:
 
 ```bash
 python -m trinetx_preprocessing.glp1_eligibility build \
-  --input /path/to/trinetx_export \
+  --database /private/output/trinetx_preprocessed.duckdb \
   --output /path/to/output/glp1_eligibility \
   --config config/glp1_eligibility.yml
 ```

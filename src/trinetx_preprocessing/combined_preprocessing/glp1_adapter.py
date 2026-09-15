@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import duckdb
 
 from ..glp1_eligibility.concept_sets import ConceptSetCatalog, load_concept_sets
 from ..glp1_eligibility.config import GLP1Config
-from ..glp1_eligibility.sql_helpers import inclusive_lookback_start_sql
+from ..glp1_eligibility.provenance import (
+    InputInventory,
+    SourceFileInventory,
+    UnmappedCodeFrequency,
+)
+from ..glp1_eligibility.sql_helpers import (
+    inclusive_lookback_start_sql,
+    timestamp_precision_sql,
+)
+from .cohort_source import validate_cohort_source
 
 _GAS_ELEMENT_IDS = (
     "source.arterial_pco2",
@@ -112,6 +122,88 @@ _SOURCE_HASH_COLUMNS = {
         "source_id",
     ),
 }
+
+
+def canonical_inventory_from_preprocessed(
+    database_path: Path,
+    *,
+    catalog: ConceptSetCatalog,
+) -> InputInventory:
+    """Read canonical audit evidence without reopening raw clinical exports."""
+
+    required_elements = tuple(
+        f"source.{concept.concept_set_id}"
+        for concept in catalog.concepts
+        if concept.include
+    )
+    validation = validate_cohort_source(
+        database_path,
+        required_elements=required_elements,
+    )
+    if not validation.valid:
+        raise ValueError(
+            "Canonical source validation failed: " + "; ".join(validation.errors)
+        )
+    path = Path(database_path).resolve()
+    connection = duckdb.connect(str(path), read_only=True)
+    try:
+        manifest_rows = connection.execute(
+            "SELECT audit_profile, input_inventory_sha256, catalog_sha256 "
+            "FROM canonical_source_audit_manifest"
+        ).fetchall()
+        if len(manifest_rows) != 1:
+            raise ValueError(
+                "Canonical source audit manifest must contain exactly one row."
+            )
+        profile, inventory_sha256, audit_catalog_sha256 = manifest_rows[0]
+        if profile != "source_inventory_v1" or not isinstance(inventory_sha256, str):
+            raise ValueError("Canonical source audit profile is unsupported.")
+        if not isinstance(audit_catalog_sha256, str):
+            raise ValueError("Canonical source audit lacks a catalog identity.")
+        files = tuple(
+            SourceFileInventory(
+                logical_domain=str(row[0]),
+                source_file=str(row[1]),
+                source_file_sha256=str(row[2]),
+                file_size_bytes=int(row[3]),
+                source_mtime_ns=int(row[4]),
+                row_count=int(row[5]),
+                column_names=tuple(json.loads(row[6])),
+                detected_schema_version=str(row[7]),
+                warning=None if row[8] is None else str(row[8]),
+            )
+            for row in connection.execute(
+                "SELECT logical_domain, source_file, source_file_sha256, "
+                "file_size_bytes, source_mtime_ns, row_count, column_names, "
+                "detected_schema_version, warning "
+                "FROM canonical_source_file_audit ORDER BY source_file"
+            ).fetchall()
+        )
+        unmapped = tuple(
+            UnmappedCodeFrequency(
+                logical_domain=str(row[0]),
+                code_system=str(row[1]),
+                code=str(row[2]),
+                estimated_count=int(row[3]),
+                max_error=int(row[4]),
+            )
+            for row in connection.execute(
+                "SELECT logical_domain, code_system, code, estimated_count, max_error "
+                "FROM canonical_unmapped_code_frequency "
+                "ORDER BY logical_domain, estimated_count DESC, code_system, code"
+            ).fetchall()
+        )
+    except duckdb.CatalogException as exc:
+        raise ValueError(
+            "Canonical source lacks reusable source-audit evidence."
+        ) from exc
+    finally:
+        connection.close()
+    return InputInventory(
+        files=files,
+        sha256=inventory_sha256,
+        unmapped_code_frequencies=unmapped,
+    )
 
 
 def materialize_glp1_sources_from_preprocessed(
@@ -263,6 +355,8 @@ def _create_candidate_membership(connection: duckdb.DuckDBPyConnection) -> None:
 
 
 def _create_encounter_source(connection: duckdb.DuckDBPyConnection) -> None:
+    # Preserve the reference consumer convention, including missing end dates.
+    # Canonical precision remains nullable; do not rewrite the shared source.
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE source_encounter AS
@@ -280,7 +374,7 @@ def _create_encounter_source(connection: duckdb.DuckDBPyConnection) -> None:
             cast(source_id AS VARCHAR) AS source_id,
             start_datetime AS encounter_start,
             end_datetime AS encounter_end,
-            end_timestamp_precision AS encounter_end_precision,
+            {timestamp_precision_sql("end_date")} AS encounter_end_precision,
             source_file,
             {_source_hash_sql("source_encounter")} AS source_record_hash
         FROM preprocessed.source_encounter
@@ -543,12 +637,16 @@ def _glp1_source_membership_sql(
     logical_domain: str,
     concept_domain: str,
 ) -> str:
-    """Return an EXISTS predicate for rows matched by the active GLP-1 catalog.
+    """Return a semijoin predicate for the active GLP-1 catalog.
 
     The canonical preprocessed database intentionally retains candidates from
     multiple downstream consumers.  An adapter consumer must select only the
     memberships belonging to its own active catalog; otherwise traditional
     source candidates would leak into the standalone GLP-1 source contract.
+    Keep the subquery uncorrelated: a correlated EXISTS creates a delimiter
+    join over the full source at private scale and can exhaust bounded memory.
+    IN in a WHERE predicate retains the same rows, including duplicate source
+    records, without multiplying rows for multiple matching memberships.
     """
 
     element_ids = tuple(
@@ -560,11 +658,10 @@ def _glp1_source_membership_sql(
         return "FALSE"
     elements = ", ".join(_sql_string(element_id) for element_id in element_ids)
     return f"""
-        EXISTS (
-            SELECT 1
+        {source_alias}.source_record_id IN (
+            SELECT membership.source_record_id
             FROM preprocessed.element_membership AS membership
-            WHERE membership.source_record_id = {source_alias}.source_record_id
-              AND membership.logical_domain = {_sql_string(logical_domain)}
+            WHERE membership.logical_domain = {_sql_string(logical_domain)}
               AND membership.include
               AND membership.element_id IN ({elements})
         )

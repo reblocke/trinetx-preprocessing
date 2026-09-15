@@ -7,6 +7,11 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..combined_preprocessing.glp1_adapter import (
+    canonical_inventory_from_preprocessed,
+    materialize_glp1_observability_from_preprocessed,
+    materialize_glp1_sources_from_preprocessed,
+)
 from ..filesystem import remove_tree_strict
 from .cohort import CoreCohortCounts, build_cohort_flow, build_core_cohort
 from .concept_sets import load_concept_sets
@@ -14,7 +19,11 @@ from .config import GLP1Config, load_glp1_config
 from .database import initialize_database, mark_database_complete
 from .discovery import validate_export
 from .eligibility import build_eligibility_phenotypes
-from .ingestion import build_raw_observability_summaries, ingest_core_sources
+from .ingestion import (
+    _update_retained_date_coverage,
+    build_raw_observability_summaries,
+    ingest_core_sources,
+)
 from .monitoring import RunStateWriter, state_path_for_output
 from .outputs import OUTPUT_TABLES, summarize_database, write_build_outputs
 from .provenance import (
@@ -40,12 +49,16 @@ class BuildResult:
 
 def build_glp1_eligibility(
     *,
-    input_root: Path,
+    input_root: Path | None = None,
+    database_path: Path | None = None,
     output_dir: Path,
     config_path: Path,
     replace: bool = False,
 ) -> BuildResult:
-    """Build and atomically publish the GLP-1 core analytic database."""
+    """Build a reference GLP-1 result from raw inputs or a canonical source."""
+
+    if (input_root is None) == (database_path is None):
+        raise ValueError("Supply exactly one of input_root or database_path.")
 
     output = Path(output_dir).resolve()
     _require_safe_output_location(output)
@@ -59,21 +72,36 @@ def build_glp1_eligibility(
     try:
         config = load_glp1_config(config_path)
         catalog = load_concept_sets(config.concept_sets_dir)
-        report = validate_export(input_root)
-        if not report.valid:
-            raise ValueError("Export validation failed: " + "; ".join(report.errors))
-        inventory = build_input_inventory(
-            input_root,
-            report,
-            state=state,
-            catalog=catalog,
-        )
+        source_database_path = None
+        if database_path is not None:
+            source_database_path = Path(database_path).resolve()
+            inventory = canonical_inventory_from_preprocessed(
+                source_database_path,
+                catalog=catalog,
+            )
+            source_root = source_database_path
+            source_mode = "canonical"
+        else:
+            input_root = Path(input_root).resolve()
+            report = validate_export(input_root)
+            if not report.valid:
+                raise ValueError(
+                    "Export validation failed: " + "; ".join(report.errors)
+                )
+            inventory = build_input_inventory(
+                input_root,
+                report,
+                state=state,
+                catalog=catalog,
+            )
+            source_root = input_root
+            source_mode = "raw_reference"
         git_sha = current_git_sha()
         run_id = deterministic_run_id(
             config_sha256=config.sha256,
             input_manifest_sha256=inventory.sha256,
             concept_catalog_sha256=catalog.sha256,
-            code_fingerprint=git_sha,
+            code_fingerprint=f"{git_sha}:{source_mode}",
         )
         state.update(run_id=run_id, phase="inventory_complete")
 
@@ -118,20 +146,28 @@ def build_glp1_eligibility(
         connection = initialize_database(
             database_path,
             run_id=run_id,
-            input_root=input_root,
+            input_root=source_root,
             config=config,
             inventory=inventory,
             catalog=catalog,
             git_sha=git_sha,
             concept_catalog_sha256=catalog.sha256,
         )
-        ingest_core_sources(
-            connection,
-            input_root=input_root,
-            inventory=inventory,
-            config=config,
-            state=state,
-        )
+        if source_database_path is None:
+            ingest_core_sources(
+                connection,
+                input_root=input_root,
+                inventory=inventory,
+                config=config,
+                state=state,
+            )
+        else:
+            materialize_glp1_sources_from_preprocessed(
+                connection,
+                source_database_path,
+                config=config,
+            )
+            _update_retained_date_coverage(connection)
         warnings = build_concept_match_summary(
             connection,
             catalog.required_concept_set_ids,
@@ -144,12 +180,18 @@ def build_glp1_eligibility(
             run_id=run_id,
             git_sha=git_sha,
         )
-        build_raw_observability_summaries(
-            connection,
-            input_root=input_root,
-            inventory=inventory,
-            state=state,
-        )
+        if source_database_path is None:
+            build_raw_observability_summaries(
+                connection,
+                input_root=input_root,
+                inventory=inventory,
+                state=state,
+            )
+        else:
+            materialize_glp1_observability_from_preprocessed(
+                connection,
+                source_database_path,
+            )
         state.update(phase="component_phenotypes", current_domain=None)
         build_eligibility_phenotypes(connection, config)
         build_cohort_flow(connection, config)

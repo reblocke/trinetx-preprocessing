@@ -1,8 +1,8 @@
 # Reproducibility
 
 See `CURRENT_STATE.md` for the distinction between accepted historical
-full-data evidence, accepted current code/synthetic evidence, and the pending
-current-head private parity gate.
+full-data evidence, accepted GLP-1 source-mode equivalence at behavior head `9fe392b`, and
+separate pending broader source/cohort migration gates.
 
 ## Environment
 - Use `uv` to manage dependencies.
@@ -51,8 +51,10 @@ Keep the database and any DuckDB `spill_root` on an approved external private
 volume; the reader is read-only and cleans its owned spill directory on exit.
 
 These identity checks make a consumer reproducible but do not substitute for
-data parity. The expanded catalog/current adapter still requires a frozen-head
-private full-data comparison before raw-ingestion references can be retired.
+data parity. `GLP1_SOURCE_ACCEPTANCE.md` records private GLP-1 source-mode
+equivalence, including the provenance-checked reuse of a completed raw reference.
+Raw-reference mode remains available for reproduction; use `UPDATE_VERIFICATION.md`
+to select checks for subsequent updates.
 
 ## Intermediate storage
 - Default code behavior remains CSV for backwards compatibility.

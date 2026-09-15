@@ -15,6 +15,7 @@ from .config import GLP1ConfigError, load_glp1_config
 from .discovery import validate_export
 from .monitoring import process_appears_active, read_run_state
 from .outputs import summarize_database
+from .parity import compare_glp1_reference_outputs
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,9 +42,26 @@ def build_parser() -> argparse.ArgumentParser:
     validate_export_parser.add_argument("--json-out", type=Path)
 
     build_command = subparsers.add_parser(
-        "build", help="Build the versioned GLP-1 DuckDB and Parquet outputs."
+        "build", help="Build reference GLP-1 outputs from one validated source mode."
     )
-    build_command.add_argument("--input", type=Path, required=True)
+    source_mode = build_command.add_mutually_exclusive_group(required=True)
+    source_mode.add_argument(
+        "--input",
+        type=Path,
+        help="Raw export root; retained only for parity and historical reproduction.",
+    )
+    source_mode.add_argument(
+        "--database",
+        type=Path,
+        help=(
+            "Published canonical preprocessing database; never falls back to raw CSVs."
+        ),
+    )
+    build_command.add_argument(
+        "--raw-reference",
+        action="store_true",
+        help="Acknowledge that --input is retained only for parity and reproduction.",
+    )
     build_command.add_argument("--output", type=Path, required=True)
     build_command.add_argument("--config", type=Path, required=True)
     build_command.add_argument(
@@ -57,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     summarize_parser.add_argument("--database", type=Path, required=True)
     summarize_parser.add_argument("--json", action="store_true")
+
+    compare_parser = subparsers.add_parser(
+        "compare-reference-outputs",
+        help="Compare raw-reference and canonical-source GLP-1 outputs.",
+    )
+    compare_parser.add_argument("--raw-output", type=Path, required=True)
+    compare_parser.add_argument("--canonical-output", type=Path, required=True)
+    compare_parser.add_argument("--json", action="store_true")
 
     status_parser = subparsers.add_parser(
         "status", help="Read a long-running build's atomic progress state."
@@ -101,8 +127,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if report.valid else 2
 
         if args.command == "build":
+            if args.input is not None and not args.raw_reference:
+                raise ValueError("--input requires explicit --raw-reference.")
+            if args.database is not None and args.raw_reference:
+                raise ValueError("--raw-reference cannot be used with --database.")
             result = build_glp1_eligibility(
                 input_root=args.input,
+                database_path=args.database,
                 output_dir=args.output,
                 config_path=args.config,
                 replace=args.replace,
@@ -141,6 +172,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     + ", ".join(f"{key}={value}" for key, value in summary.items())
                 )
             return 0
+
+        if args.command == "compare-reference-outputs":
+            result = compare_glp1_reference_outputs(
+                args.raw_output,
+                args.canonical_output,
+            )
+            payload = result.to_dict()
+            if args.json:
+                print(json.dumps(payload, indent=2))
+            else:
+                print(
+                    "GLP-1 source-mode parity: "
+                    + ("passed" if result.valid else "failed")
+                )
+                for error in result.errors:
+                    print(f"- {error}")
+            return 0 if result.valid else 1
 
         if args.command == "status":
             while True:

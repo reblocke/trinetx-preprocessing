@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "products": [
+    "canonical",
+    "compatibility36",
+    "glp1"
+  ],
+  "rules": [
+    {
+      "patterns": [
+        "config/concept_sets/*",
+        "src/trinetx_preprocessing/rules/*",
+        "docs/SPEC.md",
+        "docs/DATA_CONTRACT.md"
+      ],
+      "gate": "scientific",
+      "products": [
+        "canonical",
+        "compatibility36",
+        "glp1"
+      ]
+    },
+    {
+      "patterns": [
+        "config/glp1_eligibility.yml",
+        "src/trinetx_preprocessing/glp1_eligibility/cohort.py",
+        "src/trinetx_preprocessing/glp1_eligibility/eligibility.py",
+        "src/trinetx_preprocessing/glp1_eligibility/phenotype_sources.py",
+        "docs/GLP1_DATA_CONTRACT.md"
+      ],
+      "gate": "scientific",
+      "products": [
+        "glp1"
+      ]
+    },
+    {
+      "patterns": [
+        "src/trinetx_preprocessing/glp1_eligibility/parity.py",
+        "src/trinetx_preprocessing/verification/*",
+        "config/verification_policy.json",
+        "scripts/run_glp1_source_acceptance.py",
+        "src/trinetx_preprocessing/combined_preprocessing/validation.py",
+        "src/trinetx_preprocessing/combined_preprocessing/evidence.py",
+        "src/trinetx_preprocessing/__main__.py"
+      ],
+      "gate": "static",
+      "products": []
+    },
+    {
+      "patterns": [
+        "src/trinetx_preprocessing/glp1_eligibility/*",
+        "src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py"
+      ],
+      "gate": "workflow",
+      "products": [
+        "glp1"
+      ]
+    },
+    {
+      "patterns": [
+        "src/*",
+        "pyproject.toml",
+        "uv.lock",
+        "config/*"
+      ],
+      "gate": "materialization",
+      "products": [
+        "canonical",
+        "compatibility36",
+        "glp1"
+      ]
+    },
+    {
+      "patterns": [
+        "docs/*",
+        "tests/*",
+        ".github/*",
+        "README*",
+        "CONTINUITY.md",
+        "AGENTS.md",
+        "llms.txt",
+        "LICENSE*",
+        ".gitignore",
+        "CITATION.cff"
+      ],
+      "gate": "static",
+      "products": []
+    }
+  ]
+}

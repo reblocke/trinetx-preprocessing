@@ -15,8 +15,10 @@ traditional Hypercapnia-era elements and additive GLP-1 elements.
   inclusion or eligibility.
 - No downstream cohort-construction code has been imported. Migration resumes
   after the downstream repository exposes a stable behavior head.
-- The GLP-1 adapter, standalone GLP-1 raw ingestion, and Stata implementation
-  remain migration/reference paths pending private frozen-head full-data gates.
+- Database-backed GLP-1 processing is the documented production route for the
+  contract accepted at behavior head `9fe392b`; see `docs/GLP1_SOURCE_ACCEPTANCE.md`.
+  Raw-reference GLP-1 ingestion remains for reproduction. The Stata reference
+  and 36-file compatibility bridge retain their separate acceptance boundaries.
 
 ## Stable Consumer Surfaces
 - Python: `open_cohort_source()` and `validate_cohort_source()` in
