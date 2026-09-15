@@ -29,7 +29,7 @@ Changes to this registry or observer-only exclusions require particular review.
 The public suite includes synthetic source-mode equivalence, duplicates,
 missingness, row identities, schema drift, serialization, publication, and
 negative contract tests. Small relations use bidirectional `EXCEPT ALL`. Large
-relations are written once into 256 hash partitions, then compared by grouping
+relations are written once into 64 hash partitions, then compared by grouping
 complete typed rows and summing signed multiplicities within each partition.
 Hashes only route rows: collisions do not establish equality. The positive and
 negative multiplicity differences equal the two `EXCEPT ALL` counts. Typed
@@ -149,6 +149,12 @@ Reference reuse is never a substitute for that comparison.
 The new run owns only its new output directory. Borrowed reference outputs and
 the failed run remain intact, including after successful recovery; remove their
 owned temporary products only after reviewing the acceptance evidence.
+
+Large GLP-1 comparisons use 64 partitions and 8,192-row Parquet groups.
+This reduces concurrent column-buffer spill and external-filesystem overhead.
+A bounded synthetic test on the execution drive measured the same exact result
+about four times faster than 256 partitions with 2,048-row groups; this timing
+does not replace private full-data acceptance.
 
 ## Retrying comparison without rebuilding either dataset
 

@@ -13,7 +13,8 @@ from ..combined_preprocessing.builder import require_safe_output_location
 from ..filesystem import remove_tree_strict
 
 PARTITION_THRESHOLD = 200_000
-PARTITION_COUNT = 256
+PARTITION_COUNT = 64
+PARTITION_ROW_GROUP_SIZE = 8192
 _BUCKET = "__verification_bucket"
 _WEIGHT = "__verification_weight"
 
@@ -99,7 +100,7 @@ def exact_difference_counts(
                 )
             ) TO {_literal(str(directory))}
             (FORMAT PARQUET, PARTITION_BY ({_identifier(_BUCKET)}),
-             COMPRESSION ZSTD, ROW_GROUP_SIZE 2048)
+             COMPRESSION ZSTD, ROW_GROUP_SIZE {PARTITION_ROW_GROUP_SIZE})
         """)
         result = {"left_only": 0, "right_only": 0}
         observed = [0, 0]

@@ -81,6 +81,9 @@
   partitions and provenance-checked reuse of both completed output packages;
   do not rebuild them solely to retry comparison. Full-data equivalence and
   source adoption remain pending until that comparison passes.
+- A bounded external-drive benchmark identified partition-buffer spill and
+  filesystem overhead. The GLP-1 comparator uses 64 partitions and larger row
+  groups; exact equality, schemas and duplicate multiplicities are unchanged.
 - Complete reviewable synthetic and private-data gates for canonical-source
   GLP-1 reference consumption; keep the shared source product canonical.
 
