@@ -76,6 +76,13 @@
   intentionally excluded from the public repository.
 
 ## Now
+- Full private comparison completed at `5ebf82f`: 22 of 24 database tables
+  and all six Parquet-to-database checks matched. Two encounter tables differed.
+  Aggregate diagnosis locates the differences at missing encounter-end precision:
+  reference ingestion emits `timestamp`, whereas canonical capture retains NULL.
+  The adapter now uses the unchanged reference classifier on the retained raw
+  end-date field. Targeted full-row confirmation remains pending; do not accept
+  source cutover or discard either completed output package yet.
 - Both private GLP-1 builds completed. The subsequent monolithic comparison
   exhausted its configured memory limit. Recover using exact full-value hash
   partitions and provenance-checked reuse of both completed output packages;

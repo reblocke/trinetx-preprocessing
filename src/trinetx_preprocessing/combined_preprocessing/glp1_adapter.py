@@ -14,7 +14,10 @@ from ..glp1_eligibility.provenance import (
     SourceFileInventory,
     UnmappedCodeFrequency,
 )
-from ..glp1_eligibility.sql_helpers import inclusive_lookback_start_sql
+from ..glp1_eligibility.sql_helpers import (
+    inclusive_lookback_start_sql,
+    timestamp_precision_sql,
+)
 from .cohort_source import validate_cohort_source
 
 _GAS_ELEMENT_IDS = (
@@ -352,6 +355,8 @@ def _create_candidate_membership(connection: duckdb.DuckDBPyConnection) -> None:
 
 
 def _create_encounter_source(connection: duckdb.DuckDBPyConnection) -> None:
+    # Preserve the reference consumer convention, including missing end dates.
+    # Canonical precision remains nullable; do not rewrite the shared source.
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE source_encounter AS
@@ -369,7 +374,7 @@ def _create_encounter_source(connection: duckdb.DuckDBPyConnection) -> None:
             cast(source_id AS VARCHAR) AS source_id,
             start_datetime AS encounter_start,
             end_datetime AS encounter_end,
-            end_timestamp_precision AS encounter_end_precision,
+            {timestamp_precision_sql("end_date")} AS encounter_end_precision,
             source_file,
             {_source_hash_sql("source_encounter")} AS source_record_hash
         FROM preprocessed.source_encounter
