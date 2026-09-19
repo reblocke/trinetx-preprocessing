@@ -122,6 +122,27 @@ class CompatibilityFrames(Mapping):
         )
 
 
+def _create_encounter_context_source(connection):
+    # BP evidence needs only encounter type for keys present in vital records.
+    # Avoid sorting every wide historical encounter row for candidate patients.
+    # Keep the original first-row rule, including NULL type on the selected row.
+    connection.execute("""
+        CREATE TEMP TABLE encounter_context_source AS
+        SELECT patient_id, encounter_id, type FROM (
+            SELECT source.patient_id, source.encounter_id, source.type,
+                   row_number() OVER (
+                       PARTITION BY source.patient_id, source.encounter_id
+                       ORDER BY source.encounter_start, source.source_record_hash
+                   ) AS observed_order
+            FROM source_encounter AS source
+            SEMI JOIN source_vital_measurement AS vital
+              ON source.patient_id = vital.patient_id
+             AND source.encounter_id = vital.encounter_id
+            WHERE source.patient_id IS NOT NULL AND source.encounter_id IS NOT NULL
+        ) WHERE observed_order = 1
+    """)
+
+
 def _materialize_features(connection, catalog, config):
     projection._require_matching_glp1_catalog(connection, catalog)
     connection.execute(
@@ -139,16 +160,6 @@ def _materialize_features(connection, catalog, config):
     projection._create_lab_source(connection, catalog=catalog)
     projection._create_encounter_source(connection)
     projection._create_patient_source(connection)
-    connection.execute("""
-        CREATE TEMP TABLE encounter_context_source AS
-        SELECT * EXCLUDE (observed_order) FROM (
-            SELECT source.*, row_number() OVER (
-                PARTITION BY patient_id,encounter_id
-                ORDER BY encounter_start,source_record_hash
-            ) AS observed_order FROM source_encounter AS source
-            WHERE patient_id IS NOT NULL AND encounter_id IS NOT NULL
-        ) WHERE observed_order=1
-    """)
     for name in (
         "source_vital_measurement",
         "source_diagnosis",
@@ -156,6 +167,7 @@ def _materialize_features(connection, catalog, config):
         "source_medication",
     ):
         projection._create_patient_concept_source(connection, name, catalog=catalog)
+    _create_encounter_context_source(connection)
     for output_domain, stored_domain, days in (
         ("diagnosis", "diagnosis", 730),
         ("labs", "labs", 365),

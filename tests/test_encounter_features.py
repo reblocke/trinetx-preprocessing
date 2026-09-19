@@ -347,3 +347,51 @@ def test_observability_uses_same_calendar_day_as_features():
             db.execute("SELECT event_count FROM raw_labs_observability").fetchone()[0]
             == 3
         )
+
+
+def test_encounter_context_prunes_unused_keys_without_changing_first_row():
+    from trinetx_preprocessing.encounters.builder import (
+        _create_encounter_context_source,
+    )
+
+    with duckdb.connect() as db:
+        db.execute("""
+            CREATE TABLE source_encounter (
+                patient_id VARCHAR, encounter_id VARCHAR, type VARCHAR,
+                encounter_start TIMESTAMP, source_record_hash VARCHAR,
+                unused_payload VARCHAR
+            );
+            INSERT INTO source_encounter VALUES
+                ('p','shared','INPAT','2024-01-02','a','wide'),
+                ('p','shared',NULL,'2024-01-01','a','wide'),
+                ('p','shared','AMB','2024-01-01','b','wide'),
+                ('q','shared','EMER','2024-01-01','a','wide'),
+                ('p','unused','AMB','2024-01-01','a','wide'),
+                ('p',NULL,'AMB','2024-01-01','a','wide');
+            CREATE TABLE source_vital_measurement AS
+                SELECT * FROM (VALUES
+                    ('p','shared'),('p','shared'),('q','shared'),('p',NULL)
+                ) v(patient_id,encounter_id);
+            CREATE TABLE original_context AS
+                SELECT * EXCLUDE (observed_order) FROM (
+                    SELECT *, row_number() OVER (
+                        PARTITION BY patient_id,encounter_id
+                        ORDER BY encounter_start,source_record_hash
+                    ) observed_order FROM source_encounter
+                    WHERE patient_id IS NOT NULL AND encounter_id IS NOT NULL
+                ) WHERE observed_order=1;
+        """)
+        _create_encounter_context_source(db)
+        assert db.execute(
+            "SELECT * FROM encounter_context_source ORDER BY patient_id"
+        ).fetchall() == [("p", "shared", None), ("q", "shared", "EMER")]
+        for table in ("original_context", "encounter_context_source"):
+            rows = db.execute(
+                f"SELECT vital.patient_id,vital.encounter_id,context.type "
+                f"FROM source_vital_measurement vital LEFT JOIN {table} context "
+                "USING(patient_id,encounter_id) ORDER BY 1,2"
+            ).fetchall()
+            if table == "original_context":
+                expected = rows
+            else:
+                assert rows == expected
