@@ -5,10 +5,8 @@ from __future__ import annotations
 import duckdb
 
 from ..clinical_sources.concept_sets import ConceptSetCatalog
-from ..clinical_sources.sql_helpers import (
-    inclusive_lookback_start_sql,
-    timestamp_precision_sql,
-)
+from ..clinical_sources.sql_helpers import timestamp_precision_sql
+from .date_windows import inclusive_lookback_start_sql
 
 _PATIENT_CONCEPT_DOMAIN_BY_TABLE = {
     "source_vital_measurement": ("vitals", "vital"),
@@ -311,7 +309,7 @@ def _create_observability_table(
         )
         event_count = (
             "coalesce(sum(event.event_count) FILTER (WHERE "
-            "event.event_datetime <= analysis.index_date AND "
+            "event.event_datetime::DATE <= analysis.index_date AND "
             f"{lower_bound}), 0)::BIGINT AS event_count"
         )
     connection.execute(
@@ -320,7 +318,7 @@ def _create_observability_table(
         SELECT
             analysis.index_event_id,
             min(event.event_datetime) FILTER (
-                WHERE event.event_datetime <= analysis.index_date
+                WHERE event.event_datetime::DATE <= analysis.index_date
             ) AS first_observed_event_date,
             {event_count}
         FROM encounter_anchor AS analysis

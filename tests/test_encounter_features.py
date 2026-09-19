@@ -103,6 +103,36 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
             assemble_analysis_base(CompatibilityFrames(db, "AFTER")),
             take_ownership=True,
         )
+    # Add genuine medication evidence to an encounter that fails the old
+    # obesity study criterion; enrichment must still populate its features.
+    target = base.frame.iloc[0]["pat_enc_hash"]
+    base.frame.loc[base.frame.pat_enc_hash.eq(target), "bmi"] = 25.0
+    anchor = pd.Timestamp("1960-01-01") + pd.Timedelta(
+        days=float(base.frame.iloc[0]["encounter_date"])
+    )
+    with duckdb.connect(str(source)) as db:
+        patient, encounter = db.execute(
+            "SELECT patient_id, encounter_id FROM preprocessed_encounter "
+            "WHERE concat(patient_id,'-',encounter_id)=? LIMIT 1",
+            [target],
+        ).fetchone()
+        date = (anchor - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        db.execute(
+            "INSERT INTO source_medication "
+            "(source_record_id,logical_domain,source_file,source_row_number,"
+            "patient_id,encounter_id,code_system_raw,code_system,code_raw,code,"
+            "event_datetime,start_datetime,start_date,date) "
+            "VALUES ('synthetic-semaglutide','medications','synthetic.csv',1,"
+            "?,?,'RXNORM','RXNORM','1991302','1991302',?,?,?,?)",
+            [patient, encounter, date, date, date, date],
+        )
+        db.execute(
+            "INSERT INTO element_membership "
+            "(source_record_id,element_id,logical_domain,include,match_type,"
+            "code_system,matched_code) VALUES "
+            "('synthetic-semaglutide','source.glp1_semaglutide','medications',"
+            "true,'exact','RXNORM','1991302')"
+        )
     base_path = tmp_path / "base.parquet"
     base.frame.to_parquet(base_path, index=False)
     scratch = tmp_path / "scratch"
@@ -120,7 +150,10 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
     result = pd.read_parquet(destination)
     assert qa["rows"] == len(base.frame)
     assert result[["patient_id", "encounter_id"]].duplicated().sum() == 0
-    assert result.glp1_medication_glp1_active_at_index.isna().all()
+    retained = result.loc[result.pat_enc_hash.eq(target)]
+    assert retained.bmi.iloc[0] == 25
+    assert bool(retained.glp1_medication_glp1_active_at_index.iloc[0])
+    assert result.glp1_medication_glp1_active_at_index.isna().any()
     assert result.first_encounter.eq(0).any()
 
 
@@ -284,3 +317,33 @@ def test_builder_rejects_existing_output_without_touching_source(tmp_path):
     with pytest.raises(FileExistsError):
         build_encounters(database=source, output_dir=output)
     assert source.read_bytes() == b"unchanged"
+
+
+def test_observability_uses_same_calendar_day_as_features():
+    from trinetx_preprocessing.encounters.source_projection import (
+        _create_observability_table,
+    )
+
+    with duckdb.connect() as db:
+        db.execute("""
+            ATTACH ':memory:' AS preprocessed;
+            CREATE TABLE encounter_anchor AS
+                SELECT 'p' patient_id, 'one' index_event_id,
+                       DATE '2024-01-01' index_date;
+            CREATE TABLE preprocessed.source_observability_event (
+                patient_id VARCHAR, logical_domain VARCHAR,
+                event_datetime TIMESTAMP, timestamp_precision VARCHAR,
+                event_count BIGINT
+            );
+            INSERT INTO preprocessed.source_observability_event VALUES
+                ('p','labs','2024-01-01 18:00:00','timestamp',1),
+                ('p','labs','2023-01-01 12:00:00','timestamp',2),
+                ('p','labs','2024-01-02 00:00:00','timestamp',4);
+        """)
+        _create_observability_table(
+            db, output_domain="labs", stored_domain="labs", lookback_days=365
+        )
+        assert (
+            db.execute("SELECT event_count FROM raw_labs_observability").fetchone()[0]
+            == 3
+        )

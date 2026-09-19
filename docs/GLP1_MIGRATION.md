@@ -1,3 +1,5 @@
+> Historical study/source evidence from before the encounter split. Active study code, configuration and scientific follow-ups live in trinetx-hypercapnia-code; neutral preprocessing remains here. See ENCOUNTER_PREPROCESSING.md.
+
 # GLP-1 Migration and Compatibility
 
 The migration boundary is one shared preprocessing and cohort workflow. GLP-1

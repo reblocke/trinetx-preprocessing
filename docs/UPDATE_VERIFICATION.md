@@ -1,3 +1,5 @@
+> Historical verifier documentation. The study verifier now lives in trinetx_analysis.glp1_verification downstream; this page records its pre-relocation interface.
+
 # Verifying preprocessing updates
 
 Use one change plan to select the necessary evidence. Keep the canonical

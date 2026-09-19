@@ -1,3 +1,5 @@
+> Historical study/source evidence from before the encounter split. Active study code, configuration and scientific follow-ups live in trinetx-hypercapnia-code; neutral preprocessing remains here. See ENCOUNTER_PREPROCESSING.md.
+
 # GLP-1 source acceptance
 
 Accepted 2026-09-15 at behavior head `9fe392b`. Database-backed GLP-1

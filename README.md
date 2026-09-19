@@ -100,58 +100,24 @@ Validate a published source contract before a downstream process opens it:
   --require-element source.traditional.diagnosis.has_j9612 --json
 ```
 
-The existing `export-legacy` command remains the exact 36-file CSV bridge for
-the Stata reference workflow. The next migration phase will import Hypercapnia
-cohort logic into the shared primary workflow, consuming this contract alongside
-the GLP-1 elements rather than raw exports. That import is paused while the
-downstream cohort-creation repository is refactored; it resumes from a frozen
-stable behavior head. The current GLP-1 adapter remains a temporary parity
-bridge, not a permanent parallel product or package.
+The existing `export-legacy` command remains the 36-file CSV bridge for the
+preserved Stata/Python reference workflow. The active encounter transformation
+now consumes those projections directly in memory; see
+[ENCOUNTER_PREPROCESSING.md](docs/ENCOUNTER_PREPROCESSING.md).
 
-## Downstream GLP-1 eligibility
+## Downstream GLP-1 analysis
 
-The GLP-1 command consumes the manifest-bound canonical database in production.
-Diagnoses, vitals, labs, procedures and medications remain in the shared source
-domains. The study outputs are derivations of that source, not a second
-preprocessing product. Database mode validates the source contract and reads
-stored audit evidence without reopening raw CSVs.
+Study cohort selection, indications, prevalence and reporting have moved to
+[trinetx-hypercapnia-code](https://github.com/reblocke/trinetx-hypercapnia-code).
+Its `trinetx_analysis.glp1_eligibility` command and study configuration must
+be run from that repository. The new encounter bundle does not apply GLP-1
+eligibility or restrict to one index encounter per patient.
 
-```bash
-uv run python -m trinetx_analysis.glp1_eligibility build \
-  --database /private/output/trinetx_preprocessed.duckdb \
-  --output /private/output/glp1_eligibility \
-  --config config/glp1_eligibility.yml
-```
-
-Preserve explicit raw-reference mode for reproduction and source-equivalence
-checks:
-
-```bash
-uv run python -m trinetx_analysis.glp1_eligibility build \
-  --input /private/TriNetX --raw-reference \
-  --output /private/validation/glp1_raw_reference \
-  --config config/glp1_eligibility.yml
-```
-
-Use the reusable verifier for subsequent updates:
-
-```bash
-uv run python -m trinetx_preprocessing verify-update plan --base <accepted-commit>
-```
-
-`docs/UPDATE_VERIFICATION.md` describes execution, private baseline receipts,
-scientific-drift review and temporary-output cleanup. The exact comparator
-preserves schema, values, dates, missingness, duplicates, source evidence and
-deterministic index-event IDs. Only documented operational run fields differ.
-It also checks the published Parquet, flow CSV, data dictionary, QA report and
-manifest.
-
-`docs/GLP1_SOURCE_ACCEPTANCE.md` records the accepted source-mode comparison.
-All-36-file compatibility certification and exhaustive retained-source auditing
-remain separate upstream release gates. Preserve the compatibility bridge and
-approved clinical definitions. Broader cohort integration still awaits a stable
-downstream behavior head. See `docs/GLP1_ELIGIBILITY.md`,
-`docs/GLP1_DATA_CONTRACT.md`, and issue #6 for separate clinical-review scope.
+Historical source-mode acceptance remains documented in
+[GLP1_SOURCE_ACCEPTANCE.md](docs/GLP1_SOURCE_ACCEPTANCE.md). Historical study
+documents here record the pre-relocation implementation; the maintained study
+interface and outstanding scientific defects are documented downstream.
+The shared source catalog and normalization remain upstream.
 
 ## Real data placement (do not commit)
 Put raw TriNetX exports under `data/` (git-ignored) and update `config.yaml`:

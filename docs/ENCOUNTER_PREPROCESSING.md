@@ -91,3 +91,9 @@ The private build/comparison result is recorded separately; synthetic tests
 alone do not establish current-data acceptance. Historical scientific issues
 in the study package are not repaired or newly validated by relocation.
 See the downstream ENCOUNTER_PREPROCESSING.md for that boundary.
+
+The final observability day-bound adjustment is output-neutral for the accepted
+private source: an aggregate scan found zero non-midnight timestamps in all
+five source-observability domains. The private build retains its original
+producer identity; the follow-up validation records this bounded equivalence
+proof instead of rerunning unchanged transformations.
