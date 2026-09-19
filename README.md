@@ -8,12 +8,12 @@ TriNetX exports. Its canonical product is one versioned
 and additive source elements needed by the GLP-1 work and future studies. The
 historical 36 CSV files are generated compatibility projections of that product.
 
-See `docs/CURRENT_STATE.md` for the current delivered/pending boundary. In
-brief, GLP-1 and traditional elements share one permanent source catalog.
-Database-backed GLP-1 processing is the documented production route for the
-validated source contract; raw-reference mode remains for reproduction.
-Broader cohort construction has not yet moved here. See
-`docs/GLP1_SOURCE_ACCEPTANCE.md` for the evidence and its scope.
+Active Python work now includes encounter-level traditional and GLP-1 feature
+creation via `trinetx-preprocessing build-encounters`. See
+[the encounter interface](docs/ENCOUNTER_PREPROCESSING.md) and
+[current state](docs/CURRENT_STATE.md). Study selection, GLP-1 indications,
+propensity models, prevalence and figures live in trinetx-hypercapnia-code.
+The source-building and historical compatibility interfaces below remain available.
 
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
@@ -117,7 +117,7 @@ preprocessing product. Database mode validates the source contract and reads
 stored audit evidence without reopening raw CSVs.
 
 ```bash
-uv run python -m trinetx_preprocessing.glp1_eligibility build \
+uv run python -m trinetx_analysis.glp1_eligibility build \
   --database /private/output/trinetx_preprocessed.duckdb \
   --output /private/output/glp1_eligibility \
   --config config/glp1_eligibility.yml
@@ -127,7 +127,7 @@ Preserve explicit raw-reference mode for reproduction and source-equivalence
 checks:
 
 ```bash
-uv run python -m trinetx_preprocessing.glp1_eligibility build \
+uv run python -m trinetx_analysis.glp1_eligibility build \
   --input /private/TriNetX --raw-reference \
   --output /private/validation/glp1_raw_reference \
   --config config/glp1_eligibility.yml

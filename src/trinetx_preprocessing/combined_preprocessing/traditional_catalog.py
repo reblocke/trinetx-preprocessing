@@ -13,7 +13,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable
 
-from ..glp1_eligibility.concept_sets import Concept
+from ..clinical_sources.concept_sets import Concept
 from ..transform import rfs
 from ..transform.clinical_rules import CodeRule
 from ..transform.diagnosis import DIAGNOSIS_CODE_GROUPS

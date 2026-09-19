@@ -1,111 +1,23 @@
-# Current Repository State
+# Current repository state
 
-Status date: 2026-09-15. This page is the durable human-readable status source
-for the repository. Historical evidence and decision detail remain in
-`VALIDATION.md` and `DECISIONS.md`; future work is ordered in `PLAN.md`.
+Updated 2026-09-19. Python encounter preprocessing is implemented here; validation
+and publication status are recorded in CONTINUITY.md and the linked PR.
+See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
+products, timing, identifiers, missingness and verification boundary.
 
-## Delivered and accepted
+The manifest-bound DuckDB remains the canonical captured source. Its existing
+compatibility projections feed the extracted accepted Python transformations
+in memory. Both encounter variants retain repeated encounters and their
+original rules. The 36-file CSV/DTA workflows remain available through the
+preserved reference implementation.
 
-- `trinetx_preprocessed.duckdb` is the canonical preprocessing product. Its 36
-  historical 534-column CSV projections remain the Stata compatibility bridge.
-- One versioned element catalog contains both current GLP-1 source concepts and
-  typed traditional Hypercapnia/RFS source candidates. This is a permanent
-  expansion of the original workflow, not a second GLP-1 preprocessing product.
-- The manifest-bound cohort-source schema, command-line validator, and Python
-  read-only consumer API are implemented. They validate schema and catalog
-  identity, required element IDs, the terminal manifest, and the adjacent
-  sidecar before exposing rows.
-- The code/API contract and synthetic CI are accepted. Synthetic adapter tests
-  show that the existing GLP-1 derivation reads the same five clinical-domain
-  inputs and produces the same downstream fixture outputs from raw ingestion
-  and from the canonical database.
-- Canonical publication includes reusable file-level audit evidence. The
-  reference GLP-1 CLI can consume that validated database without reopening raw
-  exports; this does not make its study-specific output a second canonical
-  source product.
-- Historical combined-build and 36-file compatibility evidence remains valid
-  for the behavior heads named in `VALIDATION.md`.
-- The preserved Stata cohort reference is frozen at
-  [`trinetx-hypercapnia-code` merge `0584b0e`](https://github.com/reblocke/trinetx-hypercapnia-code/commit/0584b0e13fe547f4a67b7d05e00aa40c0e95fa94)
-  (PR #4). Its exact-head and post-merge `master` CI passed; this commit is the
-  reference boundary for the later cohort migration and the full
-  `source_version` recorded on its Stata-annotated catalog rows.
+GLP-1 study cohort/eligibility/prevalence code and configuration have moved to
+trinetx-hypercapnia-code. Shared source normalization and terminology remain here.
+Historical source acceptance at 9fe392b and the frozen Stata reference remain
+unchanged; they are not receipts for this new encounter interface.
+Historical details remain in VALIDATION.md and GLP1_SOURCE_ACCEPTANCE.md.
 
-## Boundary and pending evidence
-
-- Source capture is not cohort construction. An `element_membership` row says
-  that a source record matched a versioned extraction rule; it does not apply a
-  value threshold, time window, index selection, phenotype, exclusion, or
-  study-cohort decision.
-- Cohort construction has not been imported into this repository. The next
-  migration will place traditional and GLP-1 derivations in the same primary
-  cohort workflow and consume only the cohort-source contract.
-- `combined_preprocessing/glp1_adapter.py` and the standalone GLP-1 raw-ingestion
-  command are temporary migration references. Raw ingestion cannot be retired
-  until a frozen exact head passes private full-data adapter-versus-reference
-  parity.
-- Full-data raw-versus-database GLP-1 equivalence passed at behavior head
-  `9fe392b`; database-backed processing is the documented production route for
-  that validated contract. Raw-reference mode remains for reproduction.
-  See [GLP1_SOURCE_ACCEPTANCE.md](GLP1_SOURCE_ACCEPTANCE.md). This acceptance
-  does not certify all traditional source rows or retire the 36-file bridge.
-- Cohort import is paused because the downstream cohort-creation repository is
-  being refactored. Work resumes when that repository exposes a stable behavior
-  head; the exact restart commit is not yet known.
-- `source.traditional.medication.stata_op_mat` retains five Stata-annotated
-  source codes. Codes `3304`, `236913`, and `28863` are the three additions not
-  present in the existing Python `OPmed_list3` rule. They remain unadjudicated
-  source candidates pending review of the original TriNetX query/export and
-  must not be treated as a medication-assisted-treatment phenotype.
-
-## Supported consumer interfaces
-
-Validate a published database from the command line:
-
-```bash
-python -m trinetx_preprocessing validate-cohort-source \
-  --database /private/output/trinetx_preprocessed.duckdb \
-  --require-element source.traditional.diagnosis.has_j9612 \
-  --require-element source.arterial_pco2 \
-  --json
-```
-
-`--require-element` is repeatable. The CLI intentionally exposes only the
-database path, required element IDs, and JSON output selection.
-
-Downstream Python consumers can additionally pin the catalog and select an
-external DuckDB spill root:
-
-```python
-from pathlib import Path
-
-from trinetx_preprocessing.combined_preprocessing.cohort_source import (
-    open_cohort_source,
-)
-
-with open_cohort_source(
-    Path("/private/output/trinetx_preprocessed.duckdb"),
-    required_elements=("source.traditional.diagnosis.has_j9612",),
-    expected_catalog_sha256="<approved-cohort-source-catalog-sha256>",
-    memory_limit_mib=3072,
-    spill_root=Path("/private/scratch/duckdb"),
-) as source:
-    rows = source.connection.execute(
-        "SELECT * FROM source_diagnosis LIMIT 100"
-    ).fetchall()
-```
-
-`open_cohort_source()` is a context manager with keyword-only
-`required_elements`, `expected_catalog_sha256`, `memory_limit_mib`, and
-`spill_root` arguments. It opens DuckDB read-only and removes its owned spill
-directory on exit. Both the database parent and an explicit spill root must be
-external to every Git worktree. `validate_cohort_source()` accepts the same
-arguments and returns a result instead of raising for contract failures.
-
-## Safe next handoff
-
-Once the downstream refactor publishes a stable behavior head, freeze its
-inputs and expected outputs, import one cohort slice at a time behind the
-cohort-source contract, and compare each imported result with the preserved
-Stata/standalone reference. The private full-data parity gate—not synthetic CI
-alone—authorizes retirement of either legacy raw-data path.
+The owner-approved extraction uses downstream merged source 5ada7194d40f.
+The earlier pause awaiting a stable cohort head is superseded by this explicit
+refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
+not a validated medication-assisted-treatment phenotype.

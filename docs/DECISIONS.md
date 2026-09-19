@@ -1856,3 +1856,14 @@ Record decisions that affect behavior, reproducibility, or maintainability.
   `tests/test_combined_preprocessing.py`,
   `scripts/verify_combined_parity.py`,
   `scripts/verify_element_completeness.py`.
+
+## 2026-09-19: encounter preprocessing ownership
+
+Owner-approved extraction places traditional/GLP-1 encounter data creation in
+trinetx-preprocessing and relocates study analysis to trinetx-hypercapnia-code.
+The direct Stata/Python reference remains unchanged. FULL_DATA preserves its
+pre-screen values; AFTER_EXCLUSION retains its separate measurement-imputation
+fit. New GLP-1 features use the legacy daily encounter anchor, explicit
+calendar-day lookbacks, and original source keys. Future same-encounter source
+evidence is retained separately from baseline summaries. See
+ENCOUNTER_PREPROCESSING.md for the supported interface and scientific limits.
