@@ -111,7 +111,7 @@ changing its estimand is a subsequent analysis task.
    reference identity and a discrete-field mismatch; test explicit renames and
    documented exclusions. New enrichment fields have their own contract.
 
-5. [ ] **Pass the cheap legacy population/value gate for both variants first.**
+5. [x] **Pass the cheap legacy population/value gate for both variants first.**
    Build only the legacy base needed for exact keys, membership, categories,
    missingness and required field comparison under the repaired comparator.
    Preserve repeated encounters, independent timing and imputation behavior.
@@ -208,9 +208,10 @@ or their offline synchronization is explicitly pending.
 The authenticated one-time import and both independent legacy builds completed.
 The repaired reader preserves exact text/order/duplicates with bounded allocation;
 wide publication uses the existing enrichment SQL cap after releasing pandas.
-FULL_DATA has 2,662,675 encounters; AFTER_EXCLUSION has 833,476. Full retained-field
-comparison and canonical linkage/history gates remain pending; counts alone do
-not establish acceptance. AppleDouble filesystem companions are kept outside the
+FULL_DATA has 2,662,675 encounters; AFTER_EXCLUSION has 833,476. The complete retained-field
+comparison passed both variants with zero membership/missingness differences
+and no retained-value discrepancies under the declared rules. Canonical linkage
+and history coverage remain pending before enrichment. AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.
 The laptop is not needed and no offline synchronization is claimed.

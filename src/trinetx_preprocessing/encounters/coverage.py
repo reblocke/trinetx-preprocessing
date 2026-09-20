@@ -25,6 +25,12 @@ DOMAINS = {
     "procedure": 730,
     "medications": 730,
 }
+# Canonical file provenance retains the two accepted medication export families;
+# patient observability and the encounter interface use their combined domain.
+AUDIT_DOMAINS = {
+    **{domain: (domain,) for domain in DOMAINS},
+    "medications": ("medication", "medication_ingredient"),
+}
 HISTORY_LIMITATION = (
     "Observation span does not establish continuous capture. All-history "
     "components use all records captured in the canonical export, not lifetime history."
@@ -94,17 +100,37 @@ def coverage_tables(db):
     """).fetchone()
     # A mismatch remains a diagnosis gate, never an automatic source remapping.
     passed = corroboration[1] > 0 and corroboration[2] == 0 and corroboration[4] == 0
+    audited_domains = {
+        row[0]
+        for row in db.execute(
+            "SELECT DISTINCT logical_domain "
+            "FROM preprocessed.canonical_source_file_audit"
+        ).fetchall()
+    }
+    observable_domains = {
+        row[0]
+        for row in db.execute(
+            "SELECT DISTINCT logical_domain FROM preprocessed.patient_observability"
+        ).fetchall()
+    }
+    domain_sources = {
+        domain: sorted(audited_domains.intersection(AUDIT_DOMAINS[domain]))
+        for domain in DOMAINS
+    }
     selects = []
     for domain, days in DOMAINS.items():
+        available = bool(domain_sources[domain])
+        if domain in observable_domains and not available:
+            raise ValueError(
+                "Source observability has records without a recognized audited domain"
+            )
         selects.append(f"""
             SELECT b.pat_enc_hash AS index_event_id, b.patient_id, b.encounter_id,
                 {literal(domain)} AS domain, {days} AS baseline_lookback_days,
                 k.patient_linked, k.demographics_agree, k.encounter_linked,
                 k.anchor_in_encounter, o.first_event_datetime, o.last_event_datetime,
                 o.event_count AS captured_patient_record_count,
-                CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM preprocessed.canonical_source_file_audit
-                    WHERE logical_domain={literal(domain)}) THEN 'unavailable_domain'
+                CASE WHEN NOT {str(available).lower()} THEN 'unavailable_domain'
                   WHEN NOT k.patient_linked OR o.patient_id IS NULL
                     THEN 'incomplete_capture'
                   WHEN o.first_event_datetime::DATE > DATE '1960-01-01'
@@ -130,6 +156,7 @@ def coverage_tables(db):
         "demographic_disagreements": corroboration[2],
         "encounter_linked": corroboration[3],
         "anchor_disagreements": corroboration[4],
+        "audited_source_domains": domain_sources,
         "history_states": [dict(domain=d, state=s, rows=n) for d, s, n in states],
         "limitation": HISTORY_LIMITATION,
         "cache_policy": "Fresh projections of the complete canonical source "
@@ -185,6 +212,7 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
         raise ValueError("Source changed during coverage validation")
     result = {
         "contract_version": FEATURE_CONTRACT_VERSION,
+        "audit_domain_mapping": AUDIT_DOMAINS,
         "pass": all(r["pass"] for r in reports.values()),
         "source": source_metadata,
         "source_file_identity": before,

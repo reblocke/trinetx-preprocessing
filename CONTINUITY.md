@@ -25,21 +25,23 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-Both independent private legacy bases completed at producer ba7470b:
-FULL_DATA 2,662,675 encounters; AFTER_EXCLUSION 833,476. All 36 partitions were
-read and cleaned, with peak whole-process RSS 8,577,777,664 bytes. The retained
-reference comparator is running; matching counts alone do not establish parity.
-Bounded reader allocations and wide publication use the existing enrichment SQL
-cap after pandas release. The actual output volume creates AppleDouble metadata
-companions; future inventories now exclude those companions without deleting
-them. Eight affected adapter, coverage and validation tests and Ruff pass.
-The existing legacy bundle and its producer identity remain unchanged.
-No clinical enrichment has started. All failed stagings, the older branch and
-dirty instructions remain preserved.
+Both corrected private legacy bases passed the complete retained-reference gate:
+FULL_DATA 2,662,675 encounters and 33 fields; AFTER_EXCLUSION 833,476 encounters
+and 534 fields. Membership and missingness differences are zero; all retained
+values satisfy their declared exact/continuous rules. Both variants are unique
+by original composite key. Reference identity and immutability checks passed.
+Canonical patient/encounter linkage, demographics and anchor-day agreement
+passed for every encounter. A medication source-file audit alias mismatch made
+the first history report label available medication data unavailable; that
+report is preserved but superseded. Coverage now recognizes both canonical
+medication export families and rejects unexplained audit/observability conflicts.
+Rerun coverage before enrichment; no clinical enrichment has started. All failed attempts and reference
+implementations remain preserved. Final source pin, installed-pair checks,
+private enriched-artifact acceptance and coordinated merges remain pending.
 
 ## Next
-Pass the complete retained-field comparison and source linkage/history coverage,
-then build and validate clinical enrichment. Bind private acceptance to the exact
+Pass canonical source linkage/history coverage, then build and validate
+clinical enrichment. Bind private acceptance to the exact
 source pair and producers, verify the installed downstream pin and final CI,
 and merge UP14 before DOWN15.
 
