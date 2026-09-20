@@ -58,6 +58,8 @@ def read_frame(connection, key, *, chunk_rows=25000):
     Logical ordinal ranges preserve every row and duplicate without that sort.
     Fill the final column arrays directly: retaining chunks and concatenating
     them would temporarily duplicate a multi-gigabyte object-pointer matrix.
+    Reuse equal strings per column, matching the accepted CSV parser's value
+    sharing rather than keeping a new Python string for every DuckDB cell.
     The per-file cleaner still receives its original complete pandas frame.
     """
     if chunk_rows < 1:
@@ -69,6 +71,7 @@ def read_frame(connection, key, *, chunk_rows=25000):
         [key],
     ).fetchone()[0]
     values = {name: np.empty(rows, dtype=object) for name in names}
+    shared_strings = {name: {} for name in names}
     for offset in range(0, rows, chunk_rows):
         stop = min(rows, offset + chunk_rows)
         chunk = connection.execute(
@@ -80,7 +83,10 @@ def read_frame(connection, key, *, chunk_rows=25000):
         if len(chunk) != stop - offset:
             raise ValueError("Compatibility row ordinals are incomplete")
         for name in names:
-            values[name][offset:stop] = chunk[name].to_numpy(copy=False)
+            cache = shared_strings[name]
+            values[name][offset:stop] = [
+                cache.setdefault(value, value) for value in chunk[name]
+            ]
         del chunk
     return pd.DataFrame(values, columns=names, copy=False)
 

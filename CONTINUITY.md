@@ -34,6 +34,12 @@ terminated abnormally while loading the largest one (exact signal UNCONFIRMED).
 The reader now fills preallocated column arrays, eliminating its additional
 5.15 GiB concatenation allocation there; read/clean phase markers aid diagnosis.
 The four adapter regressions pass again. Both failed stagings are preserved.
+The next attempt was deliberately stopped after a synthetic diagnostic showed
+DuckDB creates separate repeated string objects that the accepted parser shares.
+Per-column value sharing now preserves exact text while reducing that overhead.
+A 30,000-row, 534-column synthetic reader benchmark reduced peak RSS from
+2,200,190,976 to 967,081,984 bytes (1.83 to 2.55 seconds); all four adapter tests
+still pass. This benchmark does not replace the private membership gate.
 Real membership has not yet been accepted. Original failures, older branch and
 dirty instructions remain preserved.
 
