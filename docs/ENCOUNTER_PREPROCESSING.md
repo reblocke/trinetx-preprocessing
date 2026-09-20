@@ -29,6 +29,10 @@ logical row order. It uses the accepted CSV parser settings, compares every
 stored text cell before clinical coercion, and checks identities before and
 after import. Routine builds read the companion read-only and apply the
 unchanged accepted cleaners, merges and imputation.
+The reader bounds ordinal-range queries and shares equal text values per
+column, avoiding wide sorts and duplicate whole-frame allocations. Reader and
+key-ingestion SQL use 512 MiB; final wide key publication uses the existing
+2816 MiB enrichment cap after the pandas frames have been released.
 
 Build both independent bases before any clinical enrichment:
 

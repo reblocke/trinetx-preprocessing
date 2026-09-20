@@ -95,10 +95,17 @@ def build_legacy_bases(*, compatibility_database, output_dir):
                 logging.info("Applying accepted AFTER_EXCLUSION imputation")
                 result = apply_pre_model_transformations(result, take_ownership=True)
             metadata[variant] = asdict(result.metadata)
+            # Preserve completed metadata if later key publication fails.
+            (staging / "legacy_metadata.json").write_text(
+                json.dumps(metadata, indent=2) + "\n"
+            )
             base_path = scratch / "legacy_base.parquet"
             result.frame.to_parquet(base_path, index=False)
             del result, inputs
             gc.collect()
+            # Full-data key joins exceed the small ingestion cap. The pandas
+            # frames have been released; use the existing enrichment SQL cap.
+            keys.execute("SET memory_limit='2816MiB'")
             counts[variant] = publish_keyed_base(
                 keys,
                 base_path,

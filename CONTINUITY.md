@@ -26,25 +26,19 @@ function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
 The authenticated import passed exact text-frame parity for all 36 partitions.
-The first companion-backed legacy build hit the 512 MiB reader limit while
-sorting a wide partition, before enrichment. Ordinal-range reads now bound that
-sort without changing the accepted full frame, order, duplicates or memory cap;
-all four adapter regressions and Ruff pass. The retry passed that partition but
-terminated abnormally while loading the largest one (exact signal UNCONFIRMED).
-The reader now fills preallocated column arrays, eliminating its additional
-5.15 GiB concatenation allocation there; read/clean phase markers aid diagnosis.
-The four adapter regressions pass again. Both failed stagings are preserved.
-The next attempt was deliberately stopped after a synthetic diagnostic showed
-DuckDB creates separate repeated string objects that the accepted parser shares.
-Per-column value sharing now preserves exact text while reducing that overhead.
-A 30,000-row, 534-column synthetic reader benchmark reduced peak RSS from
-2,200,190,976 to 967,081,984 bytes (1.83 to 2.55 seconds); all four adapter tests
-still pass. This benchmark does not replace the private membership gate.
-Real membership has not yet been accepted. Original failures, older branch and
-dirty instructions remain preserved.
+Bounded ordinal reads, preallocated columns and equal-string sharing preserve
+accepted frames; all four adapter regressions pass. The latest private attempt
+read and cleaned every FULL_DATA partition and wrote its intermediate, then
+failed during wide joined Parquet publication at the 512 MiB ingestion cap.
+Publication now uses the existing 2816 MiB enrichment cap after pandas frames
+are released. Metadata is checkpointed before publication. Validate that exact
+boundary on a copy of the preserved intermediate before another complete run.
+Private membership acceptance remains pending; no clinical enrichment started.
+All failed stagings, the older branch and dirty instructions are preserved.
 
 ## Next
-Retry and compare both independent legacy bases, then pass
+Pass the full-data publication probe, rebuild and compare both independent
+legacy bases, then pass
 source linkage/history coverage before clinical enrichment. Validate all
 artifacts, bind private acceptance to the source pair and final producer,
 verify installed downstream pin and final CI, and merge UP14 before DOWN15.
