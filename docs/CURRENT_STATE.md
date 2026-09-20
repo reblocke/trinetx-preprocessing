@@ -4,6 +4,9 @@ Updated 2026-09-19. Python encounter preprocessing is implemented here; validati
 and publication status are recorded in CONTINUITY.md and the linked PR.
 See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
 products, timing, identifiers, missingness and verification boundary.
+The initial private build failed, and its legacy population differs from the
+accepted reference. The interface is not yet privately validated. Follow
+[NEXT_STEPS.md](../NEXT_STEPS.md) before another build or merge.
 
 The manifest-bound DuckDB remains the canonical captured source. Its existing
 compatibility projections feed the extracted accepted Python transformations

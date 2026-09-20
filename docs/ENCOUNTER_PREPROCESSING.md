@@ -6,6 +6,11 @@ in trinetx-hypercapnia-code as reproduction references.
 
 ## Run
 
+The initial private build failed, and the canonical compatibility projections
+did not reproduce the accepted encounter population. This command is implemented
+but not yet accepted for production encounter creation. See
+[NEXT_STEPS.md](../NEXT_STEPS.md) for source reconciliation and validation gates.
+
 From this repository, with the locked environment:
 
 ```bash
@@ -94,6 +99,7 @@ See the downstream ENCOUNTER_PREPROCESSING.md for that boundary.
 
 The final observability day-bound adjustment is output-neutral for the accepted
 private source: an aggregate scan found zero non-midnight timestamps in all
-five source-observability domains. The private build retains its original
-producer identity; the follow-up validation records this bounded equivalence
-proof instead of rerunning unchanged transformations.
+five source-observability domains. The failed private build retains its original
+producer identity. This bounded date proof does not establish build success or
+validate the later context-memory repair; a corrected integrated build and
+comparison remain required.

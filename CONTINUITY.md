@@ -10,7 +10,8 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
-Reuse accepted transformations and canonical source projections. Publish two
+Reuse accepted transformations; reconcile incompatible source projections before
+another private build. See NEXT_STEPS.md and the private Mini handoff. Publish two
 encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
 
@@ -18,20 +19,21 @@ Move study analysis without claiming its known scientific defects are repaired.
 Implementation in isolated worktrees from verified merged source heads.
 
 ## Done
-Implementation, 8 focused encounter checks, relocated GLP-1 fixtures, bounded
+Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
 review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
 Private build failed at encounter-context deduplication under the 2816-MiB
-DuckDB cap; retained intermediates remain external. Both PRs have green CI at
-their prior heads. A focused query-width/key-scope repair is being checked.
+DuckDB cap; retained intermediates remain external. The focused query-width/
+key-scope repair at 8b19b7f passed targeted checks and CI, but not a private build.
 Early FULL_DATA membership comparison also failed; investigate source compatibility
 before restarting expensive enrichment or merging.
 
 ## Next
-Finish private output comparison, record aggregate evidence, merge upstream
-first and then downstream after checks pass.
+Continue from NEXT_STEPS.md on the Mini: reconcile source inputs, pass the
+population gate before enrichment, then finish private comparison and final CI.
+Merge upstream first and then downstream only after those checks pass.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.
