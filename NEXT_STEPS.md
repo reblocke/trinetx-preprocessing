@@ -6,6 +6,29 @@ Exact paths, authenticated receipts and launch instructions are in the private
 `encounter-refactor-handoff/LOCAL_PATHS.md` beside the Mini checkouts. Keep that
 file and all real-data receipts out of this public repository.
 
+## Start the audited handoff
+
+After fetching/fast-forwarding the upstream handoff branch on the Mini, run
+`bash scripts/start_encounter_handoff.sh` from its release checkout. This wraps
+the existing private launcher with a session lock and copies this updated
+checklist into the private handoff folder. The old private notes remain useful
+for paths/receipts; this checklist supersedes their former acceptance rules.
+Use this wrapper instead of invoking the old private launcher directly. The
+laptop need not stay online once the Mini-local session starts.
+
+Every data build and comparison must use the same private build lock, including
+detached or monitor-driven runs. For example, substitute the actual command:
+
+```bash
+python3 scripts/with_execution_lock.py "$HANDOFF_DIR/locks/build.lock" -- COMMAND ARGUMENTS
+```
+
+Set `HANDOFF_DIR` to the existing private handoff folder. The lock is advisory:
+all entrypoints must use it; it cannot block a command deliberately launched
+outside the wrapper. Preserve the lock file even after a process exits. The
+kernel releases ownership automatically; a leftover empty file is not a stale
+held lock. Keep the Mini online and its Terminal session open.
+
 ## Completed
 
 - [x] Extract accepted cleaning, ordered merges, derived variables and measurement
@@ -22,91 +45,160 @@ file and all real-data receipts out of this public repository.
 - [x] Authenticate all 36 original compatibility inputs against the retained
   producer manifest. Full-data confirmation of the repair remains outstanding.
 
+## Source authority and scope
+
+| Source | Authority |
+| --- | --- |
+| Authenticated legacy compatibility snapshot | Legacy population, 36 partitions, ordering, independent variants and preserved transformation inputs |
+| Provenance-validated canonical clinical database | Additional clinical records/evidence for encounter enrichment |
+| Accepted reference products | Expected retained legacy outputs |
+
+The owner approved proceeding with the one-time authenticated CSV-to-DuckDB
+import and the audit additions on 2026-09-20. Routine builds then read DuckDB.
+This bypasses the incompatible canonical population projections; it does not
+repair or fully explain their mismatch. Record that limitation in provenance.
+Repository ownership means code/responsibility; real data remain private and
+external. Relocated study code still constructs its existing patient-index cohort
+from the canonical source. Adopting these encounter tables as its denominator or
+changing its estimand is a subsequent analysis task.
+
 ## Remaining work, in order
 
-1. [ ] **Establish the Mini as the only executor.** Read this file, private
-   `LOCAL_PATHS.md`, both repositories' instructions and continuity notes.
-   Inspect existing processes once; never duplicate an active build. Use the
-   release upstream worktree and downstream encounter worktree. Preserve the old
-   upstream branch, dirty `AGENTS.md` and failed-run artifacts. Restore Mini
-   GitHub authentication, fetch and inspect branches; never reset or force-push
-   to achieve synchronization.
+1. [ ] **Establish one Mini executor.** Read this checklist, private
+   `LOCAL_PATHS.md`, repository instructions and current continuity notes.
+   Use an OS-backed execution lock for the full Mini session and a shared build
+   lock for every build/comparison, including monitor-driven runs. Repeated
+   launch must fail without starting another process; locks release when their
+   owning processes exit. Check for pre-existing unwrapped work once. Never
+   delete a live lock file to bypass it. Keep the laptop monitor paused. Restore
+   Mini GitHub authentication; fetch/inspect branches without reset/force-push.
+   Preserve the older branch, dirty AGENTS.md and failed-run artifacts.
 
-2. [ ] **Reconcile legacy inputs before enrichment.** Required reference keys
-   are absent from both canonical compatibility variants. Capture settings
-   `corrected_v1` and `earliest_per_setting` document different source behavior,
-   but are not a complete causal diagnosis. Do not change expected membership.
-   Recommended route: one-time checksum-authenticated import of the original
-   36 CSVs into a private DuckDB companion; routine builds then read DuckDB only.
-   This adjusts the original no-CSV-read plan and is not implemented yet. The
-   private launcher's normal start includes this choice in its startup instruction;
-   running that start authorizes the route. Without that instruction, obtain the input
-   decision before implementing it. Repairing canonical projection generation
-   remains the alternative if the owner chooses it.
+2. [ ] **Implement and prove the compatibility adapter boundary.** Import all
+   36 authenticated partitions with exact headers, explicit logical row order,
+   duplicate multiplicity and accepted identifier/missing/date/numeric coercions.
+   Use explicit types or preserved text followed by accepted coercions, not
+   sampled CSV type inference. Compare each frame delivered to `clean_per_file()`
+   against the accepted CSV loader, including leading zeros, numeric-looking
+   strings, empty strings/sentinels, all-missing columns, dates, duplicates and
+   floating boundary values. Hash identity alone does not establish interpretation
+   parity. Preserve both independently supplied variants and raw source files.
 
-3. [ ] **Implement the smallest explicit source adapter.** Preserve the accepted
-   CSV loader's coercions, input ordering, ordered merge precedence and independent
-   variants. Use authenticated compatibility data for legacy population creation
-   and canonical clinical data for GLP-1 evidence. Maintain one catalog/entrypoint
-   and record both source identities, schema/configuration and hashes. Validate
-   source-key linkage; never join on variant-specific encoded IDs. Open sources
-   read-only and publish to a new private directory with existing safeguards.
-   Update interface/decision documentation with the final command and boundary.
+3. [ ] **Repair both the reader and enrichment key mapping.** In
+   `encounters/builder.py`, `CompatibilityFrames` and `_enrich()` independently
+   use canonical `preprocessed_encounter`. Changing only the reader is insufficient.
+   Carry authoritative original patient/encounter keys from the authenticated
+   snapshot through cleaning/merges into `source_keys`; never reconstruct them
+   from the incompatible canonical projection or variant-specific encoded IDs.
+   Prove composite-key integrity and compatible identifier namespaces/export
+   history across the source pair; matching strings alone is insufficient.
+   Keep one catalog/entrypoint, sources read-only and new private output staging.
+   Record both source identities, schemas/configuration and producer hashes.
 
-4. [ ] **Pass an inexpensive population gate for both variants first.** Build
-   only the legacy base required to check keys, membership, categories, missingness
-   and unchanged numerical fields. Preserve timing, imputation and repeated
-   encounters. Authenticate any retained reference-key cache before reuse. The
-   failed run's legacy base is not an accepted population. If keys differ, trace
-   coercion, ordering and merges before expensive enrichment. Do not waive
-   population differences as numerical tolerance.
+4. [ ] **Close comparator false-pass paths before making it a release gate.**
+   Downstream `scripts/compare_encounter_reference.py` currently intersects columns
+   and can pass while a clinical reference field is missing. Replace that with a
+   versioned, explicit retained/renamed/excluded field contract. Every retained
+   field is required; every rename is mapped, including patient and encounter
+   legacy identifiers. Every intentional analysis-field exclusion needs a reason.
+   Reconcile the former 11 omitted demographic dummy aliases through explicit
+   mappings where retained; do not blindly grandfather all 25 old omissions.
+   Make accepted-reference identity-receipt verification mandatory, as well as
+   reference immutability during comparison. Use semantic comparison modes:
+   identifiers, counts, codes, flags and dates exact even if stored as floats;
+   approved continuous fields/classes use `rtol=atol=1e-6`. Missingness remains
+   exact. Regressions must fail for a missing required clinical column, wrong
+   reference identity and a discrete-field mismatch; test explicit renames and
+   documented exclusions. New enrichment fields have their own contract.
 
-5. [ ] **Prove coverage before reusing large projections.** Restored reference
-   encounters may add patients absent from the failed run's projection scope.
-   Check required patient/encounter keys and evidence-domain coverage. Reuse only
-   identity-verified projections with sufficient scope; otherwise materialize
-   missing scope from the existing canonical source. Recapture only for a
-   specifically demonstrated missing element. Leave failed staging intact.
+5. [ ] **Pass the cheap legacy population/value gate for both variants first.**
+   Build only the legacy base needed for exact keys, membership, categories,
+   missingness and required field comparison under the repaired comparator.
+   Preserve repeated encounters, independent timing and imputation behavior.
+   Authenticate retained reference-key caches. The failed base is not an accepted
+   population. Trace coercion/order/merges for any discrepancy before enrichment;
+   population changes cannot be waived as numerical tolerance.
 
-6. [ ] **Run affected checks, then one corrected integrated private build.**
-   Use the accepted numerical environment, sequential variants, existing memory
-   cap/external spill and `caffeinate -i`. Add focused import/source-boundary
-   regressions and reuse encounter fixtures, including negative-versus-missing
-   states and rows failing GLP-1 eligibility. Record the final producer tree.
-   Keep logs private; expose aggregate status only. Repeat expensive work only
-   for a concrete failure. Do not blindly restart the failed run script.
+6. [ ] **Pass a separate enrichment linkage and source-coverage gate.** Define
+   the approved, versioned encounter-feature contract. Produce a per-variant
+   report mapping every required element to its wide/evidence destination and
+   availability state, including patient/encounter linkage and required history
+   windows. Distinguish observed values, available domains with zero matching
+   records, unavailable domains and incomplete capture. Zero records never prove
+   no disease, no medication or no indication. Restored patients may fall outside
+   cached projection scope: prove key/history coverage before reuse. If records
+   exist in the canonical source, rematerialize missing scope; if that source
+   lacks them, use explicit unavailable/incomplete states or narrowly justified
+   recapture. Another query cannot recover absent source history. Undocumented
+   gaps fail the contract; justified unavailability is an explicit contract state.
 
-7. [ ] **Validate the bundle and retained references.** Use downstream
-   `scripts/compare_encounter_reference.py` with the new bundle, accepted reference
-   directory, fresh work directory and aggregate report. Require exact keys,
-   membership, categories and missingness; current numeric `rtol=atol=1e-6`.
-   Byte serialization need not match. Verify reference SHA256 against the retained
-   identity receipt, source immutability, unique patient–encounter keys, both
-   variants, completed manifest/hashes, inventory and evidence coverage. Explain
-   intended excluded/renamed analysis fields; do not silently lose clinical data.
-   The earlier day-grain proof does not validate the failed build or later fixes.
+7. [ ] **Make temporal, unit and row-order semantics explicit.** Preserve the
+   legacy calendar-day anchor and existing inclusive-day/same-encounter rules.
+   Dictionary entries must specify anchor precision, lookback, baseline versus
+   context/follow-up, source dates, raw versus normalized values/units and
+   unavailable states. Calendar-day values are not established admission-time or
+   pre-blood-gas predictors. Decide and document either deterministic final output
+   ordering or an explicit consumer-sort requirement; joined Parquet row order
+   must not be silently treated as guaranteed. No byte-identical serialization
+   requirement or unapproved temporal-rule changes.
 
-8. [ ] **Deliver coordinated changes.** Update the downstream immutable upstream
-   dependency and lockfile to the final upstream code. Run affected downstream
-   fixtures/reader checks and normal CI/relevant audits at final heads. Keep known
-   study defects documented; no full downstream analysis or renewed Stata
-   qualification is required. Update PR descriptions with verified conclusions
-   and limitations; private receipts stay outside Git. Merge
-   [upstream PR14](https://github.com/reblocke/trinetx-preprocessing/pull/14)
-   first with a merge commit, preserving pinned dependency ancestry, then
-   [downstream PR15](https://github.com/reblocke/trinetx-hypercapnia-code/pull/15)
-   after its final checks pass. Authorization to land the changes already exists.
+8. [ ] **Run focused regressions, then one corrected integrated private build.**
+   Confirm steps 2–7 before launching. Use the accepted numerical environment,
+   sequential variants, existing memory cap, external spill and caffeinate.
+   Measure peak whole-process memory, stage completion and scratch-space growth;
+   the DuckDB cap is not a process-wide ceiling. Diagnose a demonstrated evidence
+   expansion/OOM before changing limits. Reuse existing encounter/relocated-study
+   fixtures, including negative-versus-missing and ineligible-study encounters.
+   Record final producer code and source identities. Keep private logs/rows out
+   of agent output. Repeat expensive work only for a concrete failure; do not
+   blindly restart the failed run script or start broad renewed qualification.
 
-9. [ ] **Synchronize and close.** Fast-forward safe development checkouts;
-   preserve the Mini's older branch and uncommitted work. Record merged heads,
-   validated bundle location and final working command. If the laptop is offline,
-   leave a concrete fetch/fast-forward action for it; do not claim its files were
-   synchronized. Close the checkpoint and disable remaining completion monitors
-   only when the refactor is complete. Never lock or eject drives as part of this.
+9. [ ] **Validate all bundle artifacts and publish a small acceptance receipt.**
+   Run the repaired reference comparator and separate enrichment/schema checks.
+   Verify both variants' uniqueness, required features, evidence, inventories,
+   dictionary, QA, manifest/hash completeness and source immutability. A manifest
+   marked `complete` records build completion, not validation acceptance. Create
+   one private acceptance receipt bound to the exact manifest hash, output hashes,
+   source pair, reference identity, producer revisions, contract versions and gate
+   results/limitations. Do not alter the validated bundle to add a circular hash.
+   The historical date-grain proof does not validate the failed build/later fixes.
+
+10. [ ] **Verify the installed pair and deliver coordinated changes.** Pin the
+    final upstream revision in downstream pyproject/lockfile. Test the installed,
+    pinned packages and consumer readback without `PYTHONPATH` or another local
+    import override; record imported module locations and versions. Run affected
+    relocated-study fixtures, final CI and relevant repository audits. Document
+    the actual final command including its compatibility-companion argument
+    (interface still to be implemented), not the old canonical-only command.
+    Update PR descriptions with results/limits, keeping private receipts out of
+    Git. Merge [upstream PR14](https://github.com/reblocke/trinetx-preprocessing/pull/14)
+    first with a merge commit preserving pinned ancestry, then
+    [downstream PR15](https://github.com/reblocke/trinetx-hypercapnia-code/pull/15)
+    after its final checks. Commit/push/merge authorization already exists.
+
+11. [ ] **Synchronize and close with an accurate scope statement.** Fast-forward
+    safe checkouts, preserving older branches/uncommitted work. Record merged
+    heads, accepted bundle and final command. If the laptop is offline, leave its
+    concrete sync command instead of claiming synchronization. Close checkpoints
+    and disable remaining monitors on completion. No drive locking/ejection.
+    Report encounter data creation/enrichment, interfaces and bounded validation
+    separately from unresolved study defects, clinical terminology validation,
+    new indication/prevalence results and encounter-denominator adoption. Those
+    analysis tasks are not completed by this ticket.
 
 ## Done means
 
-One documented upstream Python command creates validated encounter-level products
-with all available traditional and GLP-1 elements. The direct reference port
-remains preserved, study analysis remains downstream, scientific limitations are
-documented, and coordinated changes have passed validation and landed.
+One documented upstream command, using an authenticated legacy compatibility
+snapshot and a provenance-validated canonical clinical source, creates both
+independent encounter-level products and their required evidence, inventory,
+dictionary and QA artifacts. The complete retained legacy field contract passes
+reference comparison, with no unapproved missing fields or population differences.
+All elements in the approved, versioned encounter-feature contract are represented
+with observed values or explicit availability states. Enrichment linkage, source
+coverage, temporal semantics and unavailable states pass separate checks.
+Acceptance is bound to the exact source pair, producer code and output bundle.
+The pinned downstream reader and relocated study fixtures pass at the final
+coordinated revisions. Historical reference implementations remain unchanged,
+private data remain outside Git, and known study-analysis defects remain explicitly
+unresolved. Coordinated changes are merged and safe development copies synchronized
+or their offline synchronization is explicitly pending.

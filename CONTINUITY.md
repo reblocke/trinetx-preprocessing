@@ -11,7 +11,8 @@ external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
 Reuse accepted transformations; reconcile incompatible source projections before
-another private build. See NEXT_STEPS.md and the private Mini handoff. Publish two
+another private build. Owner approved the one-time authenticated companion import
+and targeted audit gates on 2026-09-20. See NEXT_STEPS.md. Publish two
 encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
 
@@ -31,8 +32,10 @@ Early FULL_DATA membership comparison also failed; investigate source compatibil
 before restarting expensive enrichment or merging.
 
 ## Next
-Continue from NEXT_STEPS.md on the Mini: reconcile source inputs, pass the
-population gate before enrichment, then finish private comparison and final CI.
+Continue from NEXT_STEPS.md on the Mini: repair both input/key adapters and the
+comparator contract/authentication; pass legacy and independent enrichment
+coverage gates before the private build. Bind acceptance to the source pair and
+bundle, then test the installed pinned pair and final CI.
 Merge upstream first and then downstream only after those checks pass.
 
 ## Open questions
