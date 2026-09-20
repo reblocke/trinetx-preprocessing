@@ -104,3 +104,63 @@ def build_element_evidence(connection, config):
         + " FROM encounter_element_evidence GROUP BY index_event_id"
     )
     return inventory
+
+
+def add_availability_inventory(connection, inventory):
+    """Represent zero matches separately from missing domains/history.
+
+    Aggregate observed states once. Subtract these from domain totals instead
+    of materializing the element-by-encounter Cartesian product.
+    """
+    totals = {}
+    for domain, state, count in connection.execute(
+        "SELECT domain,history_state,count(*) FROM encounter_source_coverage "
+        "GROUP BY 1,2"
+    ).fetchall():
+        totals.setdefault(domain, {})[state] = count
+    observed = {}
+    for element, domain, state, count in connection.execute("""
+        SELECT e.element_id, e.domain, c.history_state, count(*)
+        FROM (SELECT DISTINCT index_event_id,element_id,domain
+              FROM encounter_element_evidence) e
+        JOIN encounter_source_coverage c
+          ON e.index_event_id=c.index_event_id AND e.domain=c.domain
+        GROUP BY 1,2,3
+    """).fetchall():
+        observed.setdefault(element, {})[state] = count
+    catalog = dict(
+        connection.execute(
+            "SELECT element_id,domain FROM preprocessed.element_catalog "
+            "WHERE starts_with(element_id,'source.')"
+        ).fetchall()
+    )
+    domains = {"lab": "labs", "vital": "vitals", "medication": "medications"}
+    for row in inventory:
+        element = row["element_id"]
+        domain = domains.get(catalog[element], catalog[element])
+        if domain not in totals:
+            raise ValueError("Required element lacks a source coverage domain")
+        row.update(
+            {
+                "contract_version": "1.0",
+                "domain": domain,
+                "availability_table": "encounter_source_coverage",
+                "availability_join": "index_event_id + domain",
+                "availability_states": [
+                    {
+                        "history_state": state,
+                        "observed_matches": observed.get(element, {}).get(state, 0),
+                        "zero_matching_records": n
+                        - observed.get(element, {}).get(state, 0),
+                    }
+                    for state, n in totals[domain].items()
+                ],
+                "anchor_precision": "calendar day",
+                "baseline_lookback_days": 365 if domain in {"labs", "vitals"} else 730,
+                "context": "Inclusive baseline days plus same-encounter records "
+                "outside baseline; latest raw values require in_baseline_window",
+                "source_dates": "event_datetime with timestamp_precision; "
+                "raw dates retained",
+            }
+        )
+    return inventory

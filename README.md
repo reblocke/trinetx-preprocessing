@@ -102,7 +102,7 @@ Validate a published source contract before a downstream process opens it:
 
 The existing `export-legacy` command remains the 36-file CSV bridge for the
 preserved Stata/Python reference workflow. The active encounter transformation
-now consumes those projections directly in memory; see
+now consumes an authenticated DuckDB companion of the original legacy snapshot; see
 [ENCOUNTER_PREPROCESSING.md](docs/ENCOUNTER_PREPROCESSING.md).
 
 ## Downstream GLP-1 analysis

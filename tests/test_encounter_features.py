@@ -26,7 +26,7 @@ def compatibility_database(tmp_path_factory):
     db = duckdb.connect(str(path))
     columns = ", ".join('"' + c.raw_name + '" VARCHAR' for c in schema.columns)
     db.execute(
-        "CREATE TABLE preprocessed_encounter (compatibili"
+        "CREATE TABLE compatibility_input (compatibili"
         "ty_output_key VARCHAR, output_variant VARCHAR, s"
         "ource_row_order BIGINT, " + columns + ")"
     )
@@ -39,7 +39,7 @@ def compatibility_database(tmp_path_factory):
         frame.insert(0, "output_variant", output.variant)
         frame.insert(0, "compatibility_output_key", output.key)
         db.register("fixture", frame)
-        db.execute("INSERT INTO preprocessed_encounter SELECT * FROM fixture")
+        db.execute("INSERT INTO compatibility_input SELECT * FROM fixture")
         db.unregister("fixture")
     db.close()
     return path
@@ -96,7 +96,7 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
         db.execute("DROP TABLE preprocessed_encounter")
         db.execute(
             "CREATE TABLE preprocessed_encounter AS SELECT * "
-            "FROM compatibility.preprocessed_encounter"
+            "FROM compatibility.compatibility_input"
         )
     with duckdb.connect(str(compatibility_database), read_only=True) as db:
         base = apply_pre_model_transformations(
@@ -134,7 +134,18 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
             "true,'exact','RXNORM','1991302')"
         )
     base_path = tmp_path / "base.parquet"
-    base.frame.to_parquet(base_path, index=False)
+    with duckdb.connect(str(compatibility_database), read_only=True) as db:
+        original = db.execute(
+            "SELECT DISTINCT trim(concat(patient_id,'-',encounter_id),' ') "
+            "AS pat_enc_hash, patient_id, encounter_id FROM compatibility_input"
+        ).fetchdf()
+    keyed = base.frame.rename(
+        columns={
+            "patient_id": "legacy_patient_id",
+            "encounter_id": "legacy_encounter_id",
+        }
+    ).merge(original, on="pat_enc_hash", validate="one_to_one")
+    keyed.to_parquet(base_path, index=False)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     destination = tmp_path / "encounters.parquet"
@@ -278,6 +289,28 @@ def test_catalog_evidence_time_boundaries_source_keys_and_overlap():
         """).fetchone()[0]
             == 0
         )
+        from trinetx_preprocessing.encounters.element_features import (
+            add_availability_inventory,
+        )
+
+        db.execute("""
+            CREATE TABLE encounter_source_coverage AS
+            SELECT index_event_id, 'labs' AS domain,
+                CASE WHEN patient_id='q' THEN 'incomplete_capture'
+                     ELSE 'observed_span' END AS history_state
+            FROM encounter_anchor
+        """)
+        with_states = add_availability_inventory(db, inventory)
+        for element in with_states:
+            assert (
+                sum(
+                    s["observed_matches"] + s["zero_matching_records"]
+                    for s in element["availability_states"]
+                )
+                == 3
+            )
+        ahi = next(e for e in with_states if e["element_id"] == "source.ahi")
+        assert sum(s["observed_matches"] for s in ahi["availability_states"]) == 0
 
 
 def test_source_key_collision_rejected_before_enrichment(tmp_path):
@@ -292,7 +325,13 @@ def test_source_key_collision_rejected_before_enrichment(tmp_path):
             UNION ALL SELECT 'a', 'b-c', 'AFTER'
         """)
     base = tmp_path / "base.parquet"
-    pd.DataFrame({"pat_enc_hash": ["a-b-c"]}).to_parquet(base)
+    pd.DataFrame(
+        {
+            "pat_enc_hash": ["a-b-c", "a-b-c"],
+            "patient_id": ["a-b", "a"],
+            "encounter_id": ["c", "b-c"],
+        }
+    ).to_parquet(base)
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     with pytest.raises(ValueError, match="uniquely identify"):
@@ -315,7 +354,14 @@ def test_builder_rejects_existing_output_without_touching_source(tmp_path):
     output = tmp_path / "output"
     output.mkdir()
     with pytest.raises(FileExistsError):
-        build_encounters(database=source, output_dir=output)
+        build_encounters(
+            database=source,
+            compatibility_database=source,
+            legacy_bundle=tmp_path / "base",
+            legacy_acceptance=tmp_path / "gate",
+            coverage_bundle=tmp_path / "coverage",
+            output_dir=output,
+        )
     assert source.read_bytes() == b"unchanged"
 
 

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import gc
 import hashlib
 import importlib.metadata
 import json
 import logging
 import os
+import shutil
 import tempfile
 from collections.abc import Mapping
 from dataclasses import asdict
@@ -19,17 +19,16 @@ import pandas as pd
 from ..clinical_sources.concept_sets import default_catalog_directory, load_concept_sets
 from ..combined_preprocessing.cohort_source import open_cohort_source
 from ..combined_preprocessing.contract import compatibility_outputs
-from ..combined_preprocessing.database import final_output_columns
 from . import feature_sources as features
 from . import source_projection as projection
+from .compatibility import file_identity, no_symlinks, read_frame, validate_companion
 from .config import FeatureConfig
-from .element_features import build_element_evidence
-from .legacy.measurement import apply_pre_model_transformations
+from .element_features import add_availability_inventory, build_element_evidence
 from .legacy.per_file_cleaning import RfsFamily, clean_per_file
-from .legacy.pipeline import SETTINGS, assemble_analysis_base
+from .legacy.pipeline import SETTINGS
 from .legacy.raw_schema import load_schema
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 VARIANTS = {"FULL_DATA": "BEFORE", "AFTER_EXCLUSION": "AFTER"}
 SUMMARY_TABLES = {
     "element_summary": "source",
@@ -80,8 +79,14 @@ def code_identity() -> str:
 class CompatibilityFrames(Mapping):
     """Load each ordered compatibility projection once, without CSV roundtrips."""
 
-    def __init__(self, connection, suffix):
+    def __init__(self, connection, suffix, key_sink=None):
         self.connection = connection
+        self.key_sink = key_sink
+        if key_sink is not None:
+            key_sink.execute(
+                "CREATE TABLE cleaned_source_keys (pat_enc_hash VARCHAR, "
+                "patient_id VARCHAR, encounter_id VARCHAR)"
+            )
         self.schema = load_schema()
         self.outputs = {
             (RfsFamily(output.category), setting): output
@@ -102,24 +107,28 @@ class CompatibilityFrames(Mapping):
         if key in self.consumed:
             raise ValueError("Compatibility projection consumed twice")
         output = self.outputs[key]
-        columns = ", ".join(ident(column) for column in final_output_columns())
-        raw = self.connection.execute(
-            f"SELECT {columns} FROM preprocessed_encounter "
-            "WHERE compatibility_output_key = ? ORDER BY source_row_order",
-            [output.key],
-        ).fetchdf()
+        LOGGER.info("Reading authenticated compatibility partition %s", output.key)
+        raw = read_frame(self.connection, output.key)
         if tuple(raw.columns) != tuple(c.raw_name for c in self.schema.columns):
             raise ValueError(
                 "Canonical compatibility schema differs from accepted port"
             )
         self.consumed.add(key)
-        return clean_per_file(
+        result = clean_per_file(
             raw,
             schema=self.schema,
             setting=key[1],
             raw_suffix=output.variant,
             family=key[0],
         )
+        if self.key_sink is not None:
+            keys = result.frame[["pat_enc_hash", "patient_id", "encounter_id"]]
+            self.key_sink.register("_cleaned_keys", keys)
+            self.key_sink.execute(
+                "INSERT INTO cleaned_source_keys SELECT DISTINCT * FROM _cleaned_keys"
+            )
+            self.key_sink.unregister("_cleaned_keys")
+        return result
 
 
 def _create_encounter_context_source(connection):
@@ -157,17 +166,23 @@ def _materialize_features(connection, catalog, config):
     connection.register("_concepts", rows)
     connection.execute("CREATE TABLE concept_set AS SELECT * FROM _concepts")
     connection.unregister("_concepts")
+    LOGGER.info("Materializing canonical lab source")
     projection._create_lab_source(connection, catalog=catalog)
+    LOGGER.info("Completed canonical lab source; materializing encounters/patients")
     projection._create_encounter_source(connection)
     projection._create_patient_source(connection)
+    LOGGER.info("Completed canonical encounters/patients")
     for name in (
         "source_vital_measurement",
         "source_diagnosis",
         "source_procedure",
         "source_medication",
     ):
+        LOGGER.info("Materializing %s", name)
         projection._create_patient_concept_source(connection, name, catalog=catalog)
+        LOGGER.info("Completed %s", name)
     _create_encounter_context_source(connection)
+    LOGGER.info("Completed bounded encounter context")
     for output_domain, stored_domain, days in (
         ("diagnosis", "diagnosis", 730),
         ("labs", "labs", 365),
@@ -181,17 +196,36 @@ def _materialize_features(connection, catalog, config):
             stored_domain=stored_domain,
             lookback_days=days,
         )
+        LOGGER.info("Completed %s observability", output_domain)
+    LOGGER.info("Building diagnosis evidence")
     features._build_diagnosis_evidence(connection, config)
+    LOGGER.info("Completed diagnosis evidence; building procedure evidence")
     features._build_procedure_evidence(connection, config)
+    LOGGER.info("Completed procedure evidence; normalizing component labs")
     features._build_normalized_component_labs(connection)
     features._build_lab_summary(connection, config)
+    LOGGER.info("Completed component labs; building blood pressure evidence")
     features._build_blood_pressure_summary(connection, config)
+    LOGGER.info("Completed blood pressure evidence; building medication evidence")
     features._build_medication_evidence(connection, config)
+    LOGGER.info("Completed medication evidence; building observability summary")
     features._build_observability_summary(connection)
-    return build_element_evidence(connection, config)
+    LOGGER.info("Completed observability; building source-element evidence")
+    result = build_element_evidence(connection, config)
+    LOGGER.info("Completed source-element evidence")
+    return result
 
 
-def _enrich(database, base_path, destination, scratch, suffix, catalog, config):
+def _enrich(
+    database,
+    base_path,
+    destination,
+    scratch,
+    suffix,
+    catalog,
+    config,
+    coverage_path=None,
+):
     connection = duckdb.connect(str(scratch / "features.duckdb"))
     try:
         connection.execute("SET memory_limit = '2816MiB'")
@@ -204,10 +238,8 @@ def _enrich(database, base_path, destination, scratch, suffix, catalog, config):
             f"SELECT * FROM read_parquet({literal(base_path)})"
         )
         connection.execute(
-            "CREATE TABLE source_keys AS SELECT DISTINCT patient_id, encounter_id, "
-            "concat(patient_id, '-', encounter_id) AS pat_enc_hash "
-            "FROM preprocessed.preprocessed_encounter WHERE output_variant = ?",
-            [suffix],
+            "CREATE TABLE source_keys AS SELECT pat_enc_hash, patient_id, "
+            "encounter_id FROM legacy_base"
         )
         duplicate = connection.execute(
             "SELECT count(*) FROM (SELECT pat_enc_hash FROM s"
@@ -230,14 +262,21 @@ def _enrich(database, base_path, destination, scratch, suffix, catalog, config):
             "ent_id IS NULL OR encounter_id IS NULL"
         ).fetchone()[0]:
             raise ValueError("Encounter feature source-key linkage is incomplete")
+        if coverage_path is not None:
+            connection.execute(
+                "CREATE VIEW encounter_source_coverage AS "
+                f"SELECT * FROM read_parquet({literal(coverage_path)})"
+            )
         element_inventory = _materialize_features(connection, catalog, config)
+        if coverage_path is not None:
+            element_inventory = add_availability_inventory(
+                connection, element_inventory
+            )
         (destination.parent / f"{destination.stem}_element_inventory.json").write_text(
             json.dumps(element_inventory, indent=2) + "\n"
         )
         select = [
             "base.* EXCLUDE (patient_id, encounter_id)",
-            "base.patient_id AS legacy_patient_id",
-            "base.encounter_id AS legacy_encounter_id",
             "anchor.patient_id",
             "anchor.encounter_id",
             "anchor.index_date AS encounter_anchor_date",
@@ -295,8 +334,52 @@ def _enrich(database, base_path, destination, scratch, suffix, catalog, config):
             ).fetchall()
         ]
         for entry in dictionary:
+            column = entry["column"]
+            entry["anchor_precision"] = "calendar day"
+            entry["anchor"] = "legacy encounter_date; not admission or blood-gas time"
+            entry["row_order"] = "Consumer must sort by patient_id, encounter_id"
+            if column.startswith("source_element_"):
+                entry["temporal_rule"] = (
+                    "Inclusive 365-day measurements or 730-day other domains; "
+                    "same-encounter context retained outside baseline; latest "
+                    "raw values require in_baseline_window"
+                )
+                entry["value_units"] = "Raw values; latest_unit identifies source units"
+                entry["source_dates"] = (
+                    "event_datetime and timestamp_precision in catalog evidence"
+                )
+                entry["availability"] = (
+                    "encounter_source_coverage by index_event_id and domain"
+                )
+            elif column.startswith("glp1_"):
+                source_name = entry.get("source_column", "")
+                all_history = (
+                    column.startswith("glp1_diagnosis_")
+                    and source_name in features.ALL_HISTORY_DIAGNOSIS_COMPONENTS
+                ) or (
+                    column.startswith("glp1_procedure_")
+                    and source_name in features.ALL_HISTORY_PROCEDURE_COMPONENTS
+                )
+                entry["temporal_rule"] = (
+                    "All captured history on or before the anchor day"
+                    if all_history
+                    else "Component-specific inclusive calendar-day windows; "
+                    "diagnosis/procedure 730 days, labs/BP 365 days, medications "
+                    "730 days history and 365 days follow-up; follow-up is context"
+                )
+                entry["value_units"] = (
+                    "Normalized component values; rules in feature_sources.py"
+                    if column.startswith(("glp1_lab_", "glp1_bp_"))
+                    else "Records, indicators or dates; no clinical-absence inference"
+                )
+                entry["source_dates"] = (
+                    "event_datetime and raw source dates retained in component evidence"
+                )
+                entry["availability"] = (
+                    "encounter_source_coverage; observed span is not continuous capture"
+                )
             if entry["column"] in {"patient_id", "encounter_id"}:
-                entry["source"] = "canonical_source_identity"
+                entry["source"] = "authenticated_compatibility_source_identity"
             elif entry["column"] == "encounter_anchor_date":
                 entry["source"] = "legacy encounter_date; Stata days since 1960-01-01"
         original = connection.execute("SELECT count(*) FROM legacy_base").fetchone()[0]
@@ -336,13 +419,55 @@ def _enrich(database, base_path, destination, scratch, suffix, catalog, config):
 
 
 def build_encounters(
-    *, database: Path, output_dir: Path, concept_sets_dir: Path | None = None
+    *,
+    database: Path,
+    compatibility_database: Path,
+    legacy_bundle: Path,
+    legacy_acceptance: Path,
+    coverage_bundle: Path,
+    output_dir: Path,
+    concept_sets_dir: Path | None = None,
 ):
     """Publish both variants atomically; never overwrite inputs or accepted output."""
     from ..combined_preprocessing.builder import require_safe_output_location
 
     database = Path(database).absolute()
     output = Path(output_dir).absolute()
+    if output.exists():
+        raise FileExistsError("Encounter output already exists")
+    companion = no_symlinks(compatibility_database)
+    companion_identity = file_identity(companion)
+    companion_metadata = validate_companion(companion)
+    legacy_bundle = no_symlinks(legacy_bundle)
+    base_manifest_path = legacy_bundle / "manifest.json"
+    base_manifest = json.loads(base_manifest_path.read_text())
+    gate = json.loads(Path(legacy_acceptance).read_text())
+    if (
+        base_manifest.get("kind") != "legacy_base"
+        or base_manifest.get("status") != "complete"
+        or base_manifest["compatibility"] != companion_metadata
+        or gate.get("bundle_manifest_sha256") != sha256(base_manifest_path)
+        or not gate.get("pass")
+        or set(gate.get("variants", {})) != set(VARIANTS)
+        or not all(v["pass"] for v in gate["variants"].values())
+    ):
+        raise ValueError("Authenticated legacy population/value gate is required")
+    legacy_metadata = json.loads((legacy_bundle / "legacy_metadata.json").read_text())
+    coverage_bundle = no_symlinks(coverage_bundle)
+    coverage = json.loads((coverage_bundle / "coverage.json").read_text())
+    if (
+        not coverage.get("pass")
+        or coverage.get("contract_version") != "1.0"
+        or coverage.get("legacy_manifest_sha256") != sha256(base_manifest_path)
+        or tuple(coverage.get("source_file_identity", ())) != file_identity(database)
+    ):
+        raise ValueError("Source linkage/history coverage gate is required")
+    for name, info in coverage["outputs"].items():
+        if sha256(coverage_bundle / name) != info["sha256"]:
+            raise ValueError("Source coverage artifact changed")
+    for name, info in base_manifest["outputs"].items():
+        if sha256(legacy_bundle / name) != info["sha256"]:
+            raise ValueError("Legacy base changed after acceptance")
     for path in (database, output, *database.parents, *output.parents):
         if path.is_symlink():
             raise ValueError("Encounter source/output paths must not contain symlinks")
@@ -364,6 +489,13 @@ def build_encounters(
     # Validation precedes publication and any clinical transformation.
     with open_cohort_source(database) as source:
         source_metadata = source.metadata.to_dict()
+        required_elements = [
+            row[0]
+            for row in source.connection.execute(
+                "SELECT element_id FROM element_catalog "
+                "WHERE starts_with(element_id,'source.') ORDER BY element_id"
+            ).fetchall()
+        ]
         if catalog.sha256 != source.metadata.glp1_catalog_sha256:
             raise ValueError("Encounter terminology differs from the validated source")
     staging = Path(
@@ -377,23 +509,8 @@ def build_encounters(
             LOGGER.info("Building encounter variant %s", variant)
             scratch = staging / f".{variant}"
             scratch.mkdir()
-            base_path = scratch / "legacy_base.parquet"
-            with open_cohort_source(database, spill_root=scratch) as source:
-                inputs = CompatibilityFrames(source.connection, suffix)
-                result = assemble_analysis_base(inputs)
-                if len(inputs.consumed) != 18:
-                    raise ValueError("Not every compatibility projection was consumed")
-                if variant == "AFTER_EXCLUSION":
-                    LOGGER.info("Applying measurement imputation for %s", variant)
-                    result = apply_pre_model_transformations(
-                        result, take_ownership=True
-                    )
-                # FULL_DATA preserves its pre-quality-screen values. The frozen
-                # workflow only fits saturation-imputation splines in AFTER.
-                metadata = asdict(result.metadata)
-                result.frame.to_parquet(base_path, index=False)
-                del result, inputs
-            gc.collect()
+            base_path = legacy_bundle / f"encounter_features_{variant.lower()}.parquet"
+            metadata = legacy_metadata[variant]
             destination = staging / f"encounter_features_{variant.lower()}.parquet"
             LOGGER.info("Enriching source evidence for %s", variant)
             qa[variant], dictionary[variant] = _enrich(
@@ -404,11 +521,20 @@ def build_encounters(
                 suffix,
                 catalog,
                 config,
+                coverage_bundle / f"{variant}_source_coverage.parquet",
+            )
+            shutil.copyfile(
+                coverage_bundle / f"{variant}_source_coverage.parquet",
+                staging
+                / (
+                    f"encounter_features_{variant.lower()}"
+                    "_encounter_source_coverage.parquet"
+                ),
             )
             for entry in dictionary[variant]:
                 name = entry["column"]
-                if name == "legacy_patient_id":
-                    name = "patient_id"
+                if name in {"legacy_patient_id", "legacy_encounter_id"}:
+                    name = name.removeprefix("legacy_")
                 label_name = metadata["variable_value_labels"].get(name)
                 entry["label"] = metadata["variable_labels"].get(name)
                 entry["value_labels"] = metadata["value_label_definitions"].get(
@@ -424,6 +550,9 @@ def build_encounters(
             json.dumps(dictionary, indent=2) + "\n"
         )
         (staging / "quality_summary.json").write_text(json.dumps(qa, indent=2) + "\n")
+        (staging / "source_coverage.json").write_text(
+            json.dumps(coverage, indent=2) + "\n"
+        )
         source_after = database.stat()
         if (
             (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
@@ -433,6 +562,7 @@ def build_encounters(
                 source_after.st_size,
                 source_after.st_mtime_ns,
             )
+            or file_identity(companion) != companion_identity
             or code_identity() != identity
             or sha256(sidecar) != source_manifest_hash
         ):
@@ -451,6 +581,13 @@ def build_encounters(
             "status": "complete",
             "source": source_metadata,
             "source_manifest_sha256": source_manifest_hash,
+            "compatibility": companion_metadata,
+            "legacy_gate_sha256": sha256(Path(legacy_acceptance)),
+            "legacy_bundle_manifest_sha256": sha256(base_manifest_path),
+            "kind": "encounter_features",
+            "feature_contract_version": "1.0",
+            "required_source_elements": required_elements,
+            "row_order": "Unspecified; consumers must sort by patient_id, encounter_id",
             "code_sha256": identity,
             "windows": asdict(config),
             "variants": qa,

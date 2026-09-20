@@ -1867,3 +1867,14 @@ fit. New GLP-1 features use the legacy daily encounter anchor, explicit
 calendar-day lookbacks, and original source keys. Future same-encounter source
 evidence is retained separately from baseline summaries. See
 ENCOUNTER_PREPROCESSING.md for the supported interface and scientific limits.
+
+## 2026-09-20: Authenticated encounter compatibility companion
+
+The owner authorizes a one-time import of the original authenticated 36 CSVs
+into a private DuckDB companion. Routine encounter builds read that companion
+for legacy populations and the validated canonical source for clinical evidence.
+This supersedes the canonical-only encounter input plan without changing
+accepted populations or explaining the incompatible canonical projection.
+Encounter bundle schema 2.0 requires paired source provenance, explicit
+legacy comparison and coverage gates. Source cohort schema/catalog versions
+are unchanged. Parquet row ordering is a consumer-sort requirement.

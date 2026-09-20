@@ -6,18 +6,79 @@ in trinetx-hypercapnia-code as reproduction references.
 
 ## Run
 
-The initial private build failed, and the canonical compatibility projections
-did not reproduce the accepted encounter population. This command is implemented
-but not yet accepted for production encounter creation. See
-[NEXT_STEPS.md](../NEXT_STEPS.md) for source reconciliation and validation gates.
+The owner approved a one-time authenticated import of the original 36 CSVs
+on 2026-09-20. Schema 2.0 separates that population authority from the canonical
+clinical evidence source. The original canonical compatibility projections did
+not reproduce accepted membership. The companion bypasses that mismatch; it
+does not explain or repair the canonical projections. Private validation remains
+pending until the gates in [NEXT_STEPS.md](../NEXT_STEPS.md) pass.
 
-From this repository, with the locked environment:
+Install the locked environment and import the authenticated immutable snapshot
+once. The identity receipt supplies the exact accepted hashes for all 36 files:
 
 ```bash
 uv sync --locked
+uv run trinetx-preprocessing import-compatibility \
+  --input-root /private/accepted-compatibility \
+  --identity-receipt /private/accepted-input-identity.json \
+  --database /private/compatibility.duckdb
+```
+
+The import preserves exact headers, text, missing sentinels, duplicate rows and
+logical row order. It uses the accepted CSV parser settings, compares every
+stored text cell before clinical coercion, and checks identities before and
+after import. Routine builds read the companion read-only and apply the
+unchanged accepted cleaners, merges and imputation.
+
+Build both independent bases before any clinical enrichment:
+
+```bash
+uv run trinetx-preprocessing build-encounters \
+  --compatibility-database /private/compatibility.duckdb \
+  --legacy-only --output-dir /private/legacy-base
+```
+
+Run the downstream `compare_encounter_reference.py` with its mandatory accepted
+reference `--identity-receipt`, writing `/private/legacy-acceptance.json`. The
+versioned contract requires all 33 FULL_DATA and 534 AFTER_EXCLUSION fields,
+including explicit patient/encounter and demographic aliases; only 14 documented
+propensity/weight fields are excluded. Discrete values and missingness are exact;
+only the named continuous fields use `rtol=atol=1e-6`. References are authenticated
+before decoding and checked unchanged after comparison. Fresh key caches are
+bound to those identities; failed-build caches are never accepted.
+
+Then validate patient demographics, composite encounter linkage, anchor-day
+agreement and source-history availability, before constructing evidence:
+
+```bash
 uv run trinetx-preprocessing build-encounters \
   --database /private/source/trinetx_preprocessed.duckdb \
+  --compatibility-database /private/compatibility.duckdb \
+  --legacy-bundle /private/legacy-base \
+  --legacy-acceptance /private/legacy-acceptance.json \
+  --coverage-only --output-dir /private/source-coverage
+```
+
+The corrected enrichment command requires both gates and creates the bundle:
+
+```bash
+uv run trinetx-preprocessing build-encounters \
+  --database /private/source/trinetx_preprocessed.duckdb \
+  --compatibility-database /private/compatibility.duckdb \
+  --legacy-bundle /private/legacy-base \
+  --legacy-acceptance /private/legacy-acceptance.json \
+  --coverage-bundle /private/source-coverage \
   --output-dir /private/encounter-bundle
+```
+
+Validate every artifact after completion, then run the same mandatory retained
+reference comparison against the enriched bundle:
+
+```bash
+uv run trinetx-preprocessing validate-encounters \
+  --bundle /private/encounter-bundle \
+  --work-dir /private/new-validation-work \
+  --report /private/encounter-validation.json
 ```
 
 Use a new private output directory outside Git. The command validates the
@@ -30,17 +91,19 @@ under caffeinate and retain logs on the private output volume.
 
 ## Products and grain
 
-- encounter_features_full_data.parquet: BEFORE compatibility projections,
+- encounter_features_full_data.parquet: authenticated BEFORE snapshot partitions,
   original ordered cleaning/merges and pre-screen population.
-- encounter_features_after_exclusion.parquet: independently transformed AFTER
-  projections, original quality/timing rules and measurement imputation.
+- encounter_features_after_exclusion.parquet: independently transformed authenticated AFTER
+  snapshot partitions, original quality/timing rules and measurement imputation.
 - Companion Parquet evidence tables for catalog elements, diagnosis, procedure,
   laboratories, blood pressure and medications.
 - Per-variant element inventories, data_dictionary.json,
   quality_summary.json and versioned manifest.json.
 
 Each feature table is unique by original string patient_id plus encounter_id.
-Repeated encounters remain. first_encounter is a flag, not a row restriction.
+Parquet row order is unspecified. Consumers must explicitly sort by original
+`patient_id, encounter_id` (and evidence by `index_event_id`, source date and
+source identity) whenever order matters. Repeated encounters remain. first_encounter is a flag, not a row restriction.
 legacy_patient_id preserves the variant-specific encoded identifier;
 legacy_encounter_id and pat_enc_hash preserve reference identifiers.
 Use original source keys for linkage, never encoded patient numbers across
@@ -59,7 +122,9 @@ as a calendar date. New evidence lookbacks therefore use inclusive calendar
 days, retaining original timestamps and precision in evidence. No time of day
 is invented. General diagnosis/procedure/medication lookback is 730 days;
 measurements use 365 days. Existing component-specific all-history rules and
-five-year sleep-study lookback remain explicit in feature_sources.py.
+captured-history exceptions remain explicit in feature_sources.py. The
+procedure evidence implementation uses its 730-day rule; the declared sleep-study
+constant does not establish a separate five-year eligibility calculation here.
 
 Catalog evidence retains same-encounter observations even outside the baseline
 window. in_baseline_window identifies records eligible for its latest baseline
@@ -75,6 +140,15 @@ component is a narrower CPT-only definition and must not replace these fields.
 Evidence preserves source references, units, dates, specimen/panel identifiers,
 statuses and missingness. Raw catalog latest values are explicitly raw-unit
 values; normalized component measurements are separate.
+
+The feature contract is version 1.0. Each required source element has a wide
+column/evidence destination and availability inventory. Per-encounter domain
+coverage distinguishes unavailable domains, incomplete capture and observed
+history spans. Each element inventory separates observed matches from zero
+matching records under each history state. An observed span does not establish
+continuous capture or complete lifetime history. All-history summaries cover
+only records captured by the canonical export. Missing source history is not
+recovered by querying a different projection.
 
 Null means unavailable under that field's rule. A zero source-record count
 does not prove clinical absence. Unsupported severity measurements remain

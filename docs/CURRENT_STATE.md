@@ -8,9 +8,10 @@ The initial private build failed, and its legacy population differs from the
 accepted reference. The interface is not yet privately validated. Follow
 [NEXT_STEPS.md](../NEXT_STEPS.md) before another build or merge.
 
-The manifest-bound DuckDB remains the canonical captured source. Its existing
-compatibility projections feed the extracted accepted Python transformations
-in memory. Both encounter variants retain repeated encounters and their
+The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
+compatibility snapshot to the accepted Python transformations; canonical
+clinical tables supply enrichment. The owner authorized this one-time import
+on 2026-09-20 to preserve legacy membership. Both sources remain read-only. Both encounter variants retain repeated encounters and their
 original rules. The 36-file CSV/DTA workflows remain available through the
 preserved reference implementation.
 

@@ -25,18 +25,17 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-Private build failed at encounter-context deduplication under the 2816-MiB
-DuckDB cap; retained intermediates remain external. The focused query-width/
-key-scope repair at 8b19b7f passed targeted checks and CI, but not a private build.
-Early FULL_DATA membership comparison also failed; investigate source compatibility
-before restarting expensive enrichment or merging.
+Sole Mini executor continues from audited NEXT_STEPS.md. The one-time
+text-preserving compatibility import is running privately under the shared
+build lock. Focused source/encounter, key publication, coverage and comparator
+checks pass; real membership has not yet been accepted. Original failures,
+older branch and dirty instructions remain preserved.
 
 ## Next
-Continue from NEXT_STEPS.md on the Mini: repair both input/key adapters and the
-comparator contract/authentication; pass legacy and independent enrichment
-coverage gates before the private build. Bind acceptance to the source pair and
-bundle, then test the installed pinned pair and final CI.
-Merge upstream first and then downstream only after those checks pass.
+Complete import, run and compare both independent legacy bases, then pass
+source linkage/history coverage before clinical enrichment. Validate all
+artifacts, bind private acceptance to the source pair and final producer,
+verify installed downstream pin and final CI, and merge UP14 before DOWN15.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

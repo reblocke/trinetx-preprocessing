@@ -64,7 +64,7 @@ changing its estimand is a subsequent analysis task.
 
 ## Remaining work, in order
 
-1. [ ] **Establish one Mini executor.** Read this checklist, private
+1. [x] **Establish one Mini executor.** Read this checklist, private
    `LOCAL_PATHS.md`, repository instructions and current continuity notes.
    Use an OS-backed execution lock for the full Mini session and a shared build
    lock for every build/comparison, including monitor-driven runs. Repeated
@@ -202,3 +202,14 @@ coordinated revisions. Historical reference implementations remain unchanged,
 private data remain outside Git, and known study-analysis defects remain explicitly
 unresolved. Coordinated changes are merged and safe development copies synchronized
 or their offline synchronization is explicitly pending.
+
+## Mini implementation checkpoint (2026-09-20)
+
+The sole persistent Mini app executor holds an OS-backed controller lock; the
+shared build lock covers the authenticated companion import now running in a
+new external location. The original CLI session ended without a data build.
+Input/key, field-contract comparator, coverage and bundle-validator repairs
+are implemented with focused synthetic checks. Private population, linkage,
+full enrichment and acceptance gates remain pending; neither PR is ready to
+merge. Exact current execution handles and paths remain in the private
+CHECKPOINT.md. The laptop is not needed and no offline synchronization is claimed.
