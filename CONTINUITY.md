@@ -25,25 +25,20 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-Both corrected private legacy bases passed the complete retained-reference gate:
-FULL_DATA 2,662,675 encounters and 33 fields; AFTER_EXCLUSION 833,476 encounters
-and 534 fields. Membership and missingness differences are zero; all retained
-values satisfy their declared exact/continuous rules. Both variants are unique
-by original composite key. Reference identity and immutability checks passed.
-Canonical patient/encounter linkage, demographics and anchor-day agreement
-passed for every encounter. A medication source-file audit alias mismatch made
-the first history report label available medication data unavailable; that
-report is preserved but superseded. Coverage now recognizes both canonical
-medication export families and rejects unexplained audit/observability conflicts.
-Rerun coverage before enrichment; no clinical enrichment has started. All failed attempts and reference
-implementations remain preserved. Final source pin, installed-pair checks,
-private enriched-artifact acceptance and coordinated merges remain pending.
+All pre-enrichment gates passed. Both legacy variants match authenticated
+references across the complete 33/534-field contracts, with zero membership and
+missingness differences. Canonical patient/composite-encounter linkage covers
+every encounter, with zero demographic or anchor-day disagreements. Corrected
+coverage recognizes both medication export families and distinguishes observed
+spans from incomplete capture; observed spans do not prove continuous history.
+All 21 focused encounter tests pass. Start the corrected sequential clinical
+enrichment build from these source-bound gates and fresh external scratch.
+Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Pass canonical source linkage/history coverage, then build and validate
-clinical enrichment. Bind private acceptance to the exact
-source pair and producers, verify the installed downstream pin and final CI,
-and merge UP14 before DOWN15.
+Complete clinical enrichment, repeat the retained-reference comparison, validate
+all artifacts, bind private acceptance to the source pair and producers, then
+verify the installed downstream pin and final CI. Merge UP14 before DOWN15.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

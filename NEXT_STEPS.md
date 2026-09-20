@@ -84,7 +84,7 @@ changing its estimand is a subsequent analysis task.
    floating boundary values. Hash identity alone does not establish interpretation
    parity. Preserve both independently supplied variants and raw source files.
 
-3. [ ] **Repair both the reader and enrichment key mapping.** In
+3. [x] **Repair both the reader and enrichment key mapping.** In
    `encounters/builder.py`, `CompatibilityFrames` and `_enrich()` independently
    use canonical `preprocessed_encounter`. Changing only the reader is insufficient.
    Carry authoritative original patient/encounter keys from the authenticated
@@ -119,7 +119,7 @@ changing its estimand is a subsequent analysis task.
    population. Trace coercion/order/merges for any discrepancy before enrichment;
    population changes cannot be waived as numerical tolerance.
 
-6. [ ] **Pass a separate enrichment linkage and source-coverage gate.** Define
+6. [x] **Pass a separate enrichment linkage and source-coverage gate.** Define
    the approved, versioned encounter-feature contract. Produce a per-variant
    report mapping every required element to its wide/evidence destination and
    availability state, including patient/encounter linkage and required history
@@ -211,7 +211,8 @@ wide publication uses the existing enrichment SQL cap after releasing pandas.
 FULL_DATA has 2,662,675 encounters; AFTER_EXCLUSION has 833,476. The complete retained-field
 comparison passed both variants with zero membership/missingness differences
 and no retained-value discrepancies under the declared rules. Canonical linkage
-and history coverage remain pending before enrichment. AppleDouble filesystem companions are kept outside the
+and corrected history coverage also passed, with all patients/encounters linked
+and no demographic/anchor disagreements. Clinical enrichment is next. AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.
 The laptop is not needed and no offline synchronization is claimed.
