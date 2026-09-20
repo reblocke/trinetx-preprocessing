@@ -25,14 +25,16 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-Sole Mini executor continues from audited NEXT_STEPS.md. The one-time
-text-preserving compatibility import is running privately under the shared
-build lock. Focused source/encounter, key publication, coverage and comparator
-checks pass; real membership has not yet been accepted. Original failures,
-older branch and dirty instructions remain preserved.
+The authenticated import passed exact text-frame parity for all 36 partitions.
+The first companion-backed legacy build hit the 512 MiB reader limit while
+sorting a wide partition, before enrichment. Ordinal-range reads now bound that
+sort without changing the accepted full frame, order, duplicates or memory cap;
+all four adapter regressions and Ruff pass. The failed staging is preserved.
+Real membership has not yet been accepted. Original failures, older branch and
+dirty instructions remain preserved.
 
 ## Next
-Complete import, run and compare both independent legacy bases, then pass
+Retry and compare both independent legacy bases, then pass
 source linkage/history coverage before clinical enrichment. Validate all
 artifacts, bind private acceptance to the source pair and final producer,
 verify installed downstream pin and final CI, and merge UP14 before DOWN15.

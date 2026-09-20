@@ -51,13 +51,36 @@ def no_symlinks(path):
     return path
 
 
-def read_frame(connection, key):
-    columns = ",".join(ident(c.raw_name) for c in load_schema().columns)
-    return connection.execute(
-        f"SELECT {columns} FROM compatibility_input "
-        "WHERE compatibility_output_key=? ORDER BY source_row_order",
+def read_frame(connection, key, *, chunk_rows=25000):
+    """Bound the wide SQL sort while delivering the exact accepted full frame.
+
+    A single ORDER BY over 534 text columns can exceed the reader's memory cap.
+    Logical ordinal ranges preserve every row and duplicate without that sort.
+    The per-file cleaner still receives its original complete pandas frame.
+    """
+    if chunk_rows < 1:
+        raise ValueError("Compatibility read chunk size must be positive")
+    names = [c.raw_name for c in load_schema().columns]
+    columns = ",".join(ident(c) for c in names)
+    rows = connection.execute(
+        "SELECT count(*) FROM compatibility_input WHERE compatibility_output_key=?",
         [key],
-    ).fetchdf()
+    ).fetchone()[0]
+    frames = []
+    for offset in range(0, rows, chunk_rows):
+        frames.append(
+            connection.execute(
+                f"SELECT {columns} FROM compatibility_input "
+                "WHERE compatibility_output_key=? AND source_row_order>=? "
+                "AND source_row_order<? ORDER BY source_row_order",
+                [key, offset, offset + chunk_rows],
+            ).fetchdf()
+        )
+    return (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=names, dtype=object)
+    )
 
 
 def validate_companion(database):

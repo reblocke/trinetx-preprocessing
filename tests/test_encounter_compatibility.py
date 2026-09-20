@@ -53,7 +53,7 @@ def test_exact_parser_roundtrip(tmp_path):
         for part in compatibility_outputs():
             expected = pd.read_csv(root / part.relative_path, **CSV_OPTIONS)
             pd.testing.assert_frame_equal(
-                read_frame(db, part.key), expected, check_exact=True
+                read_frame(db, part.key, chunk_rows=2), expected, check_exact=True
             )
     with database.open("ab") as stream:
         stream.write(b"changed")
