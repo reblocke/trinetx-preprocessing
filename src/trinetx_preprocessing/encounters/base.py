@@ -13,7 +13,12 @@ from pathlib import Path
 import duckdb
 
 from ..combined_preprocessing.builder import require_safe_output_location
-from .compatibility import digest, file_identity, no_symlinks, validate_companion
+from .compatibility import (
+    artifact_inventory,
+    file_identity,
+    no_symlinks,
+    validate_companion,
+)
 from .legacy.measurement import apply_pre_model_transformations
 from .legacy.pipeline import assemble_analysis_base
 
@@ -128,11 +133,7 @@ def build_legacy_bases(*, compatibility_database, output_dir):
         "code_sha256": identity,
         "rows": counts,
         "row_order": "Unspecified; consumers must sort by patient_id, encounter_id",
-        "outputs": {
-            p.name: {"sha256": digest(p), "bytes": p.stat().st_size}
-            for p in staging.iterdir()
-            if p.is_file()
-        },
+        "outputs": artifact_inventory(staging),
     }
     (staging / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     os.replace(staging, output)

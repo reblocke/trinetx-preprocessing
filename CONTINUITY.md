@@ -25,23 +25,23 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-The authenticated import passed exact text-frame parity for all 36 partitions.
-Bounded ordinal reads, preallocated columns and equal-string sharing preserve
-accepted frames; all four adapter regressions pass. The latest private attempt
-read and cleaned every FULL_DATA partition and wrote its intermediate, then
-failed during wide joined Parquet publication at the 512 MiB ingestion cap.
-Publication now uses the existing 2816 MiB enrichment cap after pandas frames
-are released. Metadata is checkpointed before publication. Validate that exact
-boundary on a copy of the preserved intermediate before another complete run.
-Private membership acceptance remains pending; no clinical enrichment started.
-All failed stagings, the older branch and dirty instructions are preserved.
+Both independent private legacy bases completed at producer ba7470b:
+FULL_DATA 2,662,675 encounters; AFTER_EXCLUSION 833,476. All 36 partitions were
+read and cleaned, with peak whole-process RSS 8,577,777,664 bytes. The retained
+reference comparator is running; matching counts alone do not establish parity.
+Bounded reader allocations and wide publication use the existing enrichment SQL
+cap after pandas release. The actual output volume creates AppleDouble metadata
+companions; future inventories now exclude those companions without deleting
+them. Eight affected adapter, coverage and validation tests and Ruff pass.
+The existing legacy bundle and its producer identity remain unchanged.
+No clinical enrichment has started. All failed stagings, the older branch and
+dirty instructions remain preserved.
 
 ## Next
-Pass the full-data publication probe, rebuild and compare both independent
-legacy bases, then pass
-source linkage/history coverage before clinical enrichment. Validate all
-artifacts, bind private acceptance to the source pair and final producer,
-verify installed downstream pin and final CI, and merge UP14 before DOWN15.
+Pass the complete retained-field comparison and source linkage/history coverage,
+then build and validate clinical enrichment. Bind private acceptance to the exact
+source pair and producers, verify the installed downstream pin and final CI,
+and merge UP14 before DOWN15.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

@@ -15,7 +15,7 @@ from ..pipeline.final_features import (
     LEGACY_RACE_CODES,
     LEGACY_SEX_CODES,
 )
-from .compatibility import digest, file_identity, no_symlinks
+from .compatibility import artifact_inventory, digest, file_identity, no_symlinks
 
 FEATURE_CONTRACT_VERSION = "1.0"
 DOMAINS = {
@@ -190,11 +190,7 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
         "source_file_identity": before,
         "legacy_manifest_sha256": manifest_hash,
         "variants": reports,
-        "outputs": {
-            p.name: {"sha256": digest(p), "bytes": p.stat().st_size}
-            for p in output.iterdir()
-            if p.is_file()
-        },
+        "outputs": artifact_inventory(output),
     }
     (output / "coverage.json").write_text(json.dumps(result, indent=2) + "\n")
     if not result["pass"]:

@@ -21,7 +21,13 @@ from ..combined_preprocessing.cohort_source import open_cohort_source
 from ..combined_preprocessing.contract import compatibility_outputs
 from . import feature_sources as features
 from . import source_projection as projection
-from .compatibility import file_identity, no_symlinks, read_frame, validate_companion
+from .compatibility import (
+    artifact_inventory,
+    file_identity,
+    no_symlinks,
+    read_frame,
+    validate_companion,
+)
 from .config import FeatureConfig
 from .element_features import add_availability_inventory, build_element_evidence
 from .legacy.per_file_cleaning import RfsFamily, clean_per_file
@@ -569,11 +575,7 @@ def build_encounters(
             or sha256(sidecar) != source_manifest_hash
         ):
             raise ValueError("Source or implementation changed during build")
-        inventory = {
-            p.name: {"sha256": sha256(p), "bytes": p.stat().st_size}
-            for p in sorted(staging.iterdir())
-            if p.is_file()
-        }
+        inventory = artifact_inventory(staging)
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "runtime": {

@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from trinetx_preprocessing.encounters.builder import EVIDENCE_TABLES, VARIANTS
-from trinetx_preprocessing.encounters.compatibility import digest
+from trinetx_preprocessing.encounters.compatibility import artifact_inventory
 from trinetx_preprocessing.encounters.validation import validate_bundle
 
 
@@ -55,6 +55,11 @@ def test_complete_bundle_requires_element_and_domain_coverage(tmp_path, omit_ele
     (root / "source_coverage.json").write_text(
         json.dumps({"pass": True, "source": {"test": True}})
     )
+    # The private macOS output volume creates these alongside real products.
+    # They must not turn the exact analytical-artifact contract into a false fail.
+    sidecars = [root / "._data_dictionary.json", root / "._features.parquet"]
+    for sidecar in sidecars:
+        sidecar.write_bytes(b"synthetic filesystem metadata")
     manifest = {
         "schema_version": "2.0",
         "status": "complete",
@@ -62,10 +67,7 @@ def test_complete_bundle_requires_element_and_domain_coverage(tmp_path, omit_ele
         "feature_contract_version": "1.0",
         "source": {"test": True},
         "required_source_elements": ["source.synthetic"],
-        "outputs": {
-            p.name: {"bytes": p.stat().st_size, "sha256": digest(p)}
-            for p in root.iterdir()
-        },
+        "outputs": artifact_inventory(root),
     }
     (root / "manifest.json").write_text(json.dumps(manifest))
     if omit_element:
@@ -73,3 +75,4 @@ def test_complete_bundle_requires_element_and_domain_coverage(tmp_path, omit_ele
             validate_bundle(bundle=root, work_dir=tmp_path / "work")
     else:
         assert validate_bundle(bundle=root, work_dir=tmp_path / "work")["pass"]
+    assert all(p.read_bytes() == b"synthetic filesystem metadata" for p in sidecars)

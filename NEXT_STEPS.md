@@ -74,7 +74,7 @@ changing its estimand is a subsequent analysis task.
    Mini GitHub authentication; fetch/inspect branches without reset/force-push.
    Preserve the older branch, dirty AGENTS.md and failed-run artifacts.
 
-2. [ ] **Implement and prove the compatibility adapter boundary.** Import all
+2. [x] **Implement and prove the compatibility adapter boundary.** Import all
    36 authenticated partitions with exact headers, explicit logical row order,
    duplicate multiplicity and accepted identifier/missing/date/numeric coercions.
    Use explicit types or preserved text followed by accepted coercions, not
@@ -95,7 +95,7 @@ changing its estimand is a subsequent analysis task.
    Keep one catalog/entrypoint, sources read-only and new private output staging.
    Record both source identities, schemas/configuration and producer hashes.
 
-4. [ ] **Close comparator false-pass paths before making it a release gate.**
+4. [x] **Close comparator false-pass paths before making it a release gate.**
    Downstream `scripts/compare_encounter_reference.py` currently intersects columns
    and can pass while a clinical reference field is missing. Replace that with a
    versioned, explicit retained/renamed/excluded field contract. Every retained
@@ -132,7 +132,7 @@ changing its estimand is a subsequent analysis task.
    recapture. Another query cannot recover absent source history. Undocumented
    gaps fail the contract; justified unavailability is an explicit contract state.
 
-7. [ ] **Make temporal, unit and row-order semantics explicit.** Preserve the
+7. [x] **Make temporal, unit and row-order semantics explicit.** Preserve the
    legacy calendar-day anchor and existing inclusive-day/same-encounter rules.
    Dictionary entries must specify anchor precision, lookback, baseline versus
    context/follow-up, source dates, raw versus normalized values/units and
@@ -205,11 +205,12 @@ or their offline synchronization is explicitly pending.
 
 ## Mini implementation checkpoint (2026-09-20)
 
-The sole persistent Mini app executor holds an OS-backed controller lock; the
-shared build lock covers the authenticated companion import now running in a
-new external location. The original CLI session ended without a data build.
-Input/key, field-contract comparator, coverage and bundle-validator repairs
-are implemented with focused synthetic checks. Private population, linkage,
-full enrichment and acceptance gates remain pending; neither PR is ready to
-merge. Exact current execution handles and paths remain in the private
-CHECKPOINT.md. The laptop is not needed and no offline synchronization is claimed.
+The authenticated one-time import and both independent legacy builds completed.
+The repaired reader preserves exact text/order/duplicates with bounded allocation;
+wide publication uses the existing enrichment SQL cap after releasing pandas.
+FULL_DATA has 2,662,675 encounters; AFTER_EXCLUSION has 833,476. Full retained-field
+comparison and canonical linkage/history gates remain pending; counts alone do
+not establish acceptance. AppleDouble filesystem companions are kept outside the
+analytical artifact inventory. Neither PR is ready to merge. Exact execution
+handles, source identities and failed attempts remain in the private CHECKPOINT.md.
+The laptop is not needed and no offline synchronization is claimed.

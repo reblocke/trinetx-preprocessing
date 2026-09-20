@@ -39,6 +39,15 @@ def digest(path):
     return h.hexdigest()
 
 
+def artifact_inventory(directory):
+    """Hash products, leaving macOS AppleDouble filesystem companions untouched."""
+    return {
+        path.name: {"sha256": digest(path), "bytes": path.stat().st_size}
+        for path in sorted(Path(directory).iterdir())
+        if path.is_file() and not path.name.startswith("._")
+    }
+
+
 def file_identity(path):
     stat = Path(path).stat()
     return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
