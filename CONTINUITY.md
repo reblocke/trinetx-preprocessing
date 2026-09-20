@@ -29,7 +29,11 @@ The authenticated import passed exact text-frame parity for all 36 partitions.
 The first companion-backed legacy build hit the 512 MiB reader limit while
 sorting a wide partition, before enrichment. Ordinal-range reads now bound that
 sort without changing the accepted full frame, order, duplicates or memory cap;
-all four adapter regressions and Ruff pass. The failed staging is preserved.
+all four adapter regressions and Ruff pass. The retry passed that partition but
+terminated abnormally while loading the largest one (exact signal UNCONFIRMED).
+The reader now fills preallocated column arrays, eliminating its additional
+5.15 GiB concatenation allocation there; read/clean phase markers aid diagnosis.
+The four adapter regressions pass again. Both failed stagings are preserved.
 Real membership has not yet been accepted. Original failures, older branch and
 dirty instructions remain preserved.
 

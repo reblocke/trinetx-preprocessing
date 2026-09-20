@@ -109,6 +109,7 @@ class CompatibilityFrames(Mapping):
         output = self.outputs[key]
         LOGGER.info("Reading authenticated compatibility partition %s", output.key)
         raw = read_frame(self.connection, output.key)
+        LOGGER.info("Completed compatibility read %s: %s rows", output.key, len(raw))
         if tuple(raw.columns) != tuple(c.raw_name for c in self.schema.columns):
             raise ValueError(
                 "Canonical compatibility schema differs from accepted port"
@@ -121,6 +122,7 @@ class CompatibilityFrames(Mapping):
             raw_suffix=output.variant,
             family=key[0],
         )
+        LOGGER.info("Completed compatibility cleaning %s", output.key)
         if self.key_sink is not None:
             keys = result.frame[["pat_enc_hash", "patient_id", "encounter_id"]]
             self.key_sink.register("_cleaned_keys", keys)

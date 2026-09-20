@@ -56,6 +56,8 @@ def read_frame(connection, key, *, chunk_rows=25000):
 
     A single ORDER BY over 534 text columns can exceed the reader's memory cap.
     Logical ordinal ranges preserve every row and duplicate without that sort.
+    Fill the final column arrays directly: retaining chunks and concatenating
+    them would temporarily duplicate a multi-gigabyte object-pointer matrix.
     The per-file cleaner still receives its original complete pandas frame.
     """
     if chunk_rows < 1:
@@ -66,21 +68,21 @@ def read_frame(connection, key, *, chunk_rows=25000):
         "SELECT count(*) FROM compatibility_input WHERE compatibility_output_key=?",
         [key],
     ).fetchone()[0]
-    frames = []
+    values = {name: np.empty(rows, dtype=object) for name in names}
     for offset in range(0, rows, chunk_rows):
-        frames.append(
-            connection.execute(
-                f"SELECT {columns} FROM compatibility_input "
-                "WHERE compatibility_output_key=? AND source_row_order>=? "
-                "AND source_row_order<? ORDER BY source_row_order",
-                [key, offset, offset + chunk_rows],
-            ).fetchdf()
-        )
-    return (
-        pd.concat(frames, ignore_index=True)
-        if frames
-        else pd.DataFrame(columns=names, dtype=object)
-    )
+        stop = min(rows, offset + chunk_rows)
+        chunk = connection.execute(
+            f"SELECT {columns} FROM compatibility_input "
+            "WHERE compatibility_output_key=? AND source_row_order>=? "
+            "AND source_row_order<? ORDER BY source_row_order",
+            [key, offset, stop],
+        ).fetchdf()
+        if len(chunk) != stop - offset:
+            raise ValueError("Compatibility row ordinals are incomplete")
+        for name in names:
+            values[name][offset:stop] = chunk[name].to_numpy(copy=False)
+        del chunk
+    return pd.DataFrame(values, columns=names, copy=False)
 
 
 def validate_companion(database):
