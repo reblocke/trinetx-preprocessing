@@ -216,7 +216,10 @@ and no demographic/anchor disagreements. Clinical enrichment was interrupted
 by a host restart during FULL_DATA vital-source materialization. No enriched
 variant completed. The accepted companion/base/coverage hashes survived the
 restart; recovery is limited to a validated copy of committed source stages.
-Atomic source checkpoints are being added before retrying unfinished work.
+Atomic source checkpoints passed focused tests. Full-source vital-selection
+equivalence passed with zero per-row differences; the optional query optimization
+requires that exact source/catalog/query receipt. Recovery adoption and resumed
+enrichment remain pending.
 AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.

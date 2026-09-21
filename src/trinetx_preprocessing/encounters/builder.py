@@ -34,6 +34,7 @@ from .element_features import add_availability_inventory, build_element_evidence
 from .legacy.per_file_cleaning import RfsFamily, clean_per_file
 from .legacy.pipeline import SETTINGS
 from .legacy.raw_schema import load_schema
+from .vital_selection import validate_acceptance
 
 SCHEMA_VERSION = "2.0"
 VARIANTS = {"FULL_DATA": "BEFORE", "AFTER_EXCLUSION": "AFTER"}
@@ -161,7 +162,7 @@ def _create_encounter_context_source(connection):
     """)
 
 
-def _materialize_features(connection, catalog, config, cache):
+def _materialize_features(connection, catalog, config, cache, vital_predicate=None):
     projection._require_matching_glp1_catalog(connection, catalog)
     connection.execute(
         "CREATE TEMP TABLE gas_candidate_patient AS SELEC"
@@ -208,7 +209,15 @@ def _materialize_features(connection, catalog, config, cache):
             name,
             [name],
             lambda name=name: projection._create_patient_concept_source(
-                connection, name, catalog=catalog
+                connection,
+                name,
+                catalog=catalog,
+                **(
+                    {"vital_predicate": vital_predicate}
+                    if name == "source_vital_measurement"
+                    and vital_predicate is not None
+                    else {}
+                ),
             ),
         )
         LOGGER.info("Completed %s", name)
@@ -247,7 +256,9 @@ def _materialize_features(connection, catalog, config, cache):
     return result
 
 
-def materialization_binding(database, base_path, coverage_path, catalog, config):
+def materialization_binding(
+    database, base_path, coverage_path, catalog, config, *, vital_predicate=None
+):
     """Exact bindings required before an existing stage database may resume."""
     from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
 
@@ -260,6 +271,7 @@ def materialization_binding(database, base_path, coverage_path, catalog, config)
         "base_path": str(Path(base_path).absolute()),
         "base_sha256": sha256(base_path),
         "coverage_sha256": sha256(coverage_path) if coverage_path else None,
+        "vital_predicate": vital_predicate,
         "catalog_sha256": catalog.sha256,
         "windows": asdict(config),
         "runtime": {
@@ -280,6 +292,7 @@ def _enrich(
     config,
     coverage_path=None,
     source_cache=None,
+    vital_predicate=None,
 ):
     cache_root = no_symlinks(source_cache) if source_cache else scratch
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -305,7 +318,12 @@ def _enrich(
         cache = StageCache(
             connection,
             materialization_binding(
-                database, base_path, coverage_path, catalog, config
+                database,
+                base_path,
+                coverage_path,
+                catalog,
+                config,
+                vital_predicate=vital_predicate,
             ),
         )
 
@@ -343,7 +361,9 @@ def _enrich(
                 "CREATE OR REPLACE VIEW encounter_source_coverage AS "
                 f"SELECT * FROM read_parquet({literal(coverage_path)})"
             )
-        element_inventory = _materialize_features(connection, catalog, config, cache)
+        element_inventory = _materialize_features(
+            connection, catalog, config, cache, vital_predicate
+        )
         if coverage_path is not None:
             element_inventory = add_availability_inventory(
                 connection, element_inventory
@@ -505,6 +525,7 @@ def build_encounters(
     output_dir: Path,
     concept_sets_dir: Path | None = None,
     source_cache_dir: Path | None = None,
+    vital_selection_acceptance: Path | None = None,
 ):
     """Publish both variants atomically; never overwrite inputs or accepted output."""
     from ..combined_preprocessing.builder import require_safe_output_location
@@ -574,6 +595,12 @@ def build_encounters(
     catalog_path = concept_sets_dir or default_catalog_directory()
     catalog = load_concept_sets(catalog_path)
     config = FeatureConfig()
+    vital_receipt_hash = (
+        sha256(no_symlinks(vital_selection_acceptance))
+        if vital_selection_acceptance is not None
+        else None
+    )
+    vital_predicate = validate_acceptance(vital_selection_acceptance, database, catalog)
     before = database.stat()
     identity = code_identity()
     from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
@@ -617,6 +644,7 @@ def build_encounters(
                 config,
                 coverage_bundle / f"{variant}_source_coverage.parquet",
                 source_cache_dir / variant if source_cache_dir else None,
+                vital_predicate,
             )
             shutil.copyfile(
                 coverage_bundle / f"{variant}_source_coverage.parquet",
@@ -660,6 +688,10 @@ def build_encounters(
             or file_identity(companion) != companion_identity
             or code_identity() != identity
             or sha256(sidecar) != source_manifest_hash
+            or (
+                vital_selection_acceptance is not None
+                and sha256(vital_selection_acceptance) != vital_receipt_hash
+            )
         ):
             raise ValueError("Source or implementation changed during build")
         inventory = artifact_inventory(staging)
@@ -672,6 +704,7 @@ def build_encounters(
             "status": "complete",
             "source": source_metadata,
             "source_manifest_sha256": source_manifest_hash,
+            "vital_selection_acceptance_sha256": vital_receipt_hash,
             "compatibility": companion_metadata,
             "legacy_gate_sha256": sha256(Path(legacy_acceptance)),
             "legacy_bundle_manifest_sha256": sha256(base_manifest_path),

@@ -19,9 +19,12 @@ def main(argv=None):
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--concept-sets-dir", type=Path)
     parser.add_argument("--source-cache-dir", type=Path)
+    parser.add_argument("--vital-selection-acceptance", type=Path)
     args = parser.parse_args(argv)
     if args.source_cache_dir and (args.legacy_only or args.coverage_only):
         parser.error("--source-cache-dir is only supported for enrichment")
+    if args.vital_selection_acceptance and (args.legacy_only or args.coverage_only):
+        parser.error("--vital-selection-acceptance is only supported for enrichment")
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
@@ -58,6 +61,7 @@ def main(argv=None):
         output_dir=args.output_dir,
         concept_sets_dir=args.concept_sets_dir,
         source_cache_dir=args.source_cache_dir,
+        vital_selection_acceptance=args.vital_selection_acceptance,
     )
     return 0
 

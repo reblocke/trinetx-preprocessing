@@ -35,10 +35,11 @@ The corrected enrichment was interrupted by a host restart during FULL_DATA
 vital-source materialization. No enriched variant or completed bundle was
 published. The companion, legacy artifacts and coverage artifacts were rehashed
 successfully after restart. Committed lab, encounter and patient source tables
-remain preserved; their reuse requires a validated recovery import. Atomic,
-input-bound source checkpoints and a guarded resume path are being validated.
-An exact full-source vital-selection comparison is testing a narrowly scoped
-query optimization; it is not yet accepted or enabled.
+remain preserved; their reuse requires a validated recovery import. Atomic, input-bound source checkpoints passed focused regression tests.
+An exact full-source vital-selection comparison passed with zero per-row
+selection differences. The optional receipt-gated exact-code query preserves
+patient scope, raw projected fields and duplicates. A validated recovery copy
+and resumed enrichment remain pending.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

@@ -105,6 +105,16 @@ Recovery of such a database requires a separately validated import into a new
 owned cache, preserving the original artifacts and producer provenance. Cache
 completion does not establish final bundle acceptance.
 
+The optional `--vital-selection-acceptance /private/vital-equivalence.json`
+selects the exact normalized vital codes only after a complete, per-source-row
+comparison proves equivalence to catalog membership on the same canonical
+database. The receipt must bind the source identity, catalog and exact query,
+with zero selection differences; matching totals or a sample are insufficient.
+Without this receipt, the original membership selection remains in use. The
+manifest records the receipt hash and the source cache binds the chosen predicate.
+This query optimization changes neither patient scope nor projected raw values,
+units, dates or duplicate multiplicity.
+
 ## Products and grain
 
 - encounter_features_full_data.parquet: authenticated BEFORE snapshot partitions,

@@ -208,7 +208,10 @@ def _create_patient_concept_source(
     table_name: str,
     *,
     catalog: ConceptSetCatalog,
+    vital_predicate: str | None = None,
 ) -> None:
+    if vital_predicate is not None and table_name != "source_vital_measurement":
+        raise ValueError("Exact vital selection cannot be applied to another domain")
     source_columns = {
         "source_vital_measurement": (
             "cast(patient_id AS VARCHAR) AS patient_id",
@@ -268,6 +271,12 @@ def _create_patient_concept_source(
         ),
     }[table_name]
     logical_domain, concept_domain = _PATIENT_CONCEPT_DOMAIN_BY_TABLE[table_name]
+    selection = vital_predicate or _glp1_source_membership_sql(
+        catalog,
+        source_alias="source",
+        logical_domain=logical_domain,
+        concept_domain=concept_domain,
+    )
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE {table_name} AS
@@ -279,14 +288,7 @@ def _create_patient_concept_source(
         WHERE cast(patient_id AS VARCHAR) IN (
             SELECT patient_id FROM gas_candidate_patient
         )
-          AND {
-            _glp1_source_membership_sql(
-                catalog,
-                source_alias="source",
-                logical_domain=logical_domain,
-                concept_domain=concept_domain,
-            )
-        }
+          AND ({selection})
         """
     )
 
