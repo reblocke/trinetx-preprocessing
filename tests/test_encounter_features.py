@@ -491,3 +491,55 @@ def test_encounter_context_prunes_unused_keys_without_changing_first_row(
                 expected = rows
             else:
                 assert rows == expected
+
+
+def test_context_files_ignore_appledouble_and_fail_on_metadata_only(tmp_path):
+    from trinetx_preprocessing.encounters.builder import _context_partition_files
+
+    metadata = tmp_path / "._data_0.parquet"
+    metadata.write_bytes(b"filesystem metadata, not Parquet")
+    with pytest.raises(ValueError, match="no data files"):
+        _context_partition_files(tmp_path)
+    data = tmp_path / "data_0.parquet"
+    with duckdb.connect() as db:
+        db.execute("COPY (SELECT 1 AS value) TO ? (FORMAT PARQUET)", [str(data)])
+        assert db.execute(
+            "SELECT * FROM read_parquet(?)", [_context_partition_files(tmp_path)]
+        ).fetchall() == [(1,)]
+    assert metadata.exists()
+
+
+def test_context_failure_preserves_original_error_and_rolls_back(tmp_path, monkeypatch):
+    from trinetx_preprocessing.encounters import builder
+    from trinetx_preprocessing.encounters.checkpoints import StageCache
+
+    with duckdb.connect() as db:
+        cache = StageCache(db, {"synthetic": "context-failure"})
+        db.execute("""
+            CREATE TABLE source_encounter AS
+            SELECT 'p' AS patient_id,'e' AS encounter_id,'AMB' AS type,
+                   TIMESTAMP '2024-01-01' AS encounter_start,
+                   'hash' AS source_record_hash;
+            CREATE TABLE source_vital_measurement AS
+            SELECT patient_id,encounter_id FROM source_encounter;
+        """)
+        original = builder._context_partition_files
+
+        def corrupt_partition(directory):
+            files = original(directory)
+            Path(files[0]).write_bytes(b"not a Parquet file")
+            return files
+
+        monkeypatch.setattr(builder, "_context_partition_files", corrupt_partition)
+        scratch = tmp_path / "context-failure"
+        with pytest.raises(duckdb.InvalidInputException):
+            cache.run(
+                "encounter_context",
+                ["encounter_context_source"],
+                lambda: builder._create_encounter_context_source(
+                    db, scratch, partitions=1
+                ),
+            )
+        assert cache.receipts() == {}
+        assert db.execute("SELECT count(*) FROM source_encounter").fetchone()[0] == 1
+        assert scratch.exists()

@@ -221,7 +221,9 @@ equivalence passed with zero per-row differences; the optional query optimizatio
 requires that exact source/catalog/query receipt. Recovery adoption passed and all FULL_DATA source tables completed. The
 subsequent encounter-type context join exceeded the DuckDB cap. The repair
 partitions its narrow inputs by patient while preserving the original first-row
-rule; the repaired build remains pending.
+rule. Private partition export completed, then AppleDouble sidecars caused a
+Parquet input failure. Explicit data-file filtering is tested; the corrected
+retry remains pending.
 AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.

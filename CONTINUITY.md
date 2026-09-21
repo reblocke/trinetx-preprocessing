@@ -40,8 +40,10 @@ An exact full-source vital-selection comparison passed with zero per-row
 selection differences. The optional receipt-gated exact-code query preserves
 patient scope, raw projected fields and duplicates. Recovery adoption passed and resumed FULL_DATA source materialization completed.
 The next encounter-type context join exceeded the DuckDB cap. A bounded
-patient-partitioned implementation preserves the original first-row rule;
-copying the completed cache and validating the repaired build remain pending.
+patient-partitioned implementation preserves the original first-row rule.
+The partition export completed on private data, but AppleDouble metadata files
+matched the Parquet glob and stopped the read. Explicit data-file filtering
+and original-error preservation are now tested; the corrected retry remains pending.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

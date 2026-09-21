@@ -141,6 +141,19 @@ class CompatibilityFrames(Mapping):
         return result
 
 
+def _context_partition_files(directory):
+    # macOS can add AppleDouble sidecars beside real Parquet files on external
+    # volumes. These metadata files are not records and are not valid Parquet.
+    files = sorted(
+        str(path)
+        for path in directory.glob("*.parquet")
+        if not path.name.startswith("._")
+    )
+    if not files:
+        raise ValueError("Encounter context partition has no data files")
+    return files
+
+
 def _create_encounter_context_source(connection, scratch, *, partitions=64):
     """Run the unchanged first-row rule on complete patient-key partitions.
 
@@ -187,7 +200,8 @@ def _create_encounter_context_source(connection, scratch, *, partitions=64):
             vital = scratch / "vitals" / f"context_bucket={bucket}"
             if not encounter.exists() or not vital.exists():
                 continue
-            connection.execute(f"""
+            connection.execute(
+                """
                 INSERT INTO encounter_context_source
                 SELECT patient_id,encounter_id,type FROM (
                     SELECT source.patient_id,source.encounter_id,source.type,
@@ -195,21 +209,30 @@ def _create_encounter_context_source(connection, scratch, *, partitions=64):
                                PARTITION BY source.patient_id,source.encounter_id
                                ORDER BY source.encounter_start,source.source_record_hash
                            ) AS observed_order
-                    FROM read_parquet({literal(encounter / "*.parquet")},
+                    FROM read_parquet(?,
                                       hive_partitioning=false) AS source
-                    SEMI JOIN read_parquet({literal(vital / "*.parquet")},
+                    SEMI JOIN read_parquet(?,
                                            hive_partitioning=false) AS vital
                       ON source.patient_id=vital.patient_id
                      AND source.encounter_id=vital.encounter_id
                 ) WHERE observed_order=1
-            """)
+            """,
+                [_context_partition_files(encounter), _context_partition_files(vital)],
+            )
             if (bucket + 1) % 8 == 0:
                 LOGGER.info(
                     "Completed encounter context partitions %s/%s",
                     bucket + 1,
                     partitions,
                 )
-    finally:
+    except BaseException:
+        try:
+            connection.execute("SET partitioned_write_flush_threshold=?", [flush])
+        except duckdb.TransactionException:
+            # The caller rolls back the aborted stage. Preserve its first error.
+            pass
+        raise
+    else:
         connection.execute("SET partitioned_write_flush_threshold=?", [flush])
     # Only remove this function's scratch after every partition succeeds.
     remove_tree_strict(scratch)
