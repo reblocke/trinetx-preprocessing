@@ -72,6 +72,7 @@ uv run trinetx-preprocessing build-encounters \
   --legacy-bundle /private/legacy-base \
   --legacy-acceptance /private/legacy-acceptance.json \
   --coverage-bundle /private/source-coverage \
+  --source-cache-dir /private/encounter-source-cache \
   --output-dir /private/encounter-bundle
 ```
 
@@ -92,6 +93,17 @@ both pass. An existing destination is rejected. Interrupted staging remains
 private for diagnosis; it is not a completed product. DuckDB uses one thread,
 2816 MiB for enrichment, and external spill within staging. On the Mini, run
 under caffeinate and retain logs on the private output volume.
+
+The optional `--source-cache-dir` retains expensive source materializations in
+separate per-variant databases. Each completed stage and its receipt commit in
+one transaction. A retry checks source and base identities, catalog, configuration,
+producer code, table schemas and counts before reusing a stage. It rebuilds the
+derived evidence and publishes a new output bundle. Cache paths must be external,
+non-symlinked and disjoint from inputs and outputs. An older database without
+these bindings is rejected; its tables cannot be reused just because they exist.
+Recovery of such a database requires a separately validated import into a new
+owned cache, preserving the original artifacts and producer provenance. Cache
+completion does not establish final bundle acceptance.
 
 ## Products and grain
 

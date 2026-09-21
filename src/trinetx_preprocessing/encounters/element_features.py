@@ -54,7 +54,8 @@ def build_element_evidence(connection, config):
             )
         """)
     connection.execute(
-        "CREATE TABLE encounter_element_evidence AS " + " UNION ALL ".join(selects)
+        "CREATE OR REPLACE TABLE encounter_element_evidence AS "
+        + " UNION ALL ".join(selects)
     )
     catalog = connection.execute("""
         SELECT DISTINCT element_id, domain FROM preprocessed.element_catalog
@@ -99,7 +100,7 @@ def build_element_evidence(connection, config):
             }
         )
     connection.execute(
-        "CREATE TABLE element_summary AS SELECT index_event_id, "
+        "CREATE OR REPLACE TABLE element_summary AS SELECT index_event_id, "
         + ", ".join(expressions)
         + " FROM encounter_element_evidence GROUP BY index_event_id"
     )

@@ -73,10 +73,13 @@ def test_no_analysis_model_dependencies():
     assert "sklearn" not in sys.modules
 
 
-def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_path):
+def test_enrichment_preserves_non_glp1_encounters(
+    compatibility_database, tmp_path, monkeypatch
+):
     from test_cohort_source import _build_cohort_source_product
 
     from trinetx_preprocessing.clinical_sources.concept_sets import load_concept_sets
+    from trinetx_preprocessing.encounters import source_projection
     from trinetx_preprocessing.encounters.builder import _enrich
     from trinetx_preprocessing.encounters.config import FeatureConfig
 
@@ -157,6 +160,7 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
         "AFTER",
         load_concept_sets(ROOT / "config/concept_sets"),
         FeatureConfig(),
+        source_cache=tmp_path / "source-cache",
     )
     result = pd.read_parquet(destination)
     assert qa["rows"] == len(base.frame)
@@ -166,6 +170,31 @@ def test_enrichment_preserves_non_glp1_encounters(compatibility_database, tmp_pa
     assert bool(retained.glp1_medication_glp1_active_at_index.iloc[0])
     assert result.glp1_medication_glp1_active_at_index.isna().any()
     assert result.first_encounter.eq(0).any()
+
+    def must_not_repeat(*args, **kwargs):
+        raise AssertionError("completed canonical lab extraction repeated")
+
+    monkeypatch.setattr(source_projection, "_create_lab_source", must_not_repeat)
+    resumed_scratch = tmp_path / "resumed-scratch"
+    resumed_scratch.mkdir()
+    resumed_destination = tmp_path / "resumed.parquet"
+    resumed_qa, _ = _enrich(
+        source,
+        base_path,
+        resumed_destination,
+        resumed_scratch,
+        "AFTER",
+        load_concept_sets(ROOT / "config/concept_sets"),
+        FeatureConfig(),
+        source_cache=tmp_path / "source-cache",
+    )
+    resumed = pd.read_parquet(resumed_destination)
+    order = ["patient_id", "encounter_id"]
+    pd.testing.assert_frame_equal(
+        result.sort_values(order).reset_index(drop=True),
+        resumed.sort_values(order).reset_index(drop=True),
+    )
+    assert resumed_qa == qa
 
 
 def test_ordered_merge_preserves_master_and_fills_only_missing():

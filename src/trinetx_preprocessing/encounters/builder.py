@@ -21,6 +21,7 @@ from ..combined_preprocessing.cohort_source import open_cohort_source
 from ..combined_preprocessing.contract import compatibility_outputs
 from . import feature_sources as features
 from . import source_projection as projection
+from .checkpoints import StageCache
 from .compatibility import (
     artifact_inventory,
     file_identity,
@@ -160,7 +161,7 @@ def _create_encounter_context_source(connection):
     """)
 
 
-def _materialize_features(connection, catalog, config):
+def _materialize_features(connection, catalog, config, cache):
     projection._require_matching_glp1_catalog(connection, catalog)
     connection.execute(
         "CREATE TEMP TABLE gas_candidate_patient AS SELEC"
@@ -171,14 +172,30 @@ def _materialize_features(connection, catalog, config):
         "ECT DISTINCT encounter_id FROM encounter_anchor"
     )
     rows = pd.DataFrame([asdict(concept) for concept in catalog.concepts])
-    connection.register("_concepts", rows)
-    connection.execute("CREATE TABLE concept_set AS SELECT * FROM _concepts")
-    connection.unregister("_concepts")
+
+    def concepts():
+        connection.register("_concepts", rows)
+        connection.execute("CREATE TABLE concept_set AS SELECT * FROM _concepts")
+        connection.unregister("_concepts")
+
+    cache.run("concepts", ["concept_set"], concepts)
     LOGGER.info("Materializing canonical lab source")
-    projection._create_lab_source(connection, catalog=catalog)
+    cache.run(
+        "labs",
+        ["source_lab_measurement"],
+        lambda: projection._create_lab_source(connection, catalog=catalog),
+    )
     LOGGER.info("Completed canonical lab source; materializing encounters/patients")
-    projection._create_encounter_source(connection)
-    projection._create_patient_source(connection)
+    cache.run(
+        "encounters",
+        ["source_encounter"],
+        lambda: projection._create_encounter_source(connection),
+    )
+    cache.run(
+        "patients",
+        ["source_patient"],
+        lambda: projection._create_patient_source(connection),
+    )
     LOGGER.info("Completed canonical encounters/patients")
     for name in (
         "source_vital_measurement",
@@ -187,7 +204,13 @@ def _materialize_features(connection, catalog, config):
         "source_medication",
     ):
         LOGGER.info("Materializing %s", name)
-        projection._create_patient_concept_source(connection, name, catalog=catalog)
+        cache.run(
+            name,
+            [name],
+            lambda name=name: projection._create_patient_concept_source(
+                connection, name, catalog=catalog
+            ),
+        )
         LOGGER.info("Completed %s", name)
     _create_encounter_context_source(connection)
     LOGGER.info("Completed bounded encounter context")
@@ -224,6 +247,29 @@ def _materialize_features(connection, catalog, config):
     return result
 
 
+def materialization_binding(database, base_path, coverage_path, catalog, config):
+    """Exact bindings required before an existing stage database may resume."""
+    from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
+
+    sidecar = Path(database).parent / COMBINED_MANIFEST_FILENAME
+    return {
+        "version": "1.0",
+        "database": str(Path(database).absolute()),
+        "source_file_identity": list(file_identity(database)),
+        "source_manifest_sha256": sha256(sidecar),
+        "base_path": str(Path(base_path).absolute()),
+        "base_sha256": sha256(base_path),
+        "coverage_sha256": sha256(coverage_path) if coverage_path else None,
+        "catalog_sha256": catalog.sha256,
+        "windows": asdict(config),
+        "runtime": {
+            name: importlib.metadata.version(name)
+            for name in ("numpy", "pandas", "duckdb", "pyarrow")
+        },
+        "code_sha256": code_identity(),
+    }
+
+
 def _enrich(
     database,
     base_path,
@@ -233,8 +279,12 @@ def _enrich(
     catalog,
     config,
     coverage_path=None,
+    source_cache=None,
 ):
-    connection = duckdb.connect(str(scratch / "features.duckdb"))
+    cache_root = no_symlinks(source_cache) if source_cache else scratch
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cache_database = no_symlinks(cache_root / "features.duckdb")
+    connection = duckdb.connect(str(cache_database))
     try:
         connection.execute("SET memory_limit = '2816MiB'")
         connection.execute("SET threads = 1")
@@ -242,13 +292,39 @@ def _enrich(
         connection.execute("SET temp_directory = ?", [str(scratch / "spill")])
         connection.execute(f"ATTACH {literal(database)} AS preprocessed (READ_ONLY)")
         connection.execute(
-            "CREATE VIEW legacy_base AS "
+            "CREATE OR REPLACE VIEW legacy_base AS "
             f"SELECT * FROM read_parquet({literal(base_path)})"
         )
-        connection.execute(
-            "CREATE TABLE source_keys AS SELECT pat_enc_hash, patient_id, "
-            "encounter_id FROM legacy_base"
+        if connection.execute(
+            "SELECT count(*) FROM (SELECT pat_enc_hash FROM legacy_base "
+            "GROUP BY 1 HAVING count(*) <> 1)"
+        ).fetchone()[0]:
+            raise ValueError(
+                "Legacy hash cannot uniquely identify source patient-encounter keys"
+            )
+        cache = StageCache(
+            connection,
+            materialization_binding(
+                database, base_path, coverage_path, catalog, config
+            ),
         )
+
+        def anchors():
+            connection.execute(
+                "CREATE TABLE source_keys AS SELECT pat_enc_hash, patient_id, "
+                "encounter_id FROM legacy_base"
+            )
+            connection.execute("""
+                CREATE TABLE encounter_anchor AS
+                SELECT base.pat_enc_hash AS index_event_id,
+                       keys.patient_id, keys.encounter_id,
+                       DATE '1960-01-01' + cast(base.encounter_date AS INTEGER)
+                           AS index_date
+                FROM legacy_base AS base LEFT JOIN source_keys AS keys
+                USING (pat_enc_hash)
+            """)
+
+        cache.run("anchors", ["source_keys", "encounter_anchor"], anchors)
         duplicate = connection.execute(
             "SELECT count(*) FROM (SELECT pat_enc_hash FROM s"
             "ource_keys GROUP BY 1 HAVING count(*) <> 1)"
@@ -257,14 +333,6 @@ def _enrich(
             raise ValueError(
                 "Legacy hash cannot uniquely identify source patient-encounter keys"
             )
-        connection.execute("""
-            CREATE TABLE encounter_anchor AS
-            SELECT base.pat_enc_hash AS index_event_id,
-                   keys.patient_id, keys.encounter_id,
-                   DATE '1960-01-01' + cast(base.encounter_date AS INTEGER)
-                       AS index_date
-            FROM legacy_base AS base LEFT JOIN source_keys AS keys USING (pat_enc_hash)
-        """)
         if connection.execute(
             "SELECT count(*) FROM encounter_anchor WHERE pati"
             "ent_id IS NULL OR encounter_id IS NULL"
@@ -272,10 +340,10 @@ def _enrich(
             raise ValueError("Encounter feature source-key linkage is incomplete")
         if coverage_path is not None:
             connection.execute(
-                "CREATE VIEW encounter_source_coverage AS "
+                "CREATE OR REPLACE VIEW encounter_source_coverage AS "
                 f"SELECT * FROM read_parquet({literal(coverage_path)})"
             )
-        element_inventory = _materialize_features(connection, catalog, config)
+        element_inventory = _materialize_features(connection, catalog, config, cache)
         if coverage_path is not None:
             element_inventory = add_availability_inventory(
                 connection, element_inventory
@@ -421,6 +489,7 @@ def _enrich(
             "rows": original,
             "unique_encounters": original,
             "null_counts": {k: int(v) for k, v in missingness.items()},
+            "source_materialization": cache.receipts(),
         }, dictionary
     finally:
         connection.close()
@@ -435,6 +504,7 @@ def build_encounters(
     coverage_bundle: Path,
     output_dir: Path,
     concept_sets_dir: Path | None = None,
+    source_cache_dir: Path | None = None,
 ):
     """Publish both variants atomically; never overwrite inputs or accepted output."""
     from ..combined_preprocessing.builder import require_safe_output_location
@@ -484,6 +554,18 @@ def build_encounters(
         if path.is_symlink():
             raise ValueError("Encounter source/output paths must not contain symlinks")
     require_safe_output_location(output, artifact_label="encounter feature output")
+    if source_cache_dir is not None:
+        source_cache_dir = no_symlinks(source_cache_dir)
+        require_safe_output_location(
+            source_cache_dir, artifact_label="encounter source cache"
+        )
+        for protected in (database, companion, legacy_bundle, coverage_bundle, output):
+            if (
+                source_cache_dir == protected
+                or source_cache_dir.is_relative_to(protected)
+                or protected.is_relative_to(source_cache_dir)
+            ):
+                raise ValueError("Encounter source cache overlaps input or output")
     if output.exists():
         raise FileExistsError("Encounter output already exists")
     if output == database.parent or database.is_relative_to(output):
@@ -534,6 +616,7 @@ def build_encounters(
                 catalog,
                 config,
                 coverage_bundle / f"{variant}_source_coverage.parquet",
+                source_cache_dir / variant if source_cache_dir else None,
             )
             shutil.copyfile(
                 coverage_bundle / f"{variant}_source_coverage.parquet",

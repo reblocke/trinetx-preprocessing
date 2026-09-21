@@ -212,7 +212,12 @@ FULL_DATA has 2,662,675 encounters; AFTER_EXCLUSION has 833,476. The complete re
 comparison passed both variants with zero membership/missingness differences
 and no retained-value discrepancies under the declared rules. Canonical linkage
 and corrected history coverage also passed, with all patients/encounters linked
-and no demographic/anchor disagreements. Clinical enrichment is next. AppleDouble filesystem companions are kept outside the
+and no demographic/anchor disagreements. Clinical enrichment was interrupted
+by a host restart during FULL_DATA vital-source materialization. No enriched
+variant completed. The accepted companion/base/coverage hashes survived the
+restart; recovery is limited to a validated copy of committed source stages.
+Atomic source checkpoints are being added before retrying unfinished work.
+AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.
 The laptop is not needed and no offline synchronization is claimed.

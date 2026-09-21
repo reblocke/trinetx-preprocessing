@@ -31,8 +31,14 @@ missingness differences. Canonical patient/composite-encounter linkage covers
 every encounter, with zero demographic or anchor-day disagreements. Corrected
 coverage recognizes both medication export families and distinguishes observed
 spans from incomplete capture; observed spans do not prove continuous history.
-All 21 focused encounter tests pass. Start the corrected sequential clinical
-enrichment build from these source-bound gates and fresh external scratch.
+The corrected enrichment was interrupted by a host restart during FULL_DATA
+vital-source materialization. No enriched variant or completed bundle was
+published. The companion, legacy artifacts and coverage artifacts were rehashed
+successfully after restart. Committed lab, encounter and patient source tables
+remain preserved; their reuse requires a validated recovery import. Atomic,
+input-bound source checkpoints and a guarded resume path are being validated.
+An exact full-source vital-selection comparison is testing a narrowly scoped
+query optimization; it is not yet accepted or enabled.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
