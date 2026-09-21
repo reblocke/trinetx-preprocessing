@@ -218,8 +218,10 @@ variant completed. The accepted companion/base/coverage hashes survived the
 restart; recovery is limited to a validated copy of committed source stages.
 Atomic source checkpoints passed focused tests. Full-source vital-selection
 equivalence passed with zero per-row differences; the optional query optimization
-requires that exact source/catalog/query receipt. Recovery adoption and resumed
-enrichment remain pending.
+requires that exact source/catalog/query receipt. Recovery adoption passed and all FULL_DATA source tables completed. The
+subsequent encounter-type context join exceeded the DuckDB cap. The repair
+partitions its narrow inputs by patient while preserving the original first-row
+rule; the repaired build remains pending.
 AppleDouble filesystem companions are kept outside the
 analytical artifact inventory. Neither PR is ready to merge. Exact execution
 handles, source identities and failed attempts remain in the private CHECKPOINT.md.

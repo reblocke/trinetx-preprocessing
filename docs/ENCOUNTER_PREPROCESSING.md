@@ -103,7 +103,11 @@ non-symlinked and disjoint from inputs and outputs. An older database without
 these bindings is rejected; its tables cannot be reused just because they exist.
 Recovery of such a database requires a separately validated import into a new
 owned cache, preserving the original artifacts and producer provenance. Cache
-completion does not establish final bundle acceptance.
+completion does not establish final bundle acceptance. The encounter-type
+context step partitions narrow encounter and vital keys by patient hash before
+applying the original first-row rule. All rows for a composite encounter remain
+together, including its null type and date values. The completed context table
+is also checkpointed; the memory cap and clinical selection rules are unchanged.
 
 The optional `--vital-selection-acceptance /private/vital-equivalence.json`
 selects the exact normalized vital codes only after a complete, per-source-row

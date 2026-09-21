@@ -175,6 +175,10 @@ def test_enrichment_preserves_non_glp1_encounters(
         raise AssertionError("completed canonical lab extraction repeated")
 
     monkeypatch.setattr(source_projection, "_create_lab_source", must_not_repeat)
+    monkeypatch.setattr(
+        "trinetx_preprocessing.encounters.builder._create_encounter_context_source",
+        must_not_repeat,
+    )
     resumed_scratch = tmp_path / "resumed-scratch"
     resumed_scratch.mkdir()
     resumed_destination = tmp_path / "resumed.parquet"
@@ -424,7 +428,10 @@ def test_observability_uses_same_calendar_day_as_features():
         )
 
 
-def test_encounter_context_prunes_unused_keys_without_changing_first_row():
+@pytest.mark.parametrize("partitions", [1, 7, 64])
+def test_encounter_context_prunes_unused_keys_without_changing_first_row(
+    tmp_path, partitions
+):
     from trinetx_preprocessing.encounters.builder import (
         _create_encounter_context_source,
     )
@@ -442,10 +449,13 @@ def test_encounter_context_prunes_unused_keys_without_changing_first_row():
                 ('p','shared','AMB','2024-01-01','b','wide'),
                 ('q','shared','EMER','2024-01-01','a','wide'),
                 ('p','unused','AMB','2024-01-01','a','wide'),
-                ('p',NULL,'AMB','2024-01-01','a','wide');
+                ('p',NULL,'AMB','2024-01-01','a','wide'),
+                (NULL,'shared','AMB','2024-01-01','a','wide'),
+                ('q','shared','INPAT',NULL,'b','wide');
             CREATE TABLE source_vital_measurement AS
                 SELECT * FROM (VALUES
-                    ('p','shared'),('p','shared'),('q','shared'),('p',NULL)
+                    ('p','shared'),('p','shared'),('q','shared'),('p',NULL),
+                    (NULL,'shared'),('absent','shared')
                 ) v(patient_id,encounter_id);
             CREATE TABLE original_context AS
                 SELECT * EXCLUDE (observed_order) FROM (
@@ -456,7 +466,18 @@ def test_encounter_context_prunes_unused_keys_without_changing_first_row():
                     WHERE patient_id IS NOT NULL AND encounter_id IS NOT NULL
                 ) WHERE observed_order=1;
         """)
-        _create_encounter_context_source(db)
+        scratch = tmp_path / "context"
+        initial_flush = db.sql(
+            "SELECT current_setting('partitioned_write_flush_threshold')"
+        ).fetchone()
+        _create_encounter_context_source(db, scratch, partitions=partitions)
+        assert not scratch.exists()
+        assert (
+            db.sql(
+                "SELECT current_setting('partitioned_write_flush_threshold')"
+            ).fetchone()
+            == initial_flush
+        )
         assert db.execute(
             "SELECT * FROM encounter_context_source ORDER BY patient_id"
         ).fetchall() == [("p", "shared", None), ("q", "shared", "EMER")]

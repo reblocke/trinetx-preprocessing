@@ -141,28 +141,83 @@ class CompatibilityFrames(Mapping):
         return result
 
 
-def _create_encounter_context_source(connection):
-    # BP evidence needs only encounter type for keys present in vital records.
-    # Avoid sorting every wide historical encounter row for candidate patients.
-    # Keep the original first-row rule, including NULL type on the selected row.
-    connection.execute("""
-        CREATE TEMP TABLE encounter_context_source AS
-        SELECT patient_id, encounter_id, type FROM (
-            SELECT source.patient_id, source.encounter_id, source.type,
-                   row_number() OVER (
-                       PARTITION BY source.patient_id, source.encounter_id
-                       ORDER BY source.encounter_start, source.source_record_hash
-                   ) AS observed_order
-            FROM source_encounter AS source
-            SEMI JOIN source_vital_measurement AS vital
-              ON source.patient_id = vital.patient_id
-             AND source.encounter_id = vital.encounter_id
-            WHERE source.patient_id IS NOT NULL AND source.encounter_id IS NOT NULL
-        ) WHERE observed_order = 1
-    """)
+def _create_encounter_context_source(connection, scratch, *, partitions=64):
+    """Run the unchanged first-row rule on complete patient-key partitions.
+
+    Partition both narrow inputs once; repeated scans of the large source tables
+    and a single enormous vital-key hash join are unnecessary. Every encounter's
+    rows stay together because its patient key determines the partition.
+    """
+    from ..filesystem import remove_tree_strict
+
+    if not isinstance(partitions, int) or partitions < 1:
+        raise ValueError("Encounter context partitions must be positive")
+    scratch = no_symlinks(scratch)
+    scratch.mkdir(parents=True, exist_ok=False)
+    flush = connection.execute(
+        "SELECT current_setting('partitioned_write_flush_threshold')"
+    ).fetchone()[0]
+    connection.execute("SET partitioned_write_flush_threshold=16384")
+    try:
+        LOGGER.info("Partitioning encounter context sources")
+        for name, table, columns in (
+            (
+                "encounters",
+                "source_encounter",
+                "patient_id,encounter_id,type,encounter_start,source_record_hash",
+            ),
+            ("vitals", "source_vital_measurement", "patient_id,encounter_id"),
+        ):
+            count = connection.execute(f"""
+                COPY (SELECT {columns},
+                             hash(patient_id) % {partitions} AS context_bucket
+                      FROM {table}
+                      WHERE patient_id IS NOT NULL AND encounter_id IS NOT NULL)
+                TO {literal(scratch / name)}
+                (FORMAT PARQUET, PARTITION_BY (context_bucket), ROW_GROUP_SIZE 16384)
+            """).fetchone()[0]
+            LOGGER.info("Partitioned encounter context %s: %s rows", name, count)
+        connection.execute("""
+            CREATE TABLE encounter_context_source AS
+            SELECT patient_id,encounter_id,type FROM source_encounter WHERE false
+        """)
+        LOGGER.info("Building partitioned encounter context")
+        for bucket in range(partitions):
+            encounter = scratch / "encounters" / f"context_bucket={bucket}"
+            vital = scratch / "vitals" / f"context_bucket={bucket}"
+            if not encounter.exists() or not vital.exists():
+                continue
+            connection.execute(f"""
+                INSERT INTO encounter_context_source
+                SELECT patient_id,encounter_id,type FROM (
+                    SELECT source.patient_id,source.encounter_id,source.type,
+                           row_number() OVER (
+                               PARTITION BY source.patient_id,source.encounter_id
+                               ORDER BY source.encounter_start,source.source_record_hash
+                           ) AS observed_order
+                    FROM read_parquet({literal(encounter / "*.parquet")},
+                                      hive_partitioning=false) AS source
+                    SEMI JOIN read_parquet({literal(vital / "*.parquet")},
+                                           hive_partitioning=false) AS vital
+                      ON source.patient_id=vital.patient_id
+                     AND source.encounter_id=vital.encounter_id
+                ) WHERE observed_order=1
+            """)
+            if (bucket + 1) % 8 == 0:
+                LOGGER.info(
+                    "Completed encounter context partitions %s/%s",
+                    bucket + 1,
+                    partitions,
+                )
+    finally:
+        connection.execute("SET partitioned_write_flush_threshold=?", [flush])
+    # Only remove this function's scratch after every partition succeeds.
+    remove_tree_strict(scratch)
 
 
-def _materialize_features(connection, catalog, config, cache, vital_predicate=None):
+def _materialize_features(
+    connection, catalog, config, cache, vital_predicate=None, *, context_scratch
+):
     projection._require_matching_glp1_catalog(connection, catalog)
     connection.execute(
         "CREATE TEMP TABLE gas_candidate_patient AS SELEC"
@@ -221,7 +276,11 @@ def _materialize_features(connection, catalog, config, cache, vital_predicate=No
             ),
         )
         LOGGER.info("Completed %s", name)
-    _create_encounter_context_source(connection)
+    cache.run(
+        "encounter_context",
+        ["encounter_context_source"],
+        lambda: _create_encounter_context_source(connection, context_scratch),
+    )
     LOGGER.info("Completed bounded encounter context")
     for output_domain, stored_domain, days in (
         ("diagnosis", "diagnosis", 730),
@@ -362,7 +421,12 @@ def _enrich(
                 f"SELECT * FROM read_parquet({literal(coverage_path)})"
             )
         element_inventory = _materialize_features(
-            connection, catalog, config, cache, vital_predicate
+            connection,
+            catalog,
+            config,
+            cache,
+            vital_predicate,
+            context_scratch=scratch / "encounter-context",
         )
         if coverage_path is not None:
             element_inventory = add_availability_inventory(
