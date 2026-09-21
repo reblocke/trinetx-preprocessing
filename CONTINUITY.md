@@ -43,7 +43,11 @@ The next encounter-type context join exceeded the DuckDB cap. A bounded
 patient-partitioned implementation preserves the original first-row rule.
 The partition export completed on private data, but AppleDouble metadata files
 matched the Parquet glob and stopped the read. Explicit data-file filtering
-and original-error preservation are now tested; the corrected retry remains pending.
+and original-error preservation are now tested; the corrected context stage passed privately. The subsequent global element-evidence
+join exceeded the unchanged DuckDB cap. The repair partitions source/membership
+joins by source ID and summaries by encounter ID, preserving multiplicity and
+temporal rules; completed clinical features gain an atomic checkpoint. The next
+private retry remains pending.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

@@ -305,6 +305,44 @@ def _materialize_features(
         lambda: _create_encounter_context_source(connection, context_scratch),
     )
     LOGGER.info("Completed bounded encounter context")
+    cache.run(
+        "clinical_features",
+        CLINICAL_FEATURE_TABLES,
+        lambda: _materialize_clinical_features(connection, config),
+    )
+    LOGGER.info("Completed observability; building source-element evidence")
+    result = cache.run(
+        "element_evidence",
+        ["encounter_element_evidence", "element_summary"],
+        lambda: build_element_evidence(
+            connection, config, scratch=context_scratch.parent / "element-evidence"
+        ),
+    )
+    LOGGER.info("Completed source-element evidence")
+    return result
+
+
+CLINICAL_FEATURE_TABLES = [
+    *(
+        f"raw_{domain}_observability"
+        for domain in ("diagnosis", "labs", "vitals", "procedure", "medication")
+    ),
+    "diagnosis_component_evidence",
+    "diagnosis_component_summary",
+    "procedure_component_evidence",
+    "procedure_component_summary",
+    "normalized_component_lab",
+    "component_lab_evidence",
+    "component_lab_summary",
+    "component_bp_evidence",
+    "component_bp_summary",
+    "medication_component_evidence",
+    "medication_component_summary",
+    "component_observability_summary",
+]
+
+
+def _materialize_clinical_features(connection, config):
     for output_domain, stored_domain, days in (
         ("diagnosis", "diagnosis", 730),
         ("labs", "labs", 365),
@@ -332,10 +370,6 @@ def _materialize_features(
     features._build_medication_evidence(connection, config)
     LOGGER.info("Completed medication evidence; building observability summary")
     features._build_observability_summary(connection)
-    LOGGER.info("Completed observability; building source-element evidence")
-    result = build_element_evidence(connection, config)
-    LOGGER.info("Completed source-element evidence")
-    return result
 
 
 def materialization_binding(

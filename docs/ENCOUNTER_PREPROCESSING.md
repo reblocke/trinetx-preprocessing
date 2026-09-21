@@ -109,6 +109,13 @@ applying the original first-row rule. All rows for a composite encounter remain
 together, including its null type and date values. The completed context table
 is also checkpointed; the memory cap and clinical selection rules are unchanged.
 
+Source-element evidence joins run on bounded source-ID partitions; summaries
+run on encounter-ID partitions. Duplicate membership/source rows and the
+inclusive-day or same-encounter predicate are preserved. The completed clinical
+feature group and element evidence/summary group have atomic cache receipts.
+Partition files exclude AppleDouble metadata. These are execution changes;
+private bundle acceptance still requires the complete artifact gates.
+
 The optional `--vital-selection-acceptance /private/vital-equivalence.json`
 selects the exact normalized vital codes only after a complete, per-source-row
 comparison proves equivalence to catalog membership on the same canonical

@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
+import duckdb
+
+from ..filesystem import remove_tree_strict
+from .compatibility import no_symlinks
+
+LOGGER = logging.getLogger(__name__)
+
 DOMAINS = {
     "labs": "source_lab_measurement",
     "vitals": "source_vital_measurement",
@@ -19,16 +28,27 @@ def identifier(value):
     return '"' + value.replace('"', '""') + '"'
 
 
-def build_element_evidence(connection, config):
-    selects = []
-    for domain, table in DOMAINS.items():
-        days = (
-            config.measurement_lookback_days
-            if domain in {"labs", "vitals"}
-            else config.lookback_days
+def _partition_files(directory):
+    files = sorted(
+        str(p) for p in directory.glob("*.parquet") if not p.name.startswith("._")
+    )
+    if not files:
+        raise ValueError("Element evidence partition has no data files")
+    return files
+
+
+def _evidence_select(source, membership, domain, days):
+    # Materialize the bounded source/membership join before expanding encounters.
+    # Neither input is deduplicated: membership and source multiplicity survive.
+    return f"""
+        WITH matched AS MATERIALIZED (
+            SELECT source.*, membership.element_id
+            FROM {source} AS source
+            JOIN {membership} AS membership USING (source_record_id)
+            WHERE membership.include
+              AND starts_with(membership.element_id, 'source.')
         )
-        selects.append(f"""
-          SELECT anchor.index_event_id, anchor.index_date, membership.element_id,
+          SELECT anchor.index_event_id, anchor.index_date, source.element_id,
                  source.source_record_id, source.source_file, source.source_row_number,
                  source.patient_id, source.encounter_id AS source_encounter_id,
                  source.event_datetime, source.timestamp_precision,
@@ -42,21 +62,129 @@ def build_element_evidence(connection, config):
                   AND source.event_datetime::DATE >=
                       anchor.index_date - INTERVAL {days} DAY) AS in_baseline_window
           FROM encounter_anchor AS anchor
-          JOIN preprocessed.{table} AS source ON source.patient_id=anchor.patient_id
-          JOIN preprocessed.element_membership AS membership USING(source_record_id)
-          WHERE membership.include
-            AND starts_with(membership.element_id,'source.')
-            AND (
+          JOIN matched AS source ON source.patient_id=anchor.patient_id
+          WHERE (
               source.encounter_id=anchor.encounter_id
               OR (source.event_datetime::DATE <= anchor.index_date
                   AND source.event_datetime::DATE >=
                       anchor.index_date::DATE - INTERVAL {days} DAY)
             )
-        """)
+    """
+
+
+def _partition_input(connection, query, path, key, partitions):
+    rows = connection.execute(f"""
+        COPY (SELECT *, hash({key}) % {partitions} AS evidence_bucket
+              FROM ({query})) TO {quote(path)}
+        (FORMAT PARQUET, PARTITION_BY (evidence_bucket), ROW_GROUP_SIZE 16384)
+    """).fetchone()[0]
+    LOGGER.info("Partitioned element input %s: %s rows", path.name, rows)
+
+
+def _materialize_element_rows(connection, config, scratch, partitions):
+    members = scratch / "membership"
+    _partition_input(
+        connection,
+        """
+        SELECT source_record_id, element_id, include
+        FROM preprocessed.element_membership
+        WHERE include AND starts_with(element_id, 'source.')
+          AND source_record_id IS NOT NULL
+    """,
+        members,
+        "source_record_id",
+        partitions,
+    )
+    empty = _evidence_select(
+        "preprocessed.source_lab_measurement",
+        "preprocessed.element_membership",
+        "labs",
+        config.measurement_lookback_days,
+    )
     connection.execute(
         "CREATE OR REPLACE TABLE encounter_element_evidence AS "
-        + " UNION ALL ".join(selects)
+        f"SELECT * FROM ({empty}) WHERE false"
     )
+    for domain, table in DOMAINS.items():
+        days = (
+            config.measurement_lookback_days
+            if domain in {"labs", "vitals"}
+            else config.lookback_days
+        )
+        source_path = scratch / domain
+        # This semi join only removes patients that cannot join any anchor.
+        _partition_input(
+            connection,
+            f"""
+            SELECT source.* FROM preprocessed.{table} source
+            SEMI JOIN encounter_anchor anchor USING(patient_id)
+            WHERE source.source_record_id IS NOT NULL
+        """,
+            source_path,
+            "source_record_id",
+            partitions,
+        )
+        for bucket in range(partitions):
+            source = source_path / f"evidence_bucket={bucket}"
+            membership = members / f"evidence_bucket={bucket}"
+            if not source.exists() or not membership.exists():
+                continue
+            connection.read_parquet(
+                _partition_files(source), hive_partitioning=False
+            ).create_view("_element_source", replace=True)
+            connection.read_parquet(
+                _partition_files(membership), hive_partitioning=False
+            ).create_view("_element_membership", replace=True)
+            connection.execute(
+                "INSERT INTO encounter_element_evidence "
+                + _evidence_select(
+                    "_element_source", "_element_membership", domain, days
+                )
+            )
+            if (bucket + 1) % 8 == 0:
+                LOGGER.info(
+                    "Completed element evidence %s partitions %s/%s",
+                    domain,
+                    bucket + 1,
+                    partitions,
+                )
+        LOGGER.info("Completed element evidence domain %s", domain)
+        connection.execute("DROP VIEW IF EXISTS _element_source")
+        connection.execute("DROP VIEW IF EXISTS _element_membership")
+        remove_tree_strict(source_path)
+
+
+def build_element_evidence(connection, config, *, scratch, partitions=64):
+    """Bound joins by source ID and summary groups by encounter ID.
+
+    Every matching source/membership pair shares one source-ID bucket. Every
+    encounter summary shares one encounter-ID bucket. SQL predicates, raw fields,
+    multiplicity and deterministic latest-record rules are unchanged.
+    """
+    if not isinstance(partitions, int) or partitions < 1:
+        raise ValueError("Element evidence partitions must be positive")
+    scratch = no_symlinks(scratch)
+    scratch.mkdir(parents=True, exist_ok=False)
+    flush = connection.execute(
+        "SELECT current_setting('partitioned_write_flush_threshold')"
+    ).fetchone()[0]
+    connection.execute("SET partitioned_write_flush_threshold=16384")
+    try:
+        _materialize_element_rows(connection, config, scratch, partitions)
+        inventory = _build_element_summary(connection, scratch, partitions)
+    except BaseException:
+        try:
+            connection.execute("SET partitioned_write_flush_threshold=?", [flush])
+        except duckdb.TransactionException:
+            pass
+        raise
+    else:
+        connection.execute("SET partitioned_write_flush_threshold=?", [flush])
+    remove_tree_strict(scratch)
+    return inventory
+
+
+def _build_element_summary(connection, scratch, partitions):
     catalog = connection.execute("""
         SELECT DISTINCT element_id, domain FROM preprocessed.element_catalog
         WHERE starts_with(element_id,'source.')
@@ -99,11 +227,39 @@ def build_element_evidence(connection, config):
                 "ries are separate",
             }
         )
-    connection.execute(
-        "CREATE OR REPLACE TABLE element_summary AS SELECT index_event_id, "
+    query = (
+        "SELECT index_event_id, "
         + ", ".join(expressions)
-        + " FROM encounter_element_evidence GROUP BY index_event_id"
+        + " FROM {source} GROUP BY index_event_id"
     )
+    connection.execute(
+        "CREATE OR REPLACE TABLE element_summary AS SELECT * FROM ("
+        + query.format(source="encounter_element_evidence")
+        + ") WHERE false"
+    )
+    summary_path = scratch / "summary"
+    _partition_input(
+        connection,
+        """
+        SELECT index_event_id, element_id, event_datetime, source_record_id,
+               numeric_value, units_of_measure, in_baseline_window
+        FROM encounter_element_evidence
+    """,
+        summary_path,
+        "index_event_id",
+        partitions,
+    )
+    for bucket in range(partitions):
+        path = summary_path / f"evidence_bucket={bucket}"
+        if not path.exists():
+            continue
+        connection.read_parquet(
+            _partition_files(path), hive_partitioning=False
+        ).create_view("_element_summary", replace=True)
+        connection.execute(
+            "INSERT INTO element_summary " + query.format(source="_element_summary")
+        )
+    connection.execute("DROP VIEW IF EXISTS _element_summary")
     return inventory
 
 

@@ -238,7 +238,7 @@ def test_ordered_merge_preserves_master_and_fills_only_missing():
     assert result.loc[0, ["ABG_rfs", "VBG_rfs"]].tolist() == [1.0, 1.0]
 
 
-def test_catalog_evidence_time_boundaries_source_keys_and_overlap():
+def test_catalog_evidence_time_boundaries_source_keys_and_overlap(tmp_path):
     from trinetx_preprocessing.combined_preprocessing.elements import (
         SOURCE_EVENT_DUCKDB_TYPES,
     )
@@ -294,7 +294,9 @@ def test_catalog_evidence_time_boundaries_source_keys_and_overlap():
                 for e in ("source.hba1c", "source.traditional.lab.a1c")
             ],
         )
-        inventory = build_element_evidence(db, FeatureConfig())
+        inventory = build_element_evidence(
+            db, FeatureConfig(), scratch=tmp_path / "elements", partitions=3
+        )
         observed = db.execute("""
             SELECT DISTINCT index_event_id,source_record_id
             FROM encounter_element_evidence ORDER BY 1,2
@@ -321,6 +323,77 @@ def test_catalog_evidence_time_boundaries_source_keys_and_overlap():
             SELECT count(*) FROM element_summary WHERE index_event_id='other'
         """).fetchone()[0]
             == 0
+        )
+        # Duplicate source and membership rows multiply exactly as the original
+        # joins did. Null dates still link through the same encounter, without
+        # becoming baseline values. False/other membership must not leak in.
+        db.execute("""
+            CREATE TEMP TABLE first_evidence AS
+                SELECT * FROM encounter_element_evidence;
+            CREATE TEMP TABLE first_summary AS SELECT * FROM element_summary;
+            INSERT INTO preprocessed.source_lab_measurement
+                SELECT * FROM preprocessed.source_lab_measurement
+                WHERE source_record_id='boundary';
+            INSERT INTO preprocessed.element_membership VALUES
+                ('boundary', 'source.hba1c', true),
+                ('same_day', 'source.hba1c', false),
+                ('same_day', 'study.ignored', true);
+            INSERT INTO preprocessed.source_lab_measurement
+                (source_record_id, patient_id, encounter_id, event_datetime)
+                VALUES ('null_date', 'p', 'e1', NULL),
+                       ('unlinked', 'absent', 'e1', '2024-01-01');
+            INSERT INTO preprocessed.element_membership VALUES
+                ('null_date', 'source.hba1c', true),
+                ('unlinked', 'source.hba1c', true);
+        """)
+        build_element_evidence(
+            db, FeatureConfig(), scratch=tmp_path / "duplicates", partitions=7
+        )
+        assert db.execute("""
+            SELECT element_hba1c_record_count,element_hba1c_latest_raw_value
+            FROM element_summary WHERE index_event_id='one'
+        """).fetchone() == (7, 5.0)
+        assert db.execute("""
+            SELECT index_event_id,in_baseline_window
+            FROM encounter_element_evidence WHERE source_record_id='null_date'
+        """).fetchall() == [("one", None)]
+        assert (
+            db.execute("""
+            SELECT count(*) FROM encounter_element_evidence
+            WHERE element_id='study.ignored' OR source_record_id='unlinked'
+        """).fetchone()[0]
+            == 0
+        )
+        # Group partitions must not split one encounter's summary, and physical
+        # evidence partition count cannot change any value or duplicate count.
+        db.execute(
+            "CREATE TEMP TABLE duplicate_evidence AS "
+            "SELECT * FROM encounter_element_evidence"
+        )
+        db.execute(
+            "CREATE TEMP TABLE duplicate_summary AS SELECT * FROM element_summary"
+        )
+        build_element_evidence(
+            db, FeatureConfig(), scratch=tmp_path / "single", partitions=1
+        )
+        for table, expected in [
+            ("encounter_element_evidence", "duplicate_evidence"),
+            ("element_summary", "duplicate_summary"),
+        ]:
+            assert (
+                db.execute(
+                    f"SELECT count(*) FROM ((SELECT * FROM {table} "
+                    f"EXCEPT ALL SELECT * FROM {expected}) UNION ALL "
+                    f"(SELECT * FROM {expected} EXCEPT ALL SELECT * FROM {table}))"
+                ).fetchone()[0]
+                == 0
+            )
+        db.execute(
+            "CREATE OR REPLACE TABLE encounter_element_evidence AS "
+            "SELECT * FROM first_evidence"
+        )
+        db.execute(
+            "CREATE OR REPLACE TABLE element_summary AS SELECT * FROM first_summary"
         )
         from trinetx_preprocessing.encounters.element_features import (
             add_availability_inventory,
@@ -543,3 +616,13 @@ def test_context_failure_preserves_original_error_and_rolls_back(tmp_path, monke
         assert cache.receipts() == {}
         assert db.execute("SELECT count(*) FROM source_encounter").fetchone()[0] == 1
         assert scratch.exists()
+
+
+def test_element_partition_sidecars_are_not_data(tmp_path):
+    from trinetx_preprocessing.encounters.element_features import _partition_files
+
+    (tmp_path / "._data_0.parquet").write_bytes(b"metadata")
+    with pytest.raises(ValueError, match="no data files"):
+        _partition_files(tmp_path)
+    (tmp_path / "data_0.parquet").write_bytes(b"placeholder")
+    assert _partition_files(tmp_path) == [str(tmp_path / "data_0.parquet")]
