@@ -657,3 +657,72 @@ def test_element_partition_sidecars_are_not_data(tmp_path):
         _partition_files(tmp_path)
     (tmp_path / "data_0.parquet").write_bytes(b"placeholder")
     assert _partition_files(tmp_path) == [str(tmp_path / "data_0.parquet")]
+
+
+def test_chunked_wide_output_preserves_join_multiset(tmp_path):
+    from trinetx_preprocessing.encounters.builder import _write_wide_output
+
+    with duckdb.connect() as db:
+        db.execute("""
+            CREATE TABLE legacy_base AS
+            SELECT * FROM (VALUES
+                ('k1', 'old-p1', 'old-e1', 7),
+                ('k2', 'old-p2', 'old-e2', 8),
+                ('k3', 'old-p3', 'old-e3', 9)
+            ) AS t(pat_enc_hash,patient_id,encounter_id,legacy_value);
+            CREATE TABLE encounter_anchor AS
+            SELECT * FROM (VALUES
+                ('k1', 'p1', 'e1', DATE '2024-01-01'),
+                ('k2', 'p2', 'e2', DATE '2024-01-02'),
+                ('k3', 'p3', 'e3', DATE '2024-01-03')
+            ) AS t(index_event_id,patient_id,encounter_id,index_date);
+            CREATE TABLE element_summary AS
+            SELECT * FROM (VALUES ('k1', 2), ('k2', 0))
+            AS t(index_event_id,ahi_record_count);
+            CREATE TABLE diagnosis_component_summary AS
+            SELECT * FROM (VALUES ('k1', 1), ('k3', 4))
+            AS t(index_event_id,diagnosis_count);
+        """)
+        select = [
+            "base.* EXCLUDE (patient_id, encounter_id)",
+            "anchor.patient_id",
+            "anchor.encounter_id",
+            "anchor.index_date AS encounter_anchor_date",
+            "source.ahi_record_count AS source_ahi_record_count",
+            "diagnosis.diagnosis_count AS glp1_diagnosis_count",
+        ]
+        db.execute(
+            "CREATE TABLE expected AS SELECT "
+            + ", ".join(select)
+            + " FROM legacy_base base JOIN encounter_anchor anchor "
+            "ON base.pat_enc_hash=anchor.index_event_id "
+            "LEFT JOIN element_summary source "
+            "ON source.index_event_id=anchor.index_event_id "
+            "LEFT JOIN diagnosis_component_summary diagnosis "
+            "ON diagnosis.index_event_id=anchor.index_event_id"
+        )
+        output = tmp_path / "wide.parquet"
+        _write_wide_output(
+            db,
+            select,
+            [
+                ("element_summary", "source"),
+                ("diagnosis_component_summary", "diagnosis"),
+            ],
+            output,
+            tmp_path / "wide-scratch",
+            partitions=3,
+        )
+        db.read_parquet(str(output)).create_view("actual")
+        assert (
+            db.execute("DESCRIBE expected").fetchall()
+            == db.execute("DESCRIBE actual").fetchall()
+        )
+        assert (
+            db.execute(
+                "SELECT count(*) FROM ((SELECT * FROM actual "
+                "EXCEPT ALL SELECT * FROM expected) "
+                "UNION ALL (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual))"
+            ).fetchone()[0]
+            == 0
+        )

@@ -57,7 +57,11 @@ stopped after DuckDB's 256-way partition writer produced excessive tiny files
 on the external volume. A synthetic writer check showed 64 physical partitions
 avoid that file proliferation; each physical partition is processed as four
 smaller, exact key slices. The interrupted scratch and receipts remain private
-and preserved. Neither enriched variant is accepted yet.
+and preserved. That corrected availability stage completed on private data, but
+the subsequent all-at-once wide output join exceeded the same memory cap. The
+wide output now joins one encounter-key slice at a time and streams the slices
+into the same single Parquet product; an exact synthetic multiset check covers
+the join. Neither enriched variant is accepted yet.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

@@ -398,6 +398,49 @@ def materialization_binding(
     }
 
 
+def _write_wide_output(
+    connection, select, joins, destination, scratch, *, partitions=64
+):
+    """Join complete encounter-key slices, then stream them to one Parquet file."""
+    if not isinstance(partitions, int) or partitions < 1:
+        raise ValueError("Wide output partitions must be positive")
+    scratch = no_symlinks(scratch)
+    scratch.mkdir(parents=True, exist_ok=False)
+    pieces = []
+    for bucket in range(partitions):
+        scoped_joins = [
+            f"LEFT JOIN (SELECT * FROM {ident(table)} WHERE "
+            f"hash(index_event_id) % {partitions} = {bucket}) AS {alias} "
+            f"ON {alias}.index_event_id = anchor.index_event_id"
+            for table, alias in joins
+        ]
+        query = (
+            "SELECT " + ", ".join(select) + " FROM (SELECT * FROM legacy_base WHERE "
+            f"hash(pat_enc_hash) % {partitions} = {bucket}) AS base "
+            + "JOIN (SELECT * FROM encounter_anchor WHERE "
+            f"hash(index_event_id) % {partitions} = {bucket}) AS anchor "
+            "ON base.pat_enc_hash = anchor.index_event_id " + " ".join(scoped_joins)
+        )
+        part = scratch / f"wide-part-{bucket:03d}.parquet"
+        connection.execute(
+            f"COPY ({query}) TO {literal(part)} "
+            "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 16384)"
+        )
+        if part.exists():
+            pieces.append(part)
+        if (bucket + 1) % 8 == 0:
+            LOGGER.info(
+                "Completed wide output partitions %s/%s", bucket + 1, partitions
+            )
+    if not pieces:
+        raise ValueError("Wide output produced no Parquet partitions")
+    files = "[" + ",".join(literal(part) for part in pieces) + "]"
+    connection.execute(
+        f"COPY (SELECT * FROM read_parquet({files})) TO {literal(destination)} "
+        "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 16384)"
+    )
+
+
 def _enrich(
     database,
     base_path,
@@ -526,10 +569,7 @@ def _enrich(
                 "GROUP BY 1 HAVING count(*) > 1)"
             ).fetchone()[0]:
                 raise ValueError("Feature summary has duplicate encounter keys")
-            joins.append(
-                f"LEFT JOIN {ident(table)} AS {alias} "
-                f"ON {alias}.index_event_id = anchor.index_event_id"
-            )
+            joins.append((table, alias))
             for column, *_ in columns:
                 if column == "index_event_id":
                     continue
@@ -542,15 +582,12 @@ def _enrich(
                 dictionary.append(
                     {"column": name, "source": table, "source_column": column}
                 )
-        query = (
-            "SELECT "
-            + ", ".join(select)
-            + " FROM legacy_base AS base JOIN encounter_anchor AS anchor "
-            "ON base.pat_enc_hash = anchor.index_event_id " + " ".join(joins)
-        )
-        connection.execute(
-            f"COPY ({query}) TO {literal(destination)} "
-            "(FORMAT PARQUET, COMPRESSION ZSTD)"
+        _write_wide_output(
+            connection,
+            select,
+            joins,
+            destination,
+            scratch / "wide-output",
         )
         counts = connection.execute(
             "SELECT count(*), count(DISTINCT (patient_id,encounter_id)) "
