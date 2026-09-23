@@ -407,7 +407,11 @@ def test_catalog_evidence_time_boundaries_source_keys_and_overlap(tmp_path):
             FROM encounter_anchor
         """)
         with_states = add_availability_inventory(
-            db, inventory, scratch=tmp_path / "availability-single", partitions=1
+            db,
+            inventory,
+            scratch=tmp_path / "availability-single",
+            partitions=1,
+            subpartitions=1,
         )
         assert (
             add_availability_inventory(

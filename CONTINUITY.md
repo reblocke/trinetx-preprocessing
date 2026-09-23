@@ -52,8 +52,12 @@ FULL_DATA element evidence and summary then completed privately with
 the evidence exceeded the unchanged DuckDB cap while calculating availability
 states. Availability now partitions evidence and coverage by encounter key and
 sums exact per-partition counts. The completed source, clinical, and element
-stages require provenance-checked cache adoption before the next private retry;
-neither enriched variant is accepted yet.
+stages were adopted with provenance checks. The first availability retry was
+stopped after DuckDB's 256-way partition writer produced excessive tiny files
+on the external volume. A synthetic writer check showed 64 physical partitions
+avoid that file proliferation; each physical partition is processed as four
+smaller, exact key slices. The interrupted scratch and receipts remain private
+and preserved. Neither enriched variant is accepted yet.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

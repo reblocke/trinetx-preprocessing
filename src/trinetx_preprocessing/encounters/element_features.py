@@ -263,7 +263,9 @@ def _build_element_summary(connection, scratch, partitions):
     return inventory
 
 
-def add_availability_inventory(connection, inventory, *, scratch, partitions=256):
+def add_availability_inventory(
+    connection, inventory, *, scratch, partitions=64, subpartitions=4
+):
     """Represent zero matches separately from missing domains/history.
 
     Keep each encounter's evidence and coverage in one bounded key partition.
@@ -272,6 +274,8 @@ def add_availability_inventory(connection, inventory, *, scratch, partitions=256
     """
     if not isinstance(partitions, int) or partitions < 1:
         raise ValueError("Availability partitions must be positive")
+    if not isinstance(subpartitions, int) or subpartitions < 1:
+        raise ValueError("Availability subpartitions must be positive")
     scratch = no_symlinks(scratch)
     scratch.mkdir(parents=True, exist_ok=False)
     totals = {}
@@ -313,16 +317,23 @@ def add_availability_inventory(connection, inventory, *, scratch, partitions=256
             connection.read_parquet(
                 _partition_files(coverage), hive_partitioning=False
             ).create_view("_availability_coverage", replace=True)
-            for element, domain, state, count in connection.execute("""
-                SELECT e.element_id, e.domain, c.history_state, count(*)
-                FROM (SELECT DISTINCT index_event_id,element_id,domain
-                      FROM _availability_evidence) e
-                JOIN _availability_coverage c
-                  ON e.index_event_id=c.index_event_id AND e.domain=c.domain
-                GROUP BY 1,2,3
-            """).fetchall():
-                counts = observed.setdefault(element, {})
-                counts[state] = counts.get(state, 0) + count
+            # A small number of physical files avoids partition-writer file
+            # proliferation. Each encounter is still deduplicated in one of
+            # the finer hash slices, keeping the distinct table bounded.
+            for subbucket in range(subpartitions):
+                fine_bucket = bucket + partitions * subbucket
+                for element, domain, state, count in connection.execute(f"""
+                    SELECT e.element_id, e.domain, c.history_state, count(*)
+                    FROM (SELECT DISTINCT index_event_id,element_id,domain
+                          FROM _availability_evidence
+                          WHERE hash(index_event_id) %
+                                {partitions * subpartitions} = {fine_bucket}) e
+                    JOIN _availability_coverage c
+                      ON e.index_event_id=c.index_event_id AND e.domain=c.domain
+                    GROUP BY 1,2,3
+                """).fetchall():
+                    counts = observed.setdefault(element, {})
+                    counts[state] = counts.get(state, 0) + count
             if (bucket + 1) % 16 == 0:
                 LOGGER.info(
                     "Completed availability partitions %s/%s",
