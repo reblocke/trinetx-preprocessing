@@ -406,6 +406,7 @@ def _write_wide_output(
         raise ValueError("Wide output partitions must be positive")
     scratch = no_symlinks(scratch)
     scratch.mkdir(parents=True, exist_ok=False)
+    LOGGER.info("Building wide output partitions")
     pieces = []
     for bucket in range(partitions):
         scoped_joins = [
@@ -439,6 +440,7 @@ def _write_wide_output(
         f"COPY (SELECT * FROM read_parquet({files})) TO {literal(destination)} "
         "(FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 16384)"
     )
+    LOGGER.info("Completed wide output file")
 
 
 def _enrich(
