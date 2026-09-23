@@ -46,8 +46,14 @@ matched the Parquet glob and stopped the read. Explicit data-file filtering
 and original-error preservation are now tested; the corrected context stage passed privately. The subsequent global element-evidence
 join exceeded the unchanged DuckDB cap. The repair partitions source/membership
 joins by source ID and summaries by encounter ID, preserving multiplicity and
-temporal rules; completed clinical features gain an atomic checkpoint. The next
-private retry remains pending.
+temporal rules; completed clinical features gain an atomic checkpoint. The
+FULL_DATA element evidence and summary then completed privately with
+1,056,153,386 evidence rows and 2,661,286 summary rows. A global distinct over
+the evidence exceeded the unchanged DuckDB cap while calculating availability
+states. Availability now partitions evidence and coverage by encounter key and
+sums exact per-partition counts. The completed source, clinical, and element
+stages require provenance-checked cache adoption before the next private retry;
+neither enriched variant is accepted yet.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next

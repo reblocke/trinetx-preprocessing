@@ -486,8 +486,26 @@ def _enrich(
             context_scratch=scratch / "encounter-context",
         )
         if coverage_path is not None:
-            element_inventory = add_availability_inventory(
-                connection, element_inventory
+
+            def availability():
+                result = add_availability_inventory(
+                    connection,
+                    element_inventory,
+                    scratch=scratch / "element-availability",
+                )
+                connection.execute(
+                    "CREATE TABLE element_availability_inventory (inventory VARCHAR)"
+                )
+                connection.execute(
+                    "INSERT INTO element_availability_inventory VALUES (?)",
+                    [json.dumps(result, sort_keys=True)],
+                )
+                return result
+
+            element_inventory = cache.run(
+                "availability_inventory",
+                ["element_availability_inventory"],
+                availability,
             )
         (destination.parent / f"{destination.stem}_element_inventory.json").write_text(
             json.dumps(element_inventory, indent=2) + "\n"

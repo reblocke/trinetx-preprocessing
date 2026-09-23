@@ -406,7 +406,34 @@ def test_catalog_evidence_time_boundaries_source_keys_and_overlap(tmp_path):
                      ELSE 'observed_span' END AS history_state
             FROM encounter_anchor
         """)
-        with_states = add_availability_inventory(db, inventory)
+        with_states = add_availability_inventory(
+            db, inventory, scratch=tmp_path / "availability-single", partitions=1
+        )
+        assert (
+            add_availability_inventory(
+                db,
+                inventory,
+                scratch=tmp_path / "availability-partitioned",
+                partitions=7,
+            )
+            == with_states
+        )
+        expected_observed = {
+            (element, state): count
+            for element, state, count in db.execute("""
+                SELECT e.element_id, c.history_state, count(*)
+                FROM (SELECT DISTINCT index_event_id,element_id,domain
+                      FROM encounter_element_evidence) e
+                JOIN encounter_source_coverage c
+                  ON e.index_event_id=c.index_event_id AND e.domain=c.domain
+                GROUP BY 1,2
+            """).fetchall()
+        }
+        for element in with_states:
+            for state in element["availability_states"]:
+                assert state["observed_matches"] == expected_observed.get(
+                    (element["element_id"], state["history_state"]), 0
+                )
         for element in with_states:
             assert (
                 sum(

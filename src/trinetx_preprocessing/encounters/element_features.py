@@ -263,12 +263,17 @@ def _build_element_summary(connection, scratch, partitions):
     return inventory
 
 
-def add_availability_inventory(connection, inventory):
+def add_availability_inventory(connection, inventory, *, scratch, partitions=256):
     """Represent zero matches separately from missing domains/history.
 
-    Aggregate observed states once. Subtract these from domain totals instead
-    of materializing the element-by-encounter Cartesian product.
+    Keep each encounter's evidence and coverage in one bounded key partition.
+    Distinct evidence is exact within each partition, and the partition counts
+    can be added without a global billion-row distinct hash table.
     """
+    if not isinstance(partitions, int) or partitions < 1:
+        raise ValueError("Availability partitions must be positive")
+    scratch = no_symlinks(scratch)
+    scratch.mkdir(parents=True, exist_ok=False)
     totals = {}
     for domain, state, count in connection.execute(
         "SELECT domain,history_state,count(*) FROM encounter_source_coverage "
@@ -276,15 +281,64 @@ def add_availability_inventory(connection, inventory):
     ).fetchall():
         totals.setdefault(domain, {})[state] = count
     observed = {}
-    for element, domain, state, count in connection.execute("""
-        SELECT e.element_id, e.domain, c.history_state, count(*)
-        FROM (SELECT DISTINCT index_event_id,element_id,domain
-              FROM encounter_element_evidence) e
-        JOIN encounter_source_coverage c
-          ON e.index_event_id=c.index_event_id AND e.domain=c.domain
-        GROUP BY 1,2,3
-    """).fetchall():
-        observed.setdefault(element, {})[state] = count
+    flush = connection.execute(
+        "SELECT current_setting('partitioned_write_flush_threshold')"
+    ).fetchone()[0]
+    connection.execute("SET partitioned_write_flush_threshold=16384")
+    try:
+        evidence_path = scratch / "evidence"
+        coverage_path = scratch / "coverage"
+        _partition_input(
+            connection,
+            "SELECT index_event_id,element_id,domain FROM encounter_element_evidence",
+            evidence_path,
+            "index_event_id",
+            partitions,
+        )
+        _partition_input(
+            connection,
+            "SELECT index_event_id,domain,history_state FROM encounter_source_coverage",
+            coverage_path,
+            "index_event_id",
+            partitions,
+        )
+        for bucket in range(partitions):
+            evidence = evidence_path / f"evidence_bucket={bucket}"
+            coverage = coverage_path / f"evidence_bucket={bucket}"
+            if not evidence.exists() or not coverage.exists():
+                continue
+            connection.read_parquet(
+                _partition_files(evidence), hive_partitioning=False
+            ).create_view("_availability_evidence", replace=True)
+            connection.read_parquet(
+                _partition_files(coverage), hive_partitioning=False
+            ).create_view("_availability_coverage", replace=True)
+            for element, domain, state, count in connection.execute("""
+                SELECT e.element_id, e.domain, c.history_state, count(*)
+                FROM (SELECT DISTINCT index_event_id,element_id,domain
+                      FROM _availability_evidence) e
+                JOIN _availability_coverage c
+                  ON e.index_event_id=c.index_event_id AND e.domain=c.domain
+                GROUP BY 1,2,3
+            """).fetchall():
+                counts = observed.setdefault(element, {})
+                counts[state] = counts.get(state, 0) + count
+            if (bucket + 1) % 16 == 0:
+                LOGGER.info(
+                    "Completed availability partitions %s/%s",
+                    bucket + 1,
+                    partitions,
+                )
+        connection.execute("DROP VIEW IF EXISTS _availability_evidence")
+        connection.execute("DROP VIEW IF EXISTS _availability_coverage")
+    except BaseException:
+        try:
+            connection.execute("SET partitioned_write_flush_threshold=?", [flush])
+        except duckdb.TransactionException:
+            pass
+        raise
+    else:
+        connection.execute("SET partitioned_write_flush_threshold=?", [flush])
     catalog = dict(
         connection.execute(
             "SELECT element_id,domain FROM preprocessed.element_catalog "
@@ -320,4 +374,5 @@ def add_availability_inventory(connection, inventory):
                 "raw dates retained",
             }
         )
+    remove_tree_strict(scratch)
     return inventory
