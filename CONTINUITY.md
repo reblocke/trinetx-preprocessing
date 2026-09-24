@@ -116,6 +116,13 @@ inputs: all historical patients have a canonical patient record, and all five
 clinical domains have files and observed records. It took 7.61 seconds with
 approximately 520 MB peak RSS. The receipt is path-free and mode 0600. Full
 source-scope review, timing and scientific acceptance remain open.
+The scope audit now fails on duplicate patient/domain observability, blank
+patient keys, and reversed observed spans. At `f89f1d9`, an affected owner-only
+rerun passed with stable input identities and unchanged aggregate inventory.
+The first comparison script wrote a failed receipt because it compared a Python
+tuple with a JSON list; its failed receipt is preserved. The corrected rerun
+normalizes the aggregate representation, passed, and wrote a separate path-free
+mode-0600 receipt outside Git. This remains structural evidence, not acceptance.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.

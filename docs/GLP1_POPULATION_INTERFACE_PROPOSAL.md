@@ -92,6 +92,8 @@ inventory alias for the canonical `medications` domain. These are transfer and
 capture diagnostics: a patient without a record is not a clinical negative,
 and the first/last observed event does not prove continuous history. Synthetic
 and read-only source tests pass; private source-scope review remains pending.
+The audit now fails before totaling history if observability has duplicate
+patient/domain keys, blank patient IDs, or reversed observed spans.
 The presence of medication records also does not establish order activity:
 the accepted medication export has no end or status fields, and the canonical
 columns contain no populated values for them. The original no-active-order
@@ -106,6 +108,10 @@ approximately 520 MB resident memory. Its path-free, mode-0600 aggregate
 receipt remains outside Git. This confirms observable source capture for this
 snapshot, not uninterrupted lookback, complete clinical ascertainment, or
 source-scope acceptance.
+An owner-only rerun at `f89f1d9` passed the stronger structural checks with
+stable input identities and the same aggregate inventory. Its corrected,
+path-free mode-0600 receipt remains outside Git; source-scope acceptance is
+still pending.
 
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with

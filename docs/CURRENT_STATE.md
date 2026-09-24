@@ -34,6 +34,10 @@ An additional owner-only candidate inventory found canonical patient records
 for the historical population and observed records plus source files in all
 five clinical domains. It does not establish continuous history or clinical
 ascertainment; the source-scope acceptance gate remains open.
+The draft scope audit now rejects duplicate observability keys, blank patient
+IDs, and reversed event spans before inventory totals. Its affected private
+rerun preserved the prior aggregate inventory and input identities; this is
+still structural evidence only.
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical
