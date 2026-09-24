@@ -48,6 +48,8 @@ def test_coverage_corroborates_keys_and_preserves_unavailable(
         )
         assert report["pass"] != wrong_demographics
         assert report["rows"] == 2
+        assert report["patient_total"] == 2
+        assert report["encounter_total"] == 2
         assert report["contradictions_pass"] != wrong_demographics
         assert report["patient_unlinked"] == 1
         assert report["encounter_unlinked"] == 1
@@ -152,7 +154,11 @@ def test_linked_patient_with_unlinked_encounter_needs_explicit_policy():
             approved_exception="synthetic approval",
         )
         assert report["pass"] is True
-        assert report["patient_linked"] == 2
+        assert report["patient_total"] == 1
+        assert report["patient_linked"] == 1
+        assert report["patient_linked_proportion"] == 1
+        assert report["complete_patient_linkage"] is True
+        assert report["encounter_total"] == 2
         assert report["encounter_linked"] == 1
         assert report["encounter_unlinked"] == 1
         assert not report["complete_encounter_linkage"]

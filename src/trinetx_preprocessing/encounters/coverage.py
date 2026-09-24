@@ -101,24 +101,36 @@ def coverage_tables(db, *, policy="complete_linkage", approved_exception=None):
         SELECT * FROM demographics JOIN encounters USING(pat_enc_hash)
     """)
     corroboration = db.execute("""
-        SELECT count(*), count(*) FILTER(WHERE patient_linked),
-          count(*) FILTER(WHERE patient_linked AND NOT demographics_agree),
-          count(*) FILTER(WHERE encounter_linked),
-          count(*) FILTER(WHERE encounter_linked AND NOT anchor_in_encounter)
-        FROM key_coverage
+        SELECT count(*), count(DISTINCT b.patient_id),
+          count(DISTINCT b.patient_id) FILTER(WHERE k.patient_linked),
+          count(*) FILTER(WHERE k.patient_linked AND NOT k.demographics_agree),
+          count(DISTINCT b.patient_id)
+            FILTER(WHERE k.patient_linked AND NOT k.demographics_agree),
+          count(*) FILTER(WHERE k.encounter_linked),
+          count(*) FILTER(WHERE k.encounter_linked AND NOT k.anchor_in_encounter),
+          count(*) FILTER(WHERE b.patient_id IS NULL)
+        FROM key_coverage k JOIN legacy_base b USING(pat_enc_hash)
     """).fetchone()
     # Contradictions, completeness and source-history availability are separate.
-    total, patient_linked, demographics_bad, encounter_linked, anchor_bad = (
-        corroboration
-    )
+    (
+        total,
+        patient_total,
+        patient_linked,
+        demographics_bad,
+        patient_demographics_bad,
+        encounter_linked,
+        anchor_bad,
+        null_patient_ids,
+    ) = corroboration
     contradictions_pass = (
         total > 0
         and patient_linked > 0
         and encounter_linked > 0
+        and null_patient_ids == 0
         and demographics_bad == 0
         and anchor_bad == 0
     )
-    complete_patient = total > 0 and patient_linked == total
+    complete_patient = patient_total > 0 and patient_linked == patient_total
     complete_encounter = total > 0 and encounter_linked == total
     passed = contradictions_pass and (
         (complete_patient and complete_encounter)
@@ -184,11 +196,15 @@ def coverage_tables(db, *, policy="complete_linkage", approved_exception=None):
         "complete_patient_linkage": complete_patient,
         "complete_encounter_linkage": complete_encounter,
         "rows": total,
-        "patient_total": total,
+        "patient_total": patient_total,
         "patient_linked": patient_linked,
-        "patient_unlinked": total - patient_linked,
-        "patient_linked_proportion": patient_linked / total if total else None,
+        "patient_unlinked": patient_total - patient_linked,
+        "patient_linked_proportion": (
+            patient_linked / patient_total if patient_total else None
+        ),
         "demographic_disagreements": demographics_bad,
+        "patient_demographic_disagreements": patient_demographics_bad,
+        "null_patient_ids": null_patient_ids,
         "encounter_total": total,
         "encounter_linked": encounter_linked,
         "encounter_unlinked": total - encounter_linked,
