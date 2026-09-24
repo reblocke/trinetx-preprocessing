@@ -69,7 +69,9 @@ uv run trinetx-preprocessing build-encounters \
 Coverage defaults to the version-1.0 `complete_linkage` policy: every accepted
 patient and composite encounter must link, with no demographic or anchor-day
 contradictions. The report separately records linked/unlinked counts,
-proportions, contradiction status and history-availability states. A bounded
+proportions, contradiction status and history-availability states. Patient
+totals count distinct original `patient_id` values; encounter totals count
+original composite encounters. A bounded
 `approved_incomplete_linkage` use requires an explicit
 `--approved-incomplete-linkage-exception` and retains unlinked encounters as
 incomplete capture. Zero linked records fail both policies. A source span never
