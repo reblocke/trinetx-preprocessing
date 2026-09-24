@@ -27,6 +27,18 @@ clinical evidence. Keep source catalog membership distinct from study inclusion:
 the upstream product must not select one patient index, apply GLP-1 exclusions,
 or decide medication activity. The downstream study owns those decisions.
 
+The existing read-only `open_cohort_source()` / `validate_cohort_source()`
+boundary already exposes versioned canonical source tables with manifest,
+schema and catalog checks. Reuse that boundary where it can support the scope:
+a new study-facing acceptance policy and receipt may bind an immutable
+canonical database and explicit source views in place instead of copying the
+entire source database. This is an explicit new accepted interface, not a
+silent fallback from a failed encounter-bundle read. The receipt must bind the
+exact database identity/bytes, source manifest and schema/catalog revision,
+and the installed consumer must verify that trusted identity before opening
+rows. A future timed export requires a new immutable canonical product; never
+rewrite the accepted date-only database or its existing bundle.
+
 Define the candidate source scope explicitly before building. It must cover
 all encounters and longitudinal evidence needed for the original study and
 demonstrate complete coverage of the accepted historical patient/index keys
@@ -48,8 +60,10 @@ encounters. Avoid changing the existing accepted variants or their receipt.
    relaxing clinical criteria. Record intended source-coverage changes and
    unexplained differences separately.
 4. Issue a new private acceptance receipt and pin the versioned upstream
-   product in the downstream installed consumer. The study adapter must read
-   through that trusted boundary; no silent canonical/raw fallback is allowed.
+   product in the downstream installed consumer. If the interface references
+   canonical tables in place, verify their database identity and provenance
+   through the existing read-only source API as part of that boundary. The
+   study adapter must never silently fall back from an accepted bundle.
 5. Reconstruct the approved patient-index cohort downstream, then compare
    patient membership, index events, context exclusions, medication states,
    and named denominators with the historical route. The original first-24-hour

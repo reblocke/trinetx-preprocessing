@@ -77,6 +77,10 @@ its encounter population differs from the retained accepted reference.
 The authenticated compatibility companion remains the population authority;
 independent canonical-projection reconciliation is a separate gate. No new
 scientific acceptance is claimed.
+Draft upstream PR #21 proposes a separately accepted GLP-1 population
+interface, potentially using the existing versioned read-only cohort-source
+API without duplicating the canonical database. Its acceptance, source scope,
+and any timed export remain UNCONFIRMED.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the
