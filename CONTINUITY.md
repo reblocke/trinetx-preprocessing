@@ -67,10 +67,14 @@ establishes the original GLP-1 scientific report.
 
 ## Open questions
 The accepted source snapshot has date-only encounter starts and clinical events
-across the preserved domains. A new approved source export is needed if clinical
-event times are available; its feasibility and time-zone semantics are
-UNCONFIRMED. See
-docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The current bundle remains immutable.
+across the preserved domains. A new approved source export with clinical event
+times is needed for the original first-24-hour rule. A publicly accessible
+TriNetX-authored July 2021 deidentified dataset dictionary describes encounter
+and lab dates as eight-digit dates, consistent with this snapshot. A current
+alternative product or approved site-specific extract with real clinical event
+times and usable time-zone semantics remains UNCONFIRMED. See
+docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The
+current bundle remains immutable.
 Canonical source validated: 837 catalog elements including 303 source concepts.
 Canonical compatibility capture uses corrected_v1 and earliest_per_setting;
 its encounter population differs from the retained accepted reference.

@@ -28,6 +28,13 @@ No separate time-of-day column appears in these raw headers. This rules out a
 currently omitted raw time field in the accepted input layout; it does not
 establish whether TriNetX can provide times in a new approved export.
 
+A [TriNetX-authored July 2021 deidentified dataset dictionary](https://www.stonybrookmedicine.edu/sites/default/files/TriNetX%20Research%20Data%20Dictionary%20-%20July%202021.pdf)
+describes encounter `start_date` and laboratory `date` as eight-character
+`YYYYMMDD` fields. This is consistent with the accepted snapshot and makes a
+repeat of that standard layout unlikely to add hour precision. The dictionary
+is dated and does not determine whether a current alternative product or an
+approved site-specific extract can supply clinical event timestamps.
+
 The current snapshot cannot establish an exact first-24-hour interval or the
 first gas within it. The same precision limit affects other claims about
 pre-presentation and same-day order or measurement timing. Adding these
@@ -38,8 +45,10 @@ scientific decision.
 
 ## Request to the source provider
 
-Ask whether a new approved TriNetX export can supply actual clinical event
-times, at least for:
+Ask whether a current alternative TriNetX product or approved site-specific
+extract can supply actual clinical event times, rather than another download
+of the date-only `YYYYMMDD` layout. Request a current field dictionary and a
+safe, aggregate precision inventory before any transfer. At minimum, ask for:
 
 - Encounter `patient_id`, `encounter_id`, start datetime, time precision,
   source/HCO identifier, and source-record identity. Preserve all duplicate or
