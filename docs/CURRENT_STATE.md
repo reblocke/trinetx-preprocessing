@@ -18,6 +18,11 @@ downstream full and installed-pair CI passed at the immutable merged pin. The
 downstream merge tree matches the tested consumer head. Scientific acceptance
 for the original patient-level GLP-1 abstract remains separate; see
 [NEXT_STEPS.md](../NEXT_STEPS.md).
+Aggregate source audits found that this accepted snapshot preserves only
+date-level encounter starts, arterial gas events, and other clinical-domain
+events. The original abstract's
+first-24-hour gas rule requires a new approved timestamp-capable source; see
+[the timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical
