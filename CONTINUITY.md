@@ -140,6 +140,12 @@ completed in 162 seconds, with stable source identity, clean spill storage,
 mode-0600 path-free receipt and date-only/absent medication-field findings
 matching prior independent audits. The receipt remains outside Git. Neither
 source nor scientific/report acceptance is established.
+A path-free, mode-0600 header-only receipt now records two archived 2022 raw
+TriNetX layouts. Encounter, lab and medication headers have date fields but no
+separate time-of-day or medication end/status fields. No clinical values were
+read, so this is historical source-layout context, not a current-source or
+phenotype acceptance decision. A current alternative extract remains
+UNCONFIRMED.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

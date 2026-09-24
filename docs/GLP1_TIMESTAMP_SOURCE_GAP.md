@@ -34,6 +34,14 @@ snapshot represents an absent source field, not evidence of an open order.
 This independently blocks the original documented no-active-order denominator.
 The source identity and path-free audit receipt remain private.
 
+A separate owner-only, header-only screen of two archived 2022 raw TriNetX
+export layouts found encounter `start_date`/`end_date`, lab `date`, and
+medication `start_date`, without separate time-of-day or medication end/status
+columns. It did not read clinical values or establish the precision of those
+older records. Its path-free, mode-0600 receipt remains outside Git. These
+historical layouts do not determine whether a current alternative product can
+supply the needed timestamps and order history.
+
 A [TriNetX-authored July 2021 deidentified dataset dictionary](https://www.stonybrookmedicine.edu/sites/default/files/TriNetX%20Research%20Data%20Dictionary%20-%20July%202021.pdf)
 describes encounter `start_date` and laboratory `date` as eight-character
 `YYYYMMDD` fields. This is consistent with the accepted snapshot and makes a

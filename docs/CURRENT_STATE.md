@@ -35,6 +35,9 @@ report readiness false.
 An owner-only accepted-snapshot CLI run at `ab77abd` reproduced the date-only
 and absent medication end/status findings with stable source identity; its
 restricted aggregate receipt remains outside Git.
+An owner-only header screen of two archived 2022 raw export layouts found the
+same date-field pattern without separate time-of-day or medication end/status
+columns. It did not inspect values or rule out a current alternative extract.
 Draft population-interface work has a trusted canonical-source verifier and an
 aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
