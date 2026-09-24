@@ -126,6 +126,12 @@ mode-0600 receipt outside Git. This remains structural evidence, not acceptance.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.
+The draft source-capability audit now counts encounter-start, lab-event and
+medication-start precision, parsed versus unparsed timestamp-labeled rows,
+populated medication end/status fields and raw-header field presence from a
+validated canonical connection. Thirteen focused capability/scope/population
+tests plus Ruff pass. No accepted-source rerun or new timestamp-capable export
+has been claimed; gas-specific timing and clinical acceptance remain open.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

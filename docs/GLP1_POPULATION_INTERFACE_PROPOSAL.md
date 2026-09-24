@@ -20,6 +20,10 @@ This is a population-interface problem separate from the
 does not make either existing compatibility-backed variant represent the
 original patient-level cohort. A new population interface alone does not
 restore the original first-24-hour phenotype from date-only events.
+The draft source-capability audit in `cohort_source_capability_audit.py`
+provides aggregate timing and medication-field capture counts for a validated
+canonical source. It does not select a population or make a new source
+acceptable for the original abstract.
 
 ## Proposed upstream product
 

@@ -49,6 +49,18 @@ midnight, choose an arbitrary conflicting start, or replace 24 hours with an
 inclusive calendar-day window in the original abstract without an approved
 scientific decision.
 
+The draft `audit_candidate_source_capabilities()` helper can screen a
+validated canonical source without returning patient rows, file paths or raw
+headers. It separately counts date-only rows, timestamp-labeled rows with and
+without a parsed datetime, and other/missing precision for encounter starts,
+lab events and medication starts. It also counts populated medication end and
+status fields and how many raw encounter, lab and medication files contain
+those column names. A parsed midnight date remains date-only under this audit.
+These are aggregate source-capability diagnostics, not a gas-specific
+first-24-hour validation or an acceptance receipt. A new source still needs
+the index-specific arterial gas and pH, time-zone, shift and provenance checks
+below.
+
 ## Request to the source provider
 
 Ask whether a current alternative TriNetX product or approved site-specific
