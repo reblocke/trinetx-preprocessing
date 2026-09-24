@@ -20,6 +20,14 @@ strings and explicit precision labels; its parsed midnight values do not add
 an observed time of day. The audit did not select a study index or validate a
 scientific estimate. Its source identity and aggregate receipt remain private.
 
+The accepted build's work-manifest digest matches the bundle's recorded source
+identity. Direct header checks on its recorded, unchanged raw export files found
+only `start_date`/`end_date` in the encounter export and `date` in the lab,
+vital, diagnosis, and procedure exports; the medication export has `start_date`.
+No separate time-of-day column appears in these raw headers. This rules out a
+currently omitted raw time field in the accepted input layout; it does not
+establish whether TriNetX can provide times in a new approved export.
+
 The current snapshot cannot establish an exact first-24-hour interval or the
 first gas within it. The same precision limit affects other claims about
 pre-presentation and same-day order or measurement timing. Adding these
