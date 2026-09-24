@@ -93,6 +93,10 @@ An owner-only run at audit revision `92fc880` passed historical key coverage,
 matched the prior independent aggregate categories and kept input identities
 stable. It took 164 seconds with approximately 3.51 GB peak RSS; the receipt
 is mode 0600 and path-free. Source-scope and timing acceptance remain open.
+The draft source-scope inventory now summarizes canonical demographic presence,
+five-domain observed records, event counts, observed spans and export-file
+counts for the historical patient set. Synthetic and read-only source tests
+pass. It does not establish continuous history or clinical negatives.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.

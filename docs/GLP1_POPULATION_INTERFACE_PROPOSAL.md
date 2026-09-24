@@ -75,6 +75,16 @@ retained outside Git. This verifies the candidate audit and key coverage only;
 it does not approve source scope, issue a population acceptance receipt, or
 recover time-of-day precision.
 
+The draft `audit_candidate_source_scope()` inventories the historical patient
+set through the canonical `source_patient`, `patient_observability`, and
+`source_file_inventory` tables. For each clinical domain it reports how many
+historical patients have observed records, aggregate event counts, observed
+first/last event times, and export-file counts. It includes the raw `meds`
+inventory alias for the canonical `medications` domain. These are transfer and
+capture diagnostics: a patient without a record is not a clinical negative,
+and the first/last observed event does not prove continuous history. Synthetic
+and read-only source tests pass; private source-scope review remains pending.
+
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with
 its source-work-manifest binding present. That verifies this reuse path can

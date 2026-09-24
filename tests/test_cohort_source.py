@@ -14,6 +14,9 @@ from trinetx_preprocessing.combined_preprocessing import (
 from trinetx_preprocessing.combined_preprocessing import (
     cohort_source_population_audit as population_audit_module,
 )
+from trinetx_preprocessing.combined_preprocessing import (
+    cohort_source_scope_audit as scope_audit_module,
+)
 from trinetx_preprocessing.combined_preprocessing.builder import build_preprocessed
 from trinetx_preprocessing.combined_preprocessing.cohort_source import (
     CohortSourceValidationError,
@@ -121,6 +124,19 @@ def test_cohort_source_validates_and_opens_read_only(tmp_path: Path) -> None:
             ),
         )
         assert population_audit.patient_absent == 1
+        source.connection.register(
+            "historical_scope_patients",
+            pd.DataFrame({"patient_id": ["synthetic-absent"]}),
+        )
+        try:
+            scope_audit = scope_audit_module.audit_candidate_source_scope(
+                source.connection,
+                historical_patient_relation="historical_scope_patients",
+            )
+        finally:
+            source.connection.unregister("historical_scope_patients")
+        assert scope_audit.historical_patients == 1
+        assert scope_audit.source_patient_missing == 1
 
     assert not list(spill_root.iterdir())
 
