@@ -39,6 +39,12 @@ and the installed consumer must verify that trusted identity before opening
 rows. A future timed export requires a new immutable canonical product; never
 rewrite the accepted date-only database or its existing bundle.
 
+A read-only metadata/schema validation of the accepted canonical snapshot on
+2026-09-24 passed the existing cohort-source API at schema version `1.0` with
+its source-work-manifest binding present. That verifies this reuse path can
+open the current source; it does not validate a new receipt, population scope,
+timed fields, or the original abstract phenotype.
+
 Define the candidate source scope explicitly before building. It must cover
 all encounters and longitudinal evidence needed for the original study and
 demonstrate complete coverage of the accepted historical patient/index keys

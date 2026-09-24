@@ -81,6 +81,9 @@ Draft upstream PR #21 proposes a separately accepted GLP-1 population
 interface, potentially using the existing versioned read-only cohort-source
 API without duplicating the canonical database. Its acceptance, source scope,
 and any timed export remain UNCONFIRMED.
+The existing `validate_cohort_source()` API passed a metadata/schema check on
+the accepted snapshot at schema `1.0`; this is not a new population or timing
+acceptance.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the
