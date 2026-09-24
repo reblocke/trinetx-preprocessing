@@ -17,9 +17,11 @@ encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
 
 ## State
-The encounter split is merged: upstream `main` is at `4bbe8cf`, and downstream
-`master` is at `d5d2691`. Postmerge work is in an isolated RESEARCH FAST
-worktree; the historical private bundle remains in its existing location.
+The encounter split is merged: upstream `main` includes postmerge validation
+hardening at `cae58a2`, and downstream `master` includes strict consumer merge
+`c2302cb`.
+RESEARCH FAST was physically absent at the last disk check; private work uses
+an encrypted fallback volume. The historical private bundle remains immutable.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -50,17 +52,16 @@ Preserve all failed/superseded artifacts, older branches and dirty instructions.
 ## Next
 Version-1.0 shared acceptance verification and validator report binding have
 focused synthetic real-Parquet tests passing. Table-specific schema, QA null,
-catalogue source-count, coverage/inventory availability, and enumerated
-HBA1c/BMI raw-triplet checks have mutation tests. Versioned linkage policies
-and cache content fingerprints also have focused tests. The existing private
-bundle's stronger scan reached the catalogue reconciliation and failed at the
-old 1 GiB DuckDB limit without publishing a success report. A bounded
-hash-partitioned reconciliation and 3 GiB limit are under focused test; an
-owner-only copy of the immutable bundle is being placed on encrypted RESEARCH
-FAST for a measured rerun under the same private build lock. Compose a new integrated
-receipt through the trusted private process only after all gates pass; merge
-upstream before changing the downstream immutable pin and running hosted
-installed-pair CI.
+catalogue source-count, coverage/inventory availability, enumerated HBA1c/BMI
+raw-triplet checks, linkage policies and cache fingerprints have mutation tests.
+Fresh complete-linkage coverage and stronger private artifact validation passed
+for both variants at merged upstream revision `cae58a2`. Downstream pins that
+immutable revision. Its full and installed-pair CI passed, then a private
+identity-bound engineering receipt and isolated installed production read
+passed for both variants and companion evidence. Downstream PR #18 merged as
+`c2302cb` with a Git tree identical to its tested head, and the installed read
+passed again through a trust record bound to that merge. None of these gates
+establishes the original GLP-1 scientific report.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.
