@@ -66,9 +66,10 @@ passed again through a trust record bound to that merge. None of these gates
 establishes the original GLP-1 scientific report.
 
 ## Open questions
-The accepted source snapshot has date-only encounter starts and arterial gas
-events. A new approved source export is needed if clinical event times are
-available; its feasibility and time-zone semantics are UNCONFIRMED. See
+The accepted source snapshot has date-only encounter starts and clinical events
+across the preserved domains. A new approved source export is needed if clinical
+event times are available; its feasibility and time-zone semantics are
+UNCONFIRMED. See
 docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The current bundle remains immutable.
 Canonical source validated: 837 catalog elements including 303 source concepts.
 Canonical compatibility capture uses corrected_v1 and earliest_per_setting;

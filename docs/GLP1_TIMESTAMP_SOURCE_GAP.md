@@ -12,17 +12,21 @@ its calendar-day anchor does not prove this temporal rule.
 A bounded, aggregate-only private audit on 2026-09-24 checked the accepted
 bundle's manifest-bound canonical DuckDB. It found date-only precision for
 every preserved encounter start, every selected arterial PaCO2/pH source record,
-and the broader preserved lab domain. Some bundle-linked encounters have
+and the broader preserved lab domain. A separate aggregate inventory found
+date-only precision throughout the preserved vital, diagnosis, procedure, and
+medication domains too. Some bundle-linked encounters have
 multiple distinct source start dates. The canonical source preserves raw date
 strings and explicit precision labels; its parsed midnight values do not add
 an observed time of day. The audit did not select a study index or validate a
 scientific estimate. Its source identity and aggregate receipt remain private.
 
 The current snapshot cannot establish an exact first-24-hour interval or the
-first gas within it. Adding its date-only fields to the existing bundle would
-not resolve this. Do not infer midnight, choose an arbitrary conflicting start,
-or replace 24 hours with an inclusive calendar-day window in the original
-abstract without an approved scientific decision.
+first gas within it. The same precision limit affects other claims about
+pre-presentation and same-day order or measurement timing. Adding these
+date-only fields to the existing bundle would not resolve this. Do not infer
+midnight, choose an arbitrary conflicting start, or replace 24 hours with an
+inclusive calendar-day window in the original abstract without an approved
+scientific decision.
 
 ## Request to the source provider
 
