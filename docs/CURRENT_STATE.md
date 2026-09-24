@@ -23,6 +23,11 @@ date-level encounter starts, arterial gas events, and other clinical-domain
 events. The original abstract's
 first-24-hour gas rule requires a new approved timestamp-capable source; see
 [the timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
+Draft population-interface work has a trusted canonical-source verifier and an
+aggregate historical-key audit. An owner-only candidate run at `92fc880`
+reproduced independent key-coverage categories with stable input identities;
+this is not a new accepted source population or a timed extract. See the
+[population interface proposal](GLP1_POPULATION_INTERFACE_PROPOSAL.md).
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical

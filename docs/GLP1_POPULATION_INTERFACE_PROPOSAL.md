@@ -66,6 +66,15 @@ case exercise the audit. Complete key coverage would support only one part of
 the private population gate; source scope and longitudinal evidence still need
 review.
 
+An owner-only candidate run at draft audit revision `92fc880` on the accepted
+canonical snapshot passed complete historical patient/index key coverage and
+reproduced the prior independent aggregate linkage and conflicting-start
+categories. Input identities remained stable; the bounded run took 164 seconds
+and peaked at approximately 3.51 GB resident memory. Its restricted receipt is
+retained outside Git. This verifies the candidate audit and key coverage only;
+it does not approve source scope, issue a population acceptance receipt, or
+recover time-of-day precision.
+
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with
 its source-work-manifest binding present. That verifies this reuse path can

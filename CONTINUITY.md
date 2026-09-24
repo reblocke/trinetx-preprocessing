@@ -89,6 +89,10 @@ An aggregate candidate-population audit now classifies historical patient/index
 key coverage, conflicting source start dates and start precision without
 selecting an index or returning keys. Synthetic and read-only source tests pass;
 the private acceptance gates remain open.
+An owner-only run at audit revision `92fc880` passed historical key coverage,
+matched the prior independent aggregate categories and kept input identities
+stable. It took 164 seconds with approximately 3.51 GB peak RSS; the receipt
+is mode 0600 and path-free. Source-scope and timing acceptance remain open.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.
