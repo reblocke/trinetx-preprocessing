@@ -1,8 +1,8 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Implement the owner-approved encounter preprocessing split: reusable traditional
-and GLP-1 data creation upstream, study analysis downstream, reference port preserved.
+Complete postmerge encounter validation and shared acceptance hardening for the
+downstream GLP-1 consumer while preserving the accepted reference behavior.
 
 ## Constraints/Assumptions
 Preserve FULL_DATA and AFTER_EXCLUSION membership, timing, repeated encounters,
@@ -17,7 +17,9 @@ encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
 
 ## State
-Implementation in isolated worktrees from verified merged source heads.
+The encounter split is merged: upstream `main` is at `4bbe8cf`, and downstream
+`master` is at `d5d2691`. Postmerge work is in an isolated RESEARCH FAST
+worktree; the historical private bundle remains in its existing location.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -39,21 +41,32 @@ and the wide output use bounded partitions without changing output semantics.
 The full retained-reference comparison passed exact membership and all 33/534
 field checks; the separate validator passed all bundle artifacts, schema, source
 coverage, inventories and manifest hashes. Peak whole-process RSS was measured
-at 7,404,158,976 bytes. The private acceptance receipt and linked PRs record
-the exact installed-pair, hosted-check and merge state separately.
+at 7,404,158,976 bytes. The historical private receipt records the earlier
+installed pair and gates; it predates the new shared acceptance contract and
+cannot authorize the strengthened production reader without revalidation.
 Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For release, verify the final installed downstream pin, hosted checks and private
-acceptance bound to the source pair and producers. Merge UP14 before DOWN15.
+Version-1.0 shared acceptance verification and validator report binding have
+focused synthetic real-Parquet tests passing. Table-specific schema, QA null,
+catalogue source-count, coverage/inventory availability, and enumerated
+HBA1c/BMI raw-triplet checks have mutation tests. Versioned linkage policies
+and cache content fingerprints also have focused tests. The existing private
+bundle is being revalidated under the shared private build lock, with scratch
+on encrypted RESEARCH FAST; its result is not yet known. Compose a new integrated
+receipt through the trusted private process only after all gates pass; merge
+upstream before changing the downstream immutable pin and running hosted
+installed-pair CI.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.
 Canonical compatibility capture uses corrected_v1 and earliest_per_setting;
 its encounter population differs from the retained accepted reference.
-The source/input boundary needs reconciliation; no scientific acceptance claimed.
+The authenticated compatibility companion remains the population authority;
+independent canonical-projection reconciliation is a separate gate. No new
+scientific acceptance is claimed.
 
 ## Working set
-Encounter builder and relocated GLP-1 modules; focused pytest, Ruff,
-source/output comparison and normal repository checks.
+`encounters/acceptance.py`, validator report, focused acceptance tests and the
+postmerge companion ticket; downstream reader and installed-pair gate.

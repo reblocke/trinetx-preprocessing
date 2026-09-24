@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 LOGGER = logging.getLogger(__name__)
+FINGERPRINT_VERSION = "1.0"
 
 
 class StageCache:
@@ -57,6 +59,19 @@ class StageCache:
         result = {}
         for table in tables:
             quoted = '"' + table.replace('"', '""') + '"'
+            content = hashlib.sha256()
+            # DuckDB serializes the typed row in column order. Sorting its
+            # SHA-256 digests gives a bounded multiset, retaining duplicate
+            # multiplicity without relying on physical row order. The schema
+            # below binds the interpretation of JSON numbers and dates.
+            cursor = self.connection.execute(
+                "SELECT sha256(to_json(row_value)) AS row_digest "
+                f"FROM {quoted} AS row_value ORDER BY row_digest"
+            )
+            for batch in iter(lambda: cursor.fetchmany(4096), []):
+                for (row_digest,) in batch:
+                    content.update(row_digest.encode("ascii"))
+                    content.update(b"\n")
             result[table] = {
                 "rows": self.connection.execute(
                     f"SELECT count(*) FROM {quoted}"
@@ -65,6 +80,7 @@ class StageCache:
                     list(row[:2])
                     for row in self.connection.execute(f"DESCRIBE {quoted}").fetchall()
                 ],
+                "content_sha256": content.hexdigest(),
             }
         return result
 
@@ -74,6 +90,8 @@ class StageCache:
         ).fetchone()
         if row:
             receipt = json.loads(row[0])
+            if receipt.get("fingerprint_version") != FINGERPRINT_VERSION:
+                raise ValueError("Legacy encounter cache lacks content fingerprints")
             if receipt["tables"] != self._table_receipts(tables):
                 raise ValueError("Encounter checkpoint table integrity changed")
             LOGGER.info("Reusing completed encounter stage %s", stage)
@@ -82,7 +100,11 @@ class StageCache:
         self.connection.execute("BEGIN")
         try:
             result = operation()
-            receipt = {"tables": self._table_receipts(tables), "result": result}
+            receipt = {
+                "fingerprint_version": FINGERPRINT_VERSION,
+                "tables": self._table_receipts(tables),
+                "result": result,
+            }
             self.connection.execute(
                 "INSERT INTO encounter_stage_checkpoint VALUES (?, ?)",
                 [stage, json.dumps(receipt, sort_keys=True)],
