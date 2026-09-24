@@ -3,6 +3,8 @@
 The maintained data-creation implementation lives in trinetx-preprocessing.
 The direct Stata implementation and its accepted Python port remain unchanged
 in trinetx-hypercapnia-code as reproduction references.
+The accepted source snapshot has only date-level encounter starts and arterial
+gas events; see [the original-abstract timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
 
 ## Run
 
