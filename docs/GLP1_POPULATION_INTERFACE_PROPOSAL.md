@@ -43,6 +43,18 @@ and the installed consumer must verify that trusted identity before opening
 rows. A future timed export requires a new immutable canonical product; never
 rewrite the accepted date-only database or its existing bundle.
 
+The draft `verify_accepted_cohort_source()` and
+`open_accepted_cohort_source()` implement this trust boundary without issuing
+an acceptance. They require a caller-supplied receipt SHA-256, exact database
+and adjacent sidecar SHA-256/size, matching embedded metadata and catalog,
+required element IDs, and passing provenance, source-scope and historical-index
+coverage gates in the trusted receipt. The open function reuses the existing
+read-only cohort-source API and checks file identity across the read. A
+synthetic receipt and database exercise positive and tamper rejection paths;
+they do not pass the private gates or authorize downstream adoption. Hashing
+the full database is an intentional once-per-open cost to bind exact bytes;
+its private runtime is still unmeasured.
+
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with
 its source-work-manifest binding present. That verifies this reuse path can

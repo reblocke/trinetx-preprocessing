@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 
 import duckdb
@@ -14,6 +15,10 @@ from trinetx_preprocessing.combined_preprocessing.cohort_source import (
     CohortSourceValidationError,
     open_cohort_source,
     validate_cohort_source,
+)
+from trinetx_preprocessing.combined_preprocessing.cohort_source_acceptance import (
+    open_accepted_cohort_source,
+    verify_accepted_cohort_source,
 )
 from trinetx_preprocessing.combined_preprocessing.database import (
     COMBINED_MANIFEST_FILENAME,
@@ -245,3 +250,82 @@ def test_cohort_source_returns_unsafe_spill_location_as_invalid_product(
     assert result.errors == (
         f"unsafe cohort-source database/spill directory: {database_path.parent}",
     )
+
+
+def test_trusted_population_receipt_binds_exact_source_and_passed_gates(
+    tmp_path: Path,
+) -> None:
+    database_path = _build_cohort_source_product(tmp_path)
+    result = validate_cohort_source(database_path, required_elements=_REQUIRED_ELEMENTS)
+    assert result.valid and result.metadata is not None
+    metadata = result.metadata.to_dict()
+    metadata.pop("database")
+    metadata.pop("database_size_bytes")
+    sidecar_path = database_path.parent / COMBINED_MANIFEST_FILENAME
+    receipt = {
+        "acceptance_contract_version": "1.0",
+        "status": "accepted",
+        "kind": "canonical_cohort_source",
+        "purpose": "glp1_abstract_population",
+        "database_sha256": sha256(database_path.read_bytes()).hexdigest(),
+        "database_size_bytes": database_path.stat().st_size,
+        "sidecar_sha256": sha256(sidecar_path.read_bytes()).hexdigest(),
+        "required_elements": list(_REQUIRED_ELEMENTS),
+        "metadata": metadata,
+        "gates": {
+            name: {"pass": True, "evidence_sha256": sha256(name.encode()).hexdigest()}
+            for name in (
+                "source_provenance",
+                "source_scope",
+                "historical_index_coverage",
+            )
+        },
+    }
+    receipt_path = tmp_path / "accepted-source.json"
+    receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+    trusted_digest = sha256(receipt_path.read_bytes()).hexdigest()
+    options = {"receipt_path": receipt_path, "expected_receipt_sha256": trusted_digest}
+
+    verified = verify_accepted_cohort_source(database_path, **options)
+    assert verified == result.metadata
+    with open_accepted_cohort_source(database_path, **options) as source:
+        assert source.metadata == verified
+        assert (
+            source.connection.execute(
+                "SELECT count(*) FROM source_encounter"
+            ).fetchone()
+            is not None
+        )
+
+    with pytest.raises(ValueError, match="trusted expectation"):
+        verify_accepted_cohort_source(
+            database_path,
+            **{**options, "expected_receipt_sha256": "0" * 64},
+        )
+    receipt["gates"]["historical_index_coverage"]["pass"] = False
+    receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+    with pytest.raises(ValueError, match="passing required population gates"):
+        verify_accepted_cohort_source(
+            database_path,
+            **{
+                **options,
+                "expected_receipt_sha256": sha256(
+                    receipt_path.read_bytes()
+                ).hexdigest(),
+            },
+        )
+    receipt["gates"]["historical_index_coverage"]["pass"] = True
+    receipt_path.write_text(json.dumps(receipt, sort_keys=True))
+    with duckdb.connect(str(database_path)) as connection:
+        connection.execute("UPDATE preprocessing_manifest SET status = 'building'")
+        connection.execute("CHECKPOINT")
+    with pytest.raises(ValueError, match="differs from trusted receipt"):
+        verify_accepted_cohort_source(
+            database_path,
+            **{
+                **options,
+                "expected_receipt_sha256": sha256(
+                    receipt_path.read_bytes()
+                ).hexdigest(),
+            },
+        )
