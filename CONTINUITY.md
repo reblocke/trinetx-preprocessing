@@ -130,12 +130,16 @@ The draft source-capability audit now counts encounter-start, lab-event and
 medication-start precision, parsed versus unparsed timestamp-labeled rows,
 populated medication end/status fields and raw-header field presence from a
 validated canonical connection. Thirteen focused capability/scope/population
-tests plus Ruff pass. No accepted-source rerun or new timestamp-capable export
-has been claimed; gas-specific timing and clinical acceptance remain open.
+tests plus Ruff pass. A new timestamp-capable export has not been observed;
+gas-specific timing and clinical acceptance remain open.
 The candidate capability audit is now available as a read-only CLI command
 against a validated canonical product. It emits aggregate JSON only and marks
-source acceptance and abstract readiness false. An installed command test uses
-a synthetic canonical build; private source screening remains pending.
+source acceptance and abstract readiness false. A command test uses
+a synthetic canonical build. An owner-only accepted-snapshot run at `ab77abd`
+completed in 162 seconds, with stable source identity, clean spill storage,
+mode-0600 path-free receipt and date-only/absent medication-field findings
+matching prior independent audits. The receipt remains outside Git. Neither
+source nor scientific/report acceptance is established.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

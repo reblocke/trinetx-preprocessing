@@ -77,6 +77,15 @@ identity in the approved local audit record, not in a public issue or PR.
 The spill root must already exist outside the repository; use an approved fast
 scratch volume when available.
 
+An owner-only run of this CLI at draft revision `ab77abd` against the existing
+accepted snapshot completed in 162 seconds with stable input identity and a
+clean spill directory. Its aggregate result agreed with the earlier field
+audit: the screened encounter-start, lab-event, and medication-start rows were
+all date-only, and no medication end or status values were populated. The
+path-free, mode-0600 receipt remains outside Git. This confirms the current
+snapshot limitation; it does not accept a new source or resolve gas-specific
+timing and medication activity.
+
 ## Request to the source provider
 
 Ask whether a current alternative TriNetX product or approved site-specific

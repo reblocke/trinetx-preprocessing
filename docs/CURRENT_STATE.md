@@ -32,6 +32,9 @@ the accepted source limitation and scientific report gate are unchanged.
 The read-only `audit-cohort-source-capabilities` command exposes this screen
 through a validated canonical source and labels both acceptance and abstract
 report readiness false.
+An owner-only accepted-snapshot CLI run at `ab77abd` reproduced the date-only
+and absent medication end/status findings with stable source identity; its
+restricted aggregate receipt remains outside Git.
 Draft population-interface work has a trusted canonical-source verifier and an
 aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
