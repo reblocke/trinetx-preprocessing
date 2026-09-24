@@ -10,6 +10,10 @@ variant covers all historical patients or exact index encounters, although
 every historical index key exists in that same canonical encounter source.
 The audit did not choose a replacement index, compute a phenotype, or publish
 restricted counts. Its source identities and aggregate receipts remain private.
+The historical GLP-1 source acceptance at `9fe392b` establishes canonical/raw
+source interchangeability for its validated contract. Retain it as evidence;
+it does not accept this new population interface or the original abstract's
+index membership, exact timing, and clinical estimates.
 
 This is a population-interface problem separate from the
 [timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md). A new timed export alone
