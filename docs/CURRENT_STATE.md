@@ -29,6 +29,9 @@ Draft source-capability auditing can now summarize parsed versus date-only
 event precision and medication end/status capture, including raw-header field
 presence, without returning rows or paths. It is a candidate-source screen;
 the accepted source limitation and scientific report gate are unchanged.
+The read-only `audit-cohort-source-capabilities` command exposes this screen
+through a validated canonical source and labels both acceptance and abstract
+report readiness false.
 Draft population-interface work has a trusted canonical-source verifier and an
 aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;

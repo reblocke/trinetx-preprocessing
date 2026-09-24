@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -29,7 +29,13 @@ from .combined_preprocessing.builder import (
     require_safe_compatibility_hash_locations,
     require_safe_output_location,
 )
-from .combined_preprocessing.cohort_source import validate_cohort_source
+from .combined_preprocessing.cohort_source import (
+    open_cohort_source,
+    validate_cohort_source,
+)
+from .combined_preprocessing.cohort_source_capability_audit import (
+    audit_candidate_source_capabilities,
+)
 from .combined_preprocessing.database import (
     inspect_combined_database,
 )
@@ -587,6 +593,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Emit machine-readable JSON.",
+    )
+
+    capability_parser = subparsers.add_parser(
+        "audit-cohort-source-capabilities",
+        help="Count timing precision and medication capture in a candidate source.",
+    )
+    capability_parser.add_argument(
+        "--database",
+        type=Path,
+        required=True,
+        help="Path to a canonical trinetx_preprocessed.duckdb.",
+    )
+    capability_parser.add_argument(
+        "--spill-root",
+        type=Path,
+        default=None,
+        help="Optional existing approved scratch directory for DuckDB spill.",
     )
 
     export_legacy_parser = subparsers.add_parser(
@@ -1320,6 +1343,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                     logger.error("%s", error)
                 logger.info("Cohort source valid: %s", result.valid)
             return 0 if result.valid else 1
+
+        if args.command == "audit-cohort-source-capabilities":
+            with open_cohort_source(
+                args.database, spill_root=args.spill_root
+            ) as source:
+                result = audit_candidate_source_capabilities(source.connection)
+            print(
+                json.dumps(
+                    {
+                        "kind": "candidate_source_capability_audit",
+                        "source_accepted": False,
+                        "abstract_report_ready": False,
+                        "counts": asdict(result),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
 
         if args.command == "export-legacy":
             paths = export_legacy_compatibility_outputs(

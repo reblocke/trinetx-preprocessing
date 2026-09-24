@@ -61,6 +61,22 @@ first-24-hour validation or an acceptance receipt. A new source still needs
 the index-specific arterial gas and pH, time-zone, shift and provenance checks
 below.
 
+For an approved canonical product, run the read-only screen locally:
+
+```bash
+uv run --locked trinetx-preprocessing audit-cohort-source-capabilities \
+  --database /approved/output/trinetx_preprocessed.duckdb \
+  --spill-root /approved/local/scratch
+```
+
+The command validates the canonical product first and emits aggregate JSON to
+standard output without source paths, row identifiers or raw headers. Its
+`source_accepted=false` and `abstract_report_ready=false` fields are deliberate;
+this screen does not issue an acceptance receipt. Retain full private source
+identity in the approved local audit record, not in a public issue or PR.
+The spill root must already exist outside the repository; use an approved fast
+scratch volume when available.
+
 ## Request to the source provider
 
 Ask whether a current alternative TriNetX product or approved site-specific

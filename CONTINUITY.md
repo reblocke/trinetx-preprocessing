@@ -132,6 +132,10 @@ populated medication end/status fields and raw-header field presence from a
 validated canonical connection. Thirteen focused capability/scope/population
 tests plus Ruff pass. No accepted-source rerun or new timestamp-capable export
 has been claimed; gas-specific timing and clinical acceptance remain open.
+The candidate capability audit is now available as a read-only CLI command
+against a validated canonical product. It emits aggregate JSON only and marks
+source acceptance and abstract readiness false. An installed command test uses
+a synthetic canonical build; private source screening remains pending.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

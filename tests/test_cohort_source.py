@@ -8,6 +8,7 @@ import duckdb
 import pandas as pd
 import pytest
 
+from trinetx_preprocessing import cli as preprocessing_cli
 from trinetx_preprocessing.combined_preprocessing import (
     cohort_source as cohort_source_module,
 )
@@ -138,6 +139,42 @@ def test_cohort_source_validates_and_opens_read_only(tmp_path: Path) -> None:
         assert scope_audit.historical_patients == 1
         assert scope_audit.source_patient_missing == 1
 
+    assert not list(spill_root.iterdir())
+
+
+def test_capability_cli_reads_validated_source_and_emits_only_aggregate_counts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    database_path = _build_cohort_source_product(tmp_path)
+    spill_root = tmp_path / "capability-spill"
+    spill_root.mkdir()
+
+    assert (
+        preprocessing_cli.main(
+            [
+                "audit-cohort-source-capabilities",
+                "--database",
+                str(database_path),
+                "--spill-root",
+                str(spill_root),
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["kind"] == "candidate_source_capability_audit"
+    assert payload["source_accepted"] is False
+    assert payload["abstract_report_ready"] is False
+    assert payload["counts"]["encounter_starts"]["source_rows"] == 0
+    assert {item["domain"] for item in payload["counts"]["raw_headers"]} == {
+        "encounter",
+        "labs",
+        "meds",
+    }
+    assert str(tmp_path) not in output
+    assert "patient_id" not in output
+    assert "encounter_id" not in output
     assert not list(spill_root.iterdir())
 
 
