@@ -103,7 +103,10 @@ stable. It took 164 seconds with approximately 3.51 GB peak RSS; the receipt
 is mode 0600 and path-free. Source-scope and timing acceptance remain open.
 The draft conflict audit now counts a missing start alongside an observed start
 for the same original key as a conflict. The prior private conflict receipt was
-made before this correction; an affected private aggregate rerun is pending.
+made before this correction. An affected private aggregate rerun at `9e92e1f`
+passed with stable input identities and unchanged conflict count. Its path-free
+mode-0600 receipt is outside Git; source-scope, timing and scientific acceptance
+remain open.
 The draft source-scope inventory now summarizes canonical demographic presence,
 five-domain observed records, event counts, observed spans and export-file
 counts for the historical patient set. Synthetic and read-only source tests

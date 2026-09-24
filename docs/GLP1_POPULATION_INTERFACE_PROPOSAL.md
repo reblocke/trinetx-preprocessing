@@ -77,6 +77,12 @@ retained outside Git. This verifies the candidate audit and key coverage only;
 it does not approve source scope, issue a population acceptance receipt, or
 recover time-of-day precision.
 
+The null-aware conflict correction at `9e92e1f` was rerun on the same accepted
+inputs. The exact historical key categories still matched the independent
+audit, and the corrected conflicting-start count did not change. Input
+identities remained stable; the owner-only, path-free receipt is mode 0600
+outside Git. This checks the affected audit behavior, not source acceptance.
+
 The draft `audit_candidate_source_scope()` inventories the historical patient
 set through the canonical `source_patient`, `patient_observability`, and
 `source_file_inventory` tables. For each clinical domain it reports how many
