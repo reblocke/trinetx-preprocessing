@@ -1,14 +1,15 @@
 # Current repository state
 
-Updated 2026-09-21. Python encounter preprocessing is implemented here; validation
+Updated 2026-09-24. Python encounter preprocessing is implemented here; validation
 and publication status are recorded in CONTINUITY.md and the linked PR.
 See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
 products, timing, identifiers, missingness and verification boundary.
 The authenticated companion route passed the complete legacy population/value
-and canonical linkage/coverage gates. Enrichment was interrupted by a host restart;
-the final interface remains unvalidated. Source-stage checkpoints and an exact
-vital-selection query proof support a guarded recovery. Follow
-[NEXT_STEPS.md](../NEXT_STEPS.md) before another build or merge.
+and canonical linkage/coverage gates. A corrected private build completed both
+independent variants. The full retained-reference comparison and separate bundle
+artifact validator passed on that bundle. Final installed-pair and hosted checks
+are required before its private acceptance receipt and coordinated merges; see
+[NEXT_STEPS.md](../NEXT_STEPS.md).
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical

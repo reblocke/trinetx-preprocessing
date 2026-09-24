@@ -31,43 +31,22 @@ missingness differences. Canonical patient/composite-encounter linkage covers
 every encounter, with zero demographic or anchor-day disagreements. Corrected
 coverage recognizes both medication export families and distinguishes observed
 spans from incomplete capture; observed spans do not prove continuous history.
-The corrected enrichment was interrupted by a host restart during FULL_DATA
-vital-source materialization. No enriched variant or completed bundle was
-published. The companion, legacy artifacts and coverage artifacts were rehashed
-successfully after restart. Committed lab, encounter and patient source tables
-remain preserved; their reuse requires a validated recovery import. Atomic, input-bound source checkpoints passed focused regression tests.
-An exact full-source vital-selection comparison passed with zero per-row
-selection differences. The optional receipt-gated exact-code query preserves
-patient scope, raw projected fields and duplicates. Recovery adoption passed and resumed FULL_DATA source materialization completed.
-The next encounter-type context join exceeded the DuckDB cap. A bounded
-patient-partitioned implementation preserves the original first-row rule.
-The partition export completed on private data, but AppleDouble metadata files
-matched the Parquet glob and stopped the read. Explicit data-file filtering
-and original-error preservation are now tested; the corrected context stage passed privately. The subsequent global element-evidence
-join exceeded the unchanged DuckDB cap. The repair partitions source/membership
-joins by source ID and summaries by encounter ID, preserving multiplicity and
-temporal rules; completed clinical features gain an atomic checkpoint. The
-FULL_DATA element evidence and summary then completed privately with
-1,056,153,386 evidence rows and 2,661,286 summary rows. A global distinct over
-the evidence exceeded the unchanged DuckDB cap while calculating availability
-states. Availability now partitions evidence and coverage by encounter key and
-sums exact per-partition counts. The completed source, clinical, and element
-stages were adopted with provenance checks. The first availability retry was
-stopped after DuckDB's 256-way partition writer produced excessive tiny files
-on the external volume. A synthetic writer check showed 64 physical partitions
-avoid that file proliferation; each physical partition is processed as four
-smaller, exact key slices. The interrupted scratch and receipts remain private
-and preserved. That corrected availability stage completed on private data, but
-the subsequent all-at-once wide output join exceeded the same memory cap. The
-wide output now joins one encounter-key slice at a time and streams the slices
-into the same single Parquet product; an exact synthetic multiset check covers
-the join. Neither enriched variant is accepted yet.
+The corrected private build completed both independent variants: FULL_DATA
+2,662,675 and AFTER_EXCLUSION 833,476 encounter rows. It used a provenance-bound
+recovery cache after earlier memory and file-proliferation failures; all failed
+attempts and their artifacts remain preserved. Source/element joins, availability
+and the wide output use bounded partitions without changing output semantics.
+The full retained-reference comparison passed exact membership and all 33/534
+field checks; the separate validator passed all bundle artifacts, schema, source
+coverage, inventories and manifest hashes. Peak whole-process RSS was measured
+at 7,404,158,976 bytes. The private acceptance receipt and linked PRs record
+the exact installed-pair, hosted-check and merge state separately.
+Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Complete clinical enrichment, repeat the retained-reference comparison, validate
-all artifacts, bind private acceptance to the source pair and producers, then
-verify the installed downstream pin and final CI. Merge UP14 before DOWN15.
+For release, verify the final installed downstream pin, hosted checks and private
+acceptance bound to the source pair and producers. Merge UP14 before DOWN15.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

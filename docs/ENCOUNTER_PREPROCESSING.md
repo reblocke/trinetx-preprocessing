@@ -10,8 +10,10 @@ The owner approved a one-time authenticated import of the original 36 CSVs
 on 2026-09-20. Schema 2.0 separates that population authority from the canonical
 clinical evidence source. The original canonical compatibility projections did
 not reproduce accepted membership. The companion bypasses that mismatch; it
-does not explain or repair the canonical projections. Private validation remains
-pending until the gates in [NEXT_STEPS.md](../NEXT_STEPS.md) pass.
+does not explain or repair the canonical projections. The corrected private build,
+retained-reference comparison and artifact validator passed for both variants;
+final installed-pair and hosted gates remain required for the private acceptance
+receipt described in [NEXT_STEPS.md](../NEXT_STEPS.md).
 
 Install the locked environment and import the authenticated immutable snapshot
 once. The identity receipt supplies the exact accepted hashes for all 36 files:
@@ -203,14 +205,17 @@ imputation and retention of rows failing GLP-1 study eligibility. Private
 comparison uses exact keys, categorical values and missingness, with bounded
 numerical comparison rather than byte-identical serialization.
 
-The private build/comparison result is recorded separately; synthetic tests
-alone do not establish current-data acceptance. Historical scientific issues
-in the study package are not repaired or newly validated by relocation.
+The corrected private build completed both independent variants. Its retained
+reference comparison passed exact membership and all 33 FULL_DATA and 534
+AFTER_EXCLUSION fields; the separate validator passed the complete artifact
+contract. Those results are bound to the private bundle manifest and do not by
+themselves establish final acceptance. Historical scientific issues in the study
+package are not repaired or newly validated by relocation.
 See the downstream ENCOUNTER_PREPROCESSING.md for that boundary.
 
 The final observability day-bound adjustment is output-neutral for the accepted
 private source: an aggregate scan found zero non-midnight timestamps in all
 five source-observability domains. The failed private build retains its original
-producer identity. This bounded date proof does not establish build success or
-validate the later context-memory repair; a corrected integrated build and
-comparison remain required.
+producer identity. The corrected integrated build and comparison now provide the
+separate completion evidence; the bounded date proof remains limited to that
+observability question.
