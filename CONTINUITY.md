@@ -97,6 +97,11 @@ The draft source-scope inventory now summarizes canonical demographic presence,
 five-domain observed records, event counts, observed spans and export-file
 counts for the historical patient set. Synthetic and read-only source tests
 pass. It does not establish continuous history or clinical negatives.
+An owner-only scope inventory at `4ab72db` passed structural checks with stable
+inputs: all historical patients have a canonical patient record, and all five
+clinical domains have files and observed records. It took 7.61 seconds with
+approximately 520 MB peak RSS. The receipt is path-free and mode 0600. Full
+source-scope review, timing and scientific acceptance remain open.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.

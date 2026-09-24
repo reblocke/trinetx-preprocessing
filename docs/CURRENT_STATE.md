@@ -28,6 +28,10 @@ aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
 this is not a new accepted source population or a timed extract. See the
 [population interface proposal](GLP1_POPULATION_INTERFACE_PROPOSAL.md).
+An additional owner-only candidate inventory found canonical patient records
+for the historical population and observed records plus source files in all
+five clinical domains. It does not establish continuous history or clinical
+ascertainment; the source-scope acceptance gate remains open.
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical

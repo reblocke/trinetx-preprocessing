@@ -85,6 +85,15 @@ capture diagnostics: a patient without a record is not a clinical negative,
 and the first/last observed event does not prove continuous history. Synthetic
 and read-only source tests pass; private source-scope review remains pending.
 
+An owner-only candidate inventory at `4ab72db` passed its structural checks
+with stable input identities. Every historical patient had a canonical patient
+record; each of the five clinical domains had source files and some observed
+records among historical patients. The run took 7.61 seconds and peaked at
+approximately 520 MB resident memory. Its path-free, mode-0600 aggregate
+receipt remains outside Git. This confirms observable source capture for this
+snapshot, not uninterrupted lookback, complete clinical ascertainment, or
+source-scope acceptance.
+
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with
 its source-work-manifest binding present. That verifies this reuse path can
