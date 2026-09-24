@@ -75,9 +75,21 @@ def audit_candidate_source_scope(
     allowed = ",".join("'" + domain + "'" for domain in _DOMAINS)
     invalid_observability = connection.execute(
         "SELECT count(*) FROM patient_observability "
-        "WHERE patient_id IS NULL OR logical_domain IS NULL "
-        f"OR logical_domain NOT IN ({allowed}) OR event_count IS NULL"
+        "WHERE patient_id IS NULL OR trim(patient_id)='' "
+        "OR logical_domain IS NULL "
+        f"OR logical_domain NOT IN ({allowed}) OR event_count IS NULL "
+        "OR first_event_datetime > last_event_datetime"
     ).fetchone()[0]
+    duplicate_observability = connection.execute(
+        "SELECT count(*) FROM ("
+        "SELECT patient_id, logical_domain FROM patient_observability "
+        "GROUP BY patient_id, logical_domain HAVING count(*) > 1"
+        ")"
+    ).fetchone()[0]
+    if invalid_observability or duplicate_observability:
+        raise ValueError(
+            "Candidate source has invalid or duplicated observability rows"
+        )
     files = dict(
         connection.execute(
             "SELECT domain, count(*) FROM source_file_inventory GROUP BY domain"

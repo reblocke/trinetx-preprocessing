@@ -71,3 +71,23 @@ def test_candidate_scope_rejects_bad_historical_grain_or_relation_name():
             audit_candidate_source_scope(
                 connection, historical_patient_relation="historical_patients"
             )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "INSERT INTO patient_observability SELECT * FROM patient_observability "
+        "WHERE patient_id='p1' AND logical_domain='labs'",
+        "UPDATE patient_observability SET first_event_datetime='2024-02-03' "
+        "WHERE patient_id='p2' AND logical_domain='labs'",
+        "UPDATE patient_observability SET patient_id=' ' "
+        "WHERE patient_id='p2' AND logical_domain='labs'",
+    ],
+)
+def test_candidate_scope_rejects_observability_that_could_misstate_capture(mutation):
+    with _source() as connection:
+        connection.execute(mutation)
+        with pytest.raises(ValueError, match="invalid or duplicated observability"):
+            audit_candidate_source_scope(
+                connection, historical_patient_relation="historical_patients"
+            )
