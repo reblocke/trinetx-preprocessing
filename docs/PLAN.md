@@ -61,48 +61,25 @@ remain downstream. See `CURRENT_STATE.md` for the current handoff boundary.
    Broader retained-source completeness and current-schema all-36-file
    certification remain separate upstream release gates.
 
-## Next phases
+## Encounter interface: current refactor
 
-1. **Wait for the downstream refactor boundary.** Freeze the stable behavior
-   head of the cohort-creation repository once its current refactor completes.
-   Do not import from a moving target.
-2. **Import cohort construction into the primary workflow.** Port the
-   Hypercapnia derivations and selections incrementally under the shared cohort
-   layer, consuming only the cohort-source contract while the Stata/CSV route
-   remains the exact private reference. Bring GLP-1 source elements and later
-   derivations into that same registry and workflow; do not create a permanent
-   standalone GLP-1 product or second preprocessing path.
-3. **Integrate the validated GLP-1 derivation with the future cohort layer.**
-   The current command already consumes the shared database as its documented
-   production source, with raw-reference mode retained for reproduction. Future
-   cohort integration should reuse that validated path under the shared workflow
-   and preserve its exact behavior; routine processing needs no second raw scan.
-4. **Reconcile GLP-1 issue #6.** Update its stale checklist to separate the
-   delivered standalone CLI, eight-file contract, synthetic acceptance, and
-   behavior-head-scoped aggregate full-data reference evidence from the
-   remaining literal scope: ingest optional high-value domains when present;
-   complete and clinically review the versioned concept catalogs; move
-   remaining phenotype/label/payer policy into versioned configuration; add the
-   required smoke-query SQL/script and expand `summarize` to emit the specified
-   aggregate prevalence, indication-burden, treatment-gap, and missingness
-   results; refresh full-data evidence at the final exact catalog/rule head;
-   and complete investigator terminology and private record-level review. Keep
-   the issue open until every retained acceptance criterion has evidence.
-5. **Finish onboarding and legacy cleanup.** Keep notebooks as reference-only
-   material, move them under `notebooks/legacy/` only in a dedicated cleanup,
-   and deprecate compatibility paths only after all downstream consumers have
-   migrated.
+The owner approved extraction from downstream stable head 5ada7194d40f.
+The implementation now provides both original encounter populations and
+traditional/GLP-1 source features through `build-encounters`. The preserved
+study package and configuration are downstream. See
+ENCOUNTER_PREPROCESSING.md and CONTINUITY.md for validation/landing status.
 
-## Deferred
+## Subsequent work
 
-- Importing cohort logic before the downstream repository refactor provides a
-  stable, reviewable behavior head.
-- Changing GLP-1 cohort, phenotype, imputation, propensity, or analysis
-  semantics.
-- Expanding clinical terminology beyond the current versioned element catalog.
+1. Continue neutral measurement and data-quality work here.
+2. Correct GLP-1 indication/prevalence definitions and implement encounter-based
+   study analyses downstream, using explicit study-specific denominators.
+3. Review terminology and optional-domain availability where the proposed
+   analysis needs stronger clinical ascertainment.
+4. Keep the CSV/DTA reference route available until its consumers migrate.
 
-Those changes require separate branches, explicit clinical decisions where
-applicable, and their own parity/correction gates.
+No new study estimand, indication correction or reporting is part of this
+refactor. Historical acceptance evidence below retains its original scope.
 
 ## Evidence boundary
 

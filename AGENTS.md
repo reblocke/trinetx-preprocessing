@@ -19,12 +19,14 @@
   `open_cohort_source()` / `validate_cohort_source()` API and the
   `validate-cohort-source` CLI. Consumers must validate manifest, schema, and
   catalog provenance before reading rows.
-- `src/trinetx_preprocessing/combined_preprocessing/glp1_adapter.py`, the standalone GLP-1 ingestion
-  path, and the Stata pipeline are migration/reference paths. Do not turn the
-  GLP-1 adapter into a permanent parallel product.
-- Cohort-construction code has not been imported into this repository. Its
-  migration is paused until the downstream cohort repository exposes a stable
-  behavior head; never infer cohort semantics from the source catalog.
+- Encounter creation, cleaning, measurements and imputation are maintained in
+  `encounters/`; see `docs/ENCOUNTER_PREPROCESSING.md`. Preserve repeated
+  encounters and independent FULL_DATA/AFTER_EXCLUSION rules.
+- Study selection, GLP-1 indications, weights, prevalence and figures live in
+  trinetx-hypercapnia-code. Preprocessing must never import its study package.
+- The owner-approved extraction from stable downstream head 5ada7194d40f
+  supersedes the earlier cohort-import pause. Catalog membership alone remains
+  insufficient for clinical eligibility.
 - Private GLP-1 source equivalence is accepted at `9fe392b`; see
   `docs/GLP1_SOURCE_ACCEPTANCE.md` for the composed comparison and repair receipt.
   Database-backed GLP-1 processing is the production route. Preserve raw-reference

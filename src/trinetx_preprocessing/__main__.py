@@ -11,10 +11,22 @@ from .cli import main as cli_main
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI entry point."""
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if arguments and arguments[0] == "verify-update":
-        from .verification.cli import main as verify_main
+    if arguments and arguments[0] == "validate-encounters":
+        from .encounters.cli import validate_main
 
-        return verify_main(arguments[1:])
+        return validate_main(arguments[1:])
+    if arguments and arguments[0] == "import-compatibility":
+        from .encounters.cli import import_main
+
+        return import_main(arguments[1:])
+    if arguments and arguments[0] == "build-encounters":
+        from .encounters.cli import main as encounters_main
+
+        return encounters_main(arguments[1:])
+    if arguments and arguments[0] == "verify-update":
+        raise SystemExit(
+            "Study verification moved: python -m trinetx_analysis.glp1_verification.cli"
+        )
     return cli_main(arguments)
 
 

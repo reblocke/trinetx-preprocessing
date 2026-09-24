@@ -374,7 +374,7 @@ def test_lactate_venous_blood_prefers_legacy_converted_code_on_ties(
     )
 
     assert enriched.loc[0, "value_Lactate_Venous_Blood"] == pytest.approx(
-        float(np.float32(str(np.float16(1.1) / 9.008)))
+        float(np.float32(str(np.float16(np.float16(1.1) / 9.008))))
     )
 
 

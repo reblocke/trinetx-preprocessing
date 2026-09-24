@@ -9,10 +9,10 @@ override this contract.
 This specification governs the historical/corrected Hypercapnia compatibility
 outputs. The canonical DuckDB now exposes one cohort-source catalog containing
 GLP-1 and traditional source candidates, but source `element_membership` does
-not apply any analytic rule in this specification. Cohort import has not yet
-occurred and is paused until the downstream repository refactor exposes a stable
-behavior head. The GLP-1 adapter and standalone raw ingestion remain temporary
-parity references; see `CURRENT_STATE.md` and `GLP1_PHENOTYPES.md`.
+not apply any analytic rule in this specification. The owner-approved encounter extraction is specified in
+ENCOUNTER_PREPROCESSING.md. It reuses the accepted downstream Python
+transformations without changing the compatibility rules below. Study
+selection and GLP-1 indication analysis are maintained downstream.
 
 Codes `3304`, `236913`, and `28863` are retained only as unadjudicated
 Stata-annotated outpatient-MAT source candidates. They do not change the

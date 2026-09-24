@@ -9,11 +9,11 @@ from typing import Any
 
 import pandas as pd
 
-from ..config import Config, ConfigError
-from ..glp1_eligibility.concept_sets import (
+from ..clinical_sources.concept_sets import (
     ConceptSetCatalog,
     load_concept_sets,
 )
+from ..config import Config, ConfigError
 from ..pipeline.final_output_schema import FINAL_OUTPUT_COLUMNS
 from ..storage import WorkTableWriter
 from .traditional_catalog import ANY_CODE_SYSTEM, traditional_concepts

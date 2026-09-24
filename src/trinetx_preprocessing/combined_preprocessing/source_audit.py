@@ -10,9 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..glp1_eligibility.concept_sets import ConceptSetCatalog
-from ..glp1_eligibility.discovery import validate_export
-from ..glp1_eligibility.provenance import InputInventory, build_input_inventory
+from ..clinical_sources.concept_sets import ConceptSetCatalog
+from ..clinical_sources.discovery import validate_export
+from ..clinical_sources.provenance import InputInventory, build_input_inventory
 
 AUDIT_PROFILE = "source_inventory_v1"
 
