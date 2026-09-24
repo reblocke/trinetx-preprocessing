@@ -85,6 +85,10 @@ The draft now has a caller-trusted receipt verifier and read-only open boundary
 that bind exact canonical database and sidecar bytes, metadata, required
 elements and declared population gates. Its synthetic tamper test passed. No
 private population receipt has been issued or accepted.
+An aggregate candidate-population audit now classifies historical patient/index
+key coverage, conflicting source start dates and start precision without
+selecting an index or returning keys. Synthetic and read-only source tests pass;
+the private acceptance gates remain open.
 The existing `validate_cohort_source()` API passed a metadata/schema check on
 the accepted snapshot at schema `1.0`; this is not a new population or timing
 acceptance.

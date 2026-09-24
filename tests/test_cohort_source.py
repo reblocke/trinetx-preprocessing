@@ -5,10 +5,14 @@ from hashlib import sha256
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 import pytest
 
 from trinetx_preprocessing.combined_preprocessing import (
     cohort_source as cohort_source_module,
+)
+from trinetx_preprocessing.combined_preprocessing import (
+    cohort_source_population_audit as population_audit_module,
 )
 from trinetx_preprocessing.combined_preprocessing.builder import build_preprocessed
 from trinetx_preprocessing.combined_preprocessing.cohort_source import (
@@ -110,6 +114,13 @@ def test_cohort_source_validates_and_opens_read_only(tmp_path: Path) -> None:
         )
         with pytest.raises(duckdb.Error):
             source.connection.execute("CREATE TABLE should_not_be_written (id INTEGER)")
+        population_audit = population_audit_module.audit_candidate_population(
+            source.connection,
+            pd.DataFrame(
+                {"patient_id": ["synthetic-absent"], "encounter_id": ["index"]}
+            ),
+        )
+        assert population_audit.patient_absent == 1
 
     assert not list(spill_root.iterdir())
 

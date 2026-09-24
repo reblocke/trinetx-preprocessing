@@ -55,6 +55,17 @@ they do not pass the private gates or authorize downstream adoption. Hashing
 the full database is an intentional once-per-open cost to bind exact bytes;
 its private runtime is still unmeasured.
 
+The draft `audit_candidate_population()` compares an authenticated historical
+patient/index key table supplied by the caller against the unfiltered canonical
+`source_encounter` table. It returns aggregate exact-key, patient-present but
+index-missing, and patient-absent categories, plus duplicate-start conflicts
+and start-precision counts for exact keys. It rejects duplicate, null or
+non-string historical keys, leaves all source rows in place, and selects no new
+index. Hand-counted synthetic cases and a read-only cohort-source integration
+case exercise the audit. Complete key coverage would support only one part of
+the private population gate; source scope and longitudinal evidence still need
+review.
+
 A read-only metadata/schema validation of the accepted canonical snapshot on
 2026-09-24 passed the existing cohort-source API at schema version `1.0` with
 its source-work-manifest binding present. That verifies this reuse path can
