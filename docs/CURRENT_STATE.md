@@ -1,14 +1,21 @@
 # Current repository state
 
-Updated 2026-09-24. Python encounter preprocessing is implemented here; validation
-and publication status are recorded in CONTINUITY.md and the linked PR.
+Updated 2026-09-24. Python encounter preprocessing is implemented here. The
+original split has merged: upstream `main` is at `4bbe8cf`, downstream `master`
+at `d5d2691`. These are historical implementation heads, not the new postmerge
+validator or installed consumer revisions. This file is the current public
+release-status summary; private source, bundle and receipt identities remain in
+the owner-only release record.
 See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
 products, timing, identifiers, missingness and verification boundary.
 The authenticated companion route passed the complete legacy population/value
 and canonical linkage/coverage gates. A corrected private build completed both
 independent variants. The full retained-reference comparison and separate bundle
-artifact validator passed on that bundle. Final installed-pair and hosted checks
-are required before its private acceptance receipt and coordinated merges; see
+artifact validator passed on that bundle under the earlier contract. Its
+historical private receipt cannot authorize the new strict consumer. Postmerge
+validator hardening, a new identity-bound integrated receipt, a new immutable
+upstream dependency pin and installed-pair CI remain open. Scientific acceptance
+for the original patient-level GLP-1 abstract remains separate; see
 [NEXT_STEPS.md](../NEXT_STEPS.md).
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original

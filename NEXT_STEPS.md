@@ -1,7 +1,31 @@
-# Finish the encounter preprocessing refactor
+# Encounter release follow-up
 
-Handoff: 2026-09-20. Implementation exists, but **private encounter validation
-has failed and neither PR is ready to merge**. Continue on the Mac mini.
+The original encounter split is merged: upstream `main` contains `4bbe8cf` and
+downstream `master` contains `d5d2691`. The corrected private bundle and its
+historical retained-reference comparison passed at those revisions. The older
+private receipt predates the stronger shared acceptance contract; it does not
+authorize the new strict reader. The current postmerge work must complete the
+stronger artifact check, compose a manifest-bound integrated receipt through the
+trusted private release process, pin the new immutable upstream revision in the
+downstream package, and pass installed-pair CI. The downstream GLP-1 scientific
+report has its own unresolved gates. See [current state](docs/CURRENT_STATE.md)
+and [encounter interface](docs/ENCOUNTER_PREPROCESSING.md) for the maintained
+status and commands.
+
+Revalidate the existing immutable bundle before considering a rebuild. The
+validator needs a fresh private work directory and report outside Git, under the
+same private `build.lock` used by comparisons. A new build requires the
+authenticated compatibility companion, legacy-reference gate, explicit linkage
+policy, enrichment, artifact validation and retained-reference comparison shown
+in the encounter interface. Neither route proves fresh-source equivalence,
+continuous clinical history, new GLP-1 estimates or Stata qualification.
+
+## Historical 2026-09-20 handoff
+
+The following checklist records the earlier recovery session. Its initial
+failed-build and unmerged-PR status has been superseded by the merged state
+above. Preserve these steps as provenance; do not relaunch the old wrapper to
+repeat completed work.
 Exact paths, authenticated receipts and launch instructions are in the private
 `encounter-refactor-handoff/LOCAL_PATHS.md` beside the Mini checkouts. Keep that
 file and all real-data receipts out of this public repository.

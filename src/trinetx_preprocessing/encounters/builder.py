@@ -732,11 +732,31 @@ def build_encounters(
     legacy_metadata = json.loads((legacy_bundle / "legacy_metadata.json").read_text())
     coverage_bundle = no_symlinks(coverage_bundle)
     coverage = json.loads((coverage_bundle / "coverage.json").read_text())
-    from .coverage import AUDIT_DOMAINS
+    from .coverage import AUDIT_DOMAINS, COVERAGE_POLICIES, COVERAGE_POLICY_VERSION
 
     if (
         not coverage.get("pass")
         or coverage.get("contract_version") != "1.0"
+        or coverage.get("coverage_policy_version") != COVERAGE_POLICY_VERSION
+        or coverage.get("coverage_policy") not in COVERAGE_POLICIES
+        or (
+            coverage.get("coverage_policy") == "approved_incomplete_linkage"
+            and not coverage.get("approved_exception")
+        )
+        or set(coverage.get("variants", {})) != set(VARIANTS)
+        or any(
+            not item.get("pass")
+            or item.get("coverage_policy") != coverage["coverage_policy"]
+            or item.get("contradictions_pass") is not True
+            or (
+                coverage["coverage_policy"] == "complete_linkage"
+                and (
+                    item.get("complete_patient_linkage") is not True
+                    or item.get("complete_encounter_linkage") is not True
+                )
+            )
+            for item in coverage.get("variants", {}).values()
+        )
         or coverage.get("audit_domain_mapping")
         != {domain: list(names) for domain, names in AUDIT_DOMAINS.items()}
         or coverage.get("legacy_manifest_sha256") != sha256(base_manifest_path)

@@ -14,6 +14,9 @@ creation via `trinetx-preprocessing build-encounters`. See
 [current state](docs/CURRENT_STATE.md). Study selection, GLP-1 indications,
 propensity models, prevalence and figures live in trinetx-hypercapnia-code.
 The source-building and historical compatibility interfaces below remain available.
+The completed historical bundle requires postmerge revalidation and a new
+manifest-bound private acceptance receipt before use by the strict installed
+consumer; build completion alone is insufficient.
 
 Refactor Milestone 1 completed the replication phase under near-exact
 legacy-vs-refactor row parity: `4,412,875 / 4,412,932` final analytic rows
