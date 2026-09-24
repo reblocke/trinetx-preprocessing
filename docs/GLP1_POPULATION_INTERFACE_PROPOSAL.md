@@ -84,6 +84,11 @@ inventory alias for the canonical `medications` domain. These are transfer and
 capture diagnostics: a patient without a record is not a clinical negative,
 and the first/last observed event does not prove continuous history. Synthetic
 and read-only source tests pass; private source-scope review remains pending.
+The presence of medication records also does not establish order activity:
+the accepted medication export has no end or status fields, and the canonical
+columns contain no populated values for them. The original no-active-order
+denominator therefore needs separate source evidence or an approved
+unavailability decision.
 
 An owner-only candidate inventory at `4ab72db` passed its structural checks
 with stable input identities. Every historical patient had a canonical patient

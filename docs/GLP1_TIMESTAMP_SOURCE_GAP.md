@@ -27,6 +27,12 @@ vital, diagnosis, and procedure exports; the medication export has `start_date`.
 No separate time-of-day column appears in these raw headers. This rules out a
 currently omitted raw time field in the accepted input layout; it does not
 establish whether TriNetX can provide times in a new approved export.
+The accepted medication export also lacks `end_date`, `order_status`, and
+`status` fields. An aggregate check of the manifest-bound canonical medication
+table found no populated values in those columns. A missing end date in this
+snapshot represents an absent source field, not evidence of an open order.
+This independently blocks the original documented no-active-order denominator.
+The source identity and path-free audit receipt remain private.
 
 A [TriNetX-authored July 2021 deidentified dataset dictionary](https://www.stonybrookmedicine.edu/sites/default/files/TriNetX%20Research%20Data%20Dictionary%20-%20July%202021.pdf)
 describes encounter `start_date` and laboratory `date` as eight-character
@@ -57,6 +63,11 @@ safe, aggregate precision inventory before any transfer. At minimum, ask for:
   specimen/panel identifiers, original numeric values, units, and arterial
   provenance. The two measurements need a defensible time basis for first-gas
   ordering and the section 6.2 pairing hierarchy.
+- Medication order start and end datetimes with precision, status and
+  status-effective time if available, stable order IDs, ingredient/product,
+  and source capture period. Confirm whether these represent orders,
+  prescriptions, administrations, or another event; absent end/status fields
+  cannot establish an active versus documented-no-active order at index.
 - The extract's source snapshot and manifest, time-zone/offset semantics if
   supplied, date-shift behavior if applicable, coverage interval, and field
   dictionary. Confirm whether the time values describe the clinical event,

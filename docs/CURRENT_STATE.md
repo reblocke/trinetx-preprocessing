@@ -23,6 +23,8 @@ date-level encounter starts, arterial gas events, and other clinical-domain
 events. The original abstract's
 first-24-hour gas rule requires a new approved timestamp-capable source; see
 [the timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
+The accepted medication export also lacks end and status fields, leaving the
+original documented no-active-order denominator unavailable from this source.
 Draft population-interface work has a trusted canonical-source verifier and an
 aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;

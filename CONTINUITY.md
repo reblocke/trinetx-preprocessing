@@ -73,8 +73,12 @@ TriNetX-authored July 2021 deidentified dataset dictionary describes encounter
 and lab dates as eight-digit dates, consistent with this snapshot. A current
 alternative product or approved site-specific extract with real clinical event
 times and usable time-zone semantics remains UNCONFIRMED. See
-docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The
-current bundle remains immutable.
+docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The current bundle remains immutable.
+An owner-only, path-free aggregate medication audit found that the accepted
+raw export lacks order end and status fields, and the corresponding canonical
+columns have no populated values. The source identity remained stable; its
+mode-0600 receipt is outside Git. This separately blocks the original
+documented no-active-order denominator from this snapshot.
 Canonical source validated: 837 catalog elements including 303 source concepts.
 Canonical compatibility capture uses corrected_v1 and earliest_per_setting;
 its encounter population differs from the retained accepted reference.
