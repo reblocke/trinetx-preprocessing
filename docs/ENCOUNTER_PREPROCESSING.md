@@ -231,8 +231,12 @@ release configuration; an adjacent JSON file is never trusted automatically.
 `complete_linkage` requires positive patient and composite-encounter linkage
 results. An `approved_incomplete_linkage` release must identify its approved
 exception explicitly. A historical receipt lacking this schema is not silently
-upgraded. The existing private bundle requires revalidation under the stronger
-validator and a new integrated receipt before the strict reader may consume it.
+upgraded. The existing private bundle passed stronger validation at merged
+upstream revision `cae58a2`. An external identity-bound engineering receipt
+binds all required gates, and the pinned installed consumer read both variants
+and companion evidence successfully. Downstream full and installed-pair CI
+passed, and the merged consumer tree matches the tested head. This is
+engineering acceptance of the input boundary, not the GLP-1 report.
 Build completion, artifact validation, reference parity, installed-pair
 verification and scientific acceptance remain distinct.
 

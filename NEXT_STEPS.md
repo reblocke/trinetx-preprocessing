@@ -1,14 +1,14 @@
 # Encounter release follow-up
 
-The original encounter split is merged: upstream `main` contains `4bbe8cf` and
-downstream `master` contains `d5d2691`. The corrected private bundle and its
-historical retained-reference comparison passed at those revisions. The older
-private receipt predates the stronger shared acceptance contract; it does not
-authorize the new strict reader. The current postmerge work must complete the
-stronger artifact check, compose a manifest-bound integrated receipt through the
-trusted private release process, pin the new immutable upstream revision in the
-downstream package, and pass installed-pair CI. The downstream GLP-1 scientific
-report has its own unresolved gates. See [current state](docs/CURRENT_STATE.md)
+The original encounter split is merged: upstream `main` now includes postmerge
+validator hardening at `cae58a2`, and downstream `master` includes the strict
+consumer at `c2302cb`. The corrected private bundle and retained
+reference comparison passed. Fresh complete-linkage coverage and stronger
+artifact validation passed at merged upstream revision `cae58a2`. The private
+integrated engineering receipt, installed production read, and downstream full
+and installed-pair CI passed at the immutable merged pin; the downstream merge
+tree matches its tested head. The original patient-level GLP-1 report has
+separate unresolved scientific gates. See [current state](docs/CURRENT_STATE.md)
 and [encounter interface](docs/ENCOUNTER_PREPROCESSING.md) for the maintained
 status and commands.
 
