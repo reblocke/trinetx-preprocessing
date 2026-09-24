@@ -247,6 +247,10 @@ It independently compares catalogue source-record memberships with the wide
 count columns, and inventory availability with distinct encounter/element
 matches joined to the declared source-history states. Repeated source rows
 remain counted in the membership total; availability is per encounter/element.
+The availability reconciliation writes narrow, hash-keyed partitions in its
+private work directory and checks one partition at a time. The validator uses
+one DuckDB thread, a 3 GiB memory limit and work-local spill. Keep its work
+directory on an encrypted, owner-only volume with sufficient free space.
 It checks the raw latest value/date/unit triplet for `source.hba1c` and
 `source.bmi` against eligible baseline evidence under the documented date and
 source-record tie order. Context-only rows remain in evidence and cannot supply

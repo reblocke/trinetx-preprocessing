@@ -53,8 +53,11 @@ focused synthetic real-Parquet tests passing. Table-specific schema, QA null,
 catalogue source-count, coverage/inventory availability, and enumerated
 HBA1c/BMI raw-triplet checks have mutation tests. Versioned linkage policies
 and cache content fingerprints also have focused tests. The existing private
-bundle is being revalidated under the shared private build lock, with scratch
-on encrypted RESEARCH FAST; its result is not yet known. Compose a new integrated
+bundle's stronger scan reached the catalogue reconciliation and failed at the
+old 1 GiB DuckDB limit without publishing a success report. A bounded
+hash-partitioned reconciliation and 3 GiB limit are under focused test; an
+owner-only copy of the immutable bundle is being placed on encrypted RESEARCH
+FAST for a measured rerun under the same private build lock. Compose a new integrated
 receipt through the trusted private process only after all gates pass; merge
 upstream before changing the downstream immutable pin and running hosted
 installed-pair CI.

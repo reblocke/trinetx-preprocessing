@@ -15,6 +15,7 @@ from .acceptance import (
 )
 from .builder import EVIDENCE_TABLES, SCHEMA_VERSION, VARIANTS, ident, literal
 from .compatibility import digest, no_symlinks
+from .element_features import _partition_files, _partition_input
 
 SUMMARY_RECONCILIATIONS = (
     "source.hba1c raw",
@@ -74,8 +75,9 @@ def validate_bundle(*, bundle, work_dir):
         raise ValueError("Source coverage provenance differs")
     results = {}
     with duckdb.connect(str(work / "validation.duckdb")) as db:
-        db.execute("SET memory_limit='1024MiB'")
+        db.execute("SET memory_limit='3072MiB'")
         db.execute("SET threads=1")
+        db.execute("SET preserve_insertion_order=false")
         db.execute("SET temp_directory=?", [str(work / "spill")])
         for variant in VARIANTS:
             stem = f"encounter_features_{variant.lower()}"
@@ -189,7 +191,7 @@ def validate_bundle(*, bundle, work_dir):
                         raise ValueError(
                             "Domain coverage does not cover every encounter"
                         )
-            _reconcile_element_evidence(db, root, stem, inventory)
+            _reconcile_element_evidence(db, root, stem, inventory, work)
             _reconcile_normalized_summaries(db, root, stem)
             results[variant] = {
                 "rows": counts[0],
@@ -215,7 +217,7 @@ def validate_bundle(*, bundle, work_dir):
     }
 
 
-def _reconcile_element_evidence(db, root, stem, inventory):
+def _reconcile_element_evidence(db, root, stem, inventory, work):
     """Check published catalogue counts and selected raw latest triplets."""
     evidence = root / f"{stem}_encounter_element_evidence.parquet"
     coverage = root / f"{stem}_encounter_source_coverage.parquet"
@@ -227,11 +229,7 @@ def _reconcile_element_evidence(db, root, stem, inventory):
         "CREATE OR REPLACE VIEW domain_coverage AS SELECT * FROM "
         f"read_parquet({literal(coverage)})"
     )
-    actual_counts = dict(
-        db.execute(
-            "SELECT element_id,count(*) FROM element_evidence GROUP BY element_id"
-        ).fetchall()
-    )
+    actual_counts, observed, totals = _bounded_availability_counts(db, work, stem)
     known = {row["element_id"] for row in inventory}
     if set(actual_counts) - known:
         raise ValueError("Element evidence contains an undeclared catalogue element")
@@ -260,24 +258,6 @@ def _reconcile_element_evidence(db, root, stem, inventory):
                 f"Element source-record count differs: {row['element_id']} "
                 f"feature={feature_count} evidence={evidence_count}",
             )
-    observed = {
-        (element, state): n
-        for element, state, n in db.execute("""
-            SELECT matched.element_id, coverage.history_state, count(*)
-            FROM (
-                SELECT DISTINCT index_event_id,element_id,domain
-                FROM element_evidence
-            ) matched
-            JOIN domain_coverage coverage USING (index_event_id,domain)
-            GROUP BY 1,2
-        """).fetchall()
-    }
-    totals = {
-        (domain, state): n
-        for domain, state, n in db.execute("""
-            SELECT domain,history_state,count(*) FROM domain_coverage GROUP BY 1,2
-        """).fetchall()
-    }
     for row in inventory:
         element, domain = row["element_id"], row["domain"]
         states = row["availability_states"]
@@ -335,6 +315,66 @@ def _reconcile_element_evidence(db, root, stem, inventory):
                 f"Element latest raw value/date/unit differs: {element} "
                 f"encounters={mismatches}",
             )
+
+
+def _bounded_availability_counts(db, work, stem, partitions=64):
+    """Count multiplicity and distinct coverage in bounded key partitions."""
+    evidence_root = work / f"{stem}-element-partitions"
+    coverage_root = work / f"{stem}-coverage-partitions"
+    _partition_input(
+        db,
+        "SELECT index_event_id,element_id,domain FROM element_evidence",
+        evidence_root,
+        "index_event_id",
+        partitions,
+    )
+    _partition_input(
+        db,
+        "SELECT index_event_id,domain,history_state FROM domain_coverage",
+        coverage_root,
+        "index_event_id",
+        partitions,
+    )
+    actual_counts, observed, totals = {}, {}, {}
+    for bucket in range(partitions):
+        evidence_dir = evidence_root / f"evidence_bucket={bucket}"
+        coverage_dir = coverage_root / f"evidence_bucket={bucket}"
+        if not coverage_dir.exists():
+            if evidence_dir.exists():
+                raise ValueError("Element evidence lacks matching coverage partition")
+            continue
+        db.read_parquet(
+            _partition_files(coverage_dir), hive_partitioning=False
+        ).create_view("_validation_coverage", replace=True)
+        for domain, state, count in db.execute("""
+            SELECT domain,history_state,count(*)
+            FROM _validation_coverage GROUP BY 1,2
+        """).fetchall():
+            key = (domain, state)
+            totals[key] = totals.get(key, 0) + count
+        if not evidence_dir.exists():
+            continue
+        db.read_parquet(
+            _partition_files(evidence_dir), hive_partitioning=False
+        ).create_view("_validation_evidence", replace=True)
+        for element, count in db.execute("""
+            SELECT element_id,count(*) FROM _validation_evidence GROUP BY 1
+        """).fetchall():
+            actual_counts[element] = actual_counts.get(element, 0) + count
+        for element, state, count in db.execute("""
+            SELECT matched.element_id, coverage.history_state, count(*)
+            FROM (
+                SELECT DISTINCT index_event_id,element_id,domain
+                FROM _validation_evidence
+            ) matched
+            JOIN _validation_coverage coverage USING (index_event_id,domain)
+            GROUP BY 1,2
+        """).fetchall():
+            key = (element, state)
+            observed[key] = observed.get(key, 0) + count
+    db.execute("DROP VIEW IF EXISTS _validation_evidence")
+    db.execute("DROP VIEW IF EXISTS _validation_coverage")
+    return actual_counts, observed, totals
 
 
 def _reconcile_normalized_summaries(db, root, stem):
