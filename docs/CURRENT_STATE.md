@@ -7,9 +7,10 @@ products, timing, identifiers, missingness and verification boundary.
 The authenticated companion route passed the complete legacy population/value
 and canonical linkage/coverage gates. A corrected private build completed both
 independent variants. The full retained-reference comparison and separate bundle
-artifact validator passed on that bundle. Final installed-pair and hosted checks
-are required before its private acceptance receipt and coordinated merges; see
-[NEXT_STEPS.md](../NEXT_STEPS.md).
+artifact validator passed on that bundle. The earlier handoff required final installed-pair and hosted checks before a
+private acceptance receipt. Upstream PR #14 and downstream PR #15 merged on
+2026-09-24; those merges alone do not establish the private acceptance state.
+See the dated [handoff checklist](../NEXT_STEPS.md) and its private receipt.
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical

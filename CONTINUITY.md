@@ -45,8 +45,10 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For release, verify the final installed downstream pin, hosted checks and private
-acceptance bound to the source pair and producers. Merge UP14 before DOWN15.
+Upstream PR #14 and downstream PR #15 merged in that order on 2026-09-24.
+For any release claim, verify the installed downstream pin, hosted checks and
+private acceptance bound to the source pair and producers; merges alone are not
+that evidence.
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

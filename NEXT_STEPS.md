@@ -1,7 +1,10 @@
 # Finish the encounter preprocessing refactor
 
-Handoff: 2026-09-20. Implementation exists, but **private encounter validation
-has failed and neither PR is ready to merge**. Continue on the Mac mini.
+Historical handoff: 2026-09-20. At that point private encounter validation had
+failed and neither PR was ready to merge. Later corrected build, comparison and
+artifact checks are summarized in [current state](docs/CURRENT_STATE.md).
+Upstream PR #14 and downstream PR #15 merged on 2026-09-24; this dated
+checklist is not a current private acceptance receipt.
 Exact paths, authenticated receipts and launch instructions are in the private
 `encounter-refactor-handoff/LOCAL_PATHS.md` beside the Mini checkouts. Keep that
 file and all real-data receipts out of this public repository.
