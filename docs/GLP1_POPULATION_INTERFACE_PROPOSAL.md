@@ -61,9 +61,11 @@ patient/index key table supplied by the caller against the unfiltered canonical
 index-missing, and patient-absent categories, plus duplicate-start conflicts
 and start-precision counts for exact keys. It rejects duplicate, null or
 non-string historical keys, leaves all source rows in place, and selects no new
-index. Hand-counted synthetic cases and a read-only cohort-source integration
-case exercise the audit. Complete key coverage would support only one part of
-the private population gate; source scope and longitudinal evidence still need
+index. A missing start alongside an observed start for the same original key
+counts as a conflict. Hand-counted synthetic cases and a read-only
+cohort-source integration case exercise the audit. Complete key coverage would
+support only one part of the private population gate; source scope and
+longitudinal evidence still need
 review.
 
 An owner-only candidate run at draft audit revision `92fc880` on the accepted

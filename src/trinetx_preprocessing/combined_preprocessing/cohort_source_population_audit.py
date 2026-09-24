@@ -108,7 +108,8 @@ def audit_candidate_population(
                 SELECT patient_id, encounter_id
                 FROM matched
                 GROUP BY patient_id, encounter_id
-                HAVING count(DISTINCT start_date) > 1
+                HAVING count(DISTINCT start_date)
+                     + max(CASE WHEN start_date IS NULL THEN 1 ELSE 0 END) > 1
             )
             SELECT (SELECT count(*) FROM conflicting),
                    count(*),

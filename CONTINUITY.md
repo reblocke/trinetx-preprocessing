@@ -101,6 +101,9 @@ An owner-only run at audit revision `92fc880` passed historical key coverage,
 matched the prior independent aggregate categories and kept input identities
 stable. It took 164 seconds with approximately 3.51 GB peak RSS; the receipt
 is mode 0600 and path-free. Source-scope and timing acceptance remain open.
+The draft conflict audit now counts a missing start alongside an observed start
+for the same original key as a conflict. The prior private conflict receipt was
+made before this correction; an affected private aggregate rerun is pending.
 The draft source-scope inventory now summarizes canonical demographic presence,
 five-domain observed records, event counts, observed spans and export-file
 counts for the historical patient set. Synthetic and read-only source tests

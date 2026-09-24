@@ -54,6 +54,28 @@ def test_historical_key_coverage_and_source_precision_are_separate_counts():
         )
 
 
+def test_missing_and_observed_starts_are_a_conflict_for_the_same_index_key():
+    historical = pd.DataFrame({"patient_id": ["001"], "encounter_id": ["A"]})
+    with duckdb.connect() as connection:
+        connection.execute(
+            "CREATE TABLE source_encounter(patient_id VARCHAR, encounter_id VARCHAR, "
+            "start_date VARCHAR, start_timestamp_precision VARCHAR)"
+        )
+        connection.executemany(
+            "INSERT INTO source_encounter VALUES (?,?,?,?)",
+            [
+                ("001", "A", None, None),
+                ("001", "A", "2024-01-01", "date_only"),
+            ],
+        )
+        result = population_audit.audit_candidate_population(connection, historical)
+        assert result.exact_index_present == 1
+        assert result.exact_index_source_rows == 2
+        assert result.exact_index_keys_with_conflicting_starts == 1
+        assert result.date_only_start_rows == 1
+        assert result.other_precision_start_rows == 1
+
+
 @pytest.mark.parametrize(
     "historical,error",
     [
