@@ -23,7 +23,7 @@ not establish clinical eligibility, and observed follow-up is not complete
 capture. Preserve unsupported timing and phenotypes as unknown.
 
 ## State
-The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The active readmissions work is isolated on `codex/readmissions-20260924`; the corrected validator is committed at `b8cd53c`. The original checkout's unrelated changes remain untouched.
+The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The active readmissions work is isolated on `codex/readmissions-20260924`; the v2 builder memory repair is committed at `cc6d4cc`. The original checkout's unrelated changes remain untouched.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -33,26 +33,29 @@ function/class ASTs match their accepted originals. Reference port untouched.
 ## Now
 2026-09-25 resumed readmissions checkpoint: C0 historical parent receipt and
 source/parent identities were reverified; C1 calendar-day v2 D1–D6 contract is
-frozen. Opt-in v2 build/validator code is implemented with the original v1
-default retained. The current code identity is
-`e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
-On stable files, all 464 tests pass; Ruff, offline lock, noneditable wheel,
-installed source consumer, five legacy E2Es, v2 partition E2E and synthetic
-wrapper fresh/resume/partition/adversarial checks pass with external receipts.
-The wrapper check stubs only the upstream parent/source boundary; it is not
-private C3/C4 acceptance. The initial parent v2 proof failed because raw dates
-use `YYYYMMDD`; the corrected proof then exposed a 4 GiB availability join
-memory failure. The unchanged exact join also failed at 8 GiB. A bounded,
-exact partitioned reconciliation with row-multiplicity checks passed that
-stage, then exposed a validator false positive: the accepted producer stores
-NULL for element counts when an index has no element evidence, whereas the
-validator had coalesced that state to zero. A full-file corrected query found
-zero hba1c differences. A repeatable E2E now checks NULL, zero and positive
-counts and rejects changed values. The locked r4 full parent validation is
-running on this correction; its result is not yet known. C4 pilot, full build,
-independent full return validation, immutable-byte comparison and seal remain
-pending. Preserve failed scratch/receipts and do not mark the goal DONE from
-public checks.
+frozen. Opt-in v2 build/validator code is implemented with v1 as the default.
+The current code identity is
+`c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
+All 464 tests pass; Ruff, offline lock, noneditable wheel, installed old
+consumer, five legacy E2Es, v2 partition E2E and synthetic wrapper checks
+pass on this code. The wrapper explicitly stubs upstream parent/source
+validation. The corrected calendar-day precision and NULL/zero/positive
+element-count proof passed the full accepted parent at r4 on the preceding
+code hash `e74ef7d`; a new r5 code-bound validation is now running. The first
+v2 resource pilot failed at its 1 GiB builder cap during the FULL_DATA summary
+write; its partial files and receipt are preserved. V2 now uses 4 GiB for key
+and partition building; v1 remains 1 GiB. A fresh 32-partition pilot passed
+both variants on the current code: 82,928 FULL_DATA and 25,969
+AFTER_EXCLUSION bucket keys, twelve verified files, independent partition
+validation, matching input identities, 4,773,183,488-byte peak process RSS,
+and more than 100 GiB free. Its receipt SHA-256 is
+`e4fcbdd15956c920767bb76b11ad19f52f70e2ce53f4ed6e5788421cc6e6e4ad`.
+An attempted pilot on LOCKE STATION could not start because the volume stopped
+responding before the shared lock; its diagnostic is external. The passing
+pilot and planned C4 output use safe external roots on LOCKE BOOK. Full C4
+build, independent full return validation, immutable-byte comparison and seal
+remain pending. Preserve failed scratch/receipts and do not mark the goal DONE
+from public or partition checks.
 
 The owner provisionally accepted all D1–D6 recommendations and repair strategies
 on 2026-09-25, then requested parallel removal of low-signal tests, E2E-first
@@ -197,11 +200,10 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, finish the locked r4 parent validation on code identity
-`e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
-If it passes, run the final-code 32-partition resource pilot on LOCKE STATION
-for both variants, seal the public C3 evidence to a clean commit, then run one
-locked full outcomes-only build and independent validator. Compare source and
+For return outcomes, finish the locked r5 parent validation on current code
+identity `c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
+Seal the public C3 evidence to a clean commit, then run one locked full
+outcomes-only build and independent validator on LOCKE BOOK. Compare source and
 accepted-parent bytes before and after, retain external receipts, and update
 this ledger and acceptance docs. Diagnose any failure before retrying; do not
 weaken a gate. Cross-ID continuations remain unconfirmed because the flow

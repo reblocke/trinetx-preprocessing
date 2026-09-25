@@ -27,13 +27,17 @@ not a validated medication-assisted-treatment phenotype.
 An opt-in, separate return-outcome interface is implemented for review in
 [RETURN_CONTRACT.md](RETURN_CONTRACT.md). Exact wildcard catalog rules retain
 the required J96 diagnosis rows; the initial source-capability check was too
-narrow and has been corrected. A resource pilot completed, but the full build
-stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
+narrow and has been corrected. An earlier v1 resource pilot completed, but its
+full build stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
 an inherited producer/validator precision-schema mismatch and additional return
 implementation defects. The owner resumed C0–C4 on 2026-09-25 after the E2E-first testing cleanup;
 see [the testing review](testing_review.md). The accepted [calendar-day v2
 contract](RETURN_CONTRACT.md) governs the implemented opt-in v2 builder and
 validator. Its public and synthetic checks pass; full accepted-parent
-validation is running after exact bounded-memory and producer-count repairs. C3 private proof
-and C4 remain gated by that result and a final-code resource pilot. Existing
+validation passed on the preceding code after exact bounded-memory and
+producer-count repairs. The opt-in v2 builder now uses a 4 GiB DuckDB cap; v1
+remains at 1 GiB. A final-code resource pilot passed both variants with
+independent partition validation and external hash receipts. Fresh parent
+validation is running for the current code identity. C3 private proof and C4
+remain gated by that result. Existing
 encounter products and cohort-source interfaces are preserved.

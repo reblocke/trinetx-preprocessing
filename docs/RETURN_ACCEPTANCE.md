@@ -9,18 +9,18 @@ The owner explicitly resumed the goal under the calendar-day v2 contract.
 Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
 
 The calendar-day v2 build and independent validator are implemented on code
-identity `e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
+identity `c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
 The frozen suite passed 464 cases (238 existing performance warnings); Ruff
 check/format, `uv lock --check --offline`, `git diff --check`, noneditable wheel
 installation with matching code identity, and the installed old cohort-source
 consumer passed. The five legacy E2Es passed with a readback-verified manifest
-SHA-256 `79d946dd22cd85c2c768c9d215756668fd16ec1a7665975752f4bf240cf52a80`.
+SHA-256 `130fc5fefe18aee5854092796d0fe81eadd668313c5544d3d6ceeac44b9f3ec3`.
 The v2 partition E2E passed hand-authored boundaries, independent reconciliation,
 adversarial corruption and one-versus-three partition equivalence; its receipt
-SHA-256 is `2ac8f2bb7db198e739ed61c3ab3e0119f8f55d8e46ca539ff2abe6225ee613f0`.
+SHA-256 is `9ba678adccf2b11386506b1e50338e4b3062507de80346e6fd8bd4b982932103`.
 A separate synthetic wrapper check passed fresh/resumed/partitioned full-artifact
 multisets, output collision and wrong receipt checks; its receipt SHA-256 is
-`43153a3aa5035bd42789248696712f6944d77711f4a4a5b4b2a2d1de7d391bb9`.
+`5353682be0759cb89aca6466e51c334a60f3d7758918a75c221eb52c4ae84a48`.
 That check explicitly stubs upstream parent/source validation, so these passes
 do not close the real input boundary or C4 acceptance.
 
@@ -40,8 +40,21 @@ producer left-joins a summary only for indexes with element evidence, so NULL,
 zero, and positive counts have distinct meanings. The validator now checks
 those three states exactly; a full-file correction query found zero hba1c
 differences, and a repeatable synthetic E2E rejects all three count
-corruptions. A new locked full parent validation is in progress on this code;
-no full-parent pass is claimed.
+corruptions. The locked r4 full parent validation passed both variants on code
+identity `e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`;
+its receipt SHA-256 is
+`0f7136ab261431ec50903990a7cd378c5e5be9b7bac2d534b01942cb27346b95`.
+The first v2 resource pilot then failed at the builder's 1 GiB DuckDB limit
+during the FULL_DATA summary write. The v2-only builder cap is now 4 GiB;
+v1 remains at 1 GiB. A new 32-partition resource pilot passed both variants,
+82,928 FULL_DATA and 25,969 AFTER_EXCLUSION bucket keys, with independent
+partition validation, all 12 output hashes, matching source/parent/code
+identities, 4,773,183,488-byte peak process RSS, and more than 100 GiB free.
+Its readback-verified receipt SHA-256 is
+`e4fcbdd15956c920767bb76b11ad19f52f70e2ce53f4ed6e5788421cc6e6e4ad`.
+The code change invalidates the r4 code-bound parent gate. A fresh locked r5
+full parent validation is running on the current code; no current-code
+full-parent pass or C4 acceptance is claimed.
 
 The historical accepted parent receipt was recovered from the documented
 external handoff. An external C0 receipt, SHA-256
@@ -64,7 +77,7 @@ precision NULL handling, gas three-state results, link/evidence validation,
 resume scratch handling and uncertainty summaries. The passing test count
 therefore does not close C2 or C3.
 
-The 32-partition resource pilot completed both variants and passed its
+The historical v1 32-partition resource pilot completed both variants and passed its
 summary-key, artifact-hash, input-identity, and 100 GiB free-space gates.
 The first full outcomes-only build stopped during required validation of the
 accepted parent encounter bundle, before creating any return partition. Its
