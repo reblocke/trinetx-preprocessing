@@ -50,6 +50,14 @@ selection. Both stream one raw evidence result per exact encounter and clean
 temporary tables on exit. Synthetic repeated-encounter, parity and cleanup
 tests pass; private population-scale runtime and clinical mapping remain
 unvalidated.
+A separate read-only vital projection accepts one exact selected index per
+patient and an explicit vital catalog element ID. It streams all matched raw
+vital rows across that patient's encounters, preserves source dates, precision,
+values, units and record keys, and emits an empty marker for patients without
+matches. This prepares a BMI evidence review without choosing a measurement,
+normalizing units or treating index-day BMI as pre-presentation evidence.
+Synthetic exact-key, duplicate-membership, absence and duplicate-key checks
+pass; source hierarchy and clinical BMI policy remain unresolved.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate

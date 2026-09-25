@@ -16,6 +16,10 @@ arterial values, units and linkage identifiers at the exact original
 patient/encounter key; it fails on conflicting date-only starts or undated
 arterial candidates. Synthetic tests pass. It does not accept a population,
 normalize clinical gas values, or produce a report.
+A read-only selected-patient vital projection now preserves every catalog-
+matched raw record across encounters and marks patients with no match. Its
+synthetic checks pass. It has no BMI hierarchy, unit normalization or index-day
+clinical role; no accepted private BMI parent or abstract estimate results.
 The owner approved a separately labeled coded ingredient-record descriptor on
 2026-09-25. A downstream historical-scope audit found GLP-1 catalog matches
 only in the ingredient-named export family, not confirmed orders. The
