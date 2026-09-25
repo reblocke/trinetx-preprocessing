@@ -60,6 +60,12 @@ projected keys, stable input identity, empty scratch and mode-0600 private
 receipt read-back. Duplicate rows and nonzero conflicting start dates were
 surfaced in the broader source population. Do not select an index from an
 unresolved start; no type, adult or context rule has been approved.
+A separate owner-only aggregate start-conflict audit reconciled exactly to the
+scoped projection in 3.39 minutes, with stable source identity, empty scratch
+and mode-0600 receipt read-back. Conflicting starts span several day ranges,
+often with more than two source rows, and each conflicting key had one observed
+`source_id` value. This does not identify a correct start; retain uncertainty
+until an explicit scientific source/index policy is approved.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

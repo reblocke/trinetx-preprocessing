@@ -103,6 +103,11 @@ private receipt read-back. It surfaced nonzero duplicate-record and conflicting
 start-date categories outside the historical patient scope. This remains
 engineering feasibility evidence; the unresolved starts need explicit handling
 before a new patient index can be selected.
+An owner-only aggregate conflict-pattern follow-up reconciled exactly to the
+scoped projection with stable identity and private receipt read-back. The
+conflicts span multiple calendar-day ranges and often involve more than two
+raw rows. A single observed `source_id` value within each conflicting key did
+not resolve its start date. No source-date tie or correction policy is approved.
 Owner-only aggregate checks on the historical patient scope found complete
 exact historical index-key presence and date/type/historical-age-proxy
 agreement at those keys, with age-18 boundary uncertainty still present.

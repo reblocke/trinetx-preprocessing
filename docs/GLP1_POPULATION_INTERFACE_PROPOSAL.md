@@ -106,6 +106,14 @@ nonzero duplicate-source and conflicting-start categories across the broader
 source population. Those uncertain starts cannot silently become index dates.
 The audit produced no patient-level output and did not accept a cohort, context
 order or source policy.
+A separate owner-only fixed-category audit reconciled the conflicting-start
+total to that projection in 3.39 minutes, with stable source identity, empty
+scratch and a mode-0600 receipt read-back. Conflicts span one day through more
+than a month, with a longer tail; many keys have more than two raw rows. Each
+conflicted key had one observed `source_id` value in this snapshot. That field
+pattern does not identify the correct start, and no earliest, latest or
+majority-date rule is approved. An unresolved candidate date must stay visible
+to downstream index selection and population reconciliation.
 An owner-only aggregate audit used the historical patient IDs as a bounded
 scope for this projection. A separate exact-index read-back found every
 historical index key in that candidate source and agreement of observed
