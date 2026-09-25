@@ -43,7 +43,14 @@ phenotype. pH is reported separately as genuinely linked sample evidence or
 explicitly unpaired same-day evidence. Pre-index history ends D-1; D records
 are separate. The full cleaned BMI>=30 patient cohort is the primary
 indication denominator; active medication and the historical no-active-order
-denominator are unavailable, while recorded prior orders may be described.
+denominator are unavailable. A downstream source-family audit found that all
+GLP-1 catalog matches in the authenticated historical scope came from the
+`medication_ingredient` export family, without order status. Recorded orders
+are unavailable from this evidence. On 2026-09-25 the owner approved a
+separately labeled coded ingredient-record descriptor, defined as catalog
+matches from that export family, pending source-role, terminology, date and
+capture review. The production file has the full historical medication schema;
+its name alone does not establish the clinical event role.
 
 The source-specific adapter must still reconcile original patient/encounter
 keys, conflicting encounter starts, arterial provenance, specimen/panel

@@ -16,6 +16,12 @@ arterial values, units and linkage identifiers at the exact original
 patient/encounter key; it fails on conflicting date-only starts or undated
 arterial candidates. Synthetic tests pass. It does not accept a population,
 normalize clinical gas values, or produce a report.
+The owner approved a separately labeled coded ingredient-record descriptor on
+2026-09-25. A downstream historical-scope audit found GLP-1 catalog matches
+only in the ingredient-named export family, not confirmed orders. The
+production file has the full historical medication schema; its name does not
+establish event role. Source-role, terminology, date and capture review remain
+open, and no email contact is permitted.
 A bulk candidate projection now takes a caller-selected one-index-per-patient
 relation, validates exact keys and source starts, scans gas membership once,
 streams raw encounter candidates and drops temporary tables on exit. Eighteen

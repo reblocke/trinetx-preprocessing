@@ -26,6 +26,11 @@ the first arterial testing date on D or D+1; see the
 elapsed first-24-hour rule remains unavailable from this snapshot.
 The accepted medication export also lacks end and status fields, leaving the
 original documented no-active-order denominator unavailable from this source.
+The downstream historical-scope audit found GLP-1 catalog matches only in the
+ingredient-named export family, so confirmed recorded orders are also
+unavailable. The owner approved a separately labeled coded source-family
+descriptor on 2026-09-25; event role and terminology review still gate its
+actual exhibit. No email or new timestamp acquisition is authorized.
 Draft source-capability auditing can now summarize parsed versus date-only
 event precision across encounter starts, labs, catalog-matched arterial PaCO2
 and pH candidates, and medication starts, plus medication end/status capture and raw-header field
