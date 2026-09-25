@@ -1,17 +1,14 @@
 # Return outcomes: decisions and completion plan
 
 Status: **D1–D6 provisionally accepted by the owner on 2026-09-25;
-implementation remains BLOCKED pending explicit goal resumption**.
+implementation resumed on the isolated review branch; C4 remains gated**.
 Prepared 2026-09-25 from the [audit](RETURN_AUDIT.md) and
 [calendar-day proposal](RETURN_DAY_RESOLUTION_PROPOSAL.md). No runtime changes
 or private builds are authorized by this document itself. Existing C4
 authorization remains conditional on its gates; the owner has requested this
 decision package before unblocking the goal.
 
-The owner provisionally accepted all recommendations, then requested a testing
-cleanup and policy update before relaunch. This records that response without
-resuming execution or relaxing any gate. The recommendations below remain the
-planned contract; they have not replaced executable v1 semantics.
+The owner provisionally accepted all recommendations, requested testing cleanup, then explicitly resumed the goal. D1–D6 now govern the versioned v2 implementation in [RETURN_CONTRACT.md](RETURN_CONTRACT.md); no acceptance gate is relaxed.
 
 ## Decisions for the owner
 
@@ -104,7 +101,7 @@ capability gates before large aggregations. Measure resource use without reducin
 rows or changing exact comparisons. Keep existing default interfaces and legacy
 expectations unchanged; version new return semantics explicitly.
 
-## Path to completion after the owner unblocks the goal
+## Resumed path to completion
 
 | Checkpoint | Work | Exit evidence |
 |---|---|---|

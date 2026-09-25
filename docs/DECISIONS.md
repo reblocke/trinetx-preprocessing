@@ -1893,3 +1893,19 @@ in RETURN_DECISION_PACKAGE.md, then explicitly deferred goal relaunch until the
 testing cleanup. This is a provisional decision record, not authorization to
 launch C4 or replace the executable v1 contract. The readmissions goal remains
 BLOCKED; final specification/implementation work resumes only when requested.
+
+## 2026-09-25: Resume readmissions under the calendar-day v2 contract
+
+The owner explicitly resumed the goal after accepting D1–D6 provisionally and
+completing the requested E2E-first test cleanup. Adopt those recommendations as
+the implementation contract in RETURN_CONTRACT.md. Dates are calendar-day
+observations with day 1 through each horizon; day zero is separately uncertain.
+Require coherent same-ID ED/inpatient intervals, distinct applicability for
+inpatient and ED-only indexes, observed episode intervals for phenotype evidence,
+confirmed-event counts with unresolved timing kept explicit, and three-state
+gas flags where mixed tested/untested returns remain unknown absent a positive.
+The parent schema remains 2.0; introduce a separate versioned validator rule
+that proves day-only precision from retained raw dates for recognized legacy
+evidence files. All pre-build, source, parity, private validation and resource
+gates remain mandatory. The historical v1 contract is archived in
+RETURN_CONTRACT_V1.md.

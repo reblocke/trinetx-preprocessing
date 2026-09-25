@@ -1,15 +1,16 @@
 # Proposed return outcomes contract — calendar-day v2
 
-**PROVISIONALLY ACCEPTED; IMPLEMENTATION NOT RESUMED.** This proposal follows the
-[2026-09-25 code audit](RETURN_AUDIT.md). It has not replaced the executable v1
+**ACCEPTED AS THE V2 IMPLEMENTATION BASIS ON 2026-09-25.** This proposal follows the
+[2026-09-25 code audit](RETURN_AUDIT.md). It is now incorporated into the executable v2
 contract. The existing authorization for C4 remains conditional on passing its
-gates. Proposed scientific choices below should be recorded in `DECISIONS.md`
-when accepted. Parent bundle schema 2.0 and its
+gates. The scientific choices below are recorded in `DECISIONS.md`. Parent
+bundle schema 2.0 and its
 accepted data remain unchanged; the return product and validation contract have
-separate version identifiers. Correcting the parent producer/validator mismatch
-does not itself require a new temporal endpoint. The day-only policy below is
-an explicit simplification for the observed source resolution; its scientific
-choices remain distinct from the engineering compatibility repair.
+separate version identifiers.
+Correcting the parent producer/validator mismatch does not itself require a new
+temporal endpoint. The day-only policy below is an explicit simplification for
+the observed source resolution; its scientific choices remain distinct from
+the engineering compatibility repair.
 
 The [decision package](RETURN_DECISION_PACKAGE.md) surfaces six owner choices,
 recommended policies, alternatives, defect repairs and checkpoint exit gates.

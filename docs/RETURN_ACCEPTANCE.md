@@ -1,11 +1,20 @@
 # Return outcomes acceptance
 
-Status: **BLOCKED: C2/C3 repairs and versioned parent precision compatibility proof
-required before C4**. This page tracks private acceptance for the opt-in v1
+Status: **C0 provenance recovered; C1 v2 contract frozen; C2/C3 repairs in
+progress; C4 gated**. This page tracks private acceptance for the opt-in v2
 return bundle. The executable rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
-The [2026-09-25 audit](RETURN_AUDIT.md) supersedes any earlier claim that C0–C3
-were fully satisfied. A [calendar-day v2 proposal](RETURN_DAY_RESOLUTION_PROPOSAL.md)
-is available for review; it has not been applied.
+The [2026-09-25 audit](RETURN_AUDIT.md) supersedes earlier completion claims.
+The owner explicitly resumed the goal under the calendar-day v2 contract.
+Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
+
+The historical accepted parent receipt was recovered from the documented
+external handoff. An external C0 receipt, SHA-256
+`5aefcd5c0fefdb7e59a3f564ea787f2a32a382204fb365554a31af189ccebef9`,
+verifies the parent manifest, historical receipt, three historical gate hashes,
+retained reference comparison, newer integrated validation evidence, canonical
+source sidecar, source file size, both variant names, and the engineering-only
+scope. This closes the missing-historical-receipt question, but current full
+parent validation and the C4 immutable-byte checks remain pending.
 
 The isolated review branch is `codex/readmissions-20260924`. The recorded public
 suite and packaging checks passed on code identity

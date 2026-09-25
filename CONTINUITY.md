@@ -44,7 +44,7 @@ with original archives preserved externally. Starter verification passed after
 fast-forwarding to the already merged `67456a6` readiness implementation:
 maintained exports rebuild exactly, four packager checks pass, and all runtime
 and configuration files match that base. No production source or private
-product is changed. The readmissions goal remains BLOCKED pending explicit resume.
+product is changed. The owner explicitly resumed the readmissions goal on 2026-09-25. C4 remains gated by repaired code, private proof and resource checks.
 
 2026-09-25 audit update (supersedes return completion claims below): the user
 requested an explanation, code audit and proposed day-resolution course. The
@@ -58,7 +58,7 @@ C2/C3 need repairs and C4 remains BLOCKED. The original 522-test pass remains
 historical evidence, not proof that all acceptance requirements were met.
 This audit changes documentation only; its synthetic script/results and private
 receipt references remain external. The original checkout and accepted inputs
-were not changed. The trusted parent acceptance receipt remains UNCONFIRMED.
+were not changed. The historical parent acceptance receipt was located in the documented external handoff. Its exact SHA-256 and named gate hashes match the later integrated acceptance record; current product validation remains a separate gate.
 
 The opt-in return-outcome contract and separate build/validation commands are
 implemented locally in isolated worktree `codex/readmissions-20260924`.

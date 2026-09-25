@@ -30,8 +30,8 @@ the required J96 diagnosis rows; the initial source-capability check was too
 narrow and has been corrected. A resource pilot completed, but the full build
 stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
 an inherited producer/validator precision-schema mismatch and additional return
-implementation defects. C2/C3 need repairs and C4 remains BLOCKED; a
-[calendar-day specification](RETURN_DAY_RESOLUTION_PROPOSAL.md) was provisionally
-accepted on 2026-09-25. The owner requested an E2E-first testing cleanup before
-explicit goal resumption; see [the testing review](testing_review.md). Existing
+implementation defects. The owner resumed C0–C4 on 2026-09-25 after the E2E-first testing cleanup;
+see [the testing review](testing_review.md). The accepted [calendar-day v2
+contract](RETURN_CONTRACT.md) governs repairs. C2/C3 need proof and C4 remains
+gated by complete private validation and a resource pilot. Existing
 encounter products and cohort-source interfaces are preserved.

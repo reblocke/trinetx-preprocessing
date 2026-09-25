@@ -1,122 +1,206 @@
-# Return outcomes contract (v1)
+# Return outcomes contract (calendar-day v2)
 
-This is an opt-in, separate outcome product. It does not alter encounter
-features, compatibility CSVs, cohort selection, or study analyses. The input
-population is every original `(patient_id, encounter_id)` key in each accepted
-encounter variant, independently. A row in `element_membership` supplies source
-candidacy, never outcome eligibility by itself.
+The owner accepted D1–D6 as the implementation basis and explicitly resumed the readmissions goal on 2026-09-25. This is the frozen scientific contract for the opt-in return product; the original v1 text is retained in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md). C0–C4 acceptance gates remain binding. Parent bundle schema 2.0 and cohort-source schema/catalog fingerprints remain unchanged. Parent validator compatibility has its own version. All private inputs and outputs remain external.
 
-## Sources and identity
+## 1. Population and source boundaries
 
-The accepted, manifest-bound `trinetx_preprocessed.duckdb` supplies
-`source_encounter`, `source_diagnosis`, `source_lab_measurement`,
-`element_membership`, `source_patient`, and observability. The accepted encounter
-bundle supplies only original index keys and its parent manifest identity. The
-build validates both products before reading clinical rows and publishes to a
-new external directory. Neither `source_encounter_flow` (no end field) nor
-compatibility/RFS selection, legacy filled end dates, or baseline lookbacks is
-a discharge or return source. Repeated source records retain source IDs. Keys
-are paired strings, never a concatenated or variant-encoded patient key.
+Retain exactly one summary per original composite key in each parent variant,
+independently, including unavailable and not-applicable outcomes. Preserve
+recurrent index encounters. Use the validated canonical source for all available
+encounter, diagnosis and gas history of these patients, including return
+encounters that never qualified for the original cohort.
 
-## Episode and time rules
+Inputs are immutable. All private work, spill, row products, logs and acceptance
+receipts remain external. The 36-file compatibility contract, legacy values,
+inclusion rules, dependencies and downstream files remain unchanged.
 
-An episode is the composite source `(patient_id, encounter_id)`. Multiple
-source rows with the same pair are mapped to that episode; an ED and inpatient
-row sharing that pair is one evidenced ED-to-inpatient continuation and one
-acute-care event. Distinct encounter IDs are never merged merely because their
-dates overlap or are within 24 hours. Such overlaps and uncertain same-day
-order are reported. This conservative rule does not assert that every transfer
-has a shared ID. Source types `EMER` and `IMP` identify ED and inpatient in the
-accepted exports; unrecognized types are retained as unknown, not reclassified.
+## 2. Dates, anchors and windows
 
-Index follow-up starts at the *source episode end*, requiring an observed,
-non-derived end and a valid start/end order. Missing, conflicting, or derived
-ends make the outcome unavailable. A derived return start cannot establish
-post-index order. A timestamp-precision end/start pair permits
-within-day ordering. Date-only values are calendar-day observations: a
-same-day distinct-ID event has uncertain order and is not a confirmed return.
-Confirmed returns start in `(index end, index end + N days]`, for N = 30, 90,
-and 365 by default. A return with a missing start is undated evidence and
-cannot enter a window. A return with an end before its start is retained as
-invalid-order evidence and cannot enter a confirmed-return window. End dates
-and linked diagnosis/lab dates are not filled.
+The primary time scale is **calendar days**. An observed date is represented as
+a date, not an inferred instant at midnight. Retain raw source values and original
+precision as provenance when available. This product does not require hours,
+minutes or within-day order. Timestamp-valued source observations, if encountered,
+use their recorded calendar date under this explicitly day-based contract;
+original timestamps remain evidence and do not rescue same-day ordering.
 
-An inpatient episode after an inpatient index is a readmission. After an
-ED-only index it is an admission. ED-only returns, any ED presentation, and
-acute-care union are separately reported. An evidenced ED-to-inpatient episode
-counts once in the union and once in the inpatient category; it is not ED-only.
-Recurrent episodes remain distinct. Observed follow-up and coarse death month
-are separate fields; neither censors at last visit nor proves complete capture.
-Conflicting recorded death months remain unknown.
+Let `D0` be the observed, non-derived, nonconflicting index episode end date.
+Let `Dr` be an observed, non-derived, nonconflicting return start date.
+Define `days_after_index_end = Dr - D0` using integer calendar-day subtraction.
 
-## Return evidence
+| Observation | Primary result |
+|---|---|
+| `1 <= days_after_index_end <= 30` | In 30-, 90- and 365-day windows |
+| `31 <= days_after_index_end <= 90` | In 90- and 365-day windows |
+| `91 <= days_after_index_end <= 365` | In 365-day window |
+| Distinct encounter starts on `D0` | Same-day uncertain; not a confirmed return |
+| Encounter overlaps the index episode end | Overlap/possible continuation; not a confirmed return |
+| Unknown, invalid, derived or conflicting relevant date | Explicit unavailable/uncertain reason |
+| Known start more than 365 days later | Outside the outcome horizon |
 
-Only an ICD-10-CM diagnosis linked to a return episode can satisfy the exact
-set `J96.02`, `J96.12`, `J96.22`, `J96.92`, `E66.2`. Broad J96 and historical
-diagnoses do not qualify. Source code, date, record ID, and rejection reason
-remain in evidence.
+For example, with an index end of January 2, January 3 is day 1 and February 1
+is day 30. A January 2 presentation has uncertain order. This is a calendar-day
+endpoint; it does not claim exactly 720 elapsed hours for a 30-day window.
 
-Gas evidence uses return-episode source rows in the arterial or venous PCO2
-catalog sets. A contradictory specimen, missing/nonpositive/nonfinite numeric
-or converted value, unsupported unit, missing date, or out-of-episode date is
-rejected with a reason. Accepted `mmHg`, `mm Hg`, `mm_hg`, `mm[Hg]`, and `Torr`
-are unchanged;
-`kPa` is multiplied by 7.5006168270417. Unspecified-blood PCO2 is retained
-but cannot establish ABG or VBG. Any usable measurement in the episode can
-establish a threshold. ABG and VBG each have separate `>45`, `>50`, `>=45`,
-and `>=50` flags, plus explicitly named any-gas unions. These are not legacy
-mean or first-day flags and do not require pH or a particular index route.
-Gas threshold flags use three states: `true` (positive), `false` (usable gas
-tested without the threshold), and `null` (unknown). No usable gas is unknown,
-never a negative test. Testing counts are separate.
-The named `any_hypercapnia` union is the exact ICD set, ABG PCO2 `>=45`, or
-VBG PCO2 `>=50`; the other named threshold unions remain separately available.
+Compute each criterion's first qualifying **date** independently within each
+window. Provide integer days to that event. Do not present a midnight timestamp
+as a measured first-event time; any retained compatibility timestamp field must
+be NULL for this day-based result and documented accordingly.
 
-## Product and acceptance
+Missing/derived index ends produce unavailable outcomes for that index. They
+do not exclude the summary row and are not filled from legacy variables, later
+encounters, last observations or the flow table. NULL or mixed precision must
+not be promoted to known precision. A validated raw-date proof can establish
+day resolution where a legacy precision metadata field is absent.
 
-The versioned bundle contains a typed dictionary, episode/source mapping,
-diagnosis and gas evidence, unique index-to-return links, one summary per
-original key per variant (including unavailable and not-applicable rows),
-validation report, and a manifest hashing all artifacts. Every category and
-evidence criterion has independently computed counts, flags, first dates, and
-first precise timestamps at each horizon. Fields are labeled **outcomes** and
-must not be used as baseline predictors. A complete build is engineering
-evidence only; private acceptance additionally binds source, parent bundle,
-code, configuration, contract, validator and all required comparison gates.
+## 3. Episode and category rules
 
-Private profiling of composite-key conflicts, end derivation/precision,
-settings, linkage, forward coverage, and transfer documentation is a required
-pre-build gate. An unsupported source fact stays unknown; a failed gate blocks
-acceptance rather than changing this contract silently.
+The composite `(patient_id, encounter_id)` is the source encounter identity.
+Preserve every source row and its multiplicity. Use a versioned, explicit setting
+mapping. Unknown types cannot establish an acute return.
 
-The CLI entry points are `python -m trinetx_preprocessing build-returns` and
-`python -m trinetx_preprocessing validate-returns`. Both require the canonical
-database, accepted parent bundle, and external work/output paths. The build
-also requires a patient partition count (default 32); `--resume` verifies the
-source, parent, code and partition identity and every completed part hash.
-The validator requires a new external report path and independently reconciles
-summary keys, return links, counts, flags, first dates/timestamps, uncertainty,
-typed schemas and artifact hashes. These commands are not a private acceptance
-seal.
+Same-ID continuation rule: after allowing duplicate source rows, each
+setting component has one distinct observed start/end pair, with valid order.
+An ED/inpatient progression requires
+`ED start <= inpatient start <= ED end <= inpatient end`, evaluated as dates.
+It uses the ED start and inpatient end as episode boundaries. Other arrangements
+remain conflicting or unsupported until an additional rule is approved. This
+allows differing component dates without waiving contradictions merely because
+both types are present. Exact expected cases must accompany implementation.
 
-## Source capability and acceptance gates
+Do not merge distinct IDs solely because dates overlap or are adjacent. Without
+authoritative cross-ID transfer linkage, retain that uncertainty. Do not infer
+a discharge or transfer from `source_encounter_flow`.
 
-The accepted canonical catalog retains the four required `J96` codes through
-exact rules with a wildcard code-system selector. That selector includes
-ICD-10-CM; the canonical diagnosis table has rows for all five required exact
-codes. The initial preflight incorrectly required an ICD-10-CM-specific rule.
-It now accepts either exact ICD-10-CM or exact wildcard capture, while the
-return phenotype still checks each row's ICD-10-CM code system and exact code.
-The source and parent manifest identities and aggregate encounter profile are
-recorded in an external private receipt. The source has date-only encounter
-start/end observations and some index keys have missing or conflicting ends.
-Same-day order and those index anchors remain unavailable under this contract.
+Report inpatient, ED-only, any ED and acute-care union separately. An ED/inpatient
+episode appears once in the acute-care union, belongs to inpatient and any ED,
+and is not ED-only. Recurrent episodes remain separate.
 
-The locked aggregate profile reconciles both accepted index populations and
-shows many last observed events before 365 days. The source flow table has no transfer
-identifier or discharge field, so cross-ID continuations remain unconfirmed.
-Private acceptance requires a resource pilot, one locked two-variant
-outcomes-only build, independent validation, proof that inputs stayed byte
-unchanged, and an external acceptance seal. The current gate results and
-commands are recorded in [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md). Do not
-substitute compatibility CSVs, a broad J96 outcome rule, or a raw export rescan.
+Applicability: inpatient returns after inpatient indexes are readmissions;
+inpatient returns after ED-only indexes are admissions. Known nonacute index keys
+remain present with `not_applicable` primary return outcomes. An unknown setting
+has unavailable applicability, with a distinct reason. Any desired generic
+post-outpatient admission endpoint would need its own explicit definition.
+
+## 4. Diagnosis and gas qualification
+
+Preserve exact ICD-10-CM `J96.02`, `J96.12`, `J96.22`, `J96.92`, `E66.2`
+qualification on the return episode. Historical or broad J96 diagnoses do not
+qualify. Retain all candidate evidence and rejection reasons.
+
+Retain the explicit specimen catalog, unit conversions, raw/converted values,
+source identifiers and multiplicity. Any usable return-episode measurement can
+qualify; there is no pH requirement or index-route restriction. Do not add a
+new physiological plausibility cutoff without a separate scientific decision.
+
+Clinical evidence date rule: require episode linkage and an event
+date inside an observed, coherent episode interval, inclusively by date. If the
+return end is missing, derived or conflicting, the all-cause event can still
+qualify from its valid start, but the interval-dependent phenotype is unavailable;
+retain its linked evidence with the reason. A future rule accepting encounter-ID
+linkage alone for phenotype qualification would need a separate decision.
+
+For each specimen and each threshold, `true` means at least one usable positive
+measurement; `false` means at least one usable measurement and none positive;
+NULL means no usable measurement. Rejected rows and measurements of the other
+specimen cannot turn NULL into false.
+
+Retain separate ABG/VBG >45, >50, >=45 and >=50 fields, with explicit units.
+Add unambiguous paired gas unions:
+
+- `gas_abg_gt45_or_vbg_gt50`;
+- `gas_abg_ge45_or_vbg_ge50`.
+
+Keep any same-cutoff unions only with explicit names and definitions. Define
+separate ICD-or-gas composites for strict and inclusive thresholds. The inclusive
+composite is exact qualifying ICD OR ABG >=45 OR VBG >=50. An ICD-positive episode
+can establish that composite without a gas. Absence of a qualifying ICD is an
+absence of qualifying recorded evidence, not proof of clinical absence.
+
+For a gas-only union, true means any usable included specimen meets its threshold;
+false means at least one included specimen was usable and no measured specimen
+met its threshold; NULL means neither specimen was usable. An unmeasured second
+specimen does not erase a negative observation in the measured specimen, and is
+still NULL in its own specimen-specific result. For ICD-or-gas composites, a
+qualifying ICD establishes true; otherwise use that gas-union three-state result.
+
+## 5. Counts, flags, uncertainty and follow-up
+
+Counts describe **confirmed observed events**, not complete capture of all events.
+For an applicable, evaluable index, zero confirmed events is a valid observed
+count. For an unavailable or not-applicable index, primary counts, flags and first
+dates are NULL; preserve a separate reason. Do not encode unavailable as zero.
+
+Expose counts for every temporal state and relevant reason, including same-day,
+overlap, missing start, derived start, conflicting start, unknown precision and
+invalid order. Record these by category/window when the date permits assignment;
+undated uncertainty stays separate and must not be assigned an invented window.
+For conflicting dates spanning a boundary, preserve possible-window membership
+without arbitrarily selecting a single date to decide eligibility.
+
+Horizon flag rule: positive if at least one confirmed qualifying event
+exists; otherwise NULL if unresolved candidate timing could change the result.
+A negative flag must be defined as no qualifying event in the evaluable observed
+set, never as complete ascertainment. Supply confirmed counts alongside that flag.
+Known day-zero and known pre-end overlapping starts are outside the day-1-through-N
+endpoint by definition; retain their uncertainty counts, but they alone do not
+make that endpoint's flag NULL. Undated/conflicting candidates whose possible
+start could fall in the window can change an otherwise false flag to NULL.
+
+For gas-related horizon flags, a positive measurement establishes true. With no
+positive result, retain NULL if any relevant confirmed return lacks usable testing
+or interval eligibility. False requires at least one relevant return and all such
+returns to be evaluable and negative for that criterion. No usable gas stays NULL.
+Publish tested, untested and phenotype-unavailable return counts so this rule can
+be audited. This explicitly resolves the current normal-plus-untested ambiguity.
+
+Keep last observed event, observation relative to each horizon, and recorded death
+month separate. Neither last observation nor death month supplies an exact censor
+date. Do not claim continuous coverage, unplanned readmission, causation or complete
+capture. Label the entire product as outcomes, not baseline predictors.
+
+## 6. Parent precision compatibility proof
+
+Introduce an explicitly versioned parent-validation rule for the recognized
+schema 2.0/feature-contract 1.0 producer representation. Its scope is the six
+diagnosis/procedure/medication component artifacts lacking the explicit field.
+
+1. Validate parent/source provenance, artifact hashes, required original fields
+   and types. Unexpected missing columns or representations still fail.
+2. For diagnosis/procedure use retained raw `date`; for medication use `start_date`.
+   Require supported date-only syntax, a real parseable calendar date, nonmissing
+   values when an event is present, agreement with parsed `event_datetime`, and
+   no contradictory parsed time of day for this legacy day-only proof.
+3. Project proven `date_only` precision in a validation view or ephemeral external
+   derived table. Never rewrite accepted Parquet or its manifest. Preserve row
+   multiplicity and reconcile row totals, including typed empty domains.
+4. If an explicit precision field is present, check its consistency; do not
+   silently override it. Unrecognized/mixed representations fail this compatibility
+   proof and require an applicable versioned rule or an explicit decision.
+5. Retain every other parent validation gate and issue a report stating which
+   representation was validated. Acceptance-receipt readers must recognize and
+   verify the new validation-contract version explicitly.
+
+This corrects a representation mismatch while requiring equivalent information.
+It does not authorize a blanket assumption that every timestamp is date-only,
+or a generic exemption from missing-column validation. No parent schema/catalog
+fingerprint is changed.
+
+## 7. Repair and acceptance sequence
+
+| Stage | Work | Exit gate |
+|---|---|---|
+| A. Agree definitions | Adopt day windows, applicability, episode coherence, evidence eligibility, threshold unions and NULL rules; record the decision | Versioned contract and hand-authored expected fixtures |
+| B. Repair implementation | Fix F1–F7, complete dictionary, fresh scratch for resume, symmetric path checks | Actual producer/validator integration; day-boundary, null, rejected-gas and real-resume regressions |
+| C. Strengthen proof | Independent source/evidence/link/summary reconstruction with bounded partitions | Both-direction multiset comparisons; every adversarial corruption rejected; fresh/resumed/partitioned full artifacts agree |
+| D. Establish readiness | Cheap full schema/capability checks, complete immutable-parent validation, trusted parent receipt, frozen code checks, refreshed installed runner and resource evidence | Every pre-build gate passes on the exact code/config/contract; no truncation or exception-by-test-edit |
+| E. Execute C4 | One locked full outcomes-only build of both variants, then full validation and byte comparisons | External seal binds source, parent, output, producer, validator, configuration, contracts and all required gates |
+
+Re-run affected tests during repairs, then the full suite, Ruff, lock and installed
+wheel/old-consumer checks on the frozen candidate. Keep old tolerances and fixture
+expectations unchanged. Pilot the validator as well as the builder at realistic
+scale. Previous failed attempts remain preserved; changed code cannot resume
+old return partitions under a different identity.
+
+Unknown outcomes for individual rows are valid contract results. A failed identity,
+compatibility proof, completeness check, runtime gate or unresolved scientific
+definition blocks acceptance of the bundle. **DONE still requires C0–C4.**
