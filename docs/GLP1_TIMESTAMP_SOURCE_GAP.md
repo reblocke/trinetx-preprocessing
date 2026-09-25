@@ -127,7 +127,13 @@ timing and medication activity.
 Ask whether a current alternative TriNetX product or approved site-specific
 extract can supply actual clinical event times, rather than another download
 of the date-only `YYYYMMDD` layout. Request a current field dictionary and a
-safe, aggregate precision inventory before any transfer. At minimum, ask for:
+safe, aggregate precision inventory before any transfer.
+
+The [University of Utah CTSI TriNetX page](https://ctsi.utah.edu/cores-and-services/bmic/research-data-resources/trinetx)
+lists BMIC (`bmic@ctsi.utah.edu`) for further information and links its
+institutional account-request route. This is a potential route to identify the
+study's designated TriNetX representative; it does not establish that BMIC is
+the approved recipient for this study or authorize sending the inquiry.
 
 [TriNetX's current Dataworks description](https://trinetx.com/solutions/datasets/)
 calls its observations date-stamped and says optional enhancements can be
@@ -137,7 +143,7 @@ directs researchers to their designated TriNetX representative for contractual
 clarification and to an institutional account or healthcare partnership manager
 for publishing questions. The institutional TriNetX contact is therefore the
 appropriate route for a capability inquiry under the approved study/data-use
-process; a public website claim is not source acceptance.
+process; a public website claim is not source acceptance. At minimum, ask for:
 
 - Encounter `patient_id`, `encounter_id`, start datetime, time precision,
   source/HCO identifier, and source-record identity. Preserve all duplicate or
@@ -177,9 +183,10 @@ an issue, PR, or external service.
 > We will review the permitted network and data-use terms through our approved
 > institutional route before requesting any new row-level extract.
 
-No recipient or send authorization has been supplied. The inquiry is a draft
-for the study's designated institutional TriNetX contact, not evidence that a
-timestamp-capable product exists or that a request has been submitted.
+The study's designated recipient and send authorization have not been
+confirmed. The inquiry is a draft for the approved institutional TriNetX
+contact, not evidence that a timestamp-capable product exists or that a
+request has been submitted.
 
 ## Acceptance before use
 
