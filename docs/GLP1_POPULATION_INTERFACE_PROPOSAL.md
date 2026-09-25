@@ -44,8 +44,7 @@ entire source database. This is an explicit new accepted interface, not a
 silent fallback from a failed encounter-bundle read. The receipt must bind the
 exact database identity/bytes, source manifest and schema/catalog revision,
 and the installed consumer must verify that trusted identity before opening
-rows. A future timed export requires a new immutable canonical product; never
-rewrite the accepted date-only database or its existing bundle.
+rows. Preserve the accepted date-only database and its existing bundle.
 
 The draft `verify_accepted_cohort_source()` and
 `open_accepted_cohort_source()` implement this trust boundary without issuing
@@ -58,6 +57,17 @@ synthetic receipt and database exercise positive and tamper rejection paths;
 they do not pass the private gates or authorize downstream adoption. Hashing
 the full database is an intentional once-per-open cost to bind exact bytes;
 its private runtime is still unmeasured.
+
+The candidate `project_calendar_encounter_evidence()` reads one original
+patient/encounter key from a caller-opened validated source. It requires
+observed date-only raw starts and arterial lab dates, rejects conflicting
+starts and duplicate source-record keys, and uses catalog membership with
+duplicate memberships collapsed. It returns raw numeric values, units,
+specimen and panel fields without classifying the gas. Synthetic exact-key,
+precision and ambiguity fixtures pass. This per-encounter projection is a
+validation bridge, not a measured bulk report path or evidence of source
+acceptance. Clinical specimen, unit, plausibility and linkage policies remain
+downstream decisions.
 
 The draft `audit_candidate_population()` compares an authenticated historical
 patient/index key table supplied by the caller against the unfiltered canonical
@@ -149,7 +159,8 @@ encounters. Avoid changing the existing accepted variants or their receipt.
    through the existing read-only source API as part of that boundary. The
    study adapter must never silently fall back from an accepted bundle.
 5. Reconstruct the approved patient-index cohort downstream, then compare
-   patient membership, index events, context exclusions, medication states,
+   patient membership, index events, context exclusions, recorded medication
+   history,
    and named denominators with the historical route. Evaluate intentional
    calendar-date phenotype changes separately from source-coverage changes;
    source-specific arterial, pH and date-boundary validation remains required.

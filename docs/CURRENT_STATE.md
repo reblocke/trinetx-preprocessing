@@ -50,6 +50,10 @@ aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
 this is not a new accepted source population or a timed extract. See the
 [population interface proposal](GLP1_POPULATION_INTERFACE_PROPOSAL.md).
+The candidate per-encounter calendar projection preserves exact original
+keys, raw observed dates, units and sample identifiers. It fails on
+conflicting starts or undated arterial candidates; synthetic tests pass.
+It is not a bulk clinical adapter or an accepted-source estimate.
 An additional owner-only candidate inventory found canonical patient records
 for the historical population and observed records plus source files in all
 five clinical domains. It does not establish continuous history or clinical

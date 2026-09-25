@@ -10,6 +10,12 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
+all email sending. A new read-only candidate source projection keeps raw
+arterial values, units and linkage identifiers at the exact original
+patient/encounter key; it fails on conflicting date-only starts or undated
+arterial candidates. Synthetic tests pass. It does not accept a population,
+normalize clinical gas values, or produce a report.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the
