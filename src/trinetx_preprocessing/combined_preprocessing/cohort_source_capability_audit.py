@@ -47,6 +47,8 @@ class MedicationFieldCapture:
 class CandidateSourceCapabilityAudit:
     encounter_starts: PrecisionCapture
     lab_events: PrecisionCapture
+    arterial_pco2_candidates: PrecisionCapture
+    arterial_ph_candidates: PrecisionCapture
     medication_starts: PrecisionCapture
     medication_fields: MedicationFieldCapture
     raw_headers: tuple[RawHeaderCapture, ...]
@@ -59,16 +61,28 @@ def _precision(
     table: str,
     precision: str,
     parsed: str,
+    element_id: str | None = None,
 ) -> PrecisionCapture:
     # Table and column names are fixed below, never interpolated from callers.
+    source = f"source.{precision}"
+    parsed_source = f"source.{parsed}"
+    membership_filter = (
+        " WHERE EXISTS (SELECT 1 FROM element_membership AS membership "
+        "WHERE membership.source_record_id=source.source_record_id "
+        "AND membership.element_id=? AND membership.include IS TRUE)"
+        if element_id is not None
+        else ""
+    )
     total, date_only, labeled, parsed_count, unparsed, other = connection.execute(
         f"SELECT count(*),"
-        f"count(*) FILTER(WHERE {precision}='date_only'),"
-        f"count(*) FILTER(WHERE {precision}='timestamp'),"
-        f"count(*) FILTER(WHERE {precision}='timestamp' AND {parsed} IS NOT NULL),"
-        f"count(*) FILTER(WHERE {precision}='timestamp' AND {parsed} IS NULL),"
-        f"count(*) FILTER(WHERE {precision} IS NULL OR "
-        f"{precision} NOT IN ('date_only','timestamp')) FROM {table}"
+        f"count(*) FILTER(WHERE {source}='date_only'),"
+        f"count(*) FILTER(WHERE {source}='timestamp'),"
+        f"count(*) FILTER(WHERE {source}='timestamp' AND {parsed_source} IS NOT NULL),"
+        f"count(*) FILTER(WHERE {source}='timestamp' AND {parsed_source} IS NULL),"
+        f"count(*) FILTER(WHERE {source} IS NULL OR "
+        f"{source} NOT IN ('date_only','timestamp')) FROM {table} AS source"
+        f"{membership_filter}",
+        [element_id] if element_id is not None else [],
     ).fetchone()
     if total != date_only + labeled + other or labeled != parsed_count + unparsed:
         raise AssertionError("Source precision inventory does not reconcile")
@@ -108,6 +122,22 @@ def audit_candidate_source_capabilities(
             table="source_lab_measurement",
             precision="timestamp_precision",
             parsed="event_datetime",
+        ),
+        _precision(
+            connection,
+            domain="arterial_pco2_catalog_candidate",
+            table="source_lab_measurement",
+            precision="timestamp_precision",
+            parsed="event_datetime",
+            element_id="source.arterial_pco2",
+        ),
+        _precision(
+            connection,
+            domain="arterial_ph_catalog_candidate",
+            table="source_lab_measurement",
+            precision="timestamp_precision",
+            parsed="event_datetime",
+            element_id="source.arterial_ph",
         ),
         _precision(
             connection,
@@ -151,7 +181,9 @@ def audit_candidate_source_capabilities(
     return CandidateSourceCapabilityAudit(
         encounter_starts=precision[0],
         lab_events=precision[1],
-        medication_starts=precision[2],
+        arterial_pco2_candidates=precision[2],
+        arterial_ph_candidates=precision[3],
+        medication_starts=precision[4],
         medication_fields=MedicationFieldCapture(
             source_rows=int(medication_rows[0]),
             rows_with_end_date=int(medication_rows[1]),

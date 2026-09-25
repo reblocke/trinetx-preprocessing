@@ -157,6 +157,10 @@ medication CSV paths, reads only their headers, and returns path-free aggregate
 field-presence counts with source/report acceptance false. Synthetic CLI tests
 cover fixed output and path-free errors. This does not prove that any new
 source contains actual clinical timestamps or order history.
+The validated canonical-source capability audit now also separates included
+catalog-matched arterial PaCO2 and pH candidate precision from all labs. It
+counts each source record once even if membership has duplicate rows and does
+not establish arterial provenance, index linkage or first-gas/pH pairing.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

@@ -61,7 +61,11 @@ The draft `audit_candidate_source_capabilities()` helper can screen a
 validated canonical source without returning patient rows, file paths or raw
 headers. It separately counts date-only rows, timestamp-labeled rows with and
 without a parsed datetime, and other/missing precision for encounter starts,
-lab events and medication starts. It also counts populated medication end and
+lab events, catalog-matched arterial PaCO2 and pH candidates, and medication
+starts. The two arterial candidate counts use included catalog memberships and
+deduplicate repeated membership entries by source-record key; they do not
+establish clinical arterial provenance, index linkage, first-gas order, or pH
+pairing. The audit also counts populated medication end and
 status fields and how many raw encounter, lab and medication files contain
 those column names. A parsed midnight date remains date-only under this audit.
 These are aggregate source-capability diagnostics, not a gas-specific

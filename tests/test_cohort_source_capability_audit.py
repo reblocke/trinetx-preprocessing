@@ -21,12 +21,26 @@ def _source() -> duckdb.DuckDBPyConnection:
     )
     connection.execute(
         "CREATE TABLE source_lab_measurement("
-        "timestamp_precision VARCHAR,event_datetime TIMESTAMP)"
+        "source_record_id VARCHAR,timestamp_precision VARCHAR,event_datetime TIMESTAMP)"
     )
     connection.execute(
         "INSERT INTO source_lab_measurement VALUES "
-        "('date_only','2024-01-01'),('date_only','2024-01-02'),"
-        "('timestamp','2024-01-02 10:17:00')"
+        "('gas-1','date_only','2024-01-01'),"
+        "('ph-1','date_only','2024-01-02'),"
+        "('other-1','timestamp','2024-01-02 10:17:00'),"
+        "('gas-2','timestamp','2024-01-02 10:18:00')"
+    )
+    connection.execute(
+        "CREATE TABLE element_membership("
+        "source_record_id VARCHAR,element_id VARCHAR,include BOOLEAN)"
+    )
+    connection.execute(
+        "INSERT INTO element_membership VALUES "
+        "('gas-1','source.arterial_pco2',TRUE),"
+        "('gas-1','source.arterial_pco2',TRUE),"
+        "('gas-2','source.arterial_pco2',TRUE),"
+        "('ph-1','source.arterial_ph',TRUE),"
+        "('other-1','source.arterial_ph',FALSE)"
     )
     connection.execute(
         "CREATE TABLE source_medication("
@@ -67,7 +81,12 @@ def test_capability_audit_distinguishes_timed_parsed_date_only_and_raw_field_cap
     assert result.encounter_starts.unparsed_timestamp_rows == 1
     assert result.encounter_starts.other_precision_rows == 1
     assert result.lab_events.date_only_rows == 2
-    assert result.lab_events.parsed_timestamp_rows == 1
+    assert result.lab_events.parsed_timestamp_rows == 2
+    assert result.arterial_pco2_candidates.source_rows == 2
+    assert result.arterial_pco2_candidates.date_only_rows == 1
+    assert result.arterial_pco2_candidates.parsed_timestamp_rows == 1
+    assert result.arterial_ph_candidates.source_rows == 1
+    assert result.arterial_ph_candidates.date_only_rows == 1
     assert result.medication_starts.parsed_timestamp_rows == 1
     assert result.medication_starts.unparsed_timestamp_rows == 1
     assert result.medication_fields.source_rows == 3
@@ -94,6 +113,7 @@ def test_empty_candidate_has_zero_capability_without_imputing_capture():
             "source_lab_measurement",
             "source_medication",
             "source_file_inventory",
+            "element_membership",
         ):
             connection.execute(f"DELETE FROM {table}")
         result = cohort_source_capability_audit.audit_candidate_source_capabilities(
@@ -101,5 +121,7 @@ def test_empty_candidate_has_zero_capability_without_imputing_capture():
         )
     assert result.encounter_starts.source_rows == 0
     assert result.lab_events.parsed_timestamp_rows == 0
+    assert result.arterial_pco2_candidates.source_rows == 0
+    assert result.arterial_ph_candidates.source_rows == 0
     assert result.medication_fields.rows_with_end_date == 0
     assert {item.source_files for item in result.raw_headers} == {0}

@@ -26,7 +26,8 @@ first-24-hour gas rule requires a new approved timestamp-capable source; see
 The accepted medication export also lacks end and status fields, leaving the
 original documented no-active-order denominator unavailable from this source.
 Draft source-capability auditing can now summarize parsed versus date-only
-event precision and medication end/status capture, including raw-header field
+event precision across encounter starts, labs, catalog-matched arterial PaCO2
+and pH candidates, and medication starts, plus medication end/status capture and raw-header field
 presence, without returning rows or paths. It is a candidate-source screen;
 the accepted source limitation and scientific report gate are unchanged.
 The read-only `audit-cohort-source-capabilities` command exposes this screen

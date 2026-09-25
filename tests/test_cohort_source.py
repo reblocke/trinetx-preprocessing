@@ -167,6 +167,8 @@ def test_capability_cli_reads_validated_source_and_emits_only_aggregate_counts(
     assert payload["source_accepted"] is False
     assert payload["abstract_report_ready"] is False
     assert payload["counts"]["encounter_starts"]["source_rows"] == 0
+    assert payload["counts"]["arterial_pco2_candidates"]["source_rows"] == 0
+    assert payload["counts"]["arterial_ph_candidates"]["source_rows"] == 0
     assert {item["domain"] for item in payload["counts"]["raw_headers"]} == {
         "encounter",
         "labs",
