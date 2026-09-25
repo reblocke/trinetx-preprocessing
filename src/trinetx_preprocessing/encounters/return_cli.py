@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..combined_preprocessing.builder import require_safe_output_location
 from .return_validation import validate_returns
-from .returns import build_returns
+from .returns import DAY_RETURN_CONTRACT_VERSION, RETURN_CONTRACT_VERSION, build_returns
 
 
 def build_main(argv: list[str] | None = None) -> int:
@@ -17,6 +17,11 @@ def build_main(argv: list[str] | None = None) -> int:
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--partitions", type=int, default=32)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--contract-version",
+        choices=(RETURN_CONTRACT_VERSION, DAY_RETURN_CONTRACT_VERSION),
+        default=RETURN_CONTRACT_VERSION,
+    )
     args = parser.parse_args(argv)
     build_returns(
         database=args.database,
@@ -25,6 +30,7 @@ def build_main(argv: list[str] | None = None) -> int:
         work_dir=args.work_dir,
         partitions=args.partitions,
         resume=args.resume,
+        contract_version=args.contract_version,
     )
     return 0
 

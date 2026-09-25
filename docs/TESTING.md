@@ -36,8 +36,22 @@ exceptions include:
    build; public fixtures never replace that gate.
 
 A component test with a mocked parent/source validator is not complete
-source-to-parent-to-returns E2E coverage. That missing workflow and the audited
-return defects remain part of the blocked goal.
+source-to-parent-to-returns E2E coverage. The resumed return goal requires
+the real parent/source gate and a locked full build before acceptance.
+
+For the calendar-day v2 return partition, use a new external directory:
+
+```bash
+uv run python scripts/verify_return_v2_partition_e2e.py /external/new-return-e2e
+uv run python scripts/verify_return_v2_partition_e2e.py \
+  /external/new-return-e2e --verify
+```
+
+This E2E retains synthetic source data, all six outputs at one and three
+partitions, hand-authored results, independent reconciliation, adversarial
+corruption results, code/fixture/script identities and SHA-256 inventory. Its
+receipt identifies its partition scope; it does not replace full manifest-bound
+parent/source validation or private C4 acceptance.
 
 ## Retained E2E artifact
 

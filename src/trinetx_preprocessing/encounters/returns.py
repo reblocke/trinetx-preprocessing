@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import duckdb
@@ -12,9 +13,14 @@ from ..combined_preprocessing.cohort_source import validate_cohort_source
 from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
 from .builder import VARIANTS, code_identity, literal, sha256
 from .compatibility import artifact_inventory, file_identity, no_symlinks
-from .validation import validate_bundle
+from .validation import (
+    DAY_PRECISION_VALIDATION_VERSION,
+    VALIDATION_CONTRACT_VERSION,
+    validate_bundle,
+)
 
 RETURN_CONTRACT_VERSION = "1.0"
+DAY_RETURN_CONTRACT_VERSION = "2.0"
 RETURN_PARENT_VALIDATION_MEMORY_MIB = 4096
 RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS = 32
 HORIZONS = (30, 90, 365)
@@ -240,7 +246,9 @@ def _create_links(db: duckdb.DuckDBPyConnection) -> None:
         raise ValueError("Duplicate index-to-return episode link")
 
 
-def _create_evidence(db: duckdb.DuckDBPyConnection) -> None:
+def _create_evidence(
+    db: duckdb.DuckDBPyConnection, *, create_outcomes: bool = True
+) -> None:
     db.execute(
         """
         CREATE TEMP TABLE return_episode_keys AS
@@ -332,6 +340,8 @@ def _create_evidence(db: duckdb.DuckDBPyConnection) -> None:
         FROM qualified
         """
     )
+    if not create_outcomes:
+        return
     db.execute(
         """
         CREATE TEMP TABLE episode_outcomes AS
@@ -569,8 +579,11 @@ def build_returns(
     work_dir: Path,
     partitions: int = 32,
     resume: bool = False,
+    contract_version: str = RETURN_CONTRACT_VERSION,
 ) -> dict:
     """Build both variants into a distinct external bundle with resumable parts."""
+    if contract_version not in {RETURN_CONTRACT_VERSION, DAY_RETURN_CONTRACT_VERSION}:
+        raise ValueError("Unsupported return contract version")
     if partitions < 1 or partitions > 1024:
         raise ValueError("Patient partition count must be from 1 to 1024")
     database, parent_bundle = no_symlinks(database), no_symlinks(parent_bundle)
@@ -579,21 +592,32 @@ def build_returns(
         require_safe_output_location(path, artifact_label=label)
     if output_dir.exists():
         raise FileExistsError("Return output destination already exists")
-    if output_dir == work_dir or output_dir.is_relative_to(work_dir):
+    if (
+        output_dir == work_dir
+        or output_dir.is_relative_to(work_dir)
+        or work_dir.is_relative_to(output_dir)
+    ):
         raise ValueError("Return output and work locations must be separate")
-    if output_dir.is_relative_to(parent_bundle) or output_dir.is_relative_to(
-        database.parent
+    if any(
+        output_dir.is_relative_to(input_path) or input_path.is_relative_to(output_dir)
+        for input_path in (parent_bundle, database.parent)
     ):
         raise ValueError("Return output location overlaps immutable inputs")
-    if work_dir.is_relative_to(parent_bundle) or work_dir.is_relative_to(
-        database.parent
+    if any(
+        work_dir.is_relative_to(input_path) or input_path.is_relative_to(work_dir)
+        for input_path in (parent_bundle, database.parent)
     ):
         raise ValueError("Return work location overlaps immutable inputs")
     parent_report = validate_bundle(
         bundle=parent_bundle,
-        work_dir=work_dir / "parent-validation",
+        work_dir=work_dir / f"parent-validation-{uuid.uuid4().hex}",
         memory_limit_mib=RETURN_PARENT_VALIDATION_MEMORY_MIB,
         distinct_count_partitions=RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS,
+        validation_contract_version=(
+            DAY_PRECISION_VALIDATION_VERSION
+            if contract_version == DAY_RETURN_CONTRACT_VERSION
+            else VALIDATION_CONTRACT_VERSION
+        ),
     )
     if not parent_report["pass"]:
         raise ValueError("Parent encounter bundle failed validation")
@@ -619,7 +643,7 @@ def build_returns(
             if collisions:
                 raise ValueError("Original index hash collides across composite keys")
     identity = {
-        "return_contract_version": RETURN_CONTRACT_VERSION,
+        "return_contract_version": contract_version,
         "parent_manifest_sha256": sha256(parent_manifest_path),
         "source_manifest_sha256": sha256(source_sidecar),
         "source_file_identity": list(file_identity(database)),
@@ -683,7 +707,13 @@ def build_returns(
                         raise ValueError("Interrupted return part is a symlink")
                     if partial.exists():
                         partial.unlink()
-                part = _build_partition(
+                if contract_version == DAY_RETURN_CONTRACT_VERSION:
+                    from .returns_v2 import build_partition_v2
+
+                    build_partition = build_partition_v2
+                else:
+                    build_partition = _build_partition
+                part = build_partition(
                     db,
                     variant=variant,
                     bucket=bucket,
@@ -715,12 +745,20 @@ def build_returns(
             "summary",
         ):
             example = staging / f"full_data_0000_{name}.parquet"
-            dictionary[name] = [
-                {"column": column, "duckdb_type": kind, "role": "outcome"}
-                for column, kind, *_ in inspect.execute(
-                    f"DESCRIBE SELECT * FROM read_parquet({literal(example)})"
-                ).fetchall()
-            ]
+            columns = inspect.execute(
+                f"DESCRIBE SELECT * FROM read_parquet({literal(example)})"
+            ).fetchall()
+            if contract_version == DAY_RETURN_CONTRACT_VERSION:
+                from .returns_v2 import dictionary_entry
+
+                dictionary[name] = [
+                    dictionary_entry(name, column, kind) for column, kind, *_ in columns
+                ]
+            else:
+                dictionary[name] = [
+                    {"column": column, "duckdb_type": kind, "role": "outcome"}
+                    for column, kind, *_ in columns
+                ]
     (staging / "data_dictionary.json").write_text(
         json.dumps(dictionary, indent=2) + "\n"
     )
@@ -728,7 +766,7 @@ def build_returns(
     manifest = {
         "kind": "return_outcomes",
         "status": "complete",
-        "schema_version": RETURN_CONTRACT_VERSION,
+        "schema_version": contract_version,
         **identity,
         "variants": list(VARIANTS),
         "horizons_days": list(HORIZONS),

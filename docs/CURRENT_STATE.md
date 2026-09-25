@@ -32,6 +32,8 @@ stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
 an inherited producer/validator precision-schema mismatch and additional return
 implementation defects. The owner resumed C0–C4 on 2026-09-25 after the E2E-first testing cleanup;
 see [the testing review](testing_review.md). The accepted [calendar-day v2
-contract](RETURN_CONTRACT.md) governs repairs. C2/C3 need proof and C4 remains
-gated by complete private validation and a resource pilot. Existing
+contract](RETURN_CONTRACT.md) governs the implemented opt-in v2 builder and
+validator. Its public and synthetic checks pass; full accepted-parent
+validation is running after an exact bounded-memory repair. C3 private proof
+and C4 remain gated by that result and a final-code resource pilot. Existing
 encounter products and cohort-source interfaces are preserved.

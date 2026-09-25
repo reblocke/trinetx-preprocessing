@@ -1,11 +1,39 @@
 # Return outcomes acceptance
 
-Status: **C0 provenance recovered; C1 v2 contract frozen; C2/C3 repairs in
-progress; C4 gated**. This page tracks private acceptance for the opt-in v2
+Status: **C0 provenance recovered; C1 v2 contract frozen; C2 implemented;
+C3 public and synthetic checks passed, private gate pending; C4 gated**.
+This page tracks private acceptance for the opt-in v2
 return bundle. The executable rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
 The [2026-09-25 audit](RETURN_AUDIT.md) supersedes earlier completion claims.
 The owner explicitly resumed the goal under the calendar-day v2 contract.
 Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
+
+The calendar-day v2 build and independent validator are implemented on code
+identity `ba6ad8e4809a22ff2876a1490c2a84bef20f1fe0445f7fd46142afa611361dbe`.
+The frozen suite passed 464 cases (238 existing performance warnings); Ruff
+check/format, `uv lock --check --offline`, `git diff --check`, noneditable wheel
+installation with matching code identity, and the installed old cohort-source
+consumer passed. The five legacy E2Es passed with a readback-verified manifest
+SHA-256 `068767fdfd9aa3aa197be3a6fec1bc55d65a1240743d96f483585a944c3cab9f`.
+The v2 partition E2E passed hand-authored boundaries, independent reconciliation,
+adversarial corruption and one-versus-three partition equivalence; its receipt
+SHA-256 is `4c8c82a64137ff35ab475e884ef8d29839ad501d539829fc258a3c0f96d19e00`.
+A separate synthetic wrapper check passed fresh/resumed/partitioned full-artifact
+multisets, output collision and wrong receipt checks; its receipt SHA-256 is
+`4096fcf49289be45b196ecf7f3ef17282ca6a749161810fc303d7377ee15e998`.
+That check explicitly stubs upstream parent/source validation, so these passes
+do not close the real input boundary or C4 acceptance.
+
+The first versioned parent precision preflight rejected all full-data diagnosis
+rows because its proof recognized ISO dates but not the producer's eight-digit
+`YYYYMMDD` representation. Both representations are now checked. A second
+locked preflight reached exact element-by-history availability reconciliation
+and failed at the 4 GiB DuckDB limit; the same unchanged query failed at 8 GiB
+in isolation. Both failed receipts and work remain external. The opt-in bounded
+path now partitions evidence by stable index ID, proves projected and joined
+row multiplicity, and sums exact distinct counts across disjoint partitions.
+Its synthetic positive and missing/duplicate coverage checks pass. A fresh
+locked full parent validation on that code is in progress; no pass is claimed.
 
 The historical accepted parent receipt was recovered from the documented
 external handoff. An external C0 receipt, SHA-256
@@ -46,7 +74,7 @@ then stopped because the accepted schema 2.0 parent bundle lacks the required
 `event_datetime_precision` column in diagnosis, procedure, and medication
 component evidence for both variants. The producer retains raw `date` (or
 medication `start_date`) and `event_datetime` but does not write that field for those
-tables. The current validator requires it, and the accepted bundle cannot be
+tables. The historical v1 validator requires it, and the accepted bundle cannot be
 rebuilt or modified under this request. The external schema audit records all
 six affected artifacts and the exact parent/code identities. No return bundle,
 independent return validation, post-build byte comparison, or acceptance seal
@@ -56,16 +84,16 @@ A separate read-only aggregate audit of those artifacts found that their
 producer-defined raw date fields (`date` or `start_date`) are present,
 parseable as date-only values, and agree with the parsed event calendar dates;
 the parsed events have no time of day. Its private receipts remain external.
-This evidence does not add the missing field or authorize a new schema rule.
+This evidence did not add the missing field; the owner later authorized the
+versioned v2 compatibility proof described above.
 
 The audit reproduced this mismatch with the unchanged synthetic evidence
-producer. Day-only dates are already permitted by v1. The recommended repair is
-a versioned parent-validation compatibility rule proving equivalent precision
+producer. Day-only dates are already permitted by v1. The owner accepted a
+versioned parent-validation compatibility rule proving equivalent precision
 from retained raw fields while preserving the accepted parent schema and bytes.
-An unchanged producer rebuild would reproduce the missing field. Resolve the
-versioned compatibility rule, all audit findings, trusted parent acceptance provenance,
-complete parent validation and refreshed C3 gates before retrying the outcomes
-build. Do not bypass the validator.
+An unchanged producer rebuild would reproduce the missing field. Complete the
+current parent validation and remaining private C3/C4 gates before building
+outcomes. Do not bypass the validator.
 
 The equivalent public command shape is:
 
@@ -73,7 +101,7 @@ The equivalent public command shape is:
 python -m trinetx_preprocessing build-returns \
   --database "$CANONICAL_DB" --parent-bundle "$ACCEPTED_ENCOUNTER_BUNDLE" \
   --output-dir "$EXTERNAL_RETURN_BUNDLE" --work-dir "$EXTERNAL_WORK" \
-  --partitions 32
+  --partitions 32 --contract-version 2.0
 python -m trinetx_preprocessing validate-returns \
   --bundle "$EXTERNAL_RETURN_BUNDLE" \
   --parent-bundle "$ACCEPTED_ENCOUNTER_BUNDLE" \

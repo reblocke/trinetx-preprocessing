@@ -13,6 +13,12 @@ from .builder import EVIDENCE_TABLES, SCHEMA_VERSION, VARIANTS, code_identity, l
 from .compatibility import digest, no_symlinks
 
 VALIDATION_CONTRACT_VERSION = "1.0"
+DAY_PRECISION_VALIDATION_VERSION = "2.0"
+LEGACY_DATE_FIELDS = {
+    "diagnosis_component_evidence": "date",
+    "procedure_component_evidence": "date",
+    "medication_component_evidence": "start_date",
+}
 
 # Required columns are intentionally domain-specific. Nullable values such as
 # event dates and units remain representable; the schema itself may not vanish.
@@ -329,6 +335,69 @@ def _check_table_schema(db, path, artifact, required):
     return schema
 
 
+def _prove_component_day_precision(db, *, artifact, table, schema):
+    """Prove the recognized producer's retained raw dates, without editing it."""
+    raw = LEGACY_DATE_FIELDS[table]
+    if schema.get(raw) != "VARCHAR":
+        raise ValueError(f"{artifact}: raw {raw} must be VARCHAR for day proof")
+    if schema.get("event_datetime") not in COLUMN_TYPES["event_datetime"]:
+        raise ValueError(f"{artifact}: parsed event time has an unsupported type")
+    raw_name = quote_identifier(raw)
+    raw_text = f"trim({raw_name})"
+    date_only = (
+        f"regexp_full_match({raw_text}, '[0-9]{{8}}') OR "
+        f"regexp_full_match({raw_text}, '[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')"
+    )
+    parsed = (
+        "CASE WHEN "
+        f"regexp_full_match({raw_text}, '[0-9]{{8}}') "
+        f"THEN try_strptime({raw_text}, '%Y%m%d')::DATE "
+        f"ELSE try_cast({raw_text} AS DATE) END"
+    )
+    invalid = db.execute(
+        "SELECT count(*) FROM contract_table WHERE "
+        f"{raw_name} IS NULL OR NOT ({date_only}) OR "
+        f"({parsed}) IS NULL OR "
+        "event_datetime IS NULL OR "
+        f"event_datetime::DATE IS DISTINCT FROM ({parsed}) OR "
+        "event_datetime::TIME <> TIME '00:00:00'"
+    ).fetchone()[0]
+    if invalid:
+        raise ValueError(
+            f"{artifact}: {invalid} rows fail retained raw-date precision proof"
+        )
+    if "event_datetime_precision" in schema:
+        bad_precision = db.execute(
+            "SELECT count(*) FROM contract_table WHERE "
+            "event_datetime_precision IS DISTINCT FROM 'date_only'"
+        ).fetchone()[0]
+        if bad_precision:
+            raise ValueError(
+                f"{artifact}: explicit precision contradicts raw day-only date"
+            )
+        db.execute(
+            "CREATE OR REPLACE TEMP VIEW precision_validated_evidence AS "
+            "SELECT * FROM contract_table"
+        )
+        if db.execute(
+            "SELECT (SELECT count(*) FROM precision_validated_evidence) "
+            "<> (SELECT count(*) FROM contract_table)"
+        ).fetchone()[0]:
+            raise ValueError(f"{artifact}: precision projection changed row total")
+        return "explicit_date_only_proven"
+    db.execute(
+        "CREATE OR REPLACE TEMP VIEW precision_validated_evidence AS "
+        "SELECT *, 'date_only'::VARCHAR AS event_datetime_precision "
+        "FROM contract_table"
+    )
+    if db.execute(
+        "SELECT (SELECT count(*) FROM precision_validated_evidence) "
+        "<> (SELECT count(*) FROM contract_table)"
+    ).fetchone()[0]:
+        raise ValueError(f"{artifact}: precision projection changed row total")
+    return "legacy_raw_date_proven"
+
+
 def _sha256_hex(value):
     return (
         isinstance(value, str)
@@ -340,8 +409,31 @@ def _sha256_hex(value):
 def _require_validation_report(report):
     if not isinstance(report, dict) or report.get("pass") is not True:
         raise ValueError("Acceptance requires a passing validation report")
-    if report.get("validation_contract_version") != VALIDATION_CONTRACT_VERSION:
+    if report.get("validation_contract_version") not in {
+        VALIDATION_CONTRACT_VERSION,
+        DAY_PRECISION_VALIDATION_VERSION,
+    }:
         raise ValueError("Unsupported validation report contract version")
+    if report["validation_contract_version"] == DAY_PRECISION_VALIDATION_VERSION:
+        representations = report.get("precision_representations")
+        expected = {
+            f"encounter_features_{variant.lower()}_{table}.parquet"
+            for variant in VARIANTS
+            for table in LEGACY_DATE_FIELDS
+        }
+        if (
+            not isinstance(representations, dict)
+            or set(representations) != expected
+            or any(
+                value
+                not in {
+                    "legacy_raw_date_proven",
+                    "explicit_date_only_proven",
+                }
+                for value in representations.values()
+            )
+        ):
+            raise ValueError("Validation report lacks complete day-precision proof")
     if (
         report.get("product_kind") != "encounter_features"
         or report.get("schema_version") != SCHEMA_VERSION
@@ -431,7 +523,10 @@ def verify_acceptance_receipt(
         raise ValueError("Acceptance receipt must be an object")
     if receipt.get("schema") != "trinetx.encounter.acceptance-receipt":
         raise ValueError("Unsupported acceptance receipt schema")
-    if receipt.get("validation_contract_version") != VALIDATION_CONTRACT_VERSION:
+    if receipt.get("validation_contract_version") not in {
+        VALIDATION_CONTRACT_VERSION,
+        DAY_PRECISION_VALIDATION_VERSION,
+    }:
         raise ValueError("Unsupported validation contract version")
     if receipt.get("bundle_manifest_sha256") != expected_manifest_sha256:
         raise ValueError("Acceptance receipt manifest identity differs")
@@ -453,6 +548,8 @@ def verify_acceptance_receipt(
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError("Acceptance validation report is not valid JSON") from exc
     _require_validation_report(report)
+    if receipt["validation_contract_version"] != report["validation_contract_version"]:
+        raise ValueError("Acceptance receipt and report contract versions differ")
     identity_fields = (
         "output_identities",
         "product_kind",
@@ -465,6 +562,8 @@ def verify_acceptance_receipt(
         "coverage_results",
         "coverage_exception",
     )
+    if report["validation_contract_version"] == DAY_PRECISION_VALIDATION_VERSION:
+        identity_fields += ("precision_representations",)
     if any(field not in receipt for field in identity_fields):
         raise ValueError("Acceptance receipt lacks required report identities")
     try:
@@ -763,6 +862,60 @@ def _bounded_element_distinct_counts(
     return results[0], results[1]
 
 
+def _bounded_element_availability(
+    db: duckdb.DuckDBPyConnection,
+    *,
+    work: Path,
+    stem: str,
+    element_evidence_path: Path,
+    encounter_coverage_path: Path,
+    evidence_rows: int,
+    partitions: int,
+) -> dict[tuple[str, str, str], int]:
+    """Count exact encounter-element availability in disjoint key partitions."""
+    if evidence_rows == 0:
+        return {}
+    root = work / f"{stem}_availability_parts"
+    db.execute(
+        "COPY (SELECT index_event_id,element_id,domain, "
+        f"hash(index_event_id)%{partitions} AS partition_id FROM "
+        f"read_parquet({literal(element_evidence_path)})) TO "
+        f"{literal(root)} (FORMAT PARQUET, COMPRESSION ZSTD, "
+        "PARTITION_BY (partition_id))"
+    )
+    files = list(root.rglob("*.parquet"))
+    if not files:
+        raise ValueError("Encounter availability projection is empty")
+    projected_rows = db.execute(
+        f"SELECT count(*) FROM read_parquet({literal(root / '**/*.parquet')})"
+    ).fetchone()[0]
+    if projected_rows != evidence_rows:
+        raise ValueError("Encounter availability projection lost rows")
+    joined_rows = 0
+    observed: dict[tuple[str, str, str], int] = {}
+    for bucket in range(partitions):
+        part = root / f"partition_id={bucket}"
+        if not part.is_dir():
+            continue
+        groups = db.execute(
+            "SELECT e.element_id,e.domain,c.history_state, "
+            "count(DISTINCT e.index_event_id) AS observed, "
+            "count(*) AS joined_rows "
+            f"FROM read_parquet({literal(part / '*.parquet')}) e "
+            f"JOIN read_parquet({literal(encounter_coverage_path)}) c "
+            "ON c.index_event_id=e.index_event_id AND c.domain=e.domain "
+            f"WHERE hash(c.index_event_id)%{partitions}={bucket} "
+            "GROUP BY 1,2,3"
+        ).fetchall()
+        for element_id, domain, state, count, rows in groups:
+            key = (element_id, domain, state)
+            observed[key] = observed.get(key, 0) + count
+            joined_rows += rows
+    if joined_rows != evidence_rows:
+        raise ValueError("Encounter availability join changed row multiplicity")
+    return observed
+
+
 def validate_bundle(
     *,
     bundle,
@@ -771,7 +924,13 @@ def validate_bundle(
     linkage_exception=None,
     memory_limit_mib=1024,
     distinct_count_partitions=None,
+    validation_contract_version=VALIDATION_CONTRACT_VERSION,
 ):
+    if validation_contract_version not in {
+        VALIDATION_CONTRACT_VERSION,
+        DAY_PRECISION_VALIDATION_VERSION,
+    }:
+        raise ValueError("Unsupported encounter validation contract version")
     if isinstance(memory_limit_mib, bool) or not isinstance(memory_limit_mib, int):
         raise ValueError("Encounter validation memory limit must be an integer")
     if memory_limit_mib < 1:
@@ -836,6 +995,7 @@ def validate_bundle(
     results = {}
     summary_results = {}
     coverage_results = {}
+    precision_representations = {}
     with duckdb.connect(str(work / "validation.duckdb")) as db:
         db.execute(f"SET memory_limit='{memory_limit_mib}MiB'")
         db.execute("SET threads=1")
@@ -927,7 +1087,22 @@ def validate_bundle(
             for table in (*EVIDENCE_TABLES, "encounter_source_coverage"):
                 path = root / f"{stem}_{table}.parquet"
                 if table in EVIDENCE_CONTRACTS:
-                    _check_table_schema(db, path, path.name, EVIDENCE_CONTRACTS[table])
+                    required_fields = EVIDENCE_CONTRACTS[table]
+                    if (
+                        validation_contract_version == DAY_PRECISION_VALIDATION_VERSION
+                        and table in LEGACY_DATE_FIELDS
+                    ):
+                        required_fields = required_fields - {"event_datetime_precision"}
+                    schema = _check_table_schema(db, path, path.name, required_fields)
+                    if (
+                        validation_contract_version == DAY_PRECISION_VALIDATION_VERSION
+                        and table in LEGACY_DATE_FIELDS
+                    ):
+                        precision_representations[path.name] = (
+                            _prove_component_day_precision(
+                                db, artifact=path.name, table=table, schema=schema
+                            )
+                        )
                 else:
                     coverage_required = {
                         "index_event_id",
@@ -1029,23 +1204,49 @@ def validate_bundle(
             encounter_coverage_path = root / (
                 stem + "_encounter_source_coverage.parquet"
             )
-            actual_availability = db.execute(f"""
-                WITH observed AS (
-                  SELECT e.element_id,e.domain,c.history_state,
-                         count(DISTINCT e.index_event_id) AS n
-                  FROM read_parquet({literal(element_evidence_path)}) e
-                  JOIN read_parquet({literal(encounter_coverage_path)}) c
-                    ON c.index_event_id=e.index_event_id AND c.domain=e.domain
-                  GROUP BY e.element_id,e.domain,c.history_state
-                ), totals AS (
-                  SELECT domain,history_state,count(*) AS n
-                  FROM read_parquet({literal(encounter_coverage_path)})
-                  GROUP BY domain,history_state
+            if distinct_count_partitions is None:
+                actual_availability = db.execute(f"""
+                    WITH observed AS (
+                      SELECT e.element_id,e.domain,c.history_state,
+                             count(DISTINCT e.index_event_id) AS n
+                      FROM read_parquet({literal(element_evidence_path)}) e
+                      JOIN read_parquet({literal(encounter_coverage_path)}) c
+                        ON c.index_event_id=e.index_event_id AND c.domain=e.domain
+                      GROUP BY e.element_id,e.domain,c.history_state
+                    ), totals AS (
+                      SELECT domain,history_state,count(*) AS n
+                      FROM read_parquet({literal(encounter_coverage_path)})
+                      GROUP BY domain,history_state
+                    )
+                    SELECT o.element_id,o.domain,o.history_state,coalesce(o.n,0),t.n
+                    FROM observed o
+                    JOIN totals t ON t.domain=o.domain
+                      AND t.history_state=o.history_state
+                """).fetchall()
+            else:
+                observed = _bounded_element_availability(
+                    db,
+                    work=work,
+                    stem=stem,
+                    element_evidence_path=element_evidence_path,
+                    encounter_coverage_path=encounter_coverage_path,
+                    evidence_rows=evidence_counts["encounter_element_evidence"][
+                        "retained_rows"
+                    ],
+                    partitions=distinct_count_partitions,
                 )
-                SELECT o.element_id,o.domain,o.history_state,coalesce(o.n,0),t.n
-                FROM observed o
-                JOIN totals t ON t.domain=o.domain AND t.history_state=o.history_state
-            """).fetchall()
+                totals = {
+                    (domain, state): amount
+                    for domain, state, amount in db.execute(
+                        "SELECT domain,history_state,count(*) FROM "
+                        f"read_parquet({literal(encounter_coverage_path)}) "
+                        "GROUP BY 1,2"
+                    ).fetchall()
+                }
+                actual_availability = [
+                    (element, domain, state, count, totals[(domain, state)])
+                    for (element, domain, state), count in observed.items()
+                ]
             observed_lookup = {
                 (element_id, domain, state): (observed, total)
                 for element_id, domain, state, observed, total in actual_availability
@@ -1119,7 +1320,8 @@ def validate_bundle(
     validator_hash = code_identity()
     return {
         "pass": True,
-        "validation_contract_version": VALIDATION_CONTRACT_VERSION,
+        "validation_contract_version": validation_contract_version,
+        "precision_representations": precision_representations,
         "product_kind": manifest["kind"],
         "bundle_manifest_sha256": manifest_hash,
         "schema_version": SCHEMA_VERSION,

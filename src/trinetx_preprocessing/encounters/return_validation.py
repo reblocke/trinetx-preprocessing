@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 import duckdb
@@ -305,7 +306,7 @@ def validate_returns(
     database, work_dir = no_symlinks(database), no_symlinks(work_dir)
     require_safe_output_location(work_dir, artifact_label="return validation work")
     if any(
-        work_dir.is_relative_to(input_path)
+        work_dir.is_relative_to(input_path) or input_path.is_relative_to(work_dir)
         for input_path in (bundle, parent_bundle, database.parent)
     ):
         raise ValueError("Return validation work overlaps immutable inputs")
@@ -313,6 +314,15 @@ def validate_returns(
         raise ValueError("Return bundle or manifest is missing")
     manifest_path = bundle / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
+    if manifest.get("schema_version") == "2.0":
+        from .return_validation_v2 import validate_returns_v2
+
+        return validate_returns_v2(
+            bundle=bundle,
+            parent_bundle=parent_bundle,
+            database=database,
+            work_dir=work_dir,
+        )
     if (
         manifest.get("kind") != "return_outcomes"
         or manifest.get("status") != "complete"
@@ -344,7 +354,7 @@ def validate_returns(
         raise ValueError("Return source file identity differs")
     parent_report = validate_bundle(
         bundle=parent_bundle,
-        work_dir=work_dir / "parent-validation",
+        work_dir=work_dir / f"parent-validation-{uuid.uuid4().hex}",
         memory_limit_mib=RETURN_PARENT_VALIDATION_MEMORY_MIB,
         distinct_count_partitions=RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS,
     )

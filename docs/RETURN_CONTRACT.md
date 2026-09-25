@@ -158,6 +158,18 @@ month separate. Neither last observation nor death month supplies an exact censo
 date. Do not claim continuous coverage, unplanned readmission, causation or complete
 capture. Label the entire product as outcomes, not baseline predictors.
 
+The v2 CLI is explicitly selected with `build-returns --contract-version 2.0`;
+the existing v1 default remains available. For each category, criterion and
+30/90/365-day horizon, the summary uses
+`outcome_{category}_{criterion}_{days}d_{count|flag|first_date|days_to_first}`.
+The parallel `_first_timestamp` field is always NULL because the v2 endpoint
+has calendar-day resolution. Each gas-related criterion also publishes
+`_tested_count`, `_untested_count` and `_phenotype_unavailable_count`.
+`outcome_{category}_possible_{days}d_count` and the named temporal-state
+candidate/possible counts distinguish unresolved candidates from confirmed
+events. The bundle dictionary gives every field its type, unit, definition and
+NULL meaning.
+
 ## 6. Parent precision compatibility proof
 
 Introduce an explicitly versioned parent-validation rule for the recognized
@@ -167,7 +179,8 @@ diagnosis/procedure/medication component artifacts lacking the explicit field.
 1. Validate parent/source provenance, artifact hashes, required original fields
    and types. Unexpected missing columns or representations still fail.
 2. For diagnosis/procedure use retained raw `date`; for medication use `start_date`.
-   Require supported date-only syntax, a real parseable calendar date, nonmissing
+   Support the producer's `YYYYMMDD` and ISO `YYYY-MM-DD` date-only syntax.
+   Require a real parseable calendar date, nonmissing
    values when an event is present, agreement with parsed `event_datetime`, and
    no contradictory parsed time of day for this legacy day-only proof.
 3. Project proven `date_only` precision in a validation view or ephemeral external

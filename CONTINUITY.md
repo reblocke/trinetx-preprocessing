@@ -25,6 +25,23 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-25 resumed readmissions checkpoint: C0 historical parent receipt and
+source/parent identities were reverified; C1 calendar-day v2 D1–D6 contract is
+frozen. Opt-in v2 build/validator code is implemented with the original v1
+default retained. The current code identity is
+`ba6ad8e4809a22ff2876a1490c2a84bef20f1fe0445f7fd46142afa611361dbe`.
+On stable files, all 464 tests pass; Ruff, offline lock, noneditable wheel,
+installed source consumer, five legacy E2Es, v2 partition E2E and synthetic
+wrapper fresh/resume/partition/adversarial checks pass with external receipts.
+The wrapper check stubs only the upstream parent/source boundary; it is not
+private C3/C4 acceptance. The initial parent v2 proof failed because raw dates
+use `YYYYMMDD`; the corrected proof then exposed a 4 GiB availability join
+memory failure. The unchanged exact join also failed at 8 GiB. A bounded,
+exact partitioned reconciliation with row-multiplicity checks is now under a
+fresh locked full parent validation. C4 pilot, full build, independent full
+return validation, immutable-byte comparison and seal remain pending. Preserve
+failed scratch/receipts and do not mark the goal DONE from public checks.
+
 The owner provisionally accepted all D1–D6 recommendations and repair strategies
 on 2026-09-25, then requested parallel removal of low-signal tests, E2E-first
 guidance and updated starter ZIPs before goal relaunch. The three test reviews
@@ -54,7 +71,7 @@ that mismatch, NULL precision fall-through, false flags for rejected gases,
 undetected omitted links and inconsistent gas conversion, real parent scratch
 reuse failure, omitted uncertainty summaries and an applicability inconsistency.
 See docs/RETURN_AUDIT.md and the draft docs/RETURN_DAY_RESOLUTION_PROPOSAL.md.
-C2/C3 need repairs and C4 remains BLOCKED. The original 522-test pass remains
+C2/C3 repairs and proof remain active; C4 still has unpassed gates. The original 522-test pass remains
 historical evidence, not proof that all acceptance requirements were met.
 This audit changes documentation only; its synthetic script/results and private
 receipt references remain external. The original checkout and accepted inputs
@@ -118,9 +135,11 @@ the accepted schema 2.0 parent bundle lacks `event_datetime_precision` in
 diagnosis, procedure, and medication evidence for both variants. All other
 required columns were present in the schema audit. The producer retains raw
 `date` and `event_datetime` in those tables but does not emit the required
-precision field. No full return product or seal exists. This is BLOCKED on an
-explicit owner schema-version decision; do not waive the validator or rebuild
-the accepted parent under this ticket.
+precision field. No full return product or seal exists. At that historical
+checkpoint, the missing validation rule blocked progress. The owner has since
+accepted the versioned compatibility approach and explicitly resumed the goal;
+the new proof must pass without waiving validation or rebuilding the accepted
+parent under this ticket.
 A separate external aggregate audit found all six producer-defined raw date
 fields parse as date-only values, with no raw-versus-event calendar-date
 mismatch or parsed time of day. This supports review of a versioned

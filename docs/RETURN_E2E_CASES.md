@@ -47,3 +47,17 @@ Fresh, interrupted/resumed and differently partitioned builds must agree as
 complete multisets for every published data artifact. The E2E artifact must
 record source, parent, output, contract and code hashes, commands, case results,
 and SHA-256 of every output file.
+
+## Parent availability reconciliation under bounded memory
+
+The real accepted parent exposed a separate 4 GiB and 8 GiB failure in the
+exact element-by-history availability join after the earlier distinct-count
+stage. Before changing this validator query, preserve these failure modes:
+partitioning can lose or duplicate source evidence rows; a missing or duplicate
+coverage key can change join multiplicity; the same encounter can appear in
+multiple partitions and make summed distinct counts wrong; a domain or history
+state can disappear; an empty evidence artifact can be misread as incomplete;
+and a larger scratch projection can violate the external free-space gate. The
+bounded path must prove complete row multiplicity, keep each encounter in one
+stable partition, sum exact per-group distinct counts, and compare every group
+against the original manifest report. The default validator path is unchanged.
