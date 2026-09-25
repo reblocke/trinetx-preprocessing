@@ -15,6 +15,8 @@ from .compatibility import artifact_inventory, file_identity, no_symlinks
 from .validation import validate_bundle
 
 RETURN_CONTRACT_VERSION = "1.0"
+RETURN_PARENT_VALIDATION_MEMORY_MIB = 4096
+RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS = 32
 HORIZONS = (30, 90, 365)
 KINDS = ("inpatient", "ed_only", "any_ed", "acute_union")
 CRITERIA = (
@@ -588,7 +590,10 @@ def build_returns(
     ):
         raise ValueError("Return work location overlaps immutable inputs")
     parent_report = validate_bundle(
-        bundle=parent_bundle, work_dir=work_dir / "parent-validation"
+        bundle=parent_bundle,
+        work_dir=work_dir / "parent-validation",
+        memory_limit_mib=RETURN_PARENT_VALIDATION_MEMORY_MIB,
+        distinct_count_partitions=RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS,
     )
     if not parent_report["pass"]:
         raise ValueError("Parent encounter bundle failed validation")

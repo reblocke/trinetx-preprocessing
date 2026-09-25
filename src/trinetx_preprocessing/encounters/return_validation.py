@@ -12,7 +12,14 @@ from ..combined_preprocessing.cohort_source import validate_cohort_source
 from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
 from .builder import VARIANTS, code_identity, literal, sha256
 from .compatibility import file_identity, no_symlinks
-from .returns import CRITERIA, HORIZONS, KINDS, RETURN_CONTRACT_VERSION
+from .returns import (
+    CRITERIA,
+    HORIZONS,
+    KINDS,
+    RETURN_CONTRACT_VERSION,
+    RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS,
+    RETURN_PARENT_VALIDATION_MEMORY_MIB,
+)
 from .validation import validate_bundle
 
 
@@ -336,7 +343,10 @@ def validate_returns(
     if manifest.get("source_file_identity") != list(file_identity(database)):
         raise ValueError("Return source file identity differs")
     parent_report = validate_bundle(
-        bundle=parent_bundle, work_dir=work_dir / "parent-validation"
+        bundle=parent_bundle,
+        work_dir=work_dir / "parent-validation",
+        memory_limit_mib=RETURN_PARENT_VALIDATION_MEMORY_MIB,
+        distinct_count_partitions=RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS,
     )
     if not parent_report["pass"]:
         raise ValueError("Return parent bundle is invalid")

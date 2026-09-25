@@ -540,10 +540,16 @@ def test_bundle_validation_resume_and_tampering(tmp_path, monkeypatch):
         valid = True
         metadata = object()
 
-    monkeypatch.setattr(returns, "validate_bundle", lambda **kwargs: {"pass": True})
-    monkeypatch.setattr(
-        return_validation, "validate_bundle", lambda **kwargs: {"pass": True}
-    )
+    parent_memory_limits = []
+
+    def validate_parent(**kwargs):
+        parent_memory_limits.append(
+            (kwargs["memory_limit_mib"], kwargs["distinct_count_partitions"])
+        )
+        return {"pass": True}
+
+    monkeypatch.setattr(returns, "validate_bundle", validate_parent)
+    monkeypatch.setattr(return_validation, "validate_bundle", validate_parent)
     monkeypatch.setattr(returns, "validate_cohort_source", lambda *_: SourceResult())
     monkeypatch.setattr(
         return_validation, "validate_cohort_source", lambda *_: SourceResult()
@@ -565,6 +571,7 @@ def test_bundle_validation_resume_and_tampering(tmp_path, monkeypatch):
         work_dir=tmp_path / "verify",
     )
     assert report["variants"] == {"FULL_DATA": 2, "AFTER_EXCLUSION": 1}
+    assert parent_memory_limits[:2] == [(4096, 32), (4096, 32)]
     manifest_path = output / "manifest.json"
     original_manifest = manifest_path.read_bytes()
     wrong_code = json.loads(original_manifest)

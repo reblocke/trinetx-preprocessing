@@ -44,8 +44,8 @@ observed events often precede the 365-day horizon. The aggregate receipt is
 external; it does not establish continuous follow-up or complete capture.
 The canonical database's full byte SHA-256 baseline was recorded externally
 before any outcomes pilot or build, with unchanged source/parent manifest
-identities. Sixteen focused return tests pass on the frozen code at `e21c6ed`.
-The frozen full suite passed 520 tests with 238 existing performance warnings.
+identities. On the preceding return code at `e21c6ed`, sixteen focused tests
+and the full suite passed 520 tests with 238 existing performance warnings.
 Ruff check and format, `uv lock --check --offline`, `git diff --check`, and
 non-editable wheel installation all passed. The installed wheel's code identity
 matches the checkout; the new return commands and old cohort-source consumer
@@ -61,11 +61,21 @@ helper named `profile.py` shadowed Python's standard module and started an
 unintended read-only aggregate query. Its evidence was preserved externally.
 The corrected 32-partition resource pilot completed one entire patient bucket
 in each variant. Its external receipt passed source/parent identity,
-summary-key, artifact-hash, and free-space checks. The one full outcomes-only
-build for both variants is now running under the shared lock from the
-non-editable installed wheel. Its execution receipt records the frozen code
-and contract identities. Independent validation, post-build source byte
-comparison, and the external acceptance seal are still pending.
+summary-key, artifact-hash, and free-space checks. The first full outcomes-only
+build stopped during required parent-bundle validation, before any return
+partition, with DuckDB out of memory at the validator's fixed 1 GiB limit.
+Its external receipt, log, and work are preserved. The encounter validator
+now accepts an optional memory cap while keeping its old 1 GiB default;
+opt-in return validation requests 4 GiB. No retry or acceptance is claimed. Independent
+return validation, post-build source byte comparison, and the external
+acceptance seal remain pending.
+The first memory-cap change passed 70 affected tests, Ruff check and format,
+and offline lock check. New full-suite and installed-wheel verification remain due.
+A separate 4 GiB parent preflight also failed at the same exact distinct
+aggregation. The opt-in validator now writes two complete, hash-partitioned
+scratch projections and sums exact per-partition distinct counts; default
+encounter validation remains unchanged. Synthetic equivalence tests pass;
+private parent validation must still prove this repair at full scale.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
@@ -107,8 +117,12 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, monitor the live full build by its process and execution
-receipt. On terminal completion, independently validate the separate bundle,
+For return outcomes, complete the public checks and separate locked parent
+validator preflight with bounded exact distinct counts at 4 GiB. If it passes,
+freeze the new code identity and
+make an explicit full-build retry with new external output/work locations while
+preserving the failed attempt. On terminal completion, independently validate
+the separate bundle,
 prove the accepted source and parent artifacts byte-unchanged, and write the
 external acceptance seal. Preserve any failed staging and diagnose before an
 explicit resume. Cross-ID continuations remain unconfirmed because the flow

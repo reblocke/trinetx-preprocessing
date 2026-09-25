@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+import duckdb
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -10,6 +11,7 @@ from trinetx_preprocessing.encounters.builder import EVIDENCE_TABLES, VARIANTS
 from trinetx_preprocessing.encounters.compatibility import artifact_inventory
 from trinetx_preprocessing.encounters.validation import (
     EVIDENCE_CONTRACTS,
+    _bounded_element_distinct_counts,
     validate_bundle,
     verify_acceptance_receipt,
 )
@@ -566,6 +568,55 @@ def test_previous_bundle_format_revalidates_without_mutation(tmp_path):
     assert report["coverage_results"]["FULL_DATA"]["linkage_complete"]
     assert (root / "manifest.json").read_bytes() == manifest_before
     assert (root / "source_coverage.json").read_bytes() == coverage_before
+
+
+def test_encounter_validation_memory_override_preserves_checks(tmp_path):
+    root = tmp_path / "bundle"
+    _bundle(root)
+    default = validate_bundle(bundle=root, work_dir=tmp_path / "default")
+    larger = validate_bundle(
+        bundle=root,
+        work_dir=tmp_path / "larger",
+        memory_limit_mib=2048,
+        distinct_count_partitions=4,
+    )
+    assert larger == default
+    for invalid in (0, -1, True, 1.5, "2048"):
+        with pytest.raises(ValueError, match="memory limit"):
+            validate_bundle(
+                bundle=root,
+                work_dir=tmp_path / "invalid",
+                memory_limit_mib=invalid,
+            )
+    for invalid in (0, -1, True, 1.5, "4", 129):
+        with pytest.raises(ValueError, match="distinct partitions"):
+            validate_bundle(
+                bundle=root,
+                work_dir=tmp_path / "invalid",
+                distinct_count_partitions=invalid,
+            )
+
+
+def test_bounded_distinct_counts_preserve_duplicates_and_nulls(tmp_path):
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TEMP TABLE evidence(index_event_id VARCHAR, "
+            "element_id VARCHAR, source_record_id VARCHAR)"
+        )
+        db.execute(
+            "INSERT INTO evidence VALUES "
+            "('a','x','r1'),('a','x','r1'),('a','y','r1'),"
+            "('b','x','r2'),(NULL,'x',NULL),"
+            "(NULL,'x',NULL),('b',NULL,'r3')"
+        )
+        expected = db.execute(
+            "SELECT count(DISTINCT (index_event_id,element_id)), "
+            "count(DISTINCT source_record_id) FROM evidence"
+        ).fetchone()
+        actual = _bounded_element_distinct_counts(
+            db, work=tmp_path, stem="synthetic", evidence_rows=7, partitions=4
+        )
+        assert actual == expected
 
 
 def test_previous_bundle_incomplete_linkage_requires_explicit_exception(tmp_path):

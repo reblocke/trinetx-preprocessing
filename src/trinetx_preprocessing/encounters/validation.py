@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import duckdb
 
@@ -707,7 +708,80 @@ def _reconcile_normalized_summaries(db, *, root, stem):
     }
 
 
-def validate_bundle(*, bundle, work_dir, linkage_policy=None, linkage_exception=None):
+def _bounded_element_distinct_counts(
+    db: duckdb.DuckDBPyConnection,
+    *,
+    work: Path,
+    stem: str,
+    evidence_rows: int,
+    partitions: int,
+) -> tuple[int, int]:
+    """Reconcile exact distinct counts without one unbounded hash aggregate."""
+    if evidence_rows == 0:
+        return 0, 0
+    results = []
+    for suffix, columns, hash_columns, distinct in (
+        (
+            "membership",
+            "index_event_id, element_id",
+            "index_event_id, element_id",
+            "(index_event_id, element_id)",
+        ),
+        (
+            "record",
+            "source_record_id",
+            "source_record_id",
+            "source_record_id",
+        ),
+    ):
+        root = work / f"{stem}_{suffix}_distinct_parts"
+        db.execute(
+            "COPY (SELECT "
+            f"{columns}, hash({hash_columns}) % {partitions} AS partition_id "
+            "FROM evidence) TO "
+            f"{literal(root)} (FORMAT PARQUET, COMPRESSION ZSTD, "
+            "PARTITION_BY (partition_id))"
+        )
+        files = list(root.rglob("*.parquet"))
+        if not files:
+            raise ValueError("Encounter evidence distinct projection is empty")
+        projected_rows = db.execute(
+            f"SELECT count(*) FROM read_parquet({literal(root / '**/*.parquet')})"
+        ).fetchone()[0]
+        if projected_rows != evidence_rows:
+            raise ValueError("Encounter evidence distinct projection lost rows")
+        total = 0
+        for bucket in range(partitions):
+            part = root / f"partition_id={bucket}"
+            if not part.is_dir():
+                continue
+            total += db.execute(
+                f"SELECT count(DISTINCT {distinct}) FROM "
+                f"read_parquet({literal(part / '*.parquet')})"
+            ).fetchone()[0]
+        results.append(total)
+    return results[0], results[1]
+
+
+def validate_bundle(
+    *,
+    bundle,
+    work_dir,
+    linkage_policy=None,
+    linkage_exception=None,
+    memory_limit_mib=1024,
+    distinct_count_partitions=None,
+):
+    if isinstance(memory_limit_mib, bool) or not isinstance(memory_limit_mib, int):
+        raise ValueError("Encounter validation memory limit must be an integer")
+    if memory_limit_mib < 1:
+        raise ValueError("Encounter validation memory limit must be positive")
+    if distinct_count_partitions is not None and (
+        isinstance(distinct_count_partitions, bool)
+        or not isinstance(distinct_count_partitions, int)
+        or not 1 <= distinct_count_partitions <= 128
+    ):
+        raise ValueError("Encounter validation distinct partitions must be 1 to 128")
     root = no_symlinks(bundle)
     work = no_symlinks(work_dir)
     require_safe_output_location(work, artifact_label="encounter validation scratch")
@@ -763,7 +837,7 @@ def validate_bundle(*, bundle, work_dir, linkage_policy=None, linkage_exception=
     summary_results = {}
     coverage_results = {}
     with duckdb.connect(str(work / "validation.duckdb")) as db:
-        db.execute("SET memory_limit='1024MiB'")
+        db.execute(f"SET memory_limit='{memory_limit_mib}MiB'")
         db.execute("SET threads=1")
         db.execute("SET temp_directory=?", [str(work / "spill")])
         for variant in VARIANTS:
@@ -884,10 +958,21 @@ def validate_bundle(*, bundle, work_dir, linkage_policy=None, linkage_exception=
                     "SELECT count(*) FROM evidence"
                 ).fetchone()[0]
                 if table == "encounter_element_evidence":
-                    distinct_memberships, distinct_records = db.execute(
-                        "SELECT count(DISTINCT (index_event_id,element_id)), "
-                        "count(DISTINCT source_record_id) FROM evidence"
-                    ).fetchone()
+                    if distinct_count_partitions is None:
+                        distinct_memberships, distinct_records = db.execute(
+                            "SELECT count(DISTINCT (index_event_id,element_id)), "
+                            "count(DISTINCT source_record_id) FROM evidence"
+                        ).fetchone()
+                    else:
+                        distinct_memberships, distinct_records = (
+                            _bounded_element_distinct_counts(
+                                db,
+                                work=work,
+                                stem=stem,
+                                evidence_rows=evidence_counts[table],
+                                partitions=distinct_count_partitions,
+                            )
+                        )
                     evidence_counts[table] = {
                         "retained_rows": evidence_counts[table],
                         "distinct_encounter_element_memberships": distinct_memberships,
