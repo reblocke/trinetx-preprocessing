@@ -28,6 +28,16 @@ patient/encounter pairs but does not require patient uniqueness; the original
 selected-index route still does. Synthetic repeated-patient, duplicate-pair
 and cleanup fixtures pass. Neither route chooses the clinical candidate pool
 or accepts the source.
+A separate candidate calendar-field projection now builds one temporary row
+per valid original encounter key from all source encounter rows, joins
+patient birth-year evidence, and records missing or conflicting starts,
+encounter types and birth years without choosing a value arbitrarily.
+It counts invalid encounter-key rows and returns aggregate QA. Synthetic
+read-only, conflict, empty and rollback checks pass. Adult/type/context
+eligibility and age interpretation remain downstream study decisions.
+A one-run 200,000-encounter/100,000-patient in-memory synthetic build under a
+512 MB DuckDB limit took 0.127 seconds; this excludes canonical-source
+verification and is not a private runtime measurement.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

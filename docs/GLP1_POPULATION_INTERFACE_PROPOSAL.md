@@ -64,6 +64,17 @@ clinical evidence. Keep source catalog membership distinct from study inclusion:
 the upstream product must not select one patient index, apply GLP-1 exclusions,
 or decide medication activity. The downstream study owns those decisions.
 
+The candidate `build_calendar_candidate_fields()` projects every valid exact
+source encounter key to a temporary relation with observed date-only start,
+normalized encounter type and numeric birth year only where source records
+agree. It retains duplicate-source-row counts and separate invalid/missing or
+conflicting field indicators; invalid encounter keys are reported in aggregate
+QA. It does not filter adult or emergency/inpatient candidates, derive exact
+age from birth year, apply context exclusions or choose an index. This makes
+source uncertainty visible before downstream study rules are applied.
+Synthetic read-only, ambiguity, empty-population and prior-output-preservation
+fixtures pass. The full private source and scope gates remain open.
+
 The existing read-only `open_cohort_source()` / `validate_cohort_source()`
 boundary already exposes versioned canonical source tables with manifest,
 schema and catalog checks. Reuse that boundary where it can support the scope:

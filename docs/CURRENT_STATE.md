@@ -77,6 +77,13 @@ aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
 this is not a new accepted source population or a timed extract. See the
 [population interface proposal](GLP1_POPULATION_INTERFACE_PROPOSAL.md).
+A candidate read-only calendar field projection now groups raw encounter
+records at exact patient/encounter grain and joins patient birth-year evidence.
+It exposes observed start date, normalized encounter type and birth year only
+when the corresponding source rows agree, with separate missing/conflict QA.
+Invalid source keys are counted, not silently incorporated. Synthetic
+read-only, duplicate, conflict, empty and rollback checks pass. It does not
+apply adult/type/context eligibility or select the study population.
 The candidate per-encounter calendar projection preserves exact original
 keys, raw observed dates, units and sample identifiers. It fails on
 conflicting starts or undated arterial candidates; synthetic tests pass.
