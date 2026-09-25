@@ -21,7 +21,10 @@ from trinetx_preprocessing.combined_preprocessing.builder import (
 from trinetx_preprocessing.encounters import return_validation_v2 as validator
 from trinetx_preprocessing.encounters.builder import code_identity, literal, sha256
 from trinetx_preprocessing.encounters.returns_v2 import build_partition_v2
-from trinetx_preprocessing.encounters.validation import _prove_component_day_precision
+from trinetx_preprocessing.encounters.validation import (
+    _prove_component_day_precision,
+    _reconcile_element_summary,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/test_encounter_returns.py"
@@ -452,6 +455,89 @@ def _precision_proof_cases(db: duckdb.DuckDBPyConnection) -> dict[str, bool]:
     return observed
 
 
+def _parent_summary_count_cases(root: Path) -> dict[str, str | int]:
+    """Exercise producer NULL/zero/positive count semantics end to end."""
+    part = root / "parent-summary"
+    part.mkdir()
+    evidence_path = part / "synthetic_encounter_element_evidence.parquet"
+    columns = [
+        "source_element_hba1c_record_count",
+        "source_element_hba1c_latest_raw_value",
+        "source_element_hba1c_latest_date",
+        "source_element_hba1c_latest_unit",
+    ]
+    item = {"element_id": "source.hba1c", "columns": columns}
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TEMP TABLE features (pat_enc_hash VARCHAR, "
+            "encounter_id VARCHAR, "
+            "source_element_hba1c_record_count BIGINT, "
+            "source_element_hba1c_latest_raw_value DOUBLE, "
+            "source_element_hba1c_latest_date TIMESTAMP, "
+            "source_element_hba1c_latest_unit VARCHAR)"
+        )
+        db.execute(
+            "INSERT INTO features VALUES "
+            "('a','ea',NULL,NULL,NULL,NULL), "
+            "('b','eb',0,NULL,NULL,NULL), "
+            "('c','ec',2,8,TIMESTAMP '2024-01-02','%')"
+        )
+        db.execute(
+            "CREATE TEMP TABLE retained (index_event_id VARCHAR, "
+            "element_id VARCHAR, event_datetime TIMESTAMP, "
+            "source_record_id VARCHAR, numeric_value DOUBLE, "
+            "units_of_measure VARCHAR, in_baseline_window BOOLEAN, "
+            "index_date DATE, source_encounter_id VARCHAR)"
+        )
+        db.execute(
+            "INSERT INTO retained VALUES "
+            "('b','source.egfr','2024-01-01','egfr-b',50,'ml/min',true,"
+            "'2024-01-02','eb'), "
+            "('c','source.hba1c','2024-01-01','hba1c-c1',7,'%',true,"
+            "'2024-01-02','ec'), "
+            "('c','source.hba1c','2024-01-02','hba1c-c2',8,'%',true,"
+            "'2024-01-02','ec')"
+        )
+        db.execute(f"COPY retained TO {literal(evidence_path)} (FORMAT PARQUET)")
+
+        def reconcile() -> dict:
+            return _reconcile_element_summary(
+                db,
+                root=part,
+                stem="synthetic",
+                item=item,
+                token="hba1c",
+                lookback_days=365,
+            )
+
+        clean = reconcile()
+        if clean["count_mismatches"] != 0:
+            raise AssertionError("NULL/zero/positive source summary differs")
+        corruptions = (
+            ("no_evidence_null_to_zero", "a", "0"),
+            ("other_evidence_zero_to_null", "b", "NULL"),
+            ("matching_evidence_two_to_one", "c", "1"),
+        )
+        for name, index, value in corruptions:
+            db.execute(
+                "UPDATE features SET source_element_hba1c_record_count="
+                f"{value} WHERE pat_enc_hash='{index}'"
+            )
+            try:
+                reconcile()
+            except ValueError as exc:
+                if "count_mismatches=1" not in str(exc):
+                    raise AssertionError(f"Wrong rejection for {name}") from exc
+            else:
+                raise AssertionError(f"Summary corruption passed: {name}")
+            original = {"a": "NULL", "b": "0", "c": "2"}[index]
+            db.execute(
+                "UPDATE features SET source_element_hba1c_record_count="
+                f"{original} WHERE pat_enc_hash='{index}'"
+            )
+    return {"clean_count_mismatches": 0, "corruptions_rejected": len(corruptions)}
+
+
 def run(root: Path) -> dict:
     require_safe_output_location(root, artifact_label="return E2E artifact")
     root.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -480,6 +566,7 @@ def run(root: Path) -> dict:
             source(db, str(root / "source.duckdb"))
             _extend_fixture(db)
             receipt["precision_proof_cases"] = _precision_proof_cases(db)
+            receipt["parent_summary_count_cases"] = _parent_summary_count_cases(root)
             single = root / "single"
             single.mkdir()
             build_partition_v2(

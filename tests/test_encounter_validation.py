@@ -486,7 +486,9 @@ def _add_unlinked_encounter(root):
         missing["encounter_id"] = "z"
         missing["pat_enc_hash"] = "q-z"
         for column in frame:
-            if column.endswith("_record_count") or column == "source_count":
+            if column.endswith("_record_count"):
+                missing[column] = None
+            elif column == "source_count":
                 missing[column] = 0
             elif column.startswith("glp1_") or column.endswith(
                 ("_latest_raw_value", "_latest_date", "_latest_unit")

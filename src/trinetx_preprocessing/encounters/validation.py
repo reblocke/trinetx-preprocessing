@@ -651,13 +651,14 @@ def _reconcile_element_summary(db, *, root, stem, item, token, lookback_days):
 
     count_bad = db.execute(f"""
         WITH counts AS (
-          SELECT index_event_id, count(*) AS n
-          FROM read_parquet({literal(evidence_path)}) WHERE element_id={element}
+          SELECT index_event_id,
+                 count(*) FILTER (WHERE element_id={element}) AS n
+          FROM read_parquet({literal(evidence_path)})
           GROUP BY index_event_id
         )
         SELECT count(*) FROM features f LEFT JOIN counts c
           ON c.index_event_id=f.pat_enc_hash
-        WHERE coalesce(c.n,0) IS DISTINCT FROM f.{quoted(count_column)}
+        WHERE c.n IS DISTINCT FROM f.{quoted(count_column)}
     """).fetchone()[0]
     baseline_bad = db.execute(f"""
         SELECT count(*) FROM read_parquet({literal(evidence_path)})

@@ -61,3 +61,12 @@ and a larger scratch projection can violate the external free-space gate. The
 bounded path must prove complete row multiplicity, keep each encounter in one
 stable partition, sum exact per-group distinct counts, and compare every group
 against the original manifest report. The default validator path is unchanged.
+
+The accepted producer writes an element summary row only when an encounter has
+at least one retained element-evidence row, then left-joins that summary to all
+index rows. Its count for a particular element is therefore NULL when the
+encounter has no element evidence of any kind, zero when it has other elements
+but not that element, and positive for matching rows. A validator must preserve
+that three-way distinction; coalescing the no-evidence NULL to zero can create
+a false parent-bundle failure. The synthetic proof needs all three cases and
+must still reject a genuinely changed count.
