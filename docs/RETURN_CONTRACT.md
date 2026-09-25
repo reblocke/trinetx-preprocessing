@@ -1,4 +1,4 @@
-# Return outcomes contract (proposed v1; private acceptance BLOCKED)
+# Return outcomes contract (proposed v1; private acceptance pending)
 
 This is an opt-in, separate outcome product. It does not alter encounter
 features, compatibility CSVs, cohort selection, or study analyses. The input
@@ -98,19 +98,21 @@ seal.
 
 ## Current gate status
 
-The accepted canonical diagnosis catalog does not retain the four required
-`J96.02/J96.12/J96.22/J96.92` source codes. Its concept-filtered diagnosis
-table therefore cannot support the exact return ICD outcome. The build
-preflight raises an error before publication. The source and parent manifest
-hashes, aggregate encounter profiling, and missing-code list are recorded in
-an external private receipt; no row-level data or private paths are in this
-document. The source has date-only encounter start/end observations and some
-index keys have missing or conflicting ends. Same-day order and those index
-anchors remain unavailable under this contract.
+The accepted canonical catalog retains the four required `J96` codes through
+exact rules with a wildcard code-system selector. That selector includes
+ICD-10-CM; the canonical diagnosis table has rows for all five required exact
+codes. The initial preflight incorrectly required an ICD-10-CM-specific rule.
+It now accepts either exact ICD-10-CM or exact wildcard capture, while the
+return phenotype still checks each row's ICD-10-CM code system and exact code.
+The source and parent manifest identities and aggregate encounter profile are
+recorded in an external private receipt. The source has date-only encounter
+start/end observations and some index keys have missing or conflicting ends.
+Same-day order and those index anchors remain unavailable under this contract.
 
-To unblock, approve and validate a canonical diagnosis capture containing all
-five exact ICD-10-CM codes, establish its source acceptance and linkage to the
-accepted parent keys, and re-profile episode end/forward coverage and transfer
-evidence. Then run the resource pilot, one locked two-variant outcomes-only
-build, independent validation, and external acceptance seal. Do not substitute
-the compatibility CSVs, a broad J96 rule, or a raw export rescan.
+The locked aggregate profile reconciles both accepted index populations and
+shows many last observed events before 365 days. The source flow table has no transfer
+identifier or discharge field, so cross-ID continuations remain unconfirmed.
+Private acceptance is pending a resource pilot, one locked two-variant
+outcomes-only build, independent validation, proof that inputs stayed byte
+unchanged, and an external acceptance seal. Do not substitute compatibility
+CSVs, a broad J96 outcome rule, or a raw export rescan.

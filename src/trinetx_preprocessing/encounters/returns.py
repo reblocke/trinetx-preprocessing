@@ -45,8 +45,9 @@ def _require_source_capabilities(database: Path) -> None:
             for row in source.execute(
                 "SELECT upper(trim(code)) FROM element_rule "
                 "WHERE include AND domain='diagnosis' AND match_type='exact' "
-                "AND upper(regexp_replace(code_system,'[^A-Za-z0-9]','','g'))="
-                "'ICD10CM'"
+                "AND (code_system='*' OR "
+                "upper(regexp_replace(code_system,'[^A-Za-z0-9]','','g'))="
+                "'ICD10CM')"
             ).fetchall()
         }
         missing = sorted(RETURN_ICD_CODES - available)
@@ -222,7 +223,9 @@ def _create_links(db: duckdb.DuckDBPyConnection) -> None:
           AND (e.episode_start IS NULL OR
                (e.episode_start::DATE >= i.episode_end::DATE
                 AND e.episode_start::DATE <=
-                    (i.episode_end + INTERVAL 365 DAY)::DATE))
+                    (i.episode_end + INTERVAL 365 DAY)::DATE)
+               OR (e.episode_start::DATE < i.episode_end::DATE
+                   AND e.episode_end >= i.episode_end))
         """
     )
     if db.execute(
@@ -639,6 +642,15 @@ def build_returns(
             for bucket in range(partitions):
                 key = f"{variant}:{bucket}"
                 if key in progress["completed"]:
+                    if set(progress["completed"][key]) != {
+                        "episode_source",
+                        "episodes",
+                        "diagnosis_evidence",
+                        "gas_evidence",
+                        "links",
+                        "summary",
+                    }:
+                        raise ValueError("Resume part receipt is incomplete")
                     for name, info in progress["completed"][key].items():
                         path = (
                             staging / f"{variant.lower()}_{bucket:04d}_{name}.parquet"

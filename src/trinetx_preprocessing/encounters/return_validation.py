@@ -110,6 +110,179 @@ def _summary_reconciliation_query(kind: str, days: int) -> str:
     )
 
 
+def _link_evidence_reconciliation_query() -> str:
+    """Derive every link outcome from the retained episode evidence."""
+    gas_checks = {
+        "abg_tested": "gas_kind='abg' AND rejection_reason IS NULL",
+        "vbg_tested": "gas_kind='vbg' AND rejection_reason IS NULL",
+    }
+    for kind in ("abg", "vbg"):
+        for name, operator, threshold in (
+            ("gt45", ">", 45),
+            ("gt50", ">", 50),
+            ("ge45", ">=", 45),
+            ("ge50", ">=", 50),
+        ):
+            gas_checks[f"{kind}_{name}"] = (
+                f"gas_kind='{kind}' AND rejection_reason IS NULL "
+                f"AND value_mmhg{operator}{threshold}"
+            )
+    gas_columns = ", ".join(
+        f"bool_or({condition}) AS {name}" for name, condition in gas_checks.items()
+    )
+    direct = ("icd_hypercapnia", *gas_checks)
+    mismatches = [f"l.{name} IS DISTINCT FROM e.{name}" for name in direct]
+    for name, left, right in (
+        ("any_gas_gt45", "abg_gt45", "vbg_gt45"),
+        ("any_gas_gt50", "abg_gt50", "vbg_gt50"),
+        ("any_gas_ge45", "abg_ge45", "vbg_ge45"),
+        ("any_gas_ge50", "abg_ge50", "vbg_ge50"),
+    ):
+        mismatches.append(f"l.{name} IS DISTINCT FROM (e.{left} OR e.{right})")
+    mismatches.append(
+        "l.any_hypercapnia IS DISTINCT FROM "
+        "(e.icd_hypercapnia OR e.abg_ge45 OR e.vbg_ge50)"
+    )
+    return (
+        "WITH diagnoses AS (SELECT episode_id, "
+        "bool_or(rejection_reason IS NULL) AS valid "
+        "FROM diagnosis_evidence GROUP BY episode_id), "
+        f"gases AS (SELECT episode_id, {gas_columns} "
+        "FROM gas_evidence GROUP BY episode_id), "
+        "expected AS (SELECT r.return_episode_id, "
+        "coalesce(d.valid,false) AS icd_hypercapnia, "
+        + ", ".join(f"g.{name}" for name in gas_checks)
+        + " FROM (SELECT DISTINCT return_episode_id FROM links) r "
+        "LEFT JOIN diagnoses d ON r.return_episode_id=d.episode_id "
+        "LEFT JOIN gases g ON r.return_episode_id=g.episode_id) "
+        "SELECT count(*) FROM links l JOIN expected e "
+        "USING (return_episode_id) WHERE " + " OR ".join(mismatches)
+    )
+
+
+def _link_geometry_reconciliation_query() -> str:
+    """Reconstruct index/return links from the independent episode tables."""
+    temporal_state = (
+        "CASE WHEN e.episode_start IS NULL THEN 'missing_return_start' "
+        "WHEN e.has_derived_start THEN 'derived_return_start' "
+        "WHEN e.distinct_starts>1 AND NOT (e.has_ed AND e.has_inpatient) "
+        "THEN 'conflicting_return_start' "
+        "WHEN e.start_precision NOT IN ('date_only','timestamp') "
+        "THEN 'unknown_return_precision' "
+        "WHEN e.episode_start::DATE=s.index_episode_end::DATE "
+        "AND (e.start_precision='date_only' "
+        "OR s.index_end_precision='date_only') "
+        "THEN 'same_day_uncertain' "
+        "WHEN e.episode_start<=s.index_episode_end THEN 'overlap_or_prior' "
+        "WHEN e.episode_start>s.index_episode_end+INTERVAL 365 DAY "
+        "THEN 'outside_horizon' ELSE 'confirmed' END"
+    )
+    comparisons = (
+        ("index_patient_id", "s.patient_id"),
+        ("index_encounter_id", "s.encounter_id"),
+        ("index_episode_id", "s.index_episode_id"),
+        ("index_episode_end", "s.index_episode_end"),
+        ("index_end_precision", "s.index_end_precision"),
+        ("index_inpatient", "s.index_inpatient"),
+        ("index_ed", "s.index_ed"),
+        ("patient_id", "e.patient_id"),
+        ("encounter_id", "e.encounter_id"),
+        ("return_start", "e.episode_start"),
+        ("return_start_precision", "e.start_precision"),
+        ("return_end", "e.episode_end"),
+        ("return_end_precision", "e.end_precision"),
+        ("has_inpatient", "e.has_inpatient"),
+        ("has_ed", "e.has_ed"),
+        ("source_record_count", "e.source_record_count"),
+        ("temporal_state", temporal_state),
+        ("evidenced_ed_inpatient", "(e.has_ed AND e.has_inpatient)"),
+        ("ed_only", "(e.has_ed AND NOT e.has_inpatient)"),
+        (
+            "admission_after_ed_index",
+            "(e.has_inpatient AND s.index_ed AND NOT s.index_inpatient)",
+        ),
+        (
+            "readmission_after_inpatient",
+            "(e.has_inpatient AND s.index_inpatient)",
+        ),
+    )
+    mismatches = [
+        f"l.{column} IS DISTINCT FROM {expected}" for column, expected in comparisons
+    ]
+    mismatches.extend(
+        (
+            "s.anchor_state<>'available'",
+            "l.return_episode_id=s.index_episode_id",
+            "NOT (e.has_ed OR e.has_inpatient)",
+            "NOT (e.episode_start IS NULL OR "
+            "(e.episode_start::DATE>=s.index_episode_end::DATE AND "
+            "e.episode_start::DATE<=(s.index_episode_end+INTERVAL 365 DAY)::DATE) "
+            "OR (e.episode_start::DATE<s.index_episode_end::DATE "
+            "AND e.episode_end>=s.index_episode_end))",
+        )
+    )
+    return (
+        "SELECT count(*) FROM links l JOIN summary s "
+        "ON l.index_event_id=s.index_event_id JOIN episodes e "
+        "ON l.return_episode_id=e.episode_id WHERE " + " OR ".join(mismatches)
+    )
+
+
+def _episode_mapping_reconciliation_query() -> str:
+    """Rebuild episode attributes from every retained source encounter row."""
+    columns = (
+        "patient_id",
+        "encounter_id",
+        "episode_start",
+        "episode_end",
+        "start_precision",
+        "end_precision",
+        "has_inpatient",
+        "has_ed",
+        "distinct_starts",
+        "distinct_ends",
+        "has_derived_start",
+        "has_derived_end",
+        "source_record_count",
+    )
+    mismatches = [f"e.{column} IS DISTINCT FROM m.{column}" for column in columns]
+    mismatches.extend(
+        (
+            "e.episode_id IS NULL",
+            "m.episode_id IS NULL",
+            "m.composite_key_count<>1",
+            "e.episode_id IS DISTINCT FROM "
+            "sha256(to_json([e.patient_id,e.encounter_id]))",
+        )
+    )
+    return (
+        "WITH mapped AS (SELECT episode_id, "
+        "min(patient_id) AS patient_id, "
+        "min(encounter_id) AS encounter_id, "
+        "count(DISTINCT (patient_id,encounter_id)) AS composite_key_count, "
+        "min(start_datetime) AS episode_start, "
+        "CASE WHEN count(*) FILTER (WHERE end_datetime IS NULL)=0 "
+        "THEN max(end_datetime) END AS episode_end, "
+        "CASE WHEN count(DISTINCT start_timestamp_precision)=1 "
+        "THEN min(start_timestamp_precision) END AS start_precision, "
+        "CASE WHEN count(DISTINCT end_timestamp_precision)=1 "
+        "THEN min(end_timestamp_precision) END AS end_precision, "
+        "bool_or(upper(trim(source_type)) IN "
+        "('IMP','INPAT','INPATIENT')) AS has_inpatient, "
+        "bool_or(upper(trim(source_type)) IN "
+        "('EMER','ED','EMERGENCY')) AS has_ed, "
+        "count(DISTINCT start_datetime) AS distinct_starts, "
+        "count(DISTINCT end_datetime) AS distinct_ends, "
+        "bool_or(lower(trim(coalesce(start_date_derived_by_TriNetX,''))) "
+        "IN ('1','true','yes','y')) AS has_derived_start, "
+        "bool_or(lower(trim(coalesce(end_date_derived_by_TriNetX,''))) "
+        "IN ('1','true','yes','y')) AS has_derived_end, "
+        "count(*) AS source_record_count FROM episode_source GROUP BY 1) "
+        "SELECT count(*) FROM episodes e FULL OUTER JOIN mapped m "
+        "USING (episode_id) WHERE " + " OR ".join(mismatches)
+    )
+
+
 def validate_returns(
     *,
     bundle: Path,
@@ -209,7 +382,17 @@ def validate_returns(
     }
     if set(progress.get("completed", {})) != expected_parts:
         raise ValueError("Return progress is incomplete")
+    expected_tables = {
+        "episode_source",
+        "episodes",
+        "diagnosis_evidence",
+        "gas_evidence",
+        "links",
+        "summary",
+    }
     for part_key, tables in progress["completed"].items():
+        if set(tables) != expected_tables:
+            raise ValueError("Return part receipt is incomplete")
         variant, bucket = part_key.split(":")
         for table, info in tables.items():
             name = f"{variant.lower()}_{int(bucket):04d}_{table}.parquet"
@@ -275,6 +458,17 @@ def validate_returns(
             )
             _assert_zero(
                 db,
+                _episode_mapping_reconciliation_query(),
+                f"{variant} episode/source mapping",
+            )
+            _assert_zero(
+                db,
+                "SELECT count(*) FROM (SELECT source_record_id FROM episode_source "
+                "GROUP BY 1 HAVING count(*)<>1 OR source_record_id IS NULL)",
+                f"{variant} duplicate source encounter records",
+            )
+            _assert_zero(
+                db,
                 "SELECT count(*) FROM (SELECT index_event_id,return_episode_id "
                 "FROM links GROUP BY 1,2 HAVING count(*)<>1)",
                 f"{variant} duplicate return links",
@@ -293,6 +487,28 @@ def validate_returns(
                 "WHERE e.episode_id IS NULL OR l.patient_id<>e.patient_id "
                 "OR l.encounter_id<>e.encounter_id",
                 f"{variant} unmapped return episode",
+            )
+            for evidence in ("diagnosis_evidence", "gas_evidence"):
+                _assert_zero(
+                    db,
+                    f"SELECT count(*) FROM {evidence} a LEFT JOIN episodes e "
+                    "ON a.episode_id=e.episode_id LEFT JOIN "
+                    "(SELECT DISTINCT return_episode_id FROM links) r "
+                    "ON a.episode_id=r.return_episode_id "
+                    "WHERE e.episode_id IS NULL OR r.return_episode_id IS NULL "
+                    "OR a.patient_id IS DISTINCT FROM e.patient_id "
+                    "OR a.encounter_id IS DISTINCT FROM e.encounter_id",
+                    f"{variant} {evidence} episode mapping",
+                )
+            _assert_zero(
+                db,
+                _link_evidence_reconciliation_query(),
+                f"{variant} link evidence",
+            )
+            _assert_zero(
+                db,
+                _link_geometry_reconciliation_query(),
+                f"{variant} link geometry",
             )
             _assert_zero(
                 db,

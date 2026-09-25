@@ -32,15 +32,29 @@ original checkout; its 109 encounter tests passed. The accepted parent manifest
 and canonical source sidecar hashes agree. A locked aggregate profile found
 date-only encounter starts/ends, missing/conflicting index episode ends, and
 shared ED/inpatient source IDs. A source-catalog preflight found that the
-accepted concept-filtered diagnosis source lacks four required J96 codes.
-Private return acceptance is **BLOCKED** before a resource pilot or build.
-The aggregate receipt is external; no private row-level product was published.
-Nine focused return tests, the final full suite (513 passed), Ruff check and
-format, `uv lock --check`, a non-editable wheel build, and Python `-I` installed
-CLI/legacy-consumer smokes passed. An earlier full run had one intermittent
+accepted catalog lacked ICD-10-CM-specific exact rules for four J96 codes.
+A follow-up aggregate query found rows for all five exact codes in the canonical
+diagnosis table; the four J96 codes have exact wildcard code-system rules that
+capture ICD-10-CM rows. The source-capability check was corrected and now
+passes. No private row-level return product has been published.
+The locked C1 forward-coverage profile has now completed for both variants.
+It reconciles to 2,662,675 FULL_DATA and 833,476 AFTER_EXCLUSION original
+keys, records unavailable index anchors separately, and shows that last
+observed events often precede the 365-day horizon. The aggregate receipt is
+external; it does not establish continuous follow-up or complete capture.
+The canonical database's full byte SHA-256 baseline was recorded externally
+before any outcomes pilot or build, with unchanged source/parent manifest
+identities. Fourteen focused return tests pass on the current code. The full
+suite passed 516 tests on the immediately preceding validator revision; a
+final full run remains due after the episode/source mapping check. Ruff, lock,
+non-editable wheel, and installed CLI/legacy-consumer smokes passed on earlier
+revisions and must be rerun as applicable before acceptance. An earlier full run had one intermittent
 combined compatibility-export worker failure; that test passed in isolation
-and in the unchanged final full run. These checks do not satisfy the missing
-private source capability, resource pilot, or C4 acceptance seal.
+and in a later unchanged full run. These checks do not satisfy the missing
+resource pilot or C4 acceptance seal. The return validator now independently
+recomputes episode/source mapping, link times and categories, link flags from
+diagnosis/gas evidence, and summaries; synthetic tampering checks include an
+uncertain link omitted from summaries.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
@@ -82,10 +96,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, obtain an approved canonical diagnosis source that retains
-the exact J96.02/J96.12/J96.22/J96.92/E66.2 codes, revalidate source/parent
-linkage and contract rules, then perform a resource pilot and one locked private
-outcomes-only build with independent validation and an external acceptance seal.
+For return outcomes, use the documented absence of transfer and discharge
+fields in source_encounter_flow and perform a resource pilot, then one locked
+private outcomes-only build with
+independent validation, byte-unchanged input proof, and an external acceptance
+seal. Recheck the exact source/parent identities before the private run.
 
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed

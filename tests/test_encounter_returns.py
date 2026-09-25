@@ -192,6 +192,85 @@ def test_duplicate_return_link_rejected(tmp_path):
         db.close()
 
 
+def test_link_evidence_reconciliation_detects_unreported_tampering(tmp_path):
+    db = duckdb.connect()
+    try:
+        _source(db)
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+        for table in ("links", "diagnosis_evidence", "gas_evidence"):
+            path = tmp_path / f"full_data_0000_{table}.parquet"
+            db.execute(
+                f"CREATE VIEW {table} AS SELECT * FROM "
+                f"read_parquet({returns.literal(path)})"
+            )
+        query = return_validation._link_evidence_reconciliation_query()
+        assert db.execute(query).fetchone()[0] == 0
+        # The same-day uncertain link is absent from every confirmed-return
+        # summary, so summary-only reconciliation would miss this alteration.
+        db.execute(
+            "CREATE OR REPLACE VIEW links AS SELECT * REPLACE "
+            "(CASE WHEN temporal_state='same_day_uncertain' "
+            "THEN true ELSE abg_gt50 END AS abg_gt50) "
+            "FROM read_parquet("
+            + returns.literal(tmp_path / "full_data_0000_links.parquet")
+            + ")",
+        )
+        assert db.execute(query).fetchone()[0] == 1
+    finally:
+        db.close()
+
+
+def test_link_geometry_reconciliation_detects_changed_return_time(tmp_path):
+    with duckdb.connect() as db:
+        _source(db)
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+        for table in ("links", "summary", "episodes"):
+            path = tmp_path / f"full_data_0000_{table}.parquet"
+            db.execute(
+                f"CREATE VIEW {table} AS SELECT * FROM "
+                f"read_parquet({returns.literal(path)})"
+            )
+        query = return_validation._link_geometry_reconciliation_query()
+        assert db.execute(query).fetchone()[0] == 0
+        path = tmp_path / "full_data_0000_links.parquet"
+        db.execute(
+            "CREATE OR REPLACE VIEW links AS SELECT * REPLACE "
+            "(CASE WHEN encounter_id='r1' THEN return_start+INTERVAL 1 DAY "
+            "ELSE return_start END AS return_start) "
+            f"FROM read_parquet({returns.literal(path)})"
+        )
+        assert db.execute(query).fetchone()[0] == 1
+
+
+def test_episode_source_mapping_reconciliation_detects_changed_start(tmp_path):
+    with duckdb.connect() as db:
+        _source(db)
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+        for table in ("episode_source", "episodes"):
+            path = tmp_path / f"full_data_0000_{table}.parquet"
+            db.execute(
+                f"CREATE VIEW {table} AS SELECT * FROM "
+                f"read_parquet({returns.literal(path)})"
+            )
+        query = return_validation._episode_mapping_reconciliation_query()
+        assert db.execute(query).fetchone()[0] == 0
+        path = tmp_path / "full_data_0000_episode_source.parquet"
+        db.execute(
+            "CREATE OR REPLACE VIEW episode_source AS SELECT * REPLACE "
+            "(CASE WHEN encounter_id='r2' "
+            "THEN start_datetime+INTERVAL 1 DAY "
+            "ELSE start_datetime END AS start_datetime) "
+            f"FROM read_parquet({returns.literal(path)})"
+        )
+        assert db.execute(query).fetchone()[0] == 1
+
+
 def test_ed_index_inpatient_return_is_admission(tmp_path):
     db = duckdb.connect()
     try:
@@ -217,6 +296,32 @@ def test_ed_index_inpatient_return_is_admission(tmp_path):
         assert row == (True, False)
 
 
+def test_crossing_episode_is_retained_as_overlap_uncertainty(tmp_path):
+    with duckdb.connect() as db:
+        _source(db)
+        db.execute(
+            "INSERT INTO preprocessed.source_encounter VALUES "
+            "('p','crossing','sc','f',9,'s','EMER','2024-01-01',"
+            "'2024-01-03','date_only','date_only','',NULL)"
+        )
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+    with duckdb.connect() as read:
+        link = read.execute(
+            "SELECT temporal_state FROM read_parquet(?) "
+            "WHERE index_encounter_id='i' AND encounter_id='crossing'",
+            [str(tmp_path / "full_data_0000_links.parquet")],
+        ).fetchone()
+        summary = read.execute(
+            "SELECT overlap_or_prior_count,outcome_acute_union_all_cause_30d_count "
+            "FROM read_parquet(?) WHERE encounter_id='i'",
+            [str(tmp_path / "full_data_0000_summary.parquet")],
+        ).fetchone()
+    assert link == ("overlap_or_prior",)
+    assert summary == (1, 2)
+
+
 def test_missing_canonical_icd_rule_blocks_build(tmp_path):
     source_file = tmp_path / "source.duckdb"
     with duckdb.connect() as db:
@@ -224,6 +329,18 @@ def test_missing_canonical_icd_rule_blocks_build(tmp_path):
         db.execute("DELETE FROM preprocessed.element_rule WHERE code='J96.02'")
     with pytest.raises(ValueError, match="J96.02"):
         returns._require_source_capabilities(source_file)
+
+
+def test_wildcard_exact_icd_rule_retains_required_code(tmp_path):
+    source_file = tmp_path / "source.duckdb"
+    with duckdb.connect() as db:
+        _source(db, str(source_file))
+        db.execute("DELETE FROM preprocessed.element_rule WHERE code='J96.02'")
+        db.execute(
+            "INSERT INTO preprocessed.element_rule VALUES "
+            "('J96.02','*','diagnosis','exact',true)"
+        )
+    returns._require_source_capabilities(source_file)
 
 
 def test_derived_index_end_is_unavailable(tmp_path):
@@ -397,6 +514,45 @@ def test_bundle_validation_resume_and_tampering(tmp_path, monkeypatch):
         work_dir=tmp_path / "verify",
     )
     assert report["variants"] == {"FULL_DATA": 2, "AFTER_EXCLUSION": 1}
+    # Rehash a link alteration that is excluded from all confirmed-return
+    # summaries. The validator must still detect its disagreement with evidence.
+    link_path = output / "full_data_0000_links.parquet"
+    link_bytes = link_path.read_bytes()
+    manifest_path = output / "manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    progress_path = output / "progress.json"
+    progress_bytes = progress_path.read_bytes()
+    changed_links = tmp_path / "changed_links.parquet"
+    with duckdb.connect() as tamper:
+        tamper.execute(
+            "COPY (SELECT * REPLACE "
+            "(CASE WHEN temporal_state='same_day_uncertain' "
+            "THEN true ELSE abg_gt50 END AS abg_gt50) FROM "
+            f"read_parquet({returns.literal(link_path)})) TO "
+            f"{returns.literal(changed_links)} (FORMAT PARQUET)"
+        )
+    changed_links.replace(link_path)
+    progress_data = json.loads(progress_bytes)
+    link_info = {"sha256": returns.sha256(link_path), "bytes": link_path.stat().st_size}
+    progress_data["completed"]["FULL_DATA:0"]["links"] = link_info
+    progress_path.write_text(json.dumps(progress_data) + "\n")
+    manifest_data = json.loads(manifest_bytes)
+    manifest_data["outputs"][link_path.name] = link_info
+    manifest_data["outputs"][progress_path.name] = {
+        "sha256": returns.sha256(progress_path),
+        "bytes": progress_path.stat().st_size,
+    }
+    manifest_path.write_text(json.dumps(manifest_data) + "\n")
+    with pytest.raises(ValueError, match="link evidence"):
+        return_validation.validate_returns(
+            bundle=output,
+            parent_bundle=parent,
+            database=source_file,
+            work_dir=tmp_path / "tampered-link-verify",
+        )
+    link_path.write_bytes(link_bytes)
+    manifest_path.write_bytes(manifest_bytes)
+    progress_path.write_bytes(progress_bytes)
     original_parent = parent_manifest.read_bytes()
     parent_manifest.write_text('{"wrong":"receipt"}\n')
     with pytest.raises(ValueError, match="parent manifest identity"):
@@ -461,6 +617,21 @@ def test_bundle_validation_resume_and_tampering(tmp_path, monkeypatch):
             partitions=2,
             resume=True,
         )
+    staging_progress = staging / "progress.json"
+    complete_progress = staging_progress.read_bytes()
+    incomplete_progress = json.loads(complete_progress)
+    del incomplete_progress["completed"]["FULL_DATA:0"]["summary"]
+    staging_progress.write_text(json.dumps(incomplete_progress) + "\n")
+    with pytest.raises(ValueError, match="part receipt is incomplete"):
+        returns.build_returns(
+            database=source_file,
+            parent_bundle=parent,
+            output_dir=output,
+            work_dir=work,
+            partitions=1,
+            resume=True,
+        )
+    staging_progress.write_bytes(complete_progress)
     returns.build_returns(
         database=source_file,
         parent_bundle=parent,

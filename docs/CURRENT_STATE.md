@@ -25,6 +25,8 @@ refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
 not a validated medication-assisted-treatment phenotype.
 
 An opt-in, separate return-outcome interface is proposed in
-[RETURN_CONTRACT.md](RETURN_CONTRACT.md). Its private acceptance is BLOCKED:
-the accepted concept-filtered diagnosis source lacks four required exact J96
-codes. Existing encounter and cohort-source interfaces remain unchanged.
+[RETURN_CONTRACT.md](RETURN_CONTRACT.md). Exact wildcard catalog rules retain
+the required J96 diagnosis rows; the initial source-capability check was too
+narrow and has been corrected. Private return acceptance is pending the
+resource pilot, build, and validation gates. Existing encounter
+and cohort-source interfaces remain unchanged.

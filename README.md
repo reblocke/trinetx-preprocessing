@@ -349,7 +349,7 @@ does not spill row-level data onto the internal disk.
 
 The opt-in `build-returns` and `validate-returns` commands target a separate
 versioned outcome bundle. See [the return contract](docs/RETURN_CONTRACT.md)
-for source requirements and the current BLOCKED private acceptance gate.
+for source requirements and the pending private acceptance gates.
 
 ## Maintenance and contact
 
