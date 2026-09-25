@@ -3,6 +3,8 @@
 The maintained data-creation implementation lives in trinetx-preprocessing.
 The direct Stata implementation and its accepted Python port remain unchanged
 in trinetx-hypercapnia-code as reproduction references.
+The accepted source snapshot has only date-level encounter starts and arterial
+gas events; see [the original-abstract timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
 
 ## Run
 
@@ -11,9 +13,10 @@ on 2026-09-20. Schema 2.0 separates that population authority from the canonical
 clinical evidence source. The original canonical compatibility projections did
 not reproduce accepted membership. The companion bypasses that mismatch; it
 does not explain or repair the canonical projections. The corrected private build,
-retained-reference comparison and artifact validator passed for both variants;
-final installed-pair and hosted gates remain required for the private acceptance
-receipt described in [NEXT_STEPS.md](../NEXT_STEPS.md).
+retained-reference comparison and historical artifact validator passed for both
+variants. The old private receipt predates the strengthened validator and cannot
+authorize the new strict consumer. See [current state](CURRENT_STATE.md) for the
+postmerge release gates.
 
 Install the locked environment and import the authenticated immutable snapshot
 once. The identity receipt supplies the exact accepted hashes for all 36 files:
@@ -65,6 +68,17 @@ uv run trinetx-preprocessing build-encounters \
   --coverage-only --output-dir /private/source-coverage
 ```
 
+Coverage defaults to the version-1.0 `complete_linkage` policy: every accepted
+patient and composite encounter must link, with no demographic or anchor-day
+contradictions. The report separately records linked/unlinked counts,
+proportions, contradiction status and history-availability states. Patient
+totals count distinct original `patient_id` values; encounter totals count
+original composite encounters. A bounded
+`approved_incomplete_linkage` use requires an explicit
+`--approved-incomplete-linkage-exception` and retains unlinked encounters as
+incomplete capture. Zero linked records fail both policies. A source span never
+proves continuous history or clinical absence.
+
 The corrected enrichment command requires both gates and creates the bundle:
 
 ```bash
@@ -99,8 +113,13 @@ under caffeinate and retain logs on the private output volume.
 The optional `--source-cache-dir` retains expensive source materializations in
 separate per-variant databases. Each completed stage and its receipt commit in
 one transaction. A retry checks source and base identities, catalog, configuration,
-producer code, table schemas and counts before reusing a stage. It rebuilds the
-derived evidence and publishes a new output bundle. Cache paths must be external,
+producer code, table schemas, counts and a version-1.0 content fingerprint before
+reusing a stage. The fingerprint sorts SHA-256 digests of DuckDB's typed-row JSON
+representation and hashes the resulting multiset, retaining duplicate
+multiplicity without depending on physical row order. An older cache without
+content fingerprints is rejected rather than blessed from its current bytes.
+The build then regenerates derived evidence and publishes a new output bundle.
+Cache paths must be external,
 non-symlinked and disjoint from inputs and outputs. An older database without
 these bindings is rejected; its tables cannot be reused just because they exist.
 Recovery of such a database requires a separately validated import into a new
@@ -198,6 +217,59 @@ in the canonical source dictionary. The encounter dictionary describes the
 transformed output columns and retains legacy labels/value coding.
 
 ## Scope of verification
+
+The shared acceptance contract is version 1.0 in
+`trinetx_preprocessing.encounters.acceptance`. The validator report now binds
+the exact manifest digest, product kind, schema and feature-contract versions,
+output inventory, source and compatibility identities, producer code digest,
+both variant results, and validation-contract version. A production receipt is
+external to the immutable bundle and must bind that report's digest, the same
+manifest and output inventory, the declared coverage policy/results, passing
+artifact, retained-reference, source-coverage and installed-pair gates, and the
+actual producer, validator and consumer revisions. The downstream consumer
+requires both the receipt file and its expected SHA-256 from a trusted private
+release configuration; an adjacent JSON file is never trusted automatically.
+
+`complete_linkage` requires positive patient and composite-encounter linkage
+results. An `approved_incomplete_linkage` release must identify its approved
+exception explicitly. A historical receipt lacking this schema is not silently
+upgraded. The existing private bundle passed stronger validation at merged
+upstream revision `cae58a2`. An external identity-bound engineering receipt
+binds all required gates, and the pinned installed consumer read both variants
+and companion evidence successfully. Downstream full and installed-pair CI
+passed, and the merged consumer tree matches the tested head. This is
+engineering acceptance of the input boundary, not the GLP-1 report.
+Build completion, artifact validation, reference parity, installed-pair
+verification and scientific acceptance remain distinct.
+
+The version-1.0 evidence schema contract is packaged as
+`encounters/artifact_contract.json`: it lists the exact version-1.0 feature
+schema for each independent variant (1,108 FULL_DATA fields and 1,172
+AFTER_EXCLUSION fields) from the accepted writer/dictionary, plus exact names
+and Arrow types for each clinical evidence and source-coverage table. The
+validator checks those schemas from Parquet metadata, including typed empty
+domains, and requires the manifest-bound feature dictionary to agree with the
+fixed contract. It independently scans
+the feature table to compare every QA null count with the emitted values.
+It independently compares catalogue source-record memberships with the wide
+count columns, and inventory availability with distinct encounter/element
+matches joined to the declared source-history states. Repeated source rows
+remain counted in the membership total; availability is per encounter/element.
+The availability reconciliation writes narrow, hash-keyed partitions in its
+private work directory and checks one partition at a time. The validator uses
+one DuckDB thread, a 3 GiB memory limit and work-local spill. Keep its work
+directory on an encrypted, owner-only volume with sufficient free space.
+It checks the raw latest value/date/unit triplet for `source.hba1c` and
+`source.bmi` against eligible baseline evidence under the documented date and
+source-record tie order. Context-only rows remain in evidence and cannot supply
+those baseline triplets. It also reconstructs normalized latest HBA1c
+value/date and systolic blood-pressure value, and independently checks the
+published blood-pressure unit conversion, including kPa. These four enumerated
+summaries are not exhaustive clinical phenotype validation. Assertions about
+the original canonical raw-record counts need separate bounded source reads.
+The CLI writes a versioned failure report with artifact, invariant and
+aggregate discrepancy and exits nonzero when a required check fails. Row-level
+diagnostic samples remain private and are not included in that report.
 
 Focused fixtures exercise repeated encounters, merge precedence and overlap,
 source-key collisions, temporal boundaries, negative-versus-missing states,

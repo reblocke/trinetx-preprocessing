@@ -13,6 +13,12 @@ def main(argv=None):
     parser.add_argument("--compatibility-database", type=Path, required=True)
     parser.add_argument("--legacy-only", action="store_true")
     parser.add_argument("--coverage-only", action="store_true")
+    parser.add_argument(
+        "--coverage-policy",
+        choices=("complete_linkage", "approved_incomplete_linkage"),
+        default="complete_linkage",
+    )
+    parser.add_argument("--approved-incomplete-linkage-exception")
     parser.add_argument("--coverage-bundle", type=Path)
     parser.add_argument("--legacy-bundle", type=Path)
     parser.add_argument("--legacy-acceptance", type=Path)
@@ -25,6 +31,17 @@ def main(argv=None):
         parser.error("--source-cache-dir is only supported for enrichment")
     if args.vital_selection_acceptance and (args.legacy_only or args.coverage_only):
         parser.error("--vital-selection-acceptance is only supported for enrichment")
+    if args.approved_incomplete_linkage_exception and not args.coverage_only:
+        parser.error("Linkage exception is only supported with --coverage-only")
+    if args.coverage_policy == "approved_incomplete_linkage" and not (
+        args.coverage_only and args.approved_incomplete_linkage_exception
+    ):
+        parser.error("Incomplete linkage requires an approved exception")
+    if (
+        args.coverage_policy == "complete_linkage"
+        and args.approved_incomplete_linkage_exception
+    ):
+        parser.error("Complete linkage cannot carry an exception")
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
@@ -48,6 +65,8 @@ def main(argv=None):
             legacy_bundle=args.legacy_bundle,
             legacy_acceptance=args.legacy_acceptance,
             output_dir=args.output_dir,
+            policy=args.coverage_policy,
+            approved_exception=args.approved_incomplete_linkage_exception,
         )
         return 0
     if args.coverage_bundle is None:
@@ -83,13 +102,39 @@ def import_main(argv=None):
 
 def validate_main(argv=None):
     import json
+    import sys
 
-    from .validation import validate_bundle
+    from .acceptance import ACCEPTANCE_CONTRACT_VERSION
+    from .validation import ArtifactInvariantError, validate_bundle
 
     parser = argparse.ArgumentParser(prog="trinetx-preprocessing validate-encounters")
     for name in ("bundle", "work-dir", "report"):
         parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args(argv)
-    result = validate_bundle(bundle=args.bundle, work_dir=args.work_dir)
+    try:
+        result = validate_bundle(bundle=args.bundle, work_dir=args.work_dir)
+    except Exception as exc:
+        result = {
+            "pass": False,
+            "validation_contract_version": ACCEPTANCE_CONTRACT_VERSION,
+            "failures": [
+                {
+                    "artifact": (
+                        exc.artifact
+                        if isinstance(exc, ArtifactInvariantError)
+                        else "encounter_bundle"
+                    ),
+                    "invariant": (
+                        exc.invariant
+                        if isinstance(exc, ArtifactInvariantError)
+                        else type(exc).__name__
+                    ),
+                    "aggregate_discrepancy": str(exc),
+                }
+            ],
+        }
+        args.report.write_text(json.dumps(result, indent=2) + "\n")
+        print(f"Encounter validation failed; see {args.report}", file=sys.stderr)
+        return 1
     args.report.write_text(json.dumps(result, indent=2) + "\n")
     return 0

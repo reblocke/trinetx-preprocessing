@@ -11,9 +11,16 @@ validation artifacts belong in this repository.
 
 [Current state](docs/CURRENT_STATE.md) records dated implementation and gate
 status; [encounter preprocessing](docs/ENCOUNTER_PREPROCESSING.md) is the
-maintained production and verification runbook. A merged interface or complete
-manifest does not alone establish installed-pair, private-data or scientific
-acceptance. The earlier GLP-1 source acceptance is
+maintained production and verification runbook. The historical bundle passed
+fresh complete-linkage coverage and stronger validation at merged upstream
+revision `cae58a2`; an identity-bound private engineering receipt and installed
+production read passed at the trusted downstream pin merged as `c2302cb`.
+Those engineering gates do not establish acceptance of the original patient-level
+GLP-1 report. The accepted snapshot has date-only encounter starts and arterial
+gas events, so that report's first-24-hour rule needs a new approved timestamp
+source; see the [timestamp source gate](docs/GLP1_TIMESTAMP_SOURCE_GAP.md).
+A merged interface or complete manifest alone does not establish those gates.
+The earlier GLP-1 source acceptance is
 [historical evidence](docs/GLP1_SOURCE_ACCEPTANCE.md), not a new encounter receipt.
 
 ## Products and handoff

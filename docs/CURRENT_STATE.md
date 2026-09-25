@@ -1,16 +1,28 @@
 # Current repository state
 
-Updated 2026-09-24. Python encounter preprocessing is implemented here; validation
-and publication status are recorded in CONTINUITY.md and the linked PR.
+Updated 2026-09-24. Python encounter preprocessing is implemented here. The
+original split merged at upstream `4bbe8cf` and downstream `d5d2691`;
+postmerge validator hardening is on upstream `main` at `cae58a2` and the strict
+downstream consumer merged as `c2302cb`. This is the current public status
+summary; private source, bundle and receipt
+identities remain in the owner-only release record.
 See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
 products, timing, identifiers, missingness and verification boundary.
 The authenticated companion route passed the complete legacy population/value
 and canonical linkage/coverage gates. A corrected private build completed both
-independent variants. The full retained-reference comparison and separate bundle
-artifact validator passed on that bundle. The earlier handoff required final installed-pair and hosted checks before a
-private acceptance receipt. Upstream PR #14 and downstream PR #15 merged on
-2026-09-24; those merges alone do not establish the private acceptance state.
-See the dated [handoff checklist](../NEXT_STEPS.md) and its private receipt.
+independent variants. The full retained-reference comparison passed. Fresh
+complete-linkage coverage and stronger artifact validation passed at the merged
+upstream revision. A private identity-bound engineering receipt and an isolated
+installed production read passed for both variants and companion evidence;
+downstream full and installed-pair CI passed at the immutable merged pin. The
+downstream merge tree matches the tested consumer head. Scientific acceptance
+for the original patient-level GLP-1 abstract remains separate; see
+[NEXT_STEPS.md](../NEXT_STEPS.md).
+Aggregate source audits found that this accepted snapshot preserves only
+date-level encounter starts, arterial gas events, and other clinical-domain
+events. The original abstract's
+first-24-hour gas rule requires a new approved timestamp-capable source; see
+[the timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
 
 The manifest-bound DuckDB remains the canonical captured source. An authenticated DuckDB companion now supplies the original
 compatibility snapshot to the accepted Python transformations; canonical

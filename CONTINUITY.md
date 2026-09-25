@@ -1,8 +1,8 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Implement the owner-approved encounter preprocessing split: reusable traditional
-and GLP-1 data creation upstream, study analysis downstream, reference port preserved.
+Complete postmerge encounter validation and shared acceptance hardening for the
+downstream GLP-1 consumer while preserving the accepted reference behavior.
 
 ## Constraints/Assumptions
 Preserve FULL_DATA and AFTER_EXCLUSION membership, timing, repeated encounters,
@@ -15,9 +15,15 @@ another private build. Owner approved the one-time authenticated companion impor
 and targeted audit gates on 2026-09-20. See NEXT_STEPS.md. Publish two
 encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
+For the original abstract, seek an approved timestamp-capable TriNetX extract;
+do not reinterpret its first-24-hour rule from date-only fields.
 
 ## State
-Implementation in isolated worktrees from verified merged source heads.
+The encounter split is merged: upstream `main` includes postmerge validation
+hardening at `cae58a2`, and downstream `master` includes strict consumer merge
+`c2302cb`.
+RESEARCH FAST was physically absent at the last disk check; private work uses
+an encrypted fallback volume. The historical private bundle remains immutable.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -39,23 +45,39 @@ and the wide output use bounded partitions without changing output semantics.
 The full retained-reference comparison passed exact membership and all 33/534
 field checks; the separate validator passed all bundle artifacts, schema, source
 coverage, inventories and manifest hashes. Peak whole-process RSS was measured
-at 7,404,158,976 bytes. The private acceptance receipt and linked PRs record
-the exact installed-pair, hosted-check and merge state separately.
+at 7,404,158,976 bytes. The historical private receipt records the earlier
+installed pair and gates; it predates the new shared acceptance contract and
+cannot authorize the strengthened production reader without revalidation.
 Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Upstream PR #14 and downstream PR #15 merged in that order on 2026-09-24.
-For any release claim, verify the installed downstream pin, hosted checks and
-private acceptance bound to the source pair and producers; merges alone are not
-that evidence.
+Version-1.0 shared acceptance verification and validator report binding have
+focused synthetic real-Parquet tests passing. Table-specific schema, QA null,
+catalogue source-count, coverage/inventory availability, enumerated HBA1c/BMI
+raw-triplet checks, linkage policies and cache fingerprints have mutation tests.
+Fresh complete-linkage coverage and stronger private artifact validation passed
+for both variants at merged upstream revision `cae58a2`. Downstream pins that
+immutable revision. Its full and installed-pair CI passed, then a private
+identity-bound engineering receipt and isolated installed production read
+passed for both variants and companion evidence. Downstream PR #18 merged as
+`c2302cb` with a Git tree identical to its tested head, and the installed read
+passed again through a trust record bound to that merge. None of these gates
+establishes the original GLP-1 scientific report.
 
 ## Open questions
+The accepted source snapshot has date-only encounter starts and clinical events
+across the preserved domains. A new approved source export is needed if clinical
+event times are available; its feasibility and time-zone semantics are
+UNCONFIRMED. See
+docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The current bundle remains immutable.
 Canonical source validated: 837 catalog elements including 303 source concepts.
 Canonical compatibility capture uses corrected_v1 and earliest_per_setting;
 its encounter population differs from the retained accepted reference.
-The source/input boundary needs reconciliation; no scientific acceptance claimed.
+The authenticated compatibility companion remains the population authority;
+independent canonical-projection reconciliation is a separate gate. No new
+scientific acceptance is claimed.
 
 ## Working set
-Encounter builder and relocated GLP-1 modules; focused pytest, Ruff,
-source/output comparison and normal repository checks.
+`encounters/acceptance.py`, validator report, focused acceptance tests and the
+postmerge companion ticket; downstream reader and installed-pair gate.

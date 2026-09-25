@@ -18,6 +18,8 @@ from ..pipeline.final_features import (
 from .compatibility import artifact_inventory, digest, file_identity, no_symlinks
 
 FEATURE_CONTRACT_VERSION = "1.0"
+COVERAGE_POLICY_VERSION = "1.0"
+COVERAGE_POLICIES = {"complete_linkage", "approved_incomplete_linkage"}
 DOMAINS = {
     "diagnosis": 730,
     "labs": 365,
@@ -46,9 +48,16 @@ def _case(column, mapping):
     return f"CASE {column} {terms} ELSE NULL END"
 
 
-def coverage_tables(db):
+def coverage_tables(db, *, policy="complete_linkage", approved_exception=None):
     """Cheap patient/composite-encounter checks; no clinical evidence expansion."""
     from .builder import literal
+
+    if policy not in COVERAGE_POLICIES:
+        raise ValueError("Unsupported encounter linkage coverage policy")
+    if policy == "approved_incomplete_linkage" and not approved_exception:
+        raise ValueError("Incomplete linkage requires an approved exception")
+    if policy == "complete_linkage" and approved_exception:
+        raise ValueError("Complete linkage policy cannot carry an exception")
 
     expressions = [
         f'{_case("p." + raw, mapping)} AS "{name}"'
@@ -92,14 +101,42 @@ def coverage_tables(db):
         SELECT * FROM demographics JOIN encounters USING(pat_enc_hash)
     """)
     corroboration = db.execute("""
-        SELECT count(*), count(*) FILTER(WHERE patient_linked),
-          count(*) FILTER(WHERE patient_linked AND NOT demographics_agree),
-          count(*) FILTER(WHERE encounter_linked),
-          count(*) FILTER(WHERE encounter_linked AND NOT anchor_in_encounter)
-        FROM key_coverage
+        SELECT count(*), count(DISTINCT b.patient_id),
+          count(DISTINCT b.patient_id) FILTER(WHERE k.patient_linked),
+          count(*) FILTER(WHERE k.patient_linked AND NOT k.demographics_agree),
+          count(DISTINCT b.patient_id)
+            FILTER(WHERE k.patient_linked AND NOT k.demographics_agree),
+          count(*) FILTER(WHERE k.encounter_linked),
+          count(*) FILTER(WHERE k.encounter_linked AND NOT k.anchor_in_encounter),
+          count(*) FILTER(WHERE b.patient_id IS NULL)
+        FROM key_coverage k JOIN legacy_base b USING(pat_enc_hash)
     """).fetchone()
-    # A mismatch remains a diagnosis gate, never an automatic source remapping.
-    passed = corroboration[1] > 0 and corroboration[2] == 0 and corroboration[4] == 0
+    # Contradictions, completeness and source-history availability are separate.
+    (
+        total,
+        patient_total,
+        patient_linked,
+        demographics_bad,
+        patient_demographics_bad,
+        encounter_linked,
+        anchor_bad,
+        null_patient_ids,
+    ) = corroboration
+    contradictions_pass = (
+        total > 0
+        and patient_linked > 0
+        and encounter_linked > 0
+        and null_patient_ids == 0
+        and demographics_bad == 0
+        and anchor_bad == 0
+    )
+    complete_patient = patient_total > 0 and patient_linked == patient_total
+    complete_encounter = total > 0 and encounter_linked == total
+    passed = contradictions_pass and (
+        (complete_patient and complete_encounter)
+        if policy == "complete_linkage"
+        else bool(approved_exception)
+    )
     audited_domains = {
         row[0]
         for row in db.execute(
@@ -131,7 +168,8 @@ def coverage_tables(db):
                 k.anchor_in_encounter, o.first_event_datetime, o.last_event_datetime,
                 o.event_count AS captured_patient_record_count,
                 CASE WHEN NOT {str(available).lower()} THEN 'unavailable_domain'
-                  WHEN NOT k.patient_linked OR o.patient_id IS NULL
+                  WHEN NOT k.patient_linked OR NOT k.encounter_linked
+                    OR o.patient_id IS NULL
                     THEN 'incomplete_capture'
                   WHEN o.first_event_datetime::DATE > DATE '1960-01-01'
                     + cast(b.encounter_date AS INTEGER) - INTERVAL {days} DAY
@@ -151,11 +189,27 @@ def coverage_tables(db):
     ).fetchall()
     return {
         "pass": passed,
-        "rows": corroboration[0],
-        "patient_linked": corroboration[1],
-        "demographic_disagreements": corroboration[2],
-        "encounter_linked": corroboration[3],
-        "anchor_disagreements": corroboration[4],
+        "coverage_policy_version": COVERAGE_POLICY_VERSION,
+        "coverage_policy": policy,
+        "approved_exception": approved_exception,
+        "contradictions_pass": contradictions_pass,
+        "complete_patient_linkage": complete_patient,
+        "complete_encounter_linkage": complete_encounter,
+        "rows": total,
+        "patient_total": patient_total,
+        "patient_linked": patient_linked,
+        "patient_unlinked": patient_total - patient_linked,
+        "patient_linked_proportion": (
+            patient_linked / patient_total if patient_total else None
+        ),
+        "demographic_disagreements": demographics_bad,
+        "patient_demographic_disagreements": patient_demographics_bad,
+        "null_patient_ids": null_patient_ids,
+        "encounter_total": total,
+        "encounter_linked": encounter_linked,
+        "encounter_unlinked": total - encounter_linked,
+        "encounter_linked_proportion": encounter_linked / total if total else None,
+        "anchor_disagreements": anchor_bad,
         "audited_source_domains": domain_sources,
         "history_states": [dict(domain=d, state=s, rows=n) for d, s, n in states],
         "limitation": HISTORY_LIMITATION,
@@ -164,7 +218,15 @@ def coverage_tables(db):
     }
 
 
-def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
+def build_coverage(
+    *,
+    database,
+    legacy_bundle,
+    legacy_acceptance,
+    output_dir,
+    policy="complete_linkage",
+    approved_exception=None,
+):
     from .builder import VARIANTS, literal
 
     database = no_symlinks(database)
@@ -196,7 +258,9 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
                 "CREATE VIEW legacy_base AS "
                 f"SELECT * FROM read_parquet({literal(base)})"
             )
-            reports[variant] = coverage_tables(db)
+            reports[variant] = coverage_tables(
+                db, policy=policy, approved_exception=approved_exception
+            )
             target = output / f"{variant}_source_coverage.parquet"
             db.execute(
                 f"COPY encounter_source_coverage TO {literal(target)} "
@@ -212,6 +276,9 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
         raise ValueError("Source changed during coverage validation")
     result = {
         "contract_version": FEATURE_CONTRACT_VERSION,
+        "coverage_policy_version": COVERAGE_POLICY_VERSION,
+        "coverage_policy": policy,
+        "approved_exception": approved_exception,
         "audit_domain_mapping": AUDIT_DOMAINS,
         "pass": all(r["pass"] for r in reports.values()),
         "source": source_metadata,

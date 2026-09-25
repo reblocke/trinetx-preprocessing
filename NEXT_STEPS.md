@@ -1,10 +1,31 @@
-# Finish the encounter preprocessing refactor
+# Encounter release follow-up
 
-Historical handoff: 2026-09-20. At that point private encounter validation had
-failed and neither PR was ready to merge. Later corrected build, comparison and
-artifact checks are summarized in [current state](docs/CURRENT_STATE.md).
-Upstream PR #14 and downstream PR #15 merged on 2026-09-24; this dated
-checklist is not a current private acceptance receipt.
+The original encounter split is merged: upstream `main` now includes postmerge
+validator hardening at `cae58a2`, and downstream `master` includes the strict
+consumer at `c2302cb`. The corrected private bundle and retained
+reference comparison passed. Fresh complete-linkage coverage and stronger
+artifact validation passed at merged upstream revision `cae58a2`. The private
+integrated engineering receipt, installed production read, and downstream full
+and installed-pair CI passed at the immutable merged pin; the downstream merge
+tree matches its tested head. The original patient-level GLP-1 report has
+separate unresolved scientific gates. See [current state](docs/CURRENT_STATE.md)
+and [encounter interface](docs/ENCOUNTER_PREPROCESSING.md) for the maintained
+status and commands.
+
+Revalidate the existing immutable bundle before considering a rebuild. The
+validator needs a fresh private work directory and report outside Git, under the
+same private `build.lock` used by comparisons. A new build requires the
+authenticated compatibility companion, legacy-reference gate, explicit linkage
+policy, enrichment, artifact validation and retained-reference comparison shown
+in the encounter interface. Neither route proves fresh-source equivalence,
+continuous clinical history, new GLP-1 estimates or Stata qualification.
+
+## Historical 2026-09-20 handoff
+
+The following checklist records the earlier recovery session. Its initial
+failed-build and unmerged-PR status has been superseded by the merged state
+above. Preserve these steps as provenance; do not relaunch the old wrapper to
+repeat completed work.
 Exact paths, authenticated receipts and launch instructions are in the private
 `encounter-refactor-handoff/LOCAL_PATHS.md` beside the Mini checkouts. Keep that
 file and all real-data receipts out of this public repository.
