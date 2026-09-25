@@ -35,6 +35,7 @@ class GasCandidateProfile:
     mmhg_ucum_unit_rows: int
     kpa_unit_rows: int
     ph_literal_unit_rows: int
+    ph_ucum_unit_rows: int
     unitless_literal_unit_rows: int
     missing_unit_rows: int
     other_unit_rows: int
@@ -99,6 +100,7 @@ def _profile(
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='mm[hg]'),"
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='kpa'),"
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='ph'),"
+        "count(*) FILTER(WHERE lower(trim(units_of_measure))='[ph]'),"
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='unitless'),"
         "count(*) FILTER(WHERE nullif(trim(units_of_measure),'') IS NULL),"
         "count(*) FILTER(WHERE nullif(trim(units_of_measure),'') IS NOT NULL "

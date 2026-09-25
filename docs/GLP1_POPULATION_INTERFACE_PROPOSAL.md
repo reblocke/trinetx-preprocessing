@@ -43,9 +43,16 @@ linked sample. Its first date-validity result was invalidated by the draft
 parser accepting only hyphenated dates, while the source stores observed
 compact `YYYYMMDD` dates. The parser, batch start check and fixed-category
 date audit now accept both compact and hyphenated observed date-only forms.
-The audit also adds fixed hints for common unit-label variants while leaving
-clinical conversion and specimen meaning unapproved. A corrected private
-aggregate rerun is required before source policy review.
+The audit also adds fixed hints for common unit-label variants, including
+UCUM `mm[Hg]` and `[pH]`, while leaving clinical conversion and specimen
+meaning unapproved. The corrected owner-only aggregate rerun at `3844ea0`
+found no invalid candidate dates, confirmed absent specimen/sample-link IDs,
+and passed stable source-identity and private receipt read-back checks. A
+separate owner-only fixed-category lineage check found exact configured
+arterial LOINC membership and source-code agreement for every candidate.
+Another fixed-category probe found UCUM `[pH]` on all source-code pH rows in
+this snapshot. These probes inform clinical policy review; none accepts the
+population source or clinically validates the gas phenotype.
 
 ## Proposed upstream product
 

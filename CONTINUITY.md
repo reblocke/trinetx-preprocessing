@@ -38,8 +38,14 @@ with stable input identities and mode-0600 read-back. It exposed the draft
 ISO-only date-check error against observed compact `YYYYMMDD` source dates;
 specimen and specimen/panel link IDs were absent in the catalog-matched
 candidates. The parser, batch start check and audit now accept both observed
-date-only forms. Fixed unit-label hints were added. A corrected private rerun
-and clinical policy review remain open; no linked-pH or report claim follows.
+date-only forms. Fixed unit-label hints include UCUM `mm[Hg]` and `[pH]`.
+A corrected owner-only audit at `3844ea0` found no invalid candidate dates,
+confirmed absent specimen/sample-link IDs, and passed stable source identity
+and mode-0600 receipt read-back. Separate owner-only fixed-category checks
+found exact configured arterial LOINC membership with source-code agreement
+for every candidate and UCUM `[pH]` on all source-code pH rows. These are
+review inputs, not source or clinical-policy acceptance; no linked-pH or
+report claim follows.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the

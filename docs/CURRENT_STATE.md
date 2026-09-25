@@ -46,12 +46,17 @@ identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate
 parser and batch projection now handle both observed date forms. The audit's
 field-capture categories show absent specimen and specimen/panel link IDs in
-these catalog-matched candidates; a corrected audit and clinical source-policy
-review remain required before a paired-pH claim or phenotype estimate.
+these catalog-matched candidates. The corrected owner-only audit at `3844ea0`
+found no invalid candidate dates and passed stable source-identity and private
+receipt read-back checks. Separate owner-only fixed-category checks found
+exact configured arterial LOINC code lineage and UCUM `[pH]` on source-code
+pH rows. Clinical source-policy review remains required before a phenotype
+estimate; absent sample links cannot support a paired-pH claim.
 An additional candidate audit now counts fixed categories for arterial unit,
 specimen, numeric, date and same-day linkage evidence without releasing raw
 labels or source keys. It has no CLI yet. Its results inform a future reviewed
 clinical mapping policy; they do not accept one.
+Its fixed unit hints now include UCUM `[pH]` as a separately counted category.
 A separate `screen-glp1-export-headers` command accepts explicitly listed
 proposed encounter, lab and medication CSVs and reads their headers only. It
 reports fixed aggregate field-presence counts without paths, raw header names

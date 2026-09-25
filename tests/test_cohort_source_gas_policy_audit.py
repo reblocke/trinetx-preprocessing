@@ -157,10 +157,15 @@ def test_noncanonical_unit_hints_remain_in_other_category():
         )
         connection.execute(
             "UPDATE source_lab_measurement SET units_of_measure='pH' "
+            "WHERE source_record_id='ph-1'"
+        )
+        connection.execute(
+            "UPDATE source_lab_measurement SET units_of_measure='[pH]' "
             "WHERE source_record_id='ph-2'"
         )
         result = audit_candidate_gas_policy(connection)
     assert result.pco2.mmhg_spaced_unit_rows == 1
     assert result.pco2.other_unit_rows == 1
     assert result.ph.ph_literal_unit_rows == 1
-    assert result.ph.other_unit_rows == 1
+    assert result.ph.ph_ucum_unit_rows == 1
+    assert result.ph.other_unit_rows == 2
