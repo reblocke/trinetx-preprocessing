@@ -45,6 +45,13 @@ found concordant source date, encounter type and historical age proxy at those
 keys. Age-18 boundary cases were present. Both runs used the same stable
 source identities and mode-0600 receipt read-back. They do not cover extra
 source patients, clinical gas qualification or new patient-index selection.
+A separate source-wide aggregate sizing audit completed in 2.57 minutes on the
+canonical encounter and patient tables, with stable source identity, no
+remaining scratch and mode-0600 private receipt read-back. All observed
+encounter starts were parseable date-only values; a minority of raw rows had
+an in-scope type hint. Its approximate all-key estimate exceeded the raw row
+count and is only an engineering capacity hint. Test scoped candidate staging
+before full-source materialization; no cohort or source has been accepted.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

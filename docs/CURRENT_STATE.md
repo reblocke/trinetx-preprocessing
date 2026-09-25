@@ -77,6 +77,15 @@ aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;
 this is not a new accepted source population or a timed extract. See the
 [population interface proposal](GLP1_POPULATION_INTERFACE_PROPOSAL.md).
+A separate candidate source-wide sizing audit counts encounter and patient
+rows, key/date/type/birth-year field coverage, and approximate distinct keys
+without selecting a cohort. Approximate key values guide engineering capacity
+only; they cannot serve as a denominator or establish source acceptance.
+An owner-only source-wide run completed with stable source identity and private
+receipt read-back in 2.57 minutes. The date parser covered all observed
+date-only encounter starts; only a minority of raw rows had an in-scope type
+hint. The full-source distinct-key estimate overran the raw row count, so it
+remains a coarse capacity signal. No full population was staged or accepted.
 A candidate read-only calendar field projection now groups raw encounter
 records at exact patient/encounter grain and joins patient birth-year evidence.
 It exposes observed start date, normalized encounter type and birth year only

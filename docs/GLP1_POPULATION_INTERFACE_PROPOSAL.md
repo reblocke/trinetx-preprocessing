@@ -24,6 +24,21 @@ The draft source-capability audit in `cohort_source_capability_audit.py`
 provides aggregate timing and medication-field capture counts for a validated
 canonical source. It does not select a population or make a new source
 acceptable for the original abstract.
+The separate `audit_calendar_source_sizing()` scans all source encounter and
+patient rows to count key, date, encounter-type and birth-year field coverage.
+It reports approximate distinct-key values solely to size a bounded full-source
+projection. It retains duplicates in row counts and does not apply age,
+encounter-type, context or clinical inclusion rules. Its approximate key
+values are not patient denominators or source-acceptance evidence.
+An owner-only source-wide run completed in 2.57 minutes with stable canonical
+input identity, empty DuckDB spill and mode-0600 receipt read-back. All
+observed encounter starts were date-only and parseable by the candidate date
+parser. A small minority of raw encounter rows carried an `EMER` or `IMP`
+type hint, making a narrowly staged candidate-key path worth testing before
+materializing every encounter key. The approximate all-key estimate exceeded
+the raw row count, illustrating why that estimate must never be used as an
+exact key count or study denominator. This audit did not verify one-record-per-
+patient selection, context exclusions, clinical evidence or source acceptance.
 The separate `cohort_source_gas_policy_audit.py` candidate counts fixed
 categories for catalog-matched arterial PaCO2 and pH rows: source-key and
 date completeness, raw numeric screening ranges, normalized unit classes,
