@@ -1,4 +1,4 @@
-"""Stream raw diagnosis or laboratory history for selected patient indexes.
+"""Stream raw diagnosis, laboratory or procedure history for patient indexes.
 
 Call only on a validated, accepted canonical-source connection. Catalog
 membership identifies candidates; it does not establish clinical truth,
@@ -15,7 +15,11 @@ import duckdb
 
 from .cohort_source_calendar_batch import _check_keys, _relation
 
-_TABLES = {"diagnosis": "source_diagnosis", "lab": "source_lab_measurement"}
+_TABLES = {
+    "diagnosis": "source_diagnosis",
+    "lab": "source_lab_measurement",
+    "procedure": "source_procedure",
+}
 
 
 @dataclass(frozen=True)
@@ -62,7 +66,7 @@ def iter_calendar_history_candidates(
     """
     relation = _relation(index_relation)
     if not isinstance(domain, str) or domain not in _TABLES:
-        raise ValueError("Calendar history domain must be diagnosis or lab")
+        raise ValueError("Calendar history domain must be diagnosis, lab or procedure")
     if not isinstance(element_id, str) or not element_id.strip():
         raise ValueError("Calendar history element must be a nonblank catalog ID")
     if (

@@ -1,4 +1,4 @@
-"""Raw diagnosis/lab history keeps source timing and absence distinct."""
+"""Raw diagnosis/lab/procedure history keeps timing and absence distinct."""
 
 import duckdb
 import pytest
@@ -14,7 +14,8 @@ def _source() -> duckdb.DuckDBPyConnection:
     db.execute("INSERT INTO selected VALUES ('p','index'),('q','index')")
     db.execute("CREATE TABLE element_catalog(element_id VARCHAR,domain VARCHAR)")
     db.execute(
-        "INSERT INTO element_catalog VALUES ('dx-t2d','diagnosis'),('lab-a1c','lab')"
+        "INSERT INTO element_catalog VALUES "
+        "('dx-t2d','diagnosis'),('lab-a1c','lab'),('proc','procedure')"
     )
     db.execute(
         "CREATE TABLE element_membership("
@@ -24,7 +25,8 @@ def _source() -> duckdb.DuckDBPyConnection:
         "INSERT INTO element_membership VALUES "
         "('dx-1','dx-t2d',TRUE),('dx-1','dx-t2d',TRUE),"
         "('dx-2','dx-t2d',FALSE),('a1c-1','lab-a1c',TRUE),"
-        "('a1c-2','lab-a1c',TRUE),('other-a1c','lab-a1c',TRUE)"
+        "('a1c-2','lab-a1c',TRUE),('other-a1c','lab-a1c',TRUE),"
+        "('proc-1','proc',TRUE),('proc-2','proc',TRUE)"
     )
     db.execute(
         "CREATE TABLE source_diagnosis("
@@ -62,6 +64,20 @@ def _source() -> duckdb.DuckDBPyConnection:
         "'2024-01-01','date_only','LOINC','LOINC','4548-4','4548-4',"
         "'8.0',NULL,8.0,'%','%')"
     )
+    db.execute(
+        "CREATE TABLE source_procedure("
+        "patient_id VARCHAR,encounter_id VARCHAR,source_record_id VARCHAR,"
+        "source_file VARCHAR,date VARCHAR,event_datetime TIMESTAMP,"
+        "timestamp_precision VARCHAR,code_system_raw VARCHAR,"
+        "code_system VARCHAR,code_raw VARCHAR,code VARCHAR)"
+    )
+    db.execute(
+        "INSERT INTO source_procedure VALUES "
+        "('p','history','proc-1','Procedure/procedure.csv','20240101',"
+        "'2024-01-01','date_only','CPT','CPT','94002','94002'),"
+        "('p','index','proc-2','Procedure/procedure.csv','20240201',"
+        "'2024-02-01','date_only','CPT','CPT','94002','94002')"
+    )
     return db
 
 
@@ -70,6 +86,7 @@ def _source() -> duckdb.DuckDBPyConnection:
     [
         ("dx-t2d", "diagnosis", ["dx-1", None]),
         ("lab-a1c", "lab", ["a1c-1", "a1c-2", None]),
+        ("proc", "procedure", ["proc-1", "proc-2", None]),
     ],
 )
 def test_history_preserves_cross_encounter_rows_and_absence(
@@ -99,7 +116,12 @@ def test_history_preserves_cross_encounter_rows_and_absence(
         assert rows[0].candidate.numeric_value == 6.6
         assert rows[1].candidate.raw_date == "20240201"
     else:
-        assert rows[0].candidate.source_file == "Diagnosis/diagnosis.csv"
+        expected_file = (
+            "Diagnosis/diagnosis.csv"
+            if domain == "diagnosis"
+            else "Procedure/procedure.csv"
+        )
+        assert rows[0].candidate.source_file == expected_file
         assert rows[0].candidate.numeric_value is None
 
 
@@ -111,7 +133,7 @@ def test_history_rejects_bad_domain_catalog_and_index_keys():
                     db,
                     index_relation="selected",
                     element_id="dx-t2d",
-                    domain="procedure",
+                    domain="medication",
                 )
             )
         with pytest.raises(ValueError, match="absent or ambiguous"):

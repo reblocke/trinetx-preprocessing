@@ -10,13 +10,15 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
-A read-only selected-patient diagnosis/lab history projection now preserves
+A read-only selected-patient diagnosis/lab/procedure history projection now preserves
 all catalog-matched raw rows across encounters and an explicit no-match marker.
 It requires an exact one-index-per-patient key relation and declared catalog
 domain, retaining dates, precision, codes, values, units and source-file
 provenance without T2D classification or a clinical negative. Synthetic
 cross-encounter and fail-closed tests pass; D-1 timing, terminology, capture
-and clinical policy remain downstream gates.
+and clinical policy remain downstream gates. The procedure domain is raw
+candidate evidence only; its narrow CPT concept is not the legacy NIV/IMV
+phenotype.
 The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
 all email sending. A new read-only candidate source projection keeps raw
 arterial values, units and linkage identifiers at the exact original
