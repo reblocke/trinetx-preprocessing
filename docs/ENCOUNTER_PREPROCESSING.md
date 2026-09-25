@@ -10,10 +10,12 @@ The owner approved a one-time authenticated import of the original 36 CSVs
 on 2026-09-20. Schema 2.0 separates that population authority from the canonical
 clinical evidence source. The original canonical compatibility projections did
 not reproduce accepted membership. The companion bypasses that mismatch; it
-does not explain or repair the canonical projections. The corrected private build,
-retained-reference comparison and artifact validator passed for both variants;
-final installed-pair and hosted gates remain required for the private acceptance
-receipt described in [NEXT_STEPS.md](../NEXT_STEPS.md).
+does not explain or repair the canonical projections. The corrected private
+build and retained-reference comparison are reported as passing for both
+variants in the prior handoff. The present private receipt and its exact artifact
+binding are not accessible from this checkout. For current public merge/CI
+status, per-gate boundaries and the supported existing-bundle/new-bundle
+workflows, see the [authoritative encounter release summary](ENCOUNTER_RELEASE.md).
 
 Install the locked environment and import the authenticated immutable snapshot
 once. The identity receipt supplies the exact accepted hashes for all 36 files:
@@ -99,7 +101,8 @@ under caffeinate and retain logs on the private output volume.
 The optional `--source-cache-dir` retains expensive source materializations in
 separate per-variant databases. Each completed stage and its receipt commit in
 one transaction. A retry checks source and base identities, catalog, configuration,
-producer code, table schemas and counts before reusing a stage. It rebuilds the
+producer code, table schemas, row counts and duplicate-preserving content
+fingerprints before reusing a stage. It rebuilds the
 derived evidence and publishes a new output bundle. Cache paths must be external,
 non-symlinked and disjoint from inputs and outputs. An older database without
 these bindings is rejected; its tables cannot be reused just because they exist.

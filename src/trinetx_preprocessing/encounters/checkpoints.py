@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 LOGGER = logging.getLogger(__name__)
+CACHE_FINGERPRINT_VERSION = "duckdb-json-multiset-v1"
 
 
 class StageCache:
@@ -65,8 +67,29 @@ class StageCache:
                     list(row[:2])
                     for row in self.connection.execute(f"DESCRIBE {quoted}").fetchall()
                 ],
+                "fingerprint_version": CACHE_FINGERPRINT_VERSION,
+                "content_sha256": self._content_fingerprint(quoted),
             }
         return result
+
+    def _content_fingerprint(self, quoted_table):
+        """Hash the sorted multiset of complete rows using bounded fetch batches.
+
+        DuckDB serializes each row as an ordered JSON object. Sorting the
+        serialized row strings supplies a canonical order; duplicate rows
+        are emitted repeatedly, so multiplicity is part of the digest. Dates,
+        nulls, strings and numeric values use DuckDB's logical JSON rendering.
+        """
+        cursor = self.connection.execute(
+            f"SELECT to_json(t) AS row_json FROM {quoted_table} AS t ORDER BY 1"
+        )
+        digest = hashlib.sha256(CACHE_FINGERPRINT_VERSION.encode() + b"\0")
+        while rows := cursor.fetchmany(2048):
+            for (row,) in rows:
+                encoded = row.encode("utf-8")
+                digest.update(len(encoded).to_bytes(8, "big"))
+                digest.update(encoded)
+        return digest.hexdigest()
 
     def run(self, stage, tables, operation):
         row = self.connection.execute(
@@ -74,8 +97,16 @@ class StageCache:
         ).fetchone()
         if row:
             receipt = json.loads(row[0])
+            if any(
+                details.get("fingerprint_version") != CACHE_FINGERPRINT_VERSION
+                or not details.get("content_sha256")
+                for details in receipt.get("tables", {}).values()
+            ):
+                raise ValueError(
+                    "Legacy encounter checkpoint needs verified adoption or rebuild"
+                )
             if receipt["tables"] != self._table_receipts(tables):
-                raise ValueError("Encounter checkpoint table integrity changed")
+                raise ValueError("Encounter checkpoint content integrity changed")
             LOGGER.info("Reusing completed encounter stage %s", stage)
             return receipt["result"]
         LOGGER.info("Starting encounter stage %s", stage)

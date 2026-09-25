@@ -41,9 +41,21 @@ def test_coverage_corroborates_keys_and_preserves_unavailable(
         """)
         if wrong_demographics:
             db.execute("UPDATE preprocessed.source_patient SET sex='M'")
-        report = coverage_tables(db)
+        report = coverage_tables(
+            db,
+            policy="permit_incomplete_linkage",
+            exception="synthetic missing linkage",
+        )
         assert report["pass"] != wrong_demographics
         assert report["rows"] == 2
+        assert report["policy"] == "permit_incomplete_linkage"
+        assert report["contradictions_pass"] != wrong_demographics
+        assert report["linkage_complete"] is False
+        assert report["patient_linked"] == 1
+        assert report["patient_unlinked"] == 1
+        assert report["encounter_linked"] == 1
+        assert report["encounter_unlinked"] == 1
+        assert report["patient_linked_proportion"] == 0.5
         assert report["encounter_linked"] == 1
         assert report["audited_source_domains"]["medications"] == [medication_export]
         assert (
@@ -76,6 +88,96 @@ def test_coverage_corroborates_keys_and_preserves_unavailable(
         )
 
 
+def test_complete_linkage_policy_fails_one_unlinked_composite_encounter():
+    with duckdb.connect() as db:
+        db.execute("""
+            ATTACH ':memory:' AS preprocessed;
+            CREATE TABLE legacy_base AS
+                SELECT 'p-e' pat_enc_hash,'p' patient_id,'e' encounter_id,
+                    0 sex,0 ethnicity,0 AS "location",0 race,23376 encounter_date
+                UNION ALL SELECT 'p-z','p','z',0,0,0,0,23376;
+            CREATE TABLE preprocessed.source_patient AS
+                SELECT 'p' patient_id,'F' sex,'White' race,
+                    'Not Hispanic or Latino' ethnicity,
+                    'South' patient_regional_location;
+            CREATE TABLE preprocessed.source_encounter AS
+                SELECT 'p' patient_id,'e' encounter_id,
+                    TIMESTAMP '2024-01-01' start_datetime,
+                TIMESTAMP '2024-01-05' end_datetime;
+            CREATE TABLE preprocessed.canonical_source_file_audit AS
+                SELECT 'labs' logical_domain;
+            CREATE TABLE preprocessed.patient_observability AS SELECT 'p' patient_id,
+                'labs' logical_domain,2 event_count,
+                TIMESTAMP '2022-01-01' first_event_datetime,
+                TIMESTAMP '2024-01-05' last_event_datetime;
+        """)
+        report = coverage_tables(db)
+        assert report["contradictions_pass"]
+        assert not report["linkage_complete"]
+        assert not report["pass"]
+
+
+def test_zero_encounter_source_never_passes_as_complete_or_corroborated():
+    with duckdb.connect() as db:
+        db.execute("""
+            ATTACH ':memory:' AS preprocessed;
+            CREATE TABLE legacy_base (pat_enc_hash VARCHAR,patient_id VARCHAR,
+                encounter_id VARCHAR,sex INT,race INT,ethnicity INT,
+                "location" INT,encounter_date INT);
+            CREATE TABLE preprocessed.source_patient (patient_id VARCHAR,sex VARCHAR,
+                race VARCHAR,ethnicity VARCHAR,patient_regional_location VARCHAR);
+            CREATE TABLE preprocessed.source_encounter (
+                patient_id VARCHAR,encounter_id VARCHAR,
+                start_datetime TIMESTAMP,end_datetime TIMESTAMP);
+            CREATE TABLE preprocessed.canonical_source_file_audit AS
+                SELECT 'labs' logical_domain;
+            CREATE TABLE preprocessed.patient_observability (patient_id VARCHAR,
+                logical_domain VARCHAR,event_count INT,
+                first_event_datetime TIMESTAMP,last_event_datetime TIMESTAMP);
+        """)
+        with pytest.raises(ValueError, match="documented exception"):
+            coverage_tables(db, policy="permit_incomplete_linkage")
+        report = coverage_tables(
+            db, policy="permit_incomplete_linkage", exception="synthetic zero source"
+        )
+        assert report["rows"] == 0
+        assert not report["pass"]
+        assert not report["linkage_complete"]
+        assert report["patient_linked_proportion"] is None
+
+
+def test_nonempty_legacy_population_with_zero_linked_source_fails_exception():
+    with duckdb.connect() as db:
+        db.execute("""
+            ATTACH ':memory:' AS preprocessed;
+            CREATE TABLE legacy_base AS SELECT 'p-e' pat_enc_hash,
+                'p' patient_id,'e' encounter_id,0 sex,0 race,0 ethnicity,
+                0 AS "location",23376 encounter_date;
+            CREATE TABLE preprocessed.source_patient (patient_id VARCHAR,
+                sex VARCHAR,race VARCHAR,ethnicity VARCHAR,
+                patient_regional_location VARCHAR);
+            CREATE TABLE preprocessed.source_encounter (patient_id VARCHAR,
+                encounter_id VARCHAR,start_datetime TIMESTAMP,
+                end_datetime TIMESTAMP);
+            CREATE TABLE preprocessed.canonical_source_file_audit AS
+                SELECT 'labs' logical_domain;
+            CREATE TABLE preprocessed.patient_observability (patient_id VARCHAR,
+                logical_domain VARCHAR,event_count INT,
+                first_event_datetime TIMESTAMP,last_event_datetime TIMESTAMP);
+        """)
+        report = coverage_tables(
+            db,
+            policy="permit_incomplete_linkage",
+            exception="synthetic source missing all keys",
+        )
+        assert report["rows"] == 1
+        assert report["patient_linked"] == 0
+        assert report["encounter_linked"] == 0
+        assert report["contradictions_pass"]
+        assert not report["linkage_complete"]
+        assert not report["pass"]
+
+
 def test_unrecognized_audit_domain_cannot_hide_observed_records():
     # Contradictory source metadata must fail even with an empty legacy base.
     with duckdb.connect() as db:
@@ -83,7 +185,7 @@ def test_unrecognized_audit_domain_cannot_hide_observed_records():
             ATTACH ':memory:' AS preprocessed;
             CREATE TABLE legacy_base (pat_enc_hash VARCHAR,patient_id VARCHAR,
                 encounter_id VARCHAR,sex INT,race INT,ethnicity INT,
-                location INT,encounter_date INT);
+                "location" INT,encounter_date INT);
             CREATE TABLE preprocessed.source_patient (patient_id VARCHAR,
                 sex VARCHAR,race VARCHAR,ethnicity VARCHAR,
                 patient_regional_location VARCHAR);
@@ -98,3 +200,21 @@ def test_unrecognized_audit_domain_cannot_hide_observed_records():
         """)
         with pytest.raises(ValueError, match="recognized audited domain"):
             coverage_tables(db)
+
+
+def test_cli_rejects_linkage_policy_outside_coverage_only(tmp_path):
+    from trinetx_preprocessing.encounters.cli import main
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "--compatibility-database",
+                str(tmp_path / "companion"),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--linkage-policy",
+                "permit_incomplete_linkage",
+                "--legacy-only",
+            ]
+        )
+    assert error.value.code == 2

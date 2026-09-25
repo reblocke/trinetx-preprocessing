@@ -17,7 +17,7 @@ encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
 
 ## State
-Implementation in isolated worktrees from verified merged source heads.
+The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The current checkout started clean at the upstream merge head; this ticket's edits are local and uncommitted.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -25,7 +25,23 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-All pre-enrichment gates passed. Both legacy variants match authenticated
+This ticket adds versioned per-table Parquet evidence contracts, independent
+feature-missingness and source-coverage reconciliations, explicit strict versus
+permitted-incomplete linkage policy, manifest-bound validation reports and
+receipt verification helpers, and deterministic duplicate-preserving content
+fingerprints for reusable stage tables. The follow-up fixes let the validator
+read older policy-free bundles without modifying them, recompute linkage and
+baseline eligibility from Parquet, and reject incomplete report/receipt
+identities. The full encounter suite passed 109 tests; the focused validation
+and coverage suite passed 62 tests. Ruff, `git diff --check`, and affected
+local Markdown link checks passed. Verification used the pinned uv environment
+with an external temporary cache and `uv run --offline --no-sync`. No
+encounter membership, retained value, timing rule, or evidence content changed.
+The earlier 24-test run with pytest scratch on RESEARCH FAST and 33-test focused
+rerun remain historical evidence for the preceding hardening pass; its task-owned
+scratch was removed. RESEARCH FAST is not currently mounted.
+
+The historical handoff reports that all pre-enrichment gates passed. Both legacy variants match authenticated
 references across the complete 33/534-field contracts, with zero membership and
 missingness differences. Canonical patient/composite-encounter linkage covers
 every encounter, with zero demographic or anchor-day disagreements. Corrected
@@ -39,14 +55,21 @@ and the wide output use bounded partitions without changing output semantics.
 The full retained-reference comparison passed exact membership and all 33/534
 field checks; the separate validator passed all bundle artifacts, schema, source
 coverage, inventories and manifest hashes. Peak whole-process RSS was measured
-at 7,404,158,976 bytes. The private acceptance receipt and linked PRs record
-the exact installed-pair, hosted-check and merge state separately.
+at 7,404,158,976 bytes. The prior continuity note reports a private acceptance
+receipt and exact installed-pair evidence, but the receipt was not found in a
+bounded search of currently accessible external volumes; its identity and
+current gate state remain UNCONFIRMED here. No new private data scan or build
+was run. Upstream PR14 and downstream PR15 are now verified merged with passing
+required CI, correcting the old active instructions below.
 Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For release, verify the final installed downstream pin, hosted checks and private
-acceptance bound to the source pair and producers. Merge UP14 before DOWN15.
+In the Mini private handoff, use the existing shared lock to
+revalidate the immutable accepted bundle, run downstream comparator and installed
+consumer readback, and verify the trusted receipt against exact manifest/report
+identities. Do not rebuild unless a concrete data-affecting discrepancy requires
+it. See [docs/ENCOUNTER_RELEASE.md](docs/ENCOUNTER_RELEASE.md).
 
 ## Open questions
 Canonical source validated: 837 catalog elements including 303 source concepts.

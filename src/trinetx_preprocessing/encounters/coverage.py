@@ -35,6 +35,8 @@ HISTORY_LIMITATION = (
     "Observation span does not establish continuous capture. All-history "
     "components use all records captured in the canonical export, not lifetime history."
 )
+COVERAGE_POLICY_VERSION = "1.0"
+COVERAGE_POLICIES = {"complete_linkage", "permit_incomplete_linkage"}
 
 
 def _case(column, mapping):
@@ -46,8 +48,12 @@ def _case(column, mapping):
     return f"CASE {column} {terms} ELSE NULL END"
 
 
-def coverage_tables(db):
+def coverage_tables(db, *, policy="complete_linkage", exception=None):
     """Cheap patient/composite-encounter checks; no clinical evidence expansion."""
+    if policy not in COVERAGE_POLICIES:
+        raise ValueError(f"Unsupported encounter coverage policy: {policy}")
+    if policy == "permit_incomplete_linkage" and not (exception and exception.strip()):
+        raise ValueError("Incomplete-linkage policy requires a documented exception")
     from .builder import literal
 
     expressions = [
@@ -91,15 +97,34 @@ def coverage_tables(db):
         )
         SELECT * FROM demographics JOIN encounters USING(pat_enc_hash)
     """)
-    corroboration = db.execute("""
+    linkage = db.execute("""
         SELECT count(*), count(*) FILTER(WHERE patient_linked),
           count(*) FILTER(WHERE patient_linked AND NOT demographics_agree),
           count(*) FILTER(WHERE encounter_linked),
-          count(*) FILTER(WHERE encounter_linked AND NOT anchor_in_encounter)
+          count(*) FILTER(WHERE encounter_linked AND NOT anchor_in_encounter),
+          count(*) FILTER(WHERE NOT patient_linked),
+          count(*) FILTER(WHERE NOT encounter_linked)
         FROM key_coverage
     """).fetchone()
-    # A mismatch remains a diagnosis gate, never an automatic source remapping.
-    passed = corroboration[1] > 0 and corroboration[2] == 0 and corroboration[4] == 0
+    (
+        total,
+        patient_linked,
+        demographic_disagreements,
+        encounter_linked,
+        anchor_disagreements,
+        patient_unlinked,
+        encounter_unlinked,
+    ) = linkage
+    # Contradiction checks are independent from linkage completeness.
+    contradictions_pass = demographic_disagreements == 0 and anchor_disagreements == 0
+    complete = total > 0 and patient_unlinked == 0 and encounter_unlinked == 0
+    permitted_incomplete = policy == "permit_incomplete_linkage" and total > 0
+    passed = (
+        contradictions_pass
+        and patient_linked > 0
+        and encounter_linked > 0
+        and (complete or permitted_incomplete)
+    )
     audited_domains = {
         row[0]
         for row in db.execute(
@@ -151,11 +176,23 @@ def coverage_tables(db):
     ).fetchall()
     return {
         "pass": passed,
-        "rows": corroboration[0],
-        "patient_linked": corroboration[1],
-        "demographic_disagreements": corroboration[2],
-        "encounter_linked": corroboration[3],
-        "anchor_disagreements": corroboration[4],
+        "policy": policy,
+        "policy_version": COVERAGE_POLICY_VERSION,
+        "exception": exception.strip() if exception else None,
+        "rows": total,
+        "patient_linked": patient_linked,
+        "patient_unlinked": patient_unlinked,
+        "patient_linked_proportion": patient_linked / total if total else None,
+        "encounter_linked": encounter_linked,
+        "encounter_unlinked": encounter_unlinked,
+        "encounter_linked_proportion": encounter_linked / total if total else None,
+        "demographic_disagreements": demographic_disagreements,
+        "anchor_disagreements": anchor_disagreements,
+        "contradictions_pass": contradictions_pass,
+        "linkage_complete": complete,
+        "empty_source_policy": (
+            "fail: zero encounter rows cannot establish linkage or corroboration"
+        ),
         "audited_source_domains": domain_sources,
         "history_states": [dict(domain=d, state=s, rows=n) for d, s, n in states],
         "limitation": HISTORY_LIMITATION,
@@ -164,7 +201,15 @@ def coverage_tables(db):
     }
 
 
-def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
+def build_coverage(
+    *,
+    database,
+    legacy_bundle,
+    legacy_acceptance,
+    output_dir,
+    policy="complete_linkage",
+    exception=None,
+):
     from .builder import VARIANTS, literal
 
     database = no_symlinks(database)
@@ -196,7 +241,7 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
                 "CREATE VIEW legacy_base AS "
                 f"SELECT * FROM read_parquet({literal(base)})"
             )
-            reports[variant] = coverage_tables(db)
+            reports[variant] = coverage_tables(db, policy=policy, exception=exception)
             target = output / f"{variant}_source_coverage.parquet"
             db.execute(
                 f"COPY encounter_source_coverage TO {literal(target)} "
@@ -212,6 +257,9 @@ def build_coverage(*, database, legacy_bundle, legacy_acceptance, output_dir):
         raise ValueError("Source changed during coverage validation")
     result = {
         "contract_version": FEATURE_CONTRACT_VERSION,
+        "policy": policy,
+        "policy_version": COVERAGE_POLICY_VERSION,
+        "exception": exception.strip() if exception else None,
         "audit_domain_mapping": AUDIT_DOMAINS,
         "pass": all(r["pass"] for r in reports.values()),
         "source": source_metadata,

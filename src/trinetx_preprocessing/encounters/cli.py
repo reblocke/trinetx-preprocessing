@@ -13,6 +13,19 @@ def main(argv=None):
     parser.add_argument("--compatibility-database", type=Path, required=True)
     parser.add_argument("--legacy-only", action="store_true")
     parser.add_argument("--coverage-only", action="store_true")
+    parser.add_argument(
+        "--linkage-policy",
+        choices=("complete_linkage", "permit_incomplete_linkage"),
+        default="complete_linkage",
+        help=(
+            "Explicit linkage acceptance policy for --coverage-only "
+            "(default: complete_linkage)"
+        ),
+    )
+    parser.add_argument(
+        "--linkage-exception",
+        help="Required rationale when --linkage-policy permits incomplete linkage",
+    )
     parser.add_argument("--coverage-bundle", type=Path)
     parser.add_argument("--legacy-bundle", type=Path)
     parser.add_argument("--legacy-acceptance", type=Path)
@@ -21,6 +34,10 @@ def main(argv=None):
     parser.add_argument("--source-cache-dir", type=Path)
     parser.add_argument("--vital-selection-acceptance", type=Path)
     args = parser.parse_args(argv)
+    if not args.coverage_only and (
+        args.linkage_policy != "complete_linkage" or args.linkage_exception
+    ):
+        parser.error("--linkage-policy and --linkage-exception require --coverage-only")
     if args.source_cache_dir and (args.legacy_only or args.coverage_only):
         parser.error("--source-cache-dir is only supported for enrichment")
     if args.vital_selection_acceptance and (args.legacy_only or args.coverage_only):
@@ -48,6 +65,8 @@ def main(argv=None):
             legacy_bundle=args.legacy_bundle,
             legacy_acceptance=args.legacy_acceptance,
             output_dir=args.output_dir,
+            policy=args.linkage_policy,
+            exception=args.linkage_exception,
         )
         return 0
     if args.coverage_bundle is None:
@@ -84,12 +103,43 @@ def import_main(argv=None):
 def validate_main(argv=None):
     import json
 
+    from ..combined_preprocessing.builder import require_safe_output_location
     from .validation import validate_bundle
 
     parser = argparse.ArgumentParser(prog="trinetx-preprocessing validate-encounters")
     for name in ("bundle", "work-dir", "report"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument(
+        "--linkage-policy",
+        choices=("complete_linkage", "permit_incomplete_linkage"),
+        help="Override the policy for a legacy bundle without policy metadata",
+    )
+    parser.add_argument(
+        "--linkage-exception",
+        help="Documented exception for an explicit incomplete-linkage policy",
+    )
     args = parser.parse_args(argv)
-    result = validate_bundle(bundle=args.bundle, work_dir=args.work_dir)
+    require_safe_output_location(
+        args.report, artifact_label="encounter validation report"
+    )
+    args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        result = validate_bundle(
+            bundle=args.bundle,
+            work_dir=args.work_dir,
+            linkage_policy=args.linkage_policy,
+            linkage_exception=args.linkage_exception,
+        )
+    except Exception as exc:
+        report = {
+            "pass": False,
+            "failure": {
+                "artifact": "encounter_bundle",
+                "invariant": "validation_contract",
+                "discrepancy": f"{type(exc).__name__}: {exc}",
+            },
+        }
+        args.report.write_text(json.dumps(report, indent=2) + "\n")
+        return 1
     args.report.write_text(json.dumps(result, indent=2) + "\n")
     return 0

@@ -11,7 +11,7 @@ historical 36 CSV files are generated compatibility projections of that product.
 Active Python work now includes encounter-level traditional and GLP-1 feature
 creation via `trinetx-preprocessing build-encounters`. See
 [the encounter interface](docs/ENCOUNTER_PREPROCESSING.md) and
-[current state](docs/CURRENT_STATE.md). Study selection, GLP-1 indications,
+[current release summary](docs/ENCOUNTER_RELEASE.md). Study selection, GLP-1 indications,
 propensity models, prevalence and figures live in trinetx-hypercapnia-code.
 The source-building and historical compatibility interfaces below remain available.
 

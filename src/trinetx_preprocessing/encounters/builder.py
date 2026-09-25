@@ -737,6 +737,23 @@ def build_encounters(
     if (
         not coverage.get("pass")
         or coverage.get("contract_version") != "1.0"
+        or coverage.get("policy_version") != "1.0"
+        or coverage.get("policy")
+        not in {"complete_linkage", "permit_incomplete_linkage"}
+        or (
+            coverage.get("policy") == "permit_incomplete_linkage"
+            and not (coverage.get("exception") or "").strip()
+        )
+        or not all(
+            report.get("pass")
+            and report.get("contradictions_pass")
+            and report.get("rows", 0) > 0
+            and (
+                report.get("linkage_complete")
+                or coverage.get("policy") == "permit_incomplete_linkage"
+            )
+            for report in coverage.get("variants", {}).values()
+        )
         or coverage.get("audit_domain_mapping")
         != {domain: list(names) for domain, names in AUDIT_DOMAINS.items()}
         or coverage.get("legacy_manifest_sha256") != sha256(base_manifest_path)
