@@ -59,8 +59,13 @@ uncertain link omitted from summaries.
 An initial pilot launcher was stopped before pilot output because an external
 helper named `profile.py` shadowed Python's standard module and started an
 unintended read-only aggregate query. Its evidence was preserved externally.
-The corrected runner is measuring one patient bucket in each variant under
-the shared lock; no completed pilot or private outcomes build is claimed yet.
+The corrected 32-partition resource pilot completed one entire patient bucket
+in each variant. Its external receipt passed source/parent identity,
+summary-key, artifact-hash, and free-space checks. The one full outcomes-only
+build for both variants is now running under the shared lock from the
+non-editable installed wheel. Its execution receipt records the frozen code
+and contract identities. Independent validation, post-build source byte
+comparison, and the external acceptance seal are still pending.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
@@ -102,11 +107,12 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, use the documented absence of transfer and discharge
-fields in source_encounter_flow and perform a resource pilot, then one locked
-private outcomes-only build with
-independent validation, byte-unchanged input proof, and an external acceptance
-seal. Recheck the exact source/parent identities before the private run.
+For return outcomes, monitor the live full build by its process and execution
+receipt. On terminal completion, independently validate the separate bundle,
+prove the accepted source and parent artifacts byte-unchanged, and write the
+external acceptance seal. Preserve any failed staging and diagnose before an
+explicit resume. Cross-ID continuations remain unconfirmed because the flow
+table has no transfer or discharge authority.
 
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed
