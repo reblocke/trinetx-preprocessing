@@ -123,6 +123,14 @@ scratch was empty after close, and the mode-0600 private receipt passed
 read-back. These are separate runs, so the elapsed times do not establish a
 speed improvement. The audit compares aggregate QA, not every projected row,
 and does not issue source acceptance or a patient-level denominator.
+An owner-only cross-repository aggregate coverage audit then compared the
+authenticated historical one-index-per-patient keys with the packaged
+type-hint key relation. Every historical exact index key was present in that
+candidate scope. The run completed in 1.43 minutes with stable canonical and
+historical input identities, empty scratch and mode-0600 receipt read-back.
+This verifies historical-key retention by the type hint; it does not compare
+new patient indexes, extra source patients, exclusions, gas eligibility or
+independent source acceptance.
 A separate owner-only fixed-category audit reconciled the conflicting-start
 total to that projection in 3.39 minutes, with stable source identity, empty
 scratch and a mode-0600 receipt read-back. Conflicts span one day through more

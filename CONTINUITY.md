@@ -75,6 +75,12 @@ run completed in 5.69 minutes and matched every aggregate QA field from the
 prior manual scoped projection. Stable source identity, mode-0600 receipt
 read-back and empty scratch passed. This is aggregate API parity only; source
 acceptance remains open.
+An owner-only cross-repository historical-key coverage audit completed in
+1.43 minutes using the packaged type-hint key relation and downstream
+aggregate reconciliation helper. Every authenticated historical exact index
+key was retained, with stable canonical/historical identities, empty scratch
+and mode-0600 receipt read-back. This does not accept extra source patients,
+new index selection, exclusions or clinical evidence.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

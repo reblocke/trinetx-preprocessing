@@ -111,6 +111,10 @@ An owner-only packaged-API full-source run completed in 5.69 minutes and
 matched every aggregate QA field from the prior manual scoped projection.
 Source identity, private receipt read-back and scratch cleanup passed. This
 is aggregate API parity, not full row parity or source acceptance.
+An owner-only cross-repository aggregate check found every authenticated
+historical exact index key in the packaged type-hint scope, with stable input
+identities and private receipt read-back. New patient/index membership,
+exclusions and clinical qualification remain unreconciled.
 An owner-only aggregate conflict-pattern follow-up reconciled exactly to the
 scoped projection with stable identity and private receipt read-back. The
 conflicts span multiple calendar-day ranges and often involve more than two
