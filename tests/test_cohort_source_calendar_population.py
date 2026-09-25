@@ -10,6 +10,7 @@ from trinetx_preprocessing.combined_preprocessing import (
 )
 
 build_calendar_candidate_fields = calendar_module.build_calendar_candidate_fields
+stage_calendar_type_hint_keys = calendar_module.stage_calendar_type_hint_keys
 
 
 def _source(connection):
@@ -169,3 +170,64 @@ def test_candidate_fields_reject_unsafe_output_name():
             build_calendar_candidate_fields(
                 connection, output_relation="source_encounter"
             )
+
+
+def test_type_hint_keys_retain_every_raw_row_for_selected_keys():
+    with duckdb.connect() as connection:
+        _source(connection)
+        connection.execute(
+            "INSERT INTO source_encounter VALUES "
+            "('p1','e1','2024-01-01','date_only','OUT')"
+        )
+        hint = stage_calendar_type_hint_keys(connection)
+        assert (hint.exact_candidate_keys, hint.valid_type_hint_source_rows) == (3, 6)
+        assert connection.execute(
+            "SELECT patient_id,encounter_id,type_hint_source_rows "
+            "FROM calendar_type_hint_keys ORDER BY patient_id,encounter_id"
+        ).fetchall() == [("p1", "e1", 2), ("p1", "e2", 2), ("p3", "e4", 2)]
+        connection.execute("ALTER TABLE source_encounter RENAME TO original_encounter")
+        connection.execute(
+            "CREATE TEMP VIEW source_encounter AS "
+            "SELECT e.* FROM original_encounter AS e "
+            "SEMI JOIN calendar_type_hint_keys AS k "
+            "ON e.patient_id=k.patient_id AND e.encounter_id=k.encounter_id"
+        )
+        fields = build_calendar_candidate_fields(connection)
+        assert (fields.source_encounter_rows, fields.exact_encounter_keys) == (7, 3)
+        assert fields.conflicting_type_keys == 2
+        assert connection.execute(
+            "SELECT encounter_source_rows,encounter_type,conflicting_types "
+            "FROM calendar_candidate_fields WHERE patient_id='p1' "
+            "AND encounter_id='e1'"
+        ).fetchone() == (3, None, True)
+
+
+def test_type_hint_keys_on_read_only_source_and_empty_input(tmp_path):
+    path = tmp_path / "source.duckdb"
+    with duckdb.connect(str(path)) as connection:
+        _source(connection)
+    with duckdb.connect(str(path), read_only=True) as connection:
+        assert stage_calendar_type_hint_keys(connection).exact_candidate_keys == 3
+    with duckdb.connect() as connection:
+        connection.execute(
+            "CREATE TABLE source_encounter(patient_id VARCHAR,encounter_id VARCHAR,"
+            "start_date VARCHAR,start_timestamp_precision VARCHAR,type VARCHAR)"
+        )
+        assert stage_calendar_type_hint_keys(connection).exact_candidate_keys == 0
+        assert connection.execute(
+            "SELECT count(*) FROM calendar_type_hint_keys"
+        ).fetchone() == (0,)
+
+
+def test_type_hint_keys_preserve_prior_output_on_failure():
+    with duckdb.connect() as connection:
+        _source(connection)
+        stage_calendar_type_hint_keys(connection)
+        connection.execute("DROP TABLE source_encounter")
+        with pytest.raises(duckdb.CatalogException):
+            stage_calendar_type_hint_keys(connection)
+        assert connection.execute(
+            "SELECT count(*) FROM calendar_type_hint_keys"
+        ).fetchone() == (3,)
+        with pytest.raises(ValueError, match="simple SQL identifier"):
+            stage_calendar_type_hint_keys(connection, output_relation="x;DROP TABLE y")

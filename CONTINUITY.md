@@ -52,6 +52,14 @@ encounter starts were parseable date-only values; a minority of raw rows had
 an in-scope type hint. Its approximate all-key estimate exceeded the raw row
 count and is only an engineering capacity hint. Test scoped candidate staging
 before full-source materialization; no cohort or source has been accepted.
+A candidate type-hint key staging helper now preserves exact hinted keys and
+requires rejoining all their source encounter rows before field consensus.
+Synthetic mixed-type and read-only checks pass. An owner-only full-source
+scoped projection completed in 5.13 minutes with reconciled exact hinted and
+projected keys, stable input identity, empty scratch and mode-0600 private
+receipt read-back. Duplicate rows and nonzero conflicting start dates were
+surfaced in the broader source population. Do not select an index from an
+unresolved start; no type, adult or context rule has been approved.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

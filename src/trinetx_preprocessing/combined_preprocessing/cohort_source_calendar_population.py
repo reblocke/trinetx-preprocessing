@@ -30,10 +30,52 @@ class CalendarCandidateFieldsAudit:
     conflicting_birth_year_keys: int
 
 
+@dataclass(frozen=True)
+class CalendarTypeHintKeysAudit:
+    exact_candidate_keys: int
+    valid_type_hint_source_rows: int
+
+
 def _quoted(value: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
         raise ValueError("Calendar candidate output needs a simple SQL identifier")
     return f'"{value}"'
+
+
+def stage_calendar_type_hint_keys(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    output_relation: str = "calendar_type_hint_keys",
+) -> CalendarTypeHintKeysAudit:
+    """Stage exact keys with any EMER/IMP row, without declaring eligibility.
+
+    The result is a narrow key relation; downstream staging must rejoin *all*
+    raw records for each key, including out-of-scope or conflicting type rows.
+    Invalid keys cannot enter the relation. This is a performance hint, not a
+    clinical encounter-type rule or a patient/index selection.
+    """
+    output = _quoted(output_relation)
+    if output_relation.casefold() in {"source_encounter", "source_patient"}:
+        raise ValueError("Type-hint key output must differ from source tables")
+    connection.execute("BEGIN TRANSACTION")
+    try:
+        connection.execute(
+            f"CREATE OR REPLACE TEMP TABLE {output} AS "
+            "SELECT patient_id,encounter_id,count(*) AS type_hint_source_rows "
+            "FROM source_encounter WHERE patient_id IS NOT NULL "
+            "AND encounter_id IS NOT NULL AND trim(patient_id)<>'' "
+            "AND trim(encounter_id)<>'' "
+            "AND upper(trim(type)) IN ('EMER','IMP') "
+            "GROUP BY patient_id,encounter_id"
+        )
+        keys, rows = connection.execute(
+            f"SELECT count(*),coalesce(sum(type_hint_source_rows),0) FROM {output}"
+        ).fetchone()
+        connection.execute("COMMIT")
+    except BaseException:
+        connection.execute("ROLLBACK")
+        raise
+    return CalendarTypeHintKeysAudit(int(keys), int(rows))
 
 
 def build_calendar_candidate_fields(

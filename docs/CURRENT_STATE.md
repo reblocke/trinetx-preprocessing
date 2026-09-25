@@ -93,6 +93,16 @@ when the corresponding source rows agree, with separate missing/conflict QA.
 Invalid source keys are counted, not silently incorporated. Synthetic
 read-only, duplicate, conflict, empty and rollback checks pass. It does not
 apply adult/type/context eligibility or select the study population.
+A separate type-hint helper stages exact keys with any raw `EMER` or `IMP`
+record. A scoped field projection rejoins all encounter rows for each hinted
+key, preserving conflicting type evidence. Synthetic mixed-type and read-only
+checks pass; the hint is a capacity tactic and no eligibility rule is approved.
+An owner-only full-source scoped projection completed in 5.13 minutes with
+reconciled exact hint/projected keys, stable source identity, empty scratch and
+private receipt read-back. It surfaced nonzero duplicate-record and conflicting
+start-date categories outside the historical patient scope. This remains
+engineering feasibility evidence; the unresolved starts need explicit handling
+before a new patient index can be selected.
 Owner-only aggregate checks on the historical patient scope found complete
 exact historical index-key presence and date/type/historical-age-proxy
 agreement at those keys, with age-18 boundary uncertainty still present.

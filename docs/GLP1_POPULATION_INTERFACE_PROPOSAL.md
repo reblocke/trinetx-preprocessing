@@ -89,6 +89,23 @@ age from birth year, apply context exclusions or choose an index. This makes
 source uncertainty visible before downstream study rules are applied.
 Synthetic read-only, ambiguity, empty-population and prior-output-preservation
 fixtures pass. The full private source and scope gates remain open.
+For a bounded full-source engineering path, `stage_calendar_type_hint_keys()`
+temporarily groups exact keys that have at least one raw `EMER` or `IMP` type
+hint. The caller must then rejoin **all** raw encounter rows for those keys
+before running the existing field projection, so an out-of-scope or conflicting
+type row at a hinted key cannot disappear. This stages potential keys only; it
+does not approve encounter eligibility, omit unresolved context evidence, or
+choose a patient index. Synthetic duplicate, mixed-type, empty and read-only
+checks pass. A private type-hinted projection audit remains an engineering
+feasibility gate, not independent source acceptance. An owner-only full-source
+scoped run completed in 5.13 minutes, including hint-key staging and the
+all-row field projection. Exact hint-key and projected-key counts reconciled;
+the projected source-row count retained the hinted rows. Stable input identity,
+empty scratch and mode-0600 receipt read-back passed. The projection exposed
+nonzero duplicate-source and conflicting-start categories across the broader
+source population. Those uncertain starts cannot silently become index dates.
+The audit produced no patient-level output and did not accept a cohort, context
+order or source policy.
 An owner-only aggregate audit used the historical patient IDs as a bounded
 scope for this projection. A separate exact-index read-back found every
 historical index key in that candidate source and agreement of observed
