@@ -1,13 +1,15 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Implement the owner-approved encounter preprocessing split: reusable traditional
-and GLP-1 data creation upstream, study analysis downstream, reference port preserved.
+Complete C0–C4 of Goal Readmissions.md under the owner-approved calendar-day
+v2 contract while preserving the established encounter and cohort-source behavior.
 
 ## Constraints/Assumptions
 Preserve FULL_DATA and AFTER_EXCLUSION membership, timing, repeated encounters,
-and measurement imputation. No propensity models upstream. Private outputs remain
-external. Execute on the Mac mini without changing drive state.
+and measurement imputation. Keep v1 as the default and all private outputs
+external. Do not rebuild the accepted parent or canonical source. Require exact
+parent validation, a resource pilot, one locked outcomes-only build, independent
+validation and unchanged input bytes before C4 acceptance.
 
 ## Key decisions
 Reuse accepted transformations; reconcile incompatible source projections before
@@ -15,9 +17,13 @@ another private build. Owner approved the one-time authenticated companion impor
 and targeted audit gates on 2026-09-20. See NEXT_STEPS.md. Publish two
 encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
+For returns, the owner accepted D1–D6 calendar-day decisions on 2026-09-25;
+the versioned rules are in docs/RETURN_CONTRACT.md. A source-catalog row does
+not establish clinical eligibility, and observed follow-up is not complete
+capture. Preserve unsupported timing and phenotypes as unknown.
 
 ## State
-The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The current checkout started clean at the upstream merge head; this ticket's edits are local and uncommitted.
+The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The active readmissions work is isolated on `codex/readmissions-20260924`; the corrected validator is committed at `b8cd53c`. The original checkout's unrelated changes remain untouched.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -29,7 +35,7 @@ function/class ASTs match their accepted originals. Reference port untouched.
 source/parent identities were reverified; C1 calendar-day v2 D1–D6 contract is
 frozen. Opt-in v2 build/validator code is implemented with the original v1
 default retained. The current code identity is
-`ba6ad8e4809a22ff2876a1490c2a84bef20f1fe0445f7fd46142afa611361dbe`.
+`e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
 On stable files, all 464 tests pass; Ruff, offline lock, noneditable wheel,
 installed source consumer, five legacy E2Es, v2 partition E2E and synthetic
 wrapper fresh/resume/partition/adversarial checks pass with external receipts.
@@ -37,10 +43,16 @@ The wrapper check stubs only the upstream parent/source boundary; it is not
 private C3/C4 acceptance. The initial parent v2 proof failed because raw dates
 use `YYYYMMDD`; the corrected proof then exposed a 4 GiB availability join
 memory failure. The unchanged exact join also failed at 8 GiB. A bounded,
-exact partitioned reconciliation with row-multiplicity checks is now under a
-fresh locked full parent validation. C4 pilot, full build, independent full
-return validation, immutable-byte comparison and seal remain pending. Preserve
-failed scratch/receipts and do not mark the goal DONE from public checks.
+exact partitioned reconciliation with row-multiplicity checks passed that
+stage, then exposed a validator false positive: the accepted producer stores
+NULL for element counts when an index has no element evidence, whereas the
+validator had coalesced that state to zero. A full-file corrected query found
+zero hba1c differences. A repeatable E2E now checks NULL, zero and positive
+counts and rejects changed values. The locked r4 full parent validation is
+running on this correction; its result is not yet known. C4 pilot, full build,
+independent full return validation, immutable-byte comparison and seal remain
+pending. Preserve failed scratch/receipts and do not mark the goal DONE from
+public checks.
 
 The owner provisionally accepted all D1–D6 recommendations and repair strategies
 on 2026-09-25, then requested parallel removal of low-signal tests, E2E-first
@@ -185,15 +197,14 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, review the calendar-day proposal and record approved
-scientific choices. Repair F1–F7, including a versioned proof for retained parent
-raw dates, real producer/validator and resume integration, and independent
-source/evidence/link completeness checks. Resolve trusted parent acceptance
-provenance and complete parent validation. Refresh C3 and installed runner
-identities, then establish bounded builder/validator resource readiness before
-one new locked full-build attempt. Preserve failed receipts/work. Full output
-validation, byte-unchanged source/parent proof and an external acceptance seal
-remain required. Cross-ID continuations remain unconfirmed because the flow
+For return outcomes, finish the locked r4 parent validation on code identity
+`e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
+If it passes, run the final-code 32-partition resource pilot on LOCKE STATION
+for both variants, seal the public C3 evidence to a clean commit, then run one
+locked full outcomes-only build and independent validator. Compare source and
+accepted-parent bytes before and after, retain external receipts, and update
+this ledger and acceptance docs. Diagnose any failure before retrying; do not
+weaken a gate. Cross-ID continuations remain unconfirmed because the flow
 table has no transfer or discharge authority.
 
 In the Mini private handoff, use the existing shared lock to

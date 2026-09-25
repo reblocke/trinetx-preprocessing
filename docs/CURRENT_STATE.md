@@ -34,6 +34,6 @@ implementation defects. The owner resumed C0–C4 on 2026-09-25 after the E2E-fi
 see [the testing review](testing_review.md). The accepted [calendar-day v2
 contract](RETURN_CONTRACT.md) governs the implemented opt-in v2 builder and
 validator. Its public and synthetic checks pass; full accepted-parent
-validation is running after an exact bounded-memory repair. C3 private proof
+validation is running after exact bounded-memory and producer-count repairs. C3 private proof
 and C4 remain gated by that result and a final-code resource pilot. Existing
 encounter products and cohort-source interfaces are preserved.

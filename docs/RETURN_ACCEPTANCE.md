@@ -9,18 +9,18 @@ The owner explicitly resumed the goal under the calendar-day v2 contract.
 Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
 
 The calendar-day v2 build and independent validator are implemented on code
-identity `ba6ad8e4809a22ff2876a1490c2a84bef20f1fe0445f7fd46142afa611361dbe`.
+identity `e74ef7d9a5f6930e9da1772c3cbff66315207ef41a85e0f8bc55c5eae5c37578`.
 The frozen suite passed 464 cases (238 existing performance warnings); Ruff
 check/format, `uv lock --check --offline`, `git diff --check`, noneditable wheel
 installation with matching code identity, and the installed old cohort-source
 consumer passed. The five legacy E2Es passed with a readback-verified manifest
-SHA-256 `068767fdfd9aa3aa197be3a6fec1bc55d65a1240743d96f483585a944c3cab9f`.
+SHA-256 `79d946dd22cd85c2c768c9d215756668fd16ec1a7665975752f4bf240cf52a80`.
 The v2 partition E2E passed hand-authored boundaries, independent reconciliation,
 adversarial corruption and one-versus-three partition equivalence; its receipt
-SHA-256 is `4c8c82a64137ff35ab475e884ef8d29839ad501d539829fc258a3c0f96d19e00`.
+SHA-256 is `2ac8f2bb7db198e739ed61c3ab3e0119f8f55d8e46ca539ff2abe6225ee613f0`.
 A separate synthetic wrapper check passed fresh/resumed/partitioned full-artifact
 multisets, output collision and wrong receipt checks; its receipt SHA-256 is
-`4096fcf49289be45b196ecf7f3ef17282ca6a749161810fc303d7377ee15e998`.
+`43153a3aa5035bd42789248696712f6944d77711f4a4a5b4b2a2d1de7d391bb9`.
 That check explicitly stubs upstream parent/source validation, so these passes
 do not close the real input boundary or C4 acceptance.
 
@@ -32,8 +32,16 @@ and failed at the 4 GiB DuckDB limit; the same unchanged query failed at 8 GiB
 in isolation. Both failed receipts and work remain external. The opt-in bounded
 path now partitions evidence by stable index ID, proves projected and joined
 row multiplicity, and sums exact distinct counts across disjoint partitions.
-Its synthetic positive and missing/duplicate coverage checks pass. A fresh
-locked full parent validation on that code is in progress; no pass is claimed.
+Its synthetic positive and missing/duplicate coverage checks pass. The next
+locked full parent validation found 1,389 FULL_DATA hba1c count differences;
+an exact aggregate showed every difference was a stored NULL on an index with
+no element evidence, versus the validator's expected zero. The accepted
+producer left-joins a summary only for indexes with element evidence, so NULL,
+zero, and positive counts have distinct meanings. The validator now checks
+those three states exactly; a full-file correction query found zero hba1c
+differences, and a repeatable synthetic E2E rejects all three count
+corruptions. A new locked full parent validation is in progress on this code;
+no full-parent pass is claimed.
 
 The historical accepted parent receipt was recovered from the documented
 external handoff. An external C0 receipt, SHA-256
