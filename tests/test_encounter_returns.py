@@ -514,11 +514,23 @@ def test_bundle_validation_resume_and_tampering(tmp_path, monkeypatch):
         work_dir=tmp_path / "verify",
     )
     assert report["variants"] == {"FULL_DATA": 2, "AFTER_EXCLUSION": 1}
+    manifest_path = output / "manifest.json"
+    original_manifest = manifest_path.read_bytes()
+    wrong_code = json.loads(original_manifest)
+    wrong_code["code_sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(wrong_code) + "\n")
+    with pytest.raises(ValueError, match="build code identity"):
+        return_validation.validate_returns(
+            bundle=output,
+            parent_bundle=parent,
+            database=source_file,
+            work_dir=tmp_path / "wrong-code-verify",
+        )
+    manifest_path.write_bytes(original_manifest)
     # Rehash a link alteration that is excluded from all confirmed-return
     # summaries. The validator must still detect its disagreement with evidence.
     link_path = output / "full_data_0000_links.parquet"
     link_bytes = link_path.read_bytes()
-    manifest_path = output / "manifest.json"
     manifest_bytes = manifest_path.read_bytes()
     progress_path = output / "progress.json"
     progress_bytes = progress_path.read_bytes()

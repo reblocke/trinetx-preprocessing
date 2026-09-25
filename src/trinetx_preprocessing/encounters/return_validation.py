@@ -10,7 +10,7 @@ import duckdb
 from ..combined_preprocessing.builder import require_safe_output_location
 from ..combined_preprocessing.cohort_source import validate_cohort_source
 from ..combined_preprocessing.database import COMBINED_MANIFEST_FILENAME
-from .builder import VARIANTS, literal, sha256
+from .builder import VARIANTS, code_identity, literal, sha256
 from .compatibility import file_identity, no_symlinks
 from .returns import CRITERIA, HORIZONS, KINDS, RETURN_CONTRACT_VERSION
 from .validation import validate_bundle
@@ -312,6 +312,8 @@ def validate_returns(
         or manifest.get("horizons_days") != list(HORIZONS)
     ):
         raise ValueError("Return manifest contract differs")
+    if manifest.get("code_sha256") != code_identity():
+        raise ValueError("Return build code identity differs")
     partitions = manifest.get("partitions")
     if not isinstance(partitions, int) or not 1 <= partitions <= 1024:
         raise ValueError("Return partition count is invalid")
