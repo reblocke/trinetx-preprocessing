@@ -204,6 +204,9 @@ def _create_links(db: duckdb.DuckDBPyConnection) -> None:
                       THEN 'conflicting_return_start'
                     WHEN e.start_precision NOT IN ('date_only','timestamp')
                       THEN 'unknown_return_precision'
+                    WHEN e.episode_end IS NOT NULL
+                      AND e.episode_end < e.episode_start
+                      THEN 'invalid_return_episode_order'
                     WHEN e.episode_start::DATE = i.episode_end::DATE
                       AND (e.start_precision='date_only' OR i.end_precision='date_only')
                       THEN 'same_day_uncertain'
@@ -322,6 +325,7 @@ def _create_evidence(db: duckdb.DuckDBPyConnection) -> None:
                     WHEN raw_value IS NULL OR NOT isfinite(raw_value)
                       OR raw_value <= 0 THEN 'invalid_value'
                     WHEN value_mmhg IS NULL THEN 'unsupported_unit'
+                    WHEN NOT isfinite(value_mmhg) THEN 'invalid_converted_value'
                     ELSE NULL END AS rejection_reason
         FROM qualified
         """
@@ -410,6 +414,9 @@ def _summary_query() -> str:
         "l.temporal_state='missing_return_start') AS undated_return_count",
         "count(l.return_episode_id) FILTER (WHERE "
         "l.temporal_state='derived_return_start') AS derived_return_start_count",
+        "count(l.return_episode_id) FILTER (WHERE "
+        "l.temporal_state='invalid_return_episode_order') "
+        "AS invalid_return_episode_order_count",
     ]
     kind_predicates = {
         "inpatient": "l.has_inpatient",

@@ -322,6 +322,33 @@ def test_crossing_episode_is_retained_as_overlap_uncertainty(tmp_path):
     assert summary == (1, 2)
 
 
+def test_reversed_return_dates_cannot_be_confirmed(tmp_path):
+    with duckdb.connect() as db:
+        _source(db)
+        db.execute(
+            "INSERT INTO preprocessed.source_encounter VALUES "
+            "('p','reversed','sb','f',9,'s','EMER','2024-01-12',"
+            "'2024-01-11','date_only','date_only','',NULL)"
+        )
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+    with duckdb.connect() as read:
+        link = read.execute(
+            "SELECT temporal_state FROM read_parquet(?) "
+            "WHERE index_encounter_id='i' AND encounter_id='reversed'",
+            [str(tmp_path / "full_data_0000_links.parquet")],
+        ).fetchone()
+        count = read.execute(
+            "SELECT invalid_return_episode_order_count, "
+            "outcome_acute_union_all_cause_30d_count "
+            "FROM read_parquet(?) WHERE encounter_id='i'",
+            [str(tmp_path / "full_data_0000_summary.parquet")],
+        ).fetchone()
+    assert link == ("invalid_return_episode_order",)
+    assert count == (1, 2)
+
+
 def test_missing_canonical_icd_rule_blocks_build(tmp_path):
     source_file = tmp_path / "source.duckdb"
     with duckdb.connect() as db:
@@ -329,6 +356,30 @@ def test_missing_canonical_icd_rule_blocks_build(tmp_path):
         db.execute("DELETE FROM preprocessed.element_rule WHERE code='J96.02'")
     with pytest.raises(ValueError, match="J96.02"):
         returns._require_source_capabilities(source_file)
+
+
+def test_gas_conversion_overflow_is_rejected(tmp_path):
+    with duckdb.connect() as db:
+        _source(db)
+        db.execute(
+            "INSERT INTO preprocessed.source_lab_measurement VALUES "
+            "('p','r1','overflow','f',10,'s','LOINC','2019-8',"
+            "'2024-01-05','date_only','arterial','','',1e308,'kPa')"
+        )
+        db.execute(
+            "INSERT INTO preprocessed.element_membership VALUES "
+            "('overflow','source.arterial_pco2',true)"
+        )
+        _build_partition(
+            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
+        )
+    with duckdb.connect() as read:
+        row = read.execute(
+            "SELECT rejection_reason,isfinite(value_mmhg) "
+            "FROM read_parquet(?) WHERE source_record_id='overflow'",
+            [str(tmp_path / "full_data_0000_gas_evidence.parquet")],
+        ).fetchone()
+    assert row == ("invalid_converted_value", False)
 
 
 def test_wildcard_exact_icd_rule_retains_required_code(tmp_path):

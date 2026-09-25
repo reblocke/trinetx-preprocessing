@@ -169,6 +169,9 @@ def _link_geometry_reconciliation_query() -> str:
         "THEN 'conflicting_return_start' "
         "WHEN e.start_precision NOT IN ('date_only','timestamp') "
         "THEN 'unknown_return_precision' "
+        "WHEN e.episode_end IS NOT NULL "
+        "AND e.episode_end<e.episode_start "
+        "THEN 'invalid_return_episode_order' "
         "WHEN e.episode_start::DATE=s.index_episode_end::DATE "
         "AND (e.start_precision='date_only' "
         "OR s.index_end_precision='date_only') "
@@ -522,13 +525,17 @@ def validate_returns(
                 "count(*) FILTER (WHERE temporal_state='missing_return_start') "
                 "AS undated, "
                 "count(*) FILTER (WHERE temporal_state='derived_return_start') "
-                "AS derived_start FROM links GROUP BY 1) "
+                "AS derived_start, "
+                "count(*) FILTER (WHERE "
+                "temporal_state='invalid_return_episode_order') "
+                "AS invalid_order FROM links GROUP BY 1) "
                 "SELECT count(*) FROM summary s LEFT JOIN states t "
                 "ON s.index_event_id=t.index_event_id WHERE "
                 "s.same_day_uncertain_count<>coalesce(t.same_day,0) OR "
                 "s.overlap_or_prior_count<>coalesce(t.overlap,0) OR "
                 "s.undated_return_count<>coalesce(t.undated,0) OR "
-                "s.derived_return_start_count<>coalesce(t.derived_start,0)",
+                "s.derived_return_start_count<>coalesce(t.derived_start,0) OR "
+                "s.invalid_return_episode_order_count<>coalesce(t.invalid_order,0)",
                 f"{variant} temporal uncertainty",
             )
             for days in HORIZONS:

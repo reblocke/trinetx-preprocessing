@@ -44,9 +44,10 @@ observed events often precede the 365-day horizon. The aggregate receipt is
 external; it does not establish continuous follow-up or complete capture.
 The canonical database's full byte SHA-256 baseline was recorded externally
 before any outcomes pilot or build, with unchanged source/parent manifest
-identities. Fourteen focused return tests pass on the current code. The full
-suite passed 516 tests on the immediately preceding validator revision; a
-final full run remains due after the episode/source mapping check. Ruff, lock,
+identities. Sixteen focused return tests pass on the current code. The full
+suite passed 516 tests on a preceding validator revision. A later run passed
+517 tests but its pipeline rerun rejected a code-state change made during that
+same test process; a final full run remains due after freezing the code. Ruff, lock,
 non-editable wheel, and installed CLI/legacy-consumer smokes passed on earlier
 revisions and must be rerun as applicable before acceptance. An earlier full run had one intermittent
 combined compatibility-export worker failure; that test passed in isolation
@@ -55,6 +56,11 @@ resource pilot or C4 acceptance seal. The return validator now independently
 recomputes episode/source mapping, link times and categories, link flags from
 diagnosis/gas evidence, and summaries; synthetic tampering checks include an
 uncertain link omitted from summaries.
+An initial pilot launcher was stopped before pilot output because an external
+helper named `profile.py` shadowed Python's standard module and started an
+unintended read-only aggregate query. Its evidence was preserved externally.
+The corrected runner is measuring one patient bucket in each variant under
+the shared lock; no completed pilot or private outcomes build is claimed yet.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus

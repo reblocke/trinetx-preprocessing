@@ -37,7 +37,9 @@ within-day ordering. Date-only values are calendar-day observations: a
 same-day distinct-ID event has uncertain order and is not a confirmed return.
 Confirmed returns start in `(index end, index end + N days]`, for N = 30, 90,
 and 365 by default. A return with a missing start is undated evidence and
-cannot enter a window. End dates and linked diagnosis/lab dates are not filled.
+cannot enter a window. A return with an end before its start is retained as
+invalid-order evidence and cannot enter a confirmed-return window. End dates
+and linked diagnosis/lab dates are not filled.
 
 An inpatient episode after an inpatient index is a readmission. After an
 ED-only index it is an admission. ED-only returns, any ED presentation, and
@@ -56,8 +58,9 @@ remain in evidence.
 
 Gas evidence uses return-episode source rows in the arterial or venous PCO2
 catalog sets. A contradictory specimen, missing/nonpositive/nonfinite numeric
-value, unsupported unit, missing date, or out-of-episode date is rejected with
-a reason. Accepted `mmHg`, `mm Hg`, `mm_hg`, `mm[Hg]`, and `Torr` are unchanged;
+or converted value, unsupported unit, missing date, or out-of-episode date is
+rejected with a reason. Accepted `mmHg`, `mm Hg`, `mm_hg`, `mm[Hg]`, and `Torr`
+are unchanged;
 `kPa` is multiplied by 7.5006168270417. Unspecified-blood PCO2 is retained
 but cannot establish ABG or VBG. Any usable measurement in the episode can
 establish a threshold. ABG and VBG each have separate `>45`, `>50`, `>=45`,
