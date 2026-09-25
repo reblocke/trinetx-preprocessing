@@ -70,3 +70,19 @@ but not that element, and positive for matching rows. A validator must preserve
 that three-way distinction; coalescing the no-evidence NULL to zero can create
 a false parent-bundle failure. The synthetic proof needs all three cases and
 must still reject a genuinely changed count.
+
+## V2 builder memory boundary
+
+The first final-code private bucket reached the v2 FULL_DATA summary write and
+failed at the builder's 1 GiB DuckDB cap. Five partition files were left in the
+failed external pilot directory; no summary, independent validation result, or
+passing pilot receipt exists. Before changing the builder connection, preserve
+these failure modes: a v1 caller could silently receive a larger cap; the v2
+key-collision check and partition builder could use different caps; a resumed
+build could reuse a part from different code or memory configuration; a failed
+summary could be mistaken for a complete part; the larger cap could exceed
+physical memory or external free-space limits; and a memory increase could hide
+an incorrect output. The next pilot must run both variants in a new external
+directory, measure process memory and free space, independently reconcile all
+six tables and exact keys, and verify source, parent, code and artifact hashes.
+The original v1 default and public old-consumer behavior must stay unchanged.

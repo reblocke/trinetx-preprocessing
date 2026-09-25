@@ -23,6 +23,8 @@ RETURN_CONTRACT_VERSION = "1.0"
 DAY_RETURN_CONTRACT_VERSION = "2.0"
 RETURN_PARENT_VALIDATION_MEMORY_MIB = 4096
 RETURN_PARENT_VALIDATION_DISTINCT_PARTITIONS = 32
+RETURN_BUILDER_MEMORY_MIB = 1024
+DAY_RETURN_BUILDER_MEMORY_MIB = 4096
 HORIZONS = (30, 90, 365)
 KINDS = ("inpatient", "ed_only", "any_ed", "acute_union")
 CRITERIA = (
@@ -82,10 +84,12 @@ def _write_table(db: duckdb.DuckDBPyConnection, query: str, path: Path) -> None:
     db.execute(f"COPY ({query}) TO {literal(path)} (FORMAT PARQUET, COMPRESSION ZSTD)")
 
 
-def _prepare_connection(work_dir: Path) -> duckdb.DuckDBPyConnection:
+def _prepare_connection(
+    work_dir: Path, *, memory_limit_mib: int = RETURN_BUILDER_MEMORY_MIB
+) -> duckdb.DuckDBPyConnection:
     db = duckdb.connect()
     db.execute("SET threads=1")
-    db.execute("SET memory_limit='1024MiB'")
+    db.execute(f"SET memory_limit='{memory_limit_mib}MiB'")
     spill = work_dir / "spill"
     spill.mkdir(mode=0o700, parents=True, exist_ok=True)
     db.execute("SET temp_directory=?", [str(spill)])
@@ -631,7 +635,14 @@ def build_returns(
     if parent_manifest.get("source_manifest_sha256") != sha256(source_sidecar):
         raise ValueError("Parent and canonical source identities differ")
     work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with _prepare_connection(work_dir) as keycheck:
+    builder_memory_limit_mib = (
+        DAY_RETURN_BUILDER_MEMORY_MIB
+        if contract_version == DAY_RETURN_CONTRACT_VERSION
+        else RETURN_BUILDER_MEMORY_MIB
+    )
+    with _prepare_connection(
+        work_dir, memory_limit_mib=builder_memory_limit_mib
+    ) as keycheck:
         for variant in VARIANTS:
             index_file = parent_bundle / f"encounter_features_{variant.lower()}.parquet"
             collisions = keycheck.execute(
@@ -666,7 +677,7 @@ def build_returns(
         staging.mkdir(mode=0o700)
         progress = {"identity": identity, "completed": {}}
         progress_path.write_text(json.dumps(progress, indent=2) + "\n")
-    db = _prepare_connection(work_dir)
+    db = _prepare_connection(work_dir, memory_limit_mib=builder_memory_limit_mib)
     try:
         db.execute(f"ATTACH {literal(database)} AS preprocessed (READ_ONLY)")
         for variant in VARIANTS:
