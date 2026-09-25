@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import duckdb
 
+_REQUIRED_GAS_ELEMENTS = frozenset({"source.arterial_pco2", "source.arterial_ph"})
+
 
 @dataclass(frozen=True)
 class PrecisionCapture:
@@ -108,6 +110,17 @@ def audit_candidate_source_capabilities(
     whether fields were present in the source files; null canonical columns
     cannot be interpreted as observed negatives or open medication orders.
     """
+    available = {
+        element_id
+        for (element_id,) in connection.execute(
+            "SELECT element_id FROM element_catalog "
+            "WHERE element_id IN ('source.arterial_pco2','source.arterial_ph')"
+        ).fetchall()
+    }
+    if available != _REQUIRED_GAS_ELEMENTS:
+        raise ValueError(
+            "Candidate source lacks required arterial gas catalog elements"
+        )
     precision = (
         _precision(
             connection,

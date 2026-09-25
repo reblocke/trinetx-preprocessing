@@ -3,12 +3,18 @@
 from dataclasses import asdict
 
 import duckdb
+import pytest
 
 from trinetx_preprocessing.combined_preprocessing import cohort_source_capability_audit
 
 
 def _source() -> duckdb.DuckDBPyConnection:
     connection = duckdb.connect()
+    connection.execute("CREATE TABLE element_catalog(element_id VARCHAR)")
+    connection.execute(
+        "INSERT INTO element_catalog VALUES "
+        "('source.arterial_pco2'),('source.arterial_ph')"
+    )
     connection.execute(
         "CREATE TABLE source_encounter("
         "start_timestamp_precision VARCHAR,start_datetime TIMESTAMP)"
@@ -125,3 +131,14 @@ def test_empty_candidate_has_zero_capability_without_imputing_capture():
     assert result.arterial_ph_candidates.source_rows == 0
     assert result.medication_fields.rows_with_end_date == 0
     assert {item.source_files for item in result.raw_headers} == {0}
+
+
+def test_missing_arterial_catalog_element_is_not_a_zero_candidate_result():
+    with _source() as connection:
+        connection.execute(
+            "DELETE FROM element_catalog WHERE element_id='source.arterial_ph'"
+        )
+        with pytest.raises(ValueError, match="required arterial gas catalog elements"):
+            cohort_source_capability_audit.audit_candidate_source_capabilities(
+                connection
+            )

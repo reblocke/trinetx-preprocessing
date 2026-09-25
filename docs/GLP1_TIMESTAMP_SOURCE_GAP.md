@@ -68,6 +68,8 @@ establish clinical arterial provenance, index linkage, first-gas order, or pH
 pairing. The audit also counts populated medication end and
 status fields and how many raw encounter, lab and medication files contain
 those column names. A parsed midnight date remains date-only under this audit.
+The screen fails if either required arterial catalog element is absent, so an
+unsearched element cannot appear as zero observed candidates.
 These are aggregate source-capability diagnostics, not a gas-specific
 first-24-hour validation or an acceptance receipt. A new source still needs
 the index-specific arterial gas and pH, time-zone, shift and provenance checks

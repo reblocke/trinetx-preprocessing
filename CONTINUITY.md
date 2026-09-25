@@ -161,6 +161,8 @@ The validated canonical-source capability audit now also separates included
 catalog-matched arterial PaCO2 and pH candidate precision from all labs. It
 counts each source record once even if membership has duplicate rows and does
 not establish arterial provenance, index linkage or first-gas/pH pairing.
+The audit fails closed if either arterial catalog element is absent; zero
+observed candidates now means the catalog element was available to search.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the
