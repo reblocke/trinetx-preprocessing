@@ -36,6 +36,12 @@ six affected artifacts and the exact parent/code identities. No return bundle,
 independent return validation, post-build byte comparison, or acceptance seal
 exists.
 
+A separate read-only aggregate audit of those artifacts found that their
+producer-defined raw date fields (`date` or `start_date`) are present,
+parseable as date-only values, and agree with the parsed event calendar dates;
+the parsed events have no time of day. Its private receipts remain external.
+This evidence does not add the missing field or authorize a new schema rule.
+
 An owner-approved schema-version decision is required: either supply a newly
 accepted parent bundle with the required field, or authorize a versioned
 validation rule for the existing bundle that proves equivalent precision from

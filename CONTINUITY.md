@@ -86,6 +86,10 @@ required columns were present in the schema audit. The producer retains raw
 precision field. No full return product or seal exists. This is BLOCKED on an
 explicit owner schema-version decision; do not waive the validator or rebuild
 the accepted parent under this ticket.
+A separate external aggregate audit found all six producer-defined raw date
+fields parse as date-only values, with no raw-versus-event calendar-date
+mismatch or parsed time of day. This supports review of a versioned
+compatibility proof but does not satisfy the missing schema field.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
