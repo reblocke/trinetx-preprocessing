@@ -74,8 +74,15 @@ and offline lock check. New full-suite and installed-wheel verification remain d
 A separate 4 GiB parent preflight also failed at the same exact distinct
 aggregation. The opt-in validator now writes two complete, hash-partitioned
 scratch projections and sums exact per-partition distinct counts; default
-encounter validation remains unchanged. Synthetic equivalence tests pass;
-private parent validation must still prove this repair at full scale.
+encounter validation remains unchanged. Seventy-one affected tests pass.
+The locked full-scale bounded preflight passed that memory stage, then found
+the accepted schema 2.0 parent bundle lacks `event_datetime_precision` in
+diagnosis, procedure, and medication evidence for both variants. All other
+required columns were present in the schema audit. The producer retains raw
+`date` and `event_datetime` in those tables but does not emit the required
+precision field. No full return product or seal exists. This is BLOCKED on an
+explicit owner schema-version decision; do not waive the validator or rebuild
+the accepted parent under this ticket.
 
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
@@ -117,16 +124,16 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, complete the public checks and separate locked parent
-validator preflight with bounded exact distinct counts at 4 GiB. If it passes,
-freeze the new code identity and
-make an explicit full-build retry with new external output/work locations while
-preserving the failed attempt. On terminal completion, independently validate
-the separate bundle,
-prove the accepted source and parent artifacts byte-unchanged, and write the
-external acceptance seal. Preserve any failed staging and diagnose before an
-explicit resume. Cross-ID continuations remain unconfirmed because the flow
-table has no transfer or discharge authority.
+For return outcomes, obtain an explicit schema-version decision for the
+accepted parent evidence gap. A new accepted parent bundle with explicit
+precision, or an approved versioned rule proving equivalent precision from
+retained source fields, must then pass the complete parent validator. Only
+after that gate and refreshed C3 checks may a new external full-build attempt
+run; preserve all failed receipts and work. On terminal completion,
+independently validate the separate bundle, prove accepted source/parent
+artifacts byte-unchanged, and write the external acceptance seal. Cross-ID
+continuations remain unconfirmed because the flow table has no transfer or
+discharge authority.
 
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed

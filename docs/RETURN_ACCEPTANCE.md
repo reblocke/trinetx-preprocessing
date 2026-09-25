@@ -1,6 +1,6 @@
 # Return outcomes acceptance
 
-Status: **C4 parent-validation resource diagnosis; acceptance pending**. This page tracks private acceptance for
+Status: **BLOCKED at C4: accepted parent schema decision required**. This page tracks private acceptance for
 the opt-in v1 return bundle. The rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
 
 The isolated review branch is `codex/readmissions-20260924`. C0–C3 public
@@ -27,9 +27,22 @@ A separate 4 GiB preflight still ran out of memory at the same exact distinct
 count. The opt-in path now partitions that count by stable key hash and sums
 exact per-partition counts; it also verifies that each scratch projection
 preserves every evidence row. The old validator path remains the default.
-A new locked parent-validation preflight must pass before an explicit full
-build retry. Independent return validation, post-build
-byte comparison, and the external acceptance seal remain pending.
+A locked full-scale preflight passed the memory-intensive exact-count stage,
+then stopped because the accepted schema 2.0 parent bundle lacks the required
+`event_datetime_precision` column in diagnosis, procedure, and medication
+component evidence for both variants. The producer retains raw `date` and
+`event_datetime` but does not write that explicit precision field for those
+tables. The current validator requires it, and the accepted bundle cannot be
+rebuilt or modified under this request. The external schema audit records all
+six affected artifacts and the exact parent/code identities. No return bundle,
+independent return validation, post-build byte comparison, or acceptance seal
+exists.
+
+An owner-approved schema-version decision is required: either supply a newly
+accepted parent bundle with the required field, or authorize a versioned
+validation rule for the existing bundle that proves equivalent precision from
+its retained source fields. Until that decision and its tests/private gate
+pass, do not bypass the parent validator or retry the outcomes build.
 
 The equivalent public command shape is:
 
