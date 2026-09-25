@@ -17,24 +17,10 @@ from trinetx_preprocessing.config import (
     StorageConfig,
 )
 from trinetx_preprocessing.profiling import (
-    StageTimer,
     current_git_code_dirty,
     current_git_code_state_sha256,
     write_provenance,
 )
-
-
-def test_stage_timer_records_elapsed() -> None:
-    times = iter([1.0, 2.25])
-
-    def time_fn() -> float:
-        return next(times)
-
-    timings: dict[str, float] = {}
-    with StageTimer("demo", timings=timings, time_fn=time_fn):
-        pass
-
-    assert timings["demo"] == pytest.approx(1.25)
 
 
 def test_code_state_hash_falls_back_without_git(

@@ -192,36 +192,6 @@ def test_duplicate_return_link_rejected(tmp_path):
         db.close()
 
 
-def test_link_evidence_reconciliation_detects_unreported_tampering(tmp_path):
-    db = duckdb.connect()
-    try:
-        _source(db)
-        _build_partition(
-            db, variant="FULL_DATA", bucket=0, partitions=1, output=tmp_path
-        )
-        for table in ("links", "diagnosis_evidence", "gas_evidence"):
-            path = tmp_path / f"full_data_0000_{table}.parquet"
-            db.execute(
-                f"CREATE VIEW {table} AS SELECT * FROM "
-                f"read_parquet({returns.literal(path)})"
-            )
-        query = return_validation._link_evidence_reconciliation_query()
-        assert db.execute(query).fetchone()[0] == 0
-        # The same-day uncertain link is absent from every confirmed-return
-        # summary, so summary-only reconciliation would miss this alteration.
-        db.execute(
-            "CREATE OR REPLACE VIEW links AS SELECT * REPLACE "
-            "(CASE WHEN temporal_state='same_day_uncertain' "
-            "THEN true ELSE abg_gt50 END AS abg_gt50) "
-            "FROM read_parquet("
-            + returns.literal(tmp_path / "full_data_0000_links.parquet")
-            + ")",
-        )
-        assert db.execute(query).fetchone()[0] == 1
-    finally:
-        db.close()
-
-
 def test_link_geometry_reconciliation_detects_changed_return_time(tmp_path):
     with duckdb.connect() as db:
         _source(db)

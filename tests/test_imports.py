@@ -5,14 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-import trinetx_preprocessing
-
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-
-
-def test_package_imports() -> None:
-    assert trinetx_preprocessing.__version__
 
 
 def test_module_help() -> None:

@@ -1,6 +1,6 @@
 # Proposed return outcomes contract — calendar-day v2
 
-**DRAFT FOR OWNER REVIEW.** This proposal follows the
+**PROVISIONALLY ACCEPTED; IMPLEMENTATION NOT RESUMED.** This proposal follows the
 [2026-09-25 code audit](RETURN_AUDIT.md). It has not replaced the executable v1
 contract. The existing authorization for C4 remains conditional on passing its
 gates. Proposed scientific choices below should be recorded in `DECISIONS.md`
@@ -14,7 +14,8 @@ choices remain distinct from the engineering compatibility repair.
 The [decision package](RETURN_DECISION_PACKAGE.md) surfaces six owner choices,
 recommended policies, alternatives, defect repairs and checkpoint exit gates.
 Its examples clarify day-zero versus unresolved window membership and mixed
-tested/untested returns. All choices remain proposals until accepted.
+tested/untested returns. The owner provisionally accepted D1–D6 on 2026-09-25
+and requested the testing cleanup before explicitly resuming the goal.
 
 ## 1. Population and source boundaries
 

@@ -48,26 +48,6 @@ def _config(tmp_path: Path) -> Config:
     )
 
 
-def test_work_manifest_records_and_requires_completed_stages(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-    path = initialize_work_manifest(config)
-    output = config.work_dir / "encounter_NEW_0001.parquet"
-    pd.DataFrame({"encounter_id": ["E1"]}).to_parquet(output, index=False)
-
-    mark_stage_complete(config, "encounter", [output])
-    manifest = require_current_work(config, required_stages=["encounter"])
-
-    assert path.exists()
-    assert manifest["schema_version"] == 5
-    assert manifest["intermediate_schema_version"] == 9
-    assert len(manifest["git_code_state_sha256"]) == 64
-    assert manifest["combined_element_catalog_sha256"] is None
-    assert manifest["runtime_versions"]["python"]
-    assert manifest["stages"]["encounter"]["status"] == "complete"
-    assert manifest["stages"]["encounter"]["outputs"][0]["size_bytes"] > 0
-    assert manifest["stages"]["encounter"]["outputs"][0]["row_count"] == 1
-
-
 def test_work_manifest_fails_when_rules_change(tmp_path: Path) -> None:
     config = _config(tmp_path)
     initialize_work_manifest(config)

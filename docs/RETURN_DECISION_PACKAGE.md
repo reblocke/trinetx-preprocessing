@@ -1,11 +1,17 @@
 # Return outcomes: decisions and completion plan
 
-Status: **proposed; D1–D6 await the owner's decisions; goal remains BLOCKED**.
+Status: **D1–D6 provisionally accepted by the owner on 2026-09-25;
+implementation remains BLOCKED pending explicit goal resumption**.
 Prepared 2026-09-25 from the [audit](RETURN_AUDIT.md) and
 [calendar-day proposal](RETURN_DAY_RESOLUTION_PROPOSAL.md). No runtime changes
 or private builds are authorized by this document itself. Existing C4
 authorization remains conditional on its gates; the owner has requested this
 decision package before unblocking the goal.
+
+The owner provisionally accepted all recommendations, then requested a testing
+cleanup and policy update before relaunch. This records that response without
+resuming execution or relaxing any gate. The recommendations below remain the
+planned contract; they have not replaced executable v1 semantics.
 
 ## Decisions for the owner
 

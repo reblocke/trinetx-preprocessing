@@ -675,16 +675,6 @@ def test_element_inventory_must_cover_every_required_element(tmp_path):
         validate_bundle(bundle=root, work_dir=tmp_path / "work")
 
 
-def test_evidence_schema_is_checked_after_refreshing_manifest_identity(tmp_path):
-    root = tmp_path / "bundle"
-    _bundle(root)
-    path = root / "encounter_features_full_data_diagnosis_component_evidence.parquet"
-    pq.write_table(pa.table({"index_event_id": ["p-e"]}), path)
-    _refresh_manifest(root)
-    with pytest.raises(ValueError, match="evidence schema missing required fields"):
-        validate_bundle(bundle=root, work_dir=tmp_path / "work")
-
-
 @pytest.mark.parametrize(
     ("column", "value"),
     [
@@ -935,21 +925,6 @@ def _receipt_for_report(report):
         "gates": {"artifact_validation": "pass", "build_completion": "pass"},
     }
     return receipt
-
-
-def test_acceptance_receipt_readback_binds_report_manifest_policy_and_variants():
-    report, receipt = _receipt_pair()
-    manifest_hash = report["bundle_manifest_sha256"]
-    report_bytes = json.dumps(report).encode()
-    receipt["validation_report_sha256"] = hashlib.sha256(report_bytes).hexdigest()
-    assert verify_acceptance_receipt(
-        receipt,
-        expected_manifest_sha256=manifest_hash,
-        expected_policy="complete_linkage",
-        expected_variants=["FULL_DATA"],
-        expected_required_gates=["artifact_validation"],
-        validation_report_bytes=report_bytes,
-    )["pass"]
 
 
 def test_receipt_readback_accepts_actual_synthetic_validator_report(tmp_path):

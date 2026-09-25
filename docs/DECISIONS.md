@@ -1878,3 +1878,18 @@ accepted populations or explaining the incompatible canonical projection.
 Encounter bundle schema 2.0 requires paired source provenance, explicit
 legacy comparison and coverage gates. Source cohort schema/catalog versions
 are unchanged. Parquet row ordering is a consumer-sort requirement.
+
+## 2026-09-25: E2E-first verification and provisional return decisions
+
+The owner requested removal of tests without concrete failure coverage missing
+from broader E2E workflows. Never write unit tests after implementation. Highly
+prefer E2E as the sole mechanism and retain verifiable, repeatable artifacts.
+Before necessary isolation, document failure modes and the E2E gap, then write
+code. See AGENTS.md, TESTING.md and the complete testing_review.md inventories.
+This does not remove private, scientific, integrity or runtime acceptance gates.
+
+The owner provisionally accepted all D1–D6 recommendations and repair strategies
+in RETURN_DECISION_PACKAGE.md, then explicitly deferred goal relaunch until the
+testing cleanup. This is a provisional decision record, not authorization to
+launch C4 or replace the executable v1 contract. The readmissions goal remains
+BLOCKED; final specification/implementation work resumes only when requested.

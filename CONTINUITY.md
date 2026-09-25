@@ -25,14 +25,26 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
-The owner subsequently requested a decision/recommendation and completion
-package before unblocking the goal. docs/RETURN_DECISION_PACKAGE.md now records
-six pending scientific decisions, recommended choices and alternatives, repair
-strategies for F1–F7, and explicit C0–C4 exit evidence. It clarifies that known
-day-zero events are excluded from the proposed day-1-through-N endpoint while
-undated/conflicting candidates can leave window membership unknown. No choices
-have been recorded as approved; runtime code and private data remain unchanged,
-and the goal remains BLOCKED pending the owner's response.
+The owner provisionally accepted all D1–D6 recommendations and repair strategies
+on 2026-09-25, then requested parallel removal of low-signal tests, E2E-first
+guidance and updated starter ZIPs before goal relaunch. The three test reviews
+account for every original test function; redundant checks are removed and
+useful assertions moved into broader workflows. See docs/testing_review.md.
+AGENTS.md contains the requested rules. A new E2E runner retains synthetic
+products, source/fixture identity, results and hashes outside the repository.
+All 464 remaining cases passed (238 existing warnings, 669.06 seconds); the
+five selected E2Es also passed with retained outputs and a verified manifest.
+Artifact checks rejected changed files, extra files, a wrong manifest hash and
+an existing destination; an injected workflow failure retained a failed receipt.
+The full 434-function inventory reconciles exactly (58 removed, 376 retained).
+Ruff, formatting, lockfile and diff checks passed. The original checkout's unrelated changes
+are preserved; only its AGENTS.md receives the same testing policy. Four starter
+archives and their two expanded templates in locke_cv receive consistent guidance,
+with original archives preserved externally. Starter verification passed after
+fast-forwarding to the already merged `67456a6` readiness implementation:
+maintained exports rebuild exactly, four packager checks pass, and all runtime
+and configuration files match that base. No production source or private
+product is changed. The readmissions goal remains BLOCKED pending explicit resume.
 
 2026-09-25 audit update (supersedes return completion claims below): the user
 requested an explanation, code audit and proposed day-resolution course. The
