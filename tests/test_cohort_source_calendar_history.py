@@ -210,14 +210,24 @@ def test_candidate_set_rejects_invalid_catalog_union(elements):
 
 
 @pytest.mark.parametrize(
-    ("domain", "elements", "source_ids"),
+    ("domain", "elements", "source_ids", "memberships"),
     [
-        ("diagnosis", ("dx-t2d",), ["dx-1", None, None]),
-        ("procedure", ("proc", "proc-other"), ["proc-1", "proc-2", None]),
+        (
+            "diagnosis",
+            ("dx-t2d",),
+            ["dx-1", None, None],
+            [("dx-t2d",), (), ()],
+        ),
+        (
+            "procedure",
+            ("proc", "proc-other"),
+            ["proc-1", "proc-2", None],
+            [("proc", "proc-other"), ("proc-other",), ()],
+        ),
     ],
 )
 def test_encounter_candidate_set_preserves_repeated_patient_exact_keys_and_absence(
-    domain, elements, source_ids
+    domain, elements, source_ids, memberships
 ):
     with _source() as db:
         db.execute("CREATE TABLE encounters(patient_id VARCHAR,encounter_id VARCHAR)")
@@ -242,6 +252,7 @@ def test_encounter_candidate_set_preserves_repeated_patient_exact_keys_and_absen
         row.candidate.source_record_id if row.candidate else None for row in rows
     ]
     assert observed_ids == source_ids
+    assert [row.matched_element_ids for row in rows] == memberships
     assert rows[0].candidate.raw_date == "20240101"
     assert rows[0].candidate.timestamp_precision == "date_only"
     assert rows[0].candidate.source_encounter_id == "history"

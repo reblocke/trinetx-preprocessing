@@ -53,6 +53,7 @@ class CalendarEncounterHistoryProjection:
     patient_id: str
     encounter_id: str
     candidate: CalendarHistoryCandidate | None
+    matched_element_ids: tuple[str, ...]
 
 
 def iter_calendar_history_candidates(
@@ -193,14 +194,22 @@ def iter_calendar_encounter_candidate_set(
     table = _TABLES[domain]
     values = _candidate_values_sql(domain)
     cursor = connection.execute(
-        "WITH matched AS (SELECT v.* FROM "
-        f"{table} AS v WHERE EXISTS (SELECT 1 FROM element_membership AS m "
-        "WHERE m.source_record_id=v.source_record_id AND m.element_id=ANY(?) "
-        "AND m.include IS TRUE)) "
+        "WITH keyed AS (SELECT v.* FROM "
+        f"{table} AS v JOIN {relation} AS k ON v.patient_id=k.patient_id "
+        "AND v.encounter_id=k.encounter_id),"
+        "memberships AS (SELECT m.source_record_id,"
+        "list_sort(list(DISTINCT element_id)) AS matched_element_ids "
+        "FROM element_membership AS m JOIN "
+        "(SELECT DISTINCT source_record_id FROM keyed) AS selected "
+        "ON m.source_record_id=selected.source_record_id "
+        "WHERE m.element_id=ANY(?) AND m.include IS TRUE "
+        "GROUP BY m.source_record_id),"
+        "matched AS (SELECT v.*,m.matched_element_ids FROM "
+        "keyed AS v JOIN memberships AS m USING (source_record_id)) "
         "SELECT k.patient_id,k.encounter_id,v.source_record_id,v.encounter_id,"
         "v.source_file,v.date,v.event_datetime,v.timestamp_precision,"
         "v.code_system_raw,v.code_system,v.code_raw,v.code,"
-        f"{values} FROM {relation} AS k LEFT JOIN matched AS v "
+        f"{values},v.matched_element_ids FROM {relation} AS k LEFT JOIN matched AS v "
         "ON v.patient_id=k.patient_id AND v.encounter_id=k.encounter_id "
         "ORDER BY k.patient_id,k.encounter_id,v.source_record_id",
         [list(element_ids)],
@@ -215,7 +224,9 @@ def iter_calendar_encounter_candidate_set(
                 previous_key = key
                 previous_record = None
             if source_record_id is None:
-                yield CalendarEncounterHistoryProjection(patient_id, encounter_id, None)
+                yield CalendarEncounterHistoryProjection(
+                    patient_id, encounter_id, None, ()
+                )
                 continue
             if (
                 not isinstance(source_record_id, str)
@@ -226,10 +237,19 @@ def iter_calendar_encounter_candidate_set(
                     "Matched encounter source-record keys must be unique and nonblank"
                 )
             previous_record = source_record_id
+            matched_ids = row[-1]
+            if (
+                not isinstance(matched_ids, list)
+                or not matched_ids
+                or any(item not in element_ids for item in matched_ids)
+                or len(matched_ids) != len(set(matched_ids))
+            ):
+                raise ValueError("Encounter catalog membership is missing or ambiguous")
             yield CalendarEncounterHistoryProjection(
                 patient_id,
                 encounter_id,
-                CalendarHistoryCandidate(*row[2:]),
+                CalendarHistoryCandidate(*row[2:-1]),
+                tuple(matched_ids),
             )
 
 

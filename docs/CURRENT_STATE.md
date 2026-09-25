@@ -83,6 +83,12 @@ no-match marker; overlapping catalog memberships do not multiply records.
 This supplies pre-index context evidence without inferring a negative,
 applying a date rule or approving the context terminology. Synthetic
 repeated-patient, absence, duplicate-record and exact-key tests pass.
+The encounter-grain route now preserves the exact declared catalog IDs that
+matched each raw source record, deduplicating overlapping membership rows.
+An unmatched key carries an empty membership tuple. This permits downstream
+candidate provenance checks without assigning a clinical context flag.
+The query restricts raw records to caller-selected exact encounters before
+collecting their catalog memberships. No private-scale runtime is claimed.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate

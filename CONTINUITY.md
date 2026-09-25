@@ -31,6 +31,10 @@ marker, not a clinical negative. The route retains source date, precision,
 code and file provenance; overlap membership is deduplicated. Synthetic
 repeated-patient, absence, duplicate-record and exact-key checks pass. It
 does not choose context exclusions, same-day order or a patient index.
+It now carries each raw record's deduplicated matched catalog-element IDs;
+overlapping membership rows cannot multiply records or hide which declared
+concept matched. Synthetic union and absence fixtures pass. Catalog membership
+remains candidate provenance rather than clinical validation.
 The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
 all email sending. A new read-only candidate source projection keeps raw
 arterial values, units, normalized source codes and linkage identifiers at the exact original

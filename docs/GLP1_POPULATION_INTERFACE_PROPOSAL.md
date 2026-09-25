@@ -218,6 +218,12 @@ does not multiply a source record. This permits context evidence to be
 reviewed before selecting a patient index, while leaving terminology,
 date-only ordering and observed-negative rules downstream. Synthetic tests
 pass; no private source runtime or context classification is claimed.
+Each matched record now includes the deduplicated IDs from the declared
+catalog-element union, while an unmatched key carries an empty tuple. The
+stream still does not infer a clinical negative or place a dated event before
+the first gas test.
+The candidate query bounds its raw-record and membership join to the supplied
+exact encounter keys. A private-scale performance check remains open.
 
 The draft `audit_candidate_population()` compares an authenticated historical
 patient/index key table supplied by the caller against the unfiltered canonical
