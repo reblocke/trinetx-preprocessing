@@ -58,6 +58,14 @@ matches. This prepares a BMI evidence review without choosing a measurement,
 normalizing units or treating index-day BMI as pre-presentation evidence.
 Synthetic exact-key, duplicate-membership, absence and duplicate-key checks
 pass; source hierarchy and clinical BMI policy remain unresolved.
+A separate read-only diagnosis/lab history projection now takes one exact
+selected index per patient, an explicit catalog element and its domain. It
+streams all matched source rows across encounters with raw date, precision,
+code, value, unit and source-file fields, and marks patients with no match.
+It does not call a missing match negative, apply the D-1 history cutoff, or
+classify T2D; source roles, terminology, capture and clinical rules still need
+review. Synthetic cross-encounter, duplicate-membership, absence and key tests
+pass.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate
