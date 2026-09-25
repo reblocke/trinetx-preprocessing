@@ -19,6 +19,11 @@ cross-encounter and fail-closed tests pass; D-1 timing, terminology, capture
 and clinical policy remain downstream gates. The procedure domain is raw
 candidate evidence only; its narrow CPT concept is not the legacy NIV/IMV
 phenotype.
+A second entrypoint reads an explicit set of catalog elements in one pass,
+deduplicating overlapping memberships and failing on missing, ambiguous or
+duplicate requests. This supports downstream transport of all preserved
+ventilation-code candidates without changing the canonical product or declaring
+any observed clinical negative.
 The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
 all email sending. A new read-only candidate source projection keeps raw
 arterial values, units and linkage identifiers at the exact original

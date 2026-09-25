@@ -7,7 +7,7 @@ complete capture, pre-index timing, or an observed negative.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -58,6 +58,28 @@ def iter_calendar_history_candidates(
 ) -> Iterator[CalendarHistoryProjection]:
     """Preserve matched history across encounters and mark unmatched patients.
 
+    This single-element interface is retained for existing callers. Use the
+    candidate-set interface for a declared union of source concepts.
+    """
+    yield from iter_calendar_history_candidate_set(
+        connection,
+        index_relation=index_relation,
+        element_ids=(element_id,),
+        domain=domain,
+        fetch_size=fetch_size,
+    )
+
+
+def iter_calendar_history_candidate_set(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    index_relation: str,
+    element_ids: Sequence[str],
+    domain: str,
+    fetch_size: int = 8192,
+) -> Iterator[CalendarHistoryProjection]:
+    """Stream the distinct raw records in an explicit catalog-element union.
+
     The caller supplies one original index encounter per patient. The source
     must already have passed its separate acceptance gate. No date filter is
     applied here, so the study can explicitly distinguish D-1 history from D
@@ -67,8 +89,14 @@ def iter_calendar_history_candidates(
     relation = _relation(index_relation)
     if not isinstance(domain, str) or domain not in _TABLES:
         raise ValueError("Calendar history domain must be diagnosis, lab or procedure")
-    if not isinstance(element_id, str) or not element_id.strip():
-        raise ValueError("Calendar history element must be a nonblank catalog ID")
+    if (
+        isinstance(element_ids, (str, bytes))
+        or not isinstance(element_ids, Sequence)
+        or not element_ids
+        or any(not isinstance(item, str) or not item.strip() for item in element_ids)
+        or len(set(element_ids)) != len(element_ids)
+    ):
+        raise ValueError("Calendar history needs distinct nonblank catalog IDs")
     if (
         isinstance(fetch_size, bool)
         or not isinstance(fetch_size, int)
@@ -76,11 +104,14 @@ def iter_calendar_history_candidates(
     ):
         raise ValueError("Calendar history fetch size must be positive")
     _check_keys(connection, relation, one_per_patient=True)
-    catalog_count = connection.execute(
-        "SELECT count(*) FROM element_catalog WHERE element_id=? AND domain=?",
-        [element_id, domain],
-    ).fetchone()[0]
-    if catalog_count != 1:
+    catalog_rows = connection.execute(
+        "SELECT element_id,count(*) FROM element_catalog "
+        "WHERE element_id=ANY(?) AND domain=? GROUP BY element_id",
+        [list(element_ids), domain],
+    ).fetchall()
+    if len(catalog_rows) != len(element_ids) or any(
+        count != 1 for _, count in catalog_rows
+    ):
         raise ValueError("Calendar history element is absent or ambiguous in catalog")
 
     table = _TABLES[domain]
@@ -93,7 +124,7 @@ def iter_calendar_history_candidates(
     cursor = connection.execute(
         "WITH matched AS (SELECT v.* FROM "
         f"{table} AS v WHERE EXISTS (SELECT 1 FROM element_membership AS m "
-        "WHERE m.source_record_id=v.source_record_id AND m.element_id=? "
+        "WHERE m.source_record_id=v.source_record_id AND m.element_id=ANY(?) "
         "AND m.include IS TRUE)) "
         "SELECT k.patient_id,k.encounter_id,v.source_record_id,v.encounter_id,"
         "v.source_file,v.date,v.event_datetime,v.timestamp_precision,"
@@ -101,7 +132,7 @@ def iter_calendar_history_candidates(
         f"{values} FROM {relation} AS k LEFT JOIN matched AS v "
         "ON v.patient_id=k.patient_id "
         "ORDER BY k.patient_id,v.source_record_id",
-        [element_id],
+        [list(element_ids)],
     )
     previous_patient: str | None = None
     previous_record: str | None = None

@@ -62,11 +62,16 @@ A separate read-only diagnosis/lab/procedure history projection now takes one ex
 selected index per patient, an explicit catalog element and its domain. It
 streams all matched source rows across encounters with raw date, precision,
 code, value, unit and source-file fields, and marks patients with no match.
+An explicit multi-element route unions declared catalog concepts in one source
+scan and emits each raw record once even when it matches several concepts.
+Every requested concept must be present in the declared domain; this enables
+the preserved broad NIV/IMV and separate CPAP code sets to be projected without
+using the narrow CPT-only GLP-1 seed as their replacement.
 It does not call a missing match negative, apply the D-1 history cutoff, or
 classify T2D; source roles, terminology, capture and clinical rules still need
 review. A procedure candidate retains its original code and date; it does not
 implement the broader legacy NIV/IMV definitions. Synthetic cross-encounter,
-duplicate-membership, absence and key tests
+duplicate-membership, union, absence and key tests
 pass.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only

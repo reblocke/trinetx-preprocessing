@@ -15,7 +15,8 @@ def _source() -> duckdb.DuckDBPyConnection:
     db.execute("CREATE TABLE element_catalog(element_id VARCHAR,domain VARCHAR)")
     db.execute(
         "INSERT INTO element_catalog VALUES "
-        "('dx-t2d','diagnosis'),('lab-a1c','lab'),('proc','procedure')"
+        "('dx-t2d','diagnosis'),('lab-a1c','lab'),"
+        "('proc','procedure'),('proc-other','procedure')"
     )
     db.execute(
         "CREATE TABLE element_membership("
@@ -26,7 +27,8 @@ def _source() -> duckdb.DuckDBPyConnection:
         "('dx-1','dx-t2d',TRUE),('dx-1','dx-t2d',TRUE),"
         "('dx-2','dx-t2d',FALSE),('a1c-1','lab-a1c',TRUE),"
         "('a1c-2','lab-a1c',TRUE),('other-a1c','lab-a1c',TRUE),"
-        "('proc-1','proc',TRUE),('proc-2','proc',TRUE)"
+        "('proc-1','proc',TRUE),('proc-1','proc-other',TRUE),"
+        "('proc-2','proc-other',TRUE)"
     )
     db.execute(
         "CREATE TABLE source_diagnosis("
@@ -86,7 +88,7 @@ def _source() -> duckdb.DuckDBPyConnection:
     [
         ("dx-t2d", "diagnosis", ["dx-1", None]),
         ("lab-a1c", "lab", ["a1c-1", "a1c-2", None]),
-        ("proc", "procedure", ["proc-1", "proc-2", None]),
+        ("proc", "procedure", ["proc-1", None]),
     ],
 )
 def test_history_preserves_cross_encounter_rows_and_absence(
@@ -166,3 +168,42 @@ def test_history_rejects_duplicate_matched_source_record():
                     db, index_relation="selected", element_id="lab-a1c", domain="lab"
                 )
             )
+
+
+def test_candidate_set_unions_catalog_elements_without_multiplying_raw_records():
+    with _source() as db:
+        rows = list(
+            history.iter_calendar_history_candidate_set(
+                db,
+                index_relation="selected",
+                element_ids=("proc", "proc-other"),
+                domain="procedure",
+                fetch_size=1,
+            )
+        )
+    source_ids = [
+        row.candidate.source_record_id if row.candidate else None for row in rows
+    ]
+    assert source_ids == [
+        "proc-1",
+        "proc-2",
+        None,
+    ]
+    assert [row.candidate.raw_date for row in rows[:2]] == ["20240101", "20240201"]
+    assert all(row.index_encounter_id == "index" for row in rows)
+
+
+@pytest.mark.parametrize(
+    "elements",
+    [(), ("proc", "proc"), ("proc", "missing"), ("proc", "dx-t2d")],
+)
+def test_candidate_set_rejects_invalid_catalog_union(elements):
+    with _source() as db, pytest.raises(ValueError, match="catalog"):
+        list(
+            history.iter_calendar_history_candidate_set(
+                db,
+                index_relation="selected",
+                element_ids=elements,
+                domain="procedure",
+            )
+        )
