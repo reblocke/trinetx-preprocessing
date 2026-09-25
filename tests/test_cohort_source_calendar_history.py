@@ -207,3 +207,74 @@ def test_candidate_set_rejects_invalid_catalog_union(elements):
                 domain="procedure",
             )
         )
+
+
+@pytest.mark.parametrize(
+    ("domain", "elements", "source_ids"),
+    [
+        ("diagnosis", ("dx-t2d",), ["dx-1", None, None]),
+        ("procedure", ("proc", "proc-other"), ["proc-1", "proc-2", None]),
+    ],
+)
+def test_encounter_candidate_set_preserves_repeated_patient_exact_keys_and_absence(
+    domain, elements, source_ids
+):
+    with _source() as db:
+        db.execute("CREATE TABLE encounters(patient_id VARCHAR,encounter_id VARCHAR)")
+        db.execute(
+            "INSERT INTO encounters VALUES ('p','history'),('p','index'),('q','index')"
+        )
+        rows = list(
+            history.iter_calendar_encounter_candidate_set(
+                db,
+                encounter_relation="encounters",
+                element_ids=elements,
+                domain=domain,
+                fetch_size=1,
+            )
+        )
+    assert [(row.patient_id, row.encounter_id) for row in rows] == [
+        ("p", "history"),
+        ("p", "index"),
+        ("q", "index"),
+    ]
+    observed_ids = [
+        row.candidate.source_record_id if row.candidate else None for row in rows
+    ]
+    assert observed_ids == source_ids
+    assert rows[0].candidate.raw_date == "20240101"
+    assert rows[0].candidate.timestamp_precision == "date_only"
+    assert rows[0].candidate.source_encounter_id == "history"
+    assert rows[-1].candidate is None
+
+
+def test_encounter_candidate_set_rejects_duplicate_exact_key_or_raw_record():
+    with _source() as db:
+        db.execute("CREATE TABLE encounters(patient_id VARCHAR,encounter_id VARCHAR)")
+        db.execute("INSERT INTO encounters VALUES ('p','history'),('p','index')")
+        db.execute("INSERT INTO encounters VALUES ('p','history')")
+        with pytest.raises(ValueError, match="unique nonblank exact pairs"):
+            list(
+                history.iter_calendar_encounter_candidate_set(
+                    db,
+                    encounter_relation="encounters",
+                    element_ids=("proc",),
+                    domain="procedure",
+                )
+            )
+        db.execute("DELETE FROM encounters WHERE encounter_id='history'")
+        db.execute("INSERT INTO encounters VALUES ('p','history')")
+        db.execute(
+            "INSERT INTO source_procedure SELECT * FROM source_procedure "
+            "WHERE source_record_id='proc-1'"
+        )
+        with pytest.raises(ValueError, match="source-record keys must be unique"):
+            list(
+                history.iter_calendar_encounter_candidate_set(
+                    db,
+                    encounter_relation="encounters",
+                    element_ids=("proc",),
+                    domain="procedure",
+                    fetch_size=1,
+                )
+            )

@@ -76,6 +76,13 @@ review. A procedure candidate retains its original code and date; it does not
 implement the broader legacy NIV/IMV definitions. Synthetic cross-encounter,
 duplicate-membership, union, absence and key tests
 pass.
+A separate exact-encounter candidate-set route accepts repeated patients with
+unique original encounter pairs. It streams catalog-matched raw diagnosis,
+procedure or lab records at each supplied encounter, including an explicit
+no-match marker; overlapping catalog memberships do not multiply records.
+This supplies pre-index context evidence without inferring a negative,
+applying a date rule or approving the context terminology. Synthetic
+repeated-patient, absence, duplicate-record and exact-key tests pass.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate

@@ -24,6 +24,13 @@ deduplicating overlapping memberships and failing on missing, ambiguous or
 duplicate requests. This supports downstream transport of all preserved
 ventilation-code candidates without changing the canonical product or declaring
 any observed clinical negative.
+An encounter-grain candidate-set projection now streams raw catalog-matched
+diagnosis, procedure or lab records for every caller-supplied exact encounter
+key while allowing repeated patients. An unmatched key yields one explicit
+marker, not a clinical negative. The route retains source date, precision,
+code and file provenance; overlap membership is deduplicated. Synthetic
+repeated-patient, absence, duplicate-record and exact-key checks pass. It
+does not choose context exclusions, same-day order or a patient index.
 The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
 all email sending. A new read-only candidate source projection keeps raw
 arterial values, units, normalized source codes and linkage identifiers at the exact original

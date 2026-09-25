@@ -208,6 +208,17 @@ before applying the explicit context-exclusion/index order. Synthetic
 repeated-encounter and duplicate-pair fixtures pass. This does not define the
 adult emergency/inpatient candidate pool or approve an arterial policy.
 
+The read-only `iter_calendar_encounter_candidate_set()` route accepts a
+caller-selected relation of unique original encounter pairs with repeated
+patients and a declared catalog-element union in one domain. It returns raw
+diagnosis, procedure or lab candidates at the exact encounter key, preserving
+source dates, precision, codes and file provenance. Every unmatched key gets
+an explicit marker; absence is not a clinical negative. Overlapping membership
+does not multiply a source record. This permits context evidence to be
+reviewed before selecting a patient index, while leaving terminology,
+date-only ordering and observed-negative rules downstream. Synthetic tests
+pass; no private source runtime or context classification is claimed.
+
 The draft `audit_candidate_population()` compares an authenticated historical
 patient/index key table supplied by the caller against the unfiltered canonical
 `source_encounter` table. It returns aggregate exact-key, patient-present but
