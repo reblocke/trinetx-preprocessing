@@ -178,14 +178,17 @@ all 18 cohorts. Hidden scratch remains bucket-bounded and is removed strictly. A
 versioned `pipeline_work_manifest.json` prevents stale or partially completed
 work from being resumed. If an interrupted run leaves
 hidden `.trinetx-*` scratch files under the external validation root,
-inspect them before deleting:
+inspect them before deleting. Set both paths to approved private external
+locations for the relevant historical run:
 ```bash
+export PRIVATE_VOLUME="/private/path"
+export VALIDATION_ROOT="$PRIVATE_VOLUME/trinetx-preprocessing-validation"
 ./.venv/bin/python -m trinetx_preprocessing clean-scratch \
-  --root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation" \
-  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/scratch_cleanup.json"
+  --root "$VALIDATION_ROOT" \
+  --json-out "$VALIDATION_ROOT/manifests/scratch_cleanup.json"
 
 ./.venv/bin/python -m trinetx_preprocessing clean-scratch \
-  --root "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation" \
+  --root "$VALIDATION_ROOT" \
   --delete
 ```
 The command is dry-run by default and only matches known hidden scratch prefixes
@@ -216,42 +219,47 @@ contracts are recorded privately. The later `2305f16`/`cefc861` changes are
 output-neutral lifecycle and test-fixture hardening, verified by focused
 quality evidence rather than a replacement full-data build.
 
-Hash local legacy outputs without committing row-level data:
+The following parameterized commands describe the historical validation
+workflow; use the exact source and approved private paths recorded for that
+run. They are not instructions to regenerate an accepted receipt. Hash local
+legacy outputs without committing row-level data:
 ```bash
+export PRIVATE_VOLUME="/private/path"
+export VALIDATION_ROOT="$PRIVATE_VOLUME/trinetx-preprocessing-validation"
 ./.venv/bin/python -m trinetx_preprocessing hash-outputs \
-  --output-dir "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/legacy/output" \
+  --output-dir "$VALIDATION_ROOT/legacy/output" \
   --scope final \
   --hash-chunk-rows 100000 \
-  --out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final"
+  --out "$VALIDATION_ROOT/manifests/legacy_final"
 ```
 Then hash the refactor outputs and compare manifests without rerunning:
 ```bash
 ./.venv/bin/python -m trinetx_preprocessing inspect-inputs \
-  --config "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/config.yaml" \
+  --config "$VALIDATION_ROOT/config.yaml" \
   --min-free-gb 100 \
-  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/input_status.json"
+  --json-out "$VALIDATION_ROOT/manifests/input_status.json"
 
 ./.venv/bin/python -m trinetx_preprocessing hash-outputs \
-  --output-dir "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/refactor/output" \
+  --output-dir "$VALIDATION_ROOT/refactor/output" \
   --scope final \
   --hash-chunk-rows 100000 \
-  --out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final"
+  --out "$VALIDATION_ROOT/manifests/refactor_final"
 
 ./.venv/bin/python -m trinetx_preprocessing compare-manifests \
-  --baseline "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final" \
-  --current "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final" \
-  --report "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/final_comparison.json"
+  --baseline "$VALIDATION_ROOT/manifests/legacy_final" \
+  --current "$VALIDATION_ROOT/manifests/refactor_final" \
+  --report "$VALIDATION_ROOT/manifests/final_comparison.json"
 
 ./.venv/bin/python -m trinetx_preprocessing validation-status \
-  --input-status "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/input_status.json" \
-  --legacy-manifest "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/legacy_final" \
-  --refactor-manifest "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/refactor_final" \
-  --comparison-report "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/final_comparison.json" \
-  --profile-provenance "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/profile/provenance.json" \
-  --required-root "/Volumes/LOCKE BOOK" \
+  --input-status "$VALIDATION_ROOT/manifests/input_status.json" \
+  --legacy-manifest "$VALIDATION_ROOT/manifests/legacy_final" \
+  --refactor-manifest "$VALIDATION_ROOT/manifests/refactor_final" \
+  --comparison-report "$VALIDATION_ROOT/manifests/final_comparison.json" \
+  --profile-provenance "$VALIDATION_ROOT/profile/provenance.json" \
+  --required-root "$PRIVATE_VOLUME" \
   --required-root-min-free-gb 100 \
-  --json-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/validation_status.json" \
-  --markdown-out "/Volumes/LOCKE BOOK/trinetx-preprocessing-validation/manifests/validation_status.md"
+  --json-out "$VALIDATION_ROOT/manifests/validation_status.json" \
+  --markdown-out "$VALIDATION_ROOT/manifests/validation_status.md"
 ```
 `validation-status` rejects old-schema input snapshots, capped input snapshots,
 snapshots without `--min-free-gb 100` filesystem evidence, non-strict,
