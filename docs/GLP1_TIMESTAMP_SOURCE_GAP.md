@@ -112,6 +112,19 @@ approved private record. The output explicitly marks source and report
 acceptance false; a value-level precision audit and the index-specific checks
 below remain required.
 
+The current canonical builder derives encounter, lab and medication event
+precision from the existing `start_date` or `date` values. A new export with
+actual times in those fields can be screened by the capability audit after a
+separately validated build. If times arrive only in additional columns, the
+current builder does not map them into those canonical event fields. That
+layout needs a versioned upstream field mapping and raw-to-canonical fixtures
+before its timestamps can be used; a positive header screen alone cannot
+promote it. A synthetic parser probe also showed that mixing naive timestamps
+and offset-bearing values can produce mixed datetime representations under the
+current Pandas path. Any proposed offset-bearing export therefore needs an
+explicit time-zone normalization policy and tested raw-to-canonical ordering
+before the first-24-hour rule can run.
+
 An owner-only run of `audit-cohort-source-capabilities` at draft revision
 `ab77abd` against the existing
 accepted snapshot completed in 162 seconds with stable input identity and a
