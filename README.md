@@ -1,5 +1,7 @@
+<a id="trinetx-preprocessing-pipeline"></a>
 # TriNetX preprocessing: source and encounter data creation
 
+<a id="overview"></a>
 This public repository normalizes captured TriNetX exports into a canonical,
 manifest-bound source DuckDB and creates reusable encounter-level feature
 bundles. Study cohort decisions, GLP-1 indications, weights, prevalence,
@@ -47,6 +49,7 @@ See [schema, independent-variant and timing details](docs/ENCOUNTER_PREPROCESSIN
 | Downstream consumption | Validated bundle and approved study context; use the downstream [encounter reader](https://github.com/reblocke/trinetx-hypercapnia-code/blob/master/docs/ENCOUNTER_PREPROCESSING.md) | Read-only encounter rows; study selection remains downstream. |
 | Historical reproduction | Preserved reference inputs and approved environment; use the [operator and legacy notes](docs/OPERATOR_AND_LEGACY_GUIDE.md) | Historical CSV/DTA or comparison artifacts, evaluated against their own dated receipts. |
 
+<a id="quickstart-synthetic-fixtures"></a>
 ## Small public source example
 
 Review `scripts/run_synthetic_example.py` and the fixture before running. With
