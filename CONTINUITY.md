@@ -19,6 +19,10 @@ normalize clinical gas values, or produce a report.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.
+A separate fixed-category gas-policy audit now inventories catalog-matched
+arterial key/date completeness, normalized unit and specimen classes, numeric
+ranges and same-day specimen/panel group multiplicity. Focused synthetic tests
+pass. It returns no raw labels or keys and does not approve clinical mapping.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the

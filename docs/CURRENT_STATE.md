@@ -37,6 +37,10 @@ Those aggregate groups do not establish that panel IDs mean one specimen.
 The read-only `audit-cohort-source-capabilities` command exposes this screen
 through a validated canonical source and labels both acceptance and abstract
 report readiness false.
+An additional candidate audit now counts fixed categories for arterial unit,
+specimen, numeric, date and same-day linkage evidence without releasing raw
+labels or source keys. It has no CLI yet. Its results inform a future reviewed
+clinical mapping policy; they do not accept one.
 A separate `screen-glp1-export-headers` command accepts explicitly listed
 proposed encounter, lab and medication CSVs and reads their headers only. It
 reports fixed aggregate field-presence counts without paths, raw header names
