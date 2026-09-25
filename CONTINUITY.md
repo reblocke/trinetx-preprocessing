@@ -44,14 +44,14 @@ observed events often precede the 365-day horizon. The aggregate receipt is
 external; it does not establish continuous follow-up or complete capture.
 The canonical database's full byte SHA-256 baseline was recorded externally
 before any outcomes pilot or build, with unchanged source/parent manifest
-identities. Sixteen focused return tests pass on the current code. The full
-suite passed 516 tests on a preceding validator revision. A later run passed
-517 tests but its pipeline rerun rejected a code-state change made during that
-same test process; a final full run remains due after freezing the code. Ruff, lock,
-non-editable wheel, and installed CLI/legacy-consumer smokes passed on earlier
-revisions and must be rerun as applicable before acceptance. An earlier full run had one intermittent
-combined compatibility-export worker failure; that test passed in isolation
-and in a later unchanged full run. These checks do not satisfy the missing
+identities. Sixteen focused return tests pass on the frozen code at `e21c6ed`.
+The frozen full suite passed 520 tests with 238 existing performance warnings.
+Ruff check and format, `uv lock --check --offline`, `git diff --check`, and
+non-editable wheel installation all passed. The installed wheel's code identity
+matches the checkout; the new return commands and old cohort-source consumer
+smokes passed without `PYTHONPATH`. Earlier full runs on changing code and an
+intermittent compatibility-export worker failure remain historical evidence;
+the frozen pass supersedes them. These checks do not satisfy the unfinished
 resource pilot or C4 acceptance seal. The return validator now independently
 recomputes episode/source mapping, link times and categories, link flags from
 diagnosis/gas evidence, and summaries; synthetic tampering checks include an
