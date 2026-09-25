@@ -66,6 +66,15 @@ and mode-0600 receipt read-back. Conflicting starts span several day ranges,
 often with more than two source rows, and each conflicting key had one observed
 `source_id` value. This does not identify a correct start; retain uncertainty
 until an explicit scientific source/index policy is approved.
+A packaged type-hint candidate API now composes key staging with an all-row
+rejoin and the existing calendar field projection. It validates scoped counts
+before publishing its temporary output and removes its key/view stages on
+exit. Sixteen affected synthetic/read-only tests pass, including mixed-type
+preservation and prior-output rollback. An owner-only full-source packaged-API
+run completed in 5.69 minutes and matched every aggregate QA field from the
+prior manual scoped projection. Stable source identity, mode-0600 receipt
+read-back and empty scratch passed. This is aggregate API parity only; source
+acceptance remains open.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.

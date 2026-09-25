@@ -106,6 +106,23 @@ nonzero duplicate-source and conflicting-start categories across the broader
 source population. Those uncertain starts cannot silently become index dates.
 The audit produced no patient-level output and did not accept a cohort, context
 order or source policy.
+The packaged `build_calendar_type_hint_candidate_fields()` now performs the
+type-hint stage, all-row rejoin and exact-key field projection without a
+caller-authored source view. It checks hinted/projected key counts and source
+row retention before replacing its temporary output, and removes its temporary
+key/view stages on success or failure. The underlying generic field builder
+accepts a named source relation for this bounded path; its audit counts refer
+to that relation's scope. Sixteen affected synthetic/read-only tests pass,
+including mixed-type preservation and rollback of a prior output. This remains
+a candidate API requiring a trusted read-only source and an independent
+population receipt.
+An owner-only full-source run of that packaged API completed in 5.69 minutes.
+Every aggregate hinted-key and projected-field QA value matched the prior
+manual scoped run exactly; canonical input identity was stable, temporary
+scratch was empty after close, and the mode-0600 private receipt passed
+read-back. These are separate runs, so the elapsed times do not establish a
+speed improvement. The audit compares aggregate QA, not every projected row,
+and does not issue source acceptance or a patient-level denominator.
 A separate owner-only fixed-category audit reconciled the conflicting-start
 total to that projection in 3.39 minutes, with stable source identity, empty
 scratch and a mode-0600 receipt read-back. Conflicts span one day through more

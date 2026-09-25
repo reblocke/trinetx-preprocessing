@@ -103,6 +103,14 @@ private receipt read-back. It surfaced nonzero duplicate-record and conflicting
 start-date categories outside the historical patient scope. This remains
 engineering feasibility evidence; the unresolved starts need explicit handling
 before a new patient index can be selected.
+A packaged type-hint candidate helper now composes key staging, all-record
+rejoin and field consensus with scoped count checks and temporary-stage
+cleanup. Synthetic mixed-type, read-only and prior-output rollback fixtures
+pass. It still only exposes candidate fields and cannot accept a population.
+An owner-only packaged-API full-source run completed in 5.69 minutes and
+matched every aggregate QA field from the prior manual scoped projection.
+Source identity, private receipt read-back and scratch cleanup passed. This
+is aggregate API parity, not full row parity or source acceptance.
 An owner-only aggregate conflict-pattern follow-up reconciled exactly to the
 scoped projection with stable identity and private receipt read-back. The
 conflicts span multiple calendar-day ranges and often involve more than two

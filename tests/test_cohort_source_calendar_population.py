@@ -11,6 +11,9 @@ from trinetx_preprocessing.combined_preprocessing import (
 
 build_calendar_candidate_fields = calendar_module.build_calendar_candidate_fields
 stage_calendar_type_hint_keys = calendar_module.stage_calendar_type_hint_keys
+build_calendar_type_hint_candidate_fields = (
+    calendar_module.build_calendar_type_hint_candidate_fields
+)
 
 
 def _source(connection):
@@ -231,3 +234,96 @@ def test_type_hint_keys_preserve_prior_output_on_failure():
         ).fetchone() == (3,)
         with pytest.raises(ValueError, match="simple SQL identifier"):
             stage_calendar_type_hint_keys(connection, output_relation="x;DROP TABLE y")
+
+
+def test_type_hint_projection_retains_all_source_rows_and_cleans_scoped_stages():
+    with duckdb.connect() as connection:
+        _source(connection)
+        connection.execute(
+            "INSERT INTO source_encounter VALUES "
+            "('p1','e1','2024-01-01','date_only','OUT')"
+        )
+        audit = build_calendar_type_hint_candidate_fields(connection)
+        assert (
+            audit.hinted.exact_candidate_keys,
+            audit.hinted.valid_type_hint_source_rows,
+        ) == (
+            3,
+            6,
+        )
+        assert (
+            audit.projected.exact_encounter_keys,
+            audit.projected.source_encounter_rows,
+            audit.projected.conflicting_type_keys,
+        ) == (3, 7, 2)
+        assert connection.execute(
+            "SELECT encounter_source_rows,encounter_type,conflicting_types "
+            "FROM calendar_type_hint_candidate_fields WHERE patient_id='p1' "
+            "AND encounter_id='e1'"
+        ).fetchone() == (3, None, True)
+        assert connection.execute(
+            "SELECT count(*) FROM duckdb_tables() "
+            "WHERE table_name LIKE '_calendar_hint_%'"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT count(*) FROM duckdb_views() "
+            "WHERE view_name LIKE '_calendar_hint_%'"
+        ).fetchone() == (0,)
+
+
+def test_type_hint_projection_read_only_empty_and_prior_output_preservation(tmp_path):
+    path = tmp_path / "source.duckdb"
+    with duckdb.connect(str(path)) as connection:
+        _source(connection)
+    with duckdb.connect(str(path), read_only=True) as connection:
+        assert (
+            build_calendar_type_hint_candidate_fields(
+                connection
+            ).projected.exact_encounter_keys
+            == 3
+        )
+    with duckdb.connect() as connection:
+        connection.execute(
+            "CREATE TABLE source_encounter(patient_id VARCHAR,encounter_id VARCHAR,"
+            "start_date VARCHAR,start_timestamp_precision VARCHAR,type VARCHAR)"
+        )
+        connection.execute(
+            "CREATE TABLE source_patient(patient_id VARCHAR,year_of_birth VARCHAR)"
+        )
+        assert (
+            build_calendar_type_hint_candidate_fields(
+                connection
+            ).projected.exact_encounter_keys
+            == 0
+        )
+        connection.execute("DROP TABLE source_patient")
+        with pytest.raises(duckdb.CatalogException):
+            build_calendar_type_hint_candidate_fields(connection)
+        assert connection.execute(
+            "SELECT count(*) FROM calendar_type_hint_candidate_fields"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT count(*) FROM duckdb_tables() "
+            "WHERE table_name LIKE '_calendar_hint_%'"
+        ).fetchone() == (0,)
+
+
+def test_scoped_candidate_expected_count_failure_preserves_prior_output():
+    with duckdb.connect() as connection:
+        _source(connection)
+        build_calendar_candidate_fields(connection)
+        connection.execute(
+            "CREATE TEMP VIEW one_key_source AS SELECT * FROM source_encounter "
+            "WHERE patient_id='p1' AND encounter_id='e1'"
+        )
+        with pytest.raises(ValueError, match="scoped keys or source rows differ"):
+            build_calendar_candidate_fields(
+                connection,
+                source_encounter_relation="one_key_source",
+                expected_exact_keys=2,
+            )
+        assert connection.execute(
+            "SELECT count(*) FROM calendar_candidate_fields"
+        ).fetchone() == (4,)
+        with pytest.raises(ValueError, match="nonnegative integers"):
+            build_calendar_candidate_fields(connection, expected_exact_keys=True)

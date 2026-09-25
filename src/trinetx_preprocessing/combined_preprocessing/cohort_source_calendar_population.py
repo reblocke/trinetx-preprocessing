@@ -36,9 +36,15 @@ class CalendarTypeHintKeysAudit:
     valid_type_hint_source_rows: int
 
 
+@dataclass(frozen=True)
+class CalendarTypeHintProjectionAudit:
+    hinted: CalendarTypeHintKeysAudit
+    projected: CalendarCandidateFieldsAudit
+
+
 def _quoted(value: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
-        raise ValueError("Calendar candidate output needs a simple SQL identifier")
+        raise ValueError("Calendar candidate relation needs a simple SQL identifier")
     return f'"{value}"'
 
 
@@ -82,6 +88,9 @@ def build_calendar_candidate_fields(
     connection: duckdb.DuckDBPyConnection,
     *,
     output_relation: str = "calendar_candidate_fields",
+    source_encounter_relation: str = "source_encounter",
+    expected_exact_keys: int | None = None,
+    minimum_source_rows: int | None = None,
 ) -> CalendarCandidateFieldsAudit:
     """Stage raw encounter/date/type/birth-year consensus without inclusion.
 
@@ -89,10 +98,27 @@ def build_calendar_candidate_fields(
     A missing or conflicting raw start, type or birth year yields NULL for the
     corresponding consensus field, with counts retained for private QA. No
     missing field is interpreted as an observed clinical negative. The
-    temporary output replaces an earlier temporary output only after QA.
+    temporary output replaces an earlier temporary output only after QA. A
+    caller-selected source relation must include every raw row for each key
+    in its scope; it is not itself proof of an accepted source population.
     """
     output = _quoted(output_relation)
-    if output_relation.casefold() in {"source_encounter", "source_patient"}:
+    source = _quoted(source_encounter_relation)
+    if (
+        expected_exact_keys is not None
+        and (type(expected_exact_keys) is not int or expected_exact_keys < 0)
+    ) or (
+        minimum_source_rows is not None
+        and (type(minimum_source_rows) is not int or minimum_source_rows < 0)
+    ):
+        raise ValueError(
+            "Calendar candidate expected counts must be nonnegative integers"
+        )
+    if output_relation.casefold() in {
+        "source_encounter",
+        "source_patient",
+        source_encounter_relation.casefold(),
+    }:
         raise ValueError("Calendar candidate output must differ from source tables")
     suffix = uuid4().hex
     encounters = _quoted(f"_calendar_raw_encounters_{suffix}")
@@ -102,7 +128,7 @@ def build_calendar_candidate_fields(
         source_rows, invalid_keys = connection.execute(
             "SELECT count(*),count(*) FILTER(WHERE patient_id IS NULL "
             "OR encounter_id IS NULL OR trim(patient_id)='' "
-            "OR trim(encounter_id)='') FROM source_encounter"
+            f"OR trim(encounter_id)='') FROM {source}"
         ).fetchone()
         connection.execute(
             f"CREATE TEMP TABLE {encounters} AS WITH observed AS ("
@@ -113,7 +139,7 @@ def build_calendar_candidate_fields(
             "THEN coalesce(try_strptime(start_date,'%Y%m%d'),"
             "try_strptime(start_date,'%Y-%m-%d'))::DATE ELSE NULL END AS day,"
             "nullif(upper(trim(type)),'') AS encounter_type "
-            "FROM source_encounter WHERE patient_id IS NOT NULL "
+            f"FROM {source} WHERE patient_id IS NOT NULL "
             "AND encounter_id IS NOT NULL AND trim(patient_id)<>'' "
             "AND trim(encounter_id)<>'') "
             "SELECT patient_id,encounter_id,count(*) AS source_rows,"
@@ -185,6 +211,13 @@ def build_calendar_candidate_fields(
             raise ValueError(
                 "Calendar candidate source encounter rows do not reconcile"
             )
+        if (
+            expected_exact_keys is not None
+            and keys != expected_exact_keys
+            or minimum_source_rows is not None
+            and source_rows < minimum_source_rows
+        ):
+            raise ValueError("Calendar candidate scoped keys or source rows differ")
         connection.execute(f"DROP TABLE {patients}")
         connection.execute(f"DROP TABLE {encounters}")
         connection.execute("COMMIT")
@@ -203,3 +236,49 @@ def build_calendar_candidate_fields(
         unresolved_birth_year_keys=int(unresolved_yob),
         conflicting_birth_year_keys=int(conflicting_yob),
     )
+
+
+def build_calendar_type_hint_candidate_fields(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    output_relation: str = "calendar_type_hint_candidate_fields",
+) -> CalendarTypeHintProjectionAudit:
+    """Project all raw rows at keys with any EMER/IMP type hint.
+
+    This bounds the candidate projection without dropping out-of-scope or
+    conflicting records at a hinted key. It neither defines eligible types
+    nor resolves uncertain starts, age, context, gas or patient index.
+    """
+    _quoted(output_relation)
+    if output_relation.casefold() in {"source_encounter", "source_patient"}:
+        raise ValueError("Calendar candidate output must differ from source tables")
+    suffix = uuid4().hex
+    hinted_relation = _quoted(f"_calendar_hint_keys_{suffix}")
+    scoped_relation = _quoted(f"_calendar_hint_source_{suffix}")
+    hint_created = False
+    view_created = False
+    try:
+        hinted = stage_calendar_type_hint_keys(
+            connection, output_relation=f"_calendar_hint_keys_{suffix}"
+        )
+        hint_created = True
+        connection.execute(
+            f"CREATE TEMP VIEW {scoped_relation} AS SELECT e.* "
+            "FROM source_encounter AS e "
+            f"SEMI JOIN {hinted_relation} AS k "
+            "ON e.patient_id=k.patient_id AND e.encounter_id=k.encounter_id"
+        )
+        view_created = True
+        projected = build_calendar_candidate_fields(
+            connection,
+            output_relation=output_relation,
+            source_encounter_relation=f"_calendar_hint_source_{suffix}",
+            expected_exact_keys=hinted.exact_candidate_keys,
+            minimum_source_rows=hinted.valid_type_hint_source_rows,
+        )
+        return CalendarTypeHintProjectionAudit(hinted=hinted, projected=projected)
+    finally:
+        if view_created:
+            connection.execute(f"DROP VIEW {scoped_relation}")
+        if hint_created:
+            connection.execute(f"DROP TABLE {hinted_relation}")
