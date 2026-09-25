@@ -25,6 +25,15 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+The owner subsequently requested a decision/recommendation and completion
+package before unblocking the goal. docs/RETURN_DECISION_PACKAGE.md now records
+six pending scientific decisions, recommended choices and alternatives, repair
+strategies for F1–F7, and explicit C0–C4 exit evidence. It clarifies that known
+day-zero events are excluded from the proposed day-1-through-N endpoint while
+undated/conflicting candidates can leave window membership unknown. No choices
+have been recorded as approved; runtime code and private data remain unchanged,
+and the goal remains BLOCKED pending the owner's response.
+
 2026-09-25 audit update (supersedes return completion claims below): the user
 requested an explanation, code audit and proposed day-resolution course. The
 immediate precision failure is an inherited producer/validator schema mismatch;

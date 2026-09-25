@@ -11,6 +11,11 @@ does not itself require a new temporal endpoint. The day-only policy below is
 an explicit simplification for the observed source resolution; its scientific
 choices remain distinct from the engineering compatibility repair.
 
+The [decision package](RETURN_DECISION_PACKAGE.md) surfaces six owner choices,
+recommended policies, alternatives, defect repairs and checkpoint exit gates.
+Its examples clarify day-zero versus unresolved window membership and mixed
+tested/untested returns. All choices remain proposals until accepted.
+
 ## 1. Population and source boundaries
 
 Retain exactly one summary per original composite key in each parent variant,
@@ -85,10 +90,10 @@ episode appears once in the acute-care union, belongs to inpatient and any ED,
 and is not ED-only. Recurrent episodes remain separate.
 
 Proposed applicability: inpatient returns after inpatient indexes are readmissions;
-inpatient returns after ED-only indexes are admissions. Original index keys without
-a recognized acute setting remain present with `not_applicable` primary return
-outcomes. Any desired generic post-outpatient admission endpoint would need its
-own explicit definition.
+inpatient returns after ED-only indexes are admissions. Known nonacute index keys
+remain present with `not_applicable` primary return outcomes. An unknown setting
+has unavailable applicability, with a distinct reason. Any desired generic
+post-outpatient admission endpoint would need its own explicit definition.
 
 ## 4. Diagnosis and gas qualification
 
@@ -150,6 +155,10 @@ Proposed horizon flag rule: positive if at least one confirmed qualifying event
 exists; otherwise NULL if unresolved candidate timing could change the result.
 A negative flag must be defined as no qualifying event in the evaluable observed
 set, never as complete ascertainment. Supply confirmed counts alongside that flag.
+Known day-zero and known pre-end overlapping starts are outside the day-1-through-N
+endpoint by definition; retain their uncertainty counts, but they alone do not
+make that endpoint's flag NULL. Undated/conflicting candidates whose possible
+start could fall in the window can change an otherwise false flag to NULL.
 
 For gas-related horizon flags, a positive measurement establishes true. With no
 positive result, retain NULL if any relevant confirmed return lacks usable testing
