@@ -1,4 +1,4 @@
-# Return outcomes contract (proposed v1; private acceptance pending)
+# Return outcomes contract (v1)
 
 This is an opt-in, separate outcome product. It does not alter encounter
 features, compatibility CSVs, cohort selection, or study analyses. The input
@@ -99,7 +99,7 @@ summary keys, return links, counts, flags, first dates/timestamps, uncertainty,
 typed schemas and artifact hashes. These commands are not a private acceptance
 seal.
 
-## Current gate status
+## Source capability and acceptance gates
 
 The accepted canonical catalog retains the four required `J96` codes through
 exact rules with a wildcard code-system selector. That selector includes
@@ -115,7 +115,8 @@ Same-day order and those index anchors remain unavailable under this contract.
 The locked aggregate profile reconciles both accepted index populations and
 shows many last observed events before 365 days. The source flow table has no transfer
 identifier or discharge field, so cross-ID continuations remain unconfirmed.
-Private acceptance is pending a resource pilot, one locked two-variant
+Private acceptance requires a resource pilot, one locked two-variant
 outcomes-only build, independent validation, proof that inputs stayed byte
-unchanged, and an external acceptance seal. Do not substitute compatibility
-CSVs, a broad J96 outcome rule, or a raw export rescan.
+unchanged, and an external acceptance seal. The current gate results and
+commands are recorded in [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md). Do not
+substitute compatibility CSVs, a broad J96 outcome rule, or a raw export rescan.
