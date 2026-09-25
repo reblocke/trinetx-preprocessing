@@ -53,20 +53,22 @@ See [schema, independent-variant and timing details](docs/ENCOUNTER_PREPROCESSIN
 ## Small public source example
 
 Review `scripts/run_synthetic_example.py` and the fixture before running. With
-Python/`uv` available, from this repository root:
+Python/`uv` available, from this repository root, choose a fresh external
+output directory for each run. The helper invokes the source builder with
+`--replace`, so do not reuse a directory containing earlier evidence:
 
 ```bash
 uv sync --locked
+EXAMPLE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/trinetx-readme.XXXXXX")"
 uv run python scripts/run_synthetic_example.py \
-  --output-root /tmp/trinetx-preprocessing-readme-example-new
+  --output-root "$EXAMPLE_ROOT"
 ```
 
-Choose a new output path outside Git; the helper writes `config.yaml`, `work/`
-and `output/` there and calls `build-preprocessed` on the bundled fixtures.
+The helper writes `config.yaml`, `work/` and `output/` under that new root and
+calls `build-preprocessed` on the bundled fixtures.
 Check its exit status and `output/trinetx_preprocessed.duckdb` plus the 36
-compatibility CSVs. This is a source-builder smoke, not an encounter-interface
-fixture, private full-data build or scientific validation. If that output root
-already exists, choose another new one rather than overwriting evidence.
+compatibility CSVs there. This is a source-builder smoke, not an
+encounter-interface fixture, private full-data build or scientific validation.
 
 ## Scientific and access limits
 

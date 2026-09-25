@@ -104,10 +104,14 @@ Use the mounted private raw-data tree as `data_dir`, and place `work_dir`,
 `output_dir`, profile output, logs, and manifests under that external root.
 
 ## CLI basics
+Set `VALIDATION_ROOT` to a fresh approved private external directory before
+writing real-input metadata; the examples below must not write generated
+reports inside this Git checkout.
 ```bash
+export VALIDATION_ROOT="/private/path/trinetx-preprocessing-validation"
 ./.venv/bin/python -m trinetx_preprocessing --help
 ./.venv/bin/python -m trinetx_preprocessing inspect-inputs --config config.yaml
-./.venv/bin/python -m trinetx_preprocessing inspect-inputs --config config.yaml --json-out artifacts/input_status.json --max-matches 1 --skip-space-check --domain-timeout-seconds 20
+./.venv/bin/python -m trinetx_preprocessing inspect-inputs --config config.yaml --json-out "$VALIDATION_ROOT/input_status.json" --max-matches 1 --skip-space-check --domain-timeout-seconds 20
 ./.venv/bin/python -m trinetx_preprocessing validate-inputs --config config.yaml
 ./.venv/bin/python -m trinetx_preprocessing run --config config.yaml
 ```
@@ -115,7 +119,8 @@ The JSON `inspect-inputs` output includes the resolved config path, config
 SHA-256, generation time, domain matches, search-directory existence, and free-space checks so it
 can be saved with validation manifests. It stores counts plus a bounded path
 sample, not row-level data. Use `--json` for stdout or `--json-out` to write the
-status file by atomic replacement. Use `--max-matches 1` for quick restore
+status file by atomic replacement. Keep path samples and config metadata in
+approved private storage. Use `--max-matches 1` for quick restore
 monitoring; omit it when you need exact per-domain file counts. Use
 `--domain NAME` to isolate one configured domain, and `--skip-space-check` if
 the mounted volume is stalling on free-space queries. Add
@@ -127,8 +132,9 @@ and timed-out domains must still pass exact `validate-inputs` before a real run.
 ## Performance
 Profile the pipeline with cProfile and stage timers:
 ```bash
+export VALIDATION_ROOT="/private/path/trinetx-preprocessing-validation"
 ./.venv/bin/python -m trinetx_preprocessing profile --config config.yaml \
-  --out artifacts/profile
+  --out "$VALIDATION_ROOT/profile"
 ```
 For the non-combined corrected pipeline, `--strict` enables guardrail checks
 for joins and required identifiers. For the current combined full source, use
