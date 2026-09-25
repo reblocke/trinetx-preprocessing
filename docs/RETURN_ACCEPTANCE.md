@@ -4,13 +4,11 @@ Status: **BLOCKED at C4: accepted parent schema decision required**. This page t
 the opt-in v1 return bundle. The rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
 
 The isolated review branch is `codex/readmissions-20260924`. C0–C3 public
-verification passed on the preceding code identity
-`c1be9fba59bbfd70c94cd2001165b461faf4ce6510d0dbdcd949748a34e6bac3`:
-16 focused return tests, 520 full-suite tests, Ruff check and format, offline
-lock check, non-editable wheel installation, and isolated old/new consumer
-smokes. The subsequent memory-cap change passed 70 affected tests, Ruff check
-and format, and offline lock check; a new full-suite and installed-wheel run
-are pending. The private source and parent bundle identities and C1 aggregate
+verification passed on code identity
+`63ecb329b10d902acfa925e2bfdb28aa65eb6f2df1f2b4f09316a41924b66b17`:
+71 affected tests, 522 full-suite tests, Ruff check and format, offline lock
+check, non-editable wheel installation, and isolated old/new consumer smokes.
+The private source and parent bundle identities and C1 aggregate
 coverage profile have external receipts; private clinical rows and receipts
 remain outside Git.
 

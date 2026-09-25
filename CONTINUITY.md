@@ -69,8 +69,11 @@ now accepts an optional memory cap while keeping its old 1 GiB default;
 opt-in return validation requests 4 GiB. No retry or acceptance is claimed. Independent
 return validation, post-build source byte comparison, and the external
 acceptance seal remain pending.
-The first memory-cap change passed 70 affected tests, Ruff check and format,
-and offline lock check. New full-suite and installed-wheel verification remain due.
+The final bounded-validator code passed 71 affected tests and 522 full-suite
+tests with 238 existing performance warnings. Ruff check and format, offline
+lock check, non-editable wheel installation, and isolated old/new consumer
+smokes also passed; an external C3 receipt binds those checks to code identity
+`63ecb329b10d902acfa925e2bfdb28aa65eb6f2df1f2b4f09316a41924b66b17`.
 A separate 4 GiB parent preflight also failed at the same exact distinct
 aggregation. The opt-in validator now writes two complete, hash-partitioned
 scratch projections and sums exact per-partition distinct counts; default
