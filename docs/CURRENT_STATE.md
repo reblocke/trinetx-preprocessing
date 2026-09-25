@@ -1,6 +1,6 @@
 # Current repository state
 
-Updated 2026-09-24. Python encounter preprocessing is implemented and merged.
+Updated 2026-09-25. Python encounter preprocessing is implemented and merged.
 Public merge and hosted CI state, historical private-run reports, unverified
 private gates, and the supported revalidation/build workflows are summarized in
 [ENCOUNTER_RELEASE.md](ENCOUNTER_RELEASE.md). Product definitions and commands
@@ -24,9 +24,12 @@ The earlier pause awaiting a stable cohort head is superseded by this explicit
 refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
 not a validated medication-assisted-treatment phenotype.
 
-An opt-in, separate return-outcome interface is proposed in
+An opt-in, separate return-outcome interface is implemented for review in
 [RETURN_CONTRACT.md](RETURN_CONTRACT.md). Exact wildcard catalog rules retain
 the required J96 diagnosis rows; the initial source-capability check was too
-narrow and has been corrected. Private return acceptance is pending the
-resource pilot, build, and validation gates. Existing encounter
-and cohort-source interfaces remain unchanged.
+narrow and has been corrected. A resource pilot completed, but the full build
+stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
+an inherited producer/validator precision-schema mismatch and additional return
+implementation defects. C2/C3 need repairs and C4 remains BLOCKED; a
+[calendar-day specification](RETURN_DAY_RESOLUTION_PROPOSAL.md) is proposed for
+review. Existing encounter products and cohort-source interfaces are preserved.

@@ -25,6 +25,20 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-25 audit update (supersedes return completion claims below): the user
+requested an explanation, code audit and proposed day-resolution course. The
+immediate precision failure is an inherited producer/validator schema mismatch;
+v1 already allows day-only returns. Eight targeted synthetic probes reproduced
+that mismatch, NULL precision fall-through, false flags for rejected gases,
+undetected omitted links and inconsistent gas conversion, real parent scratch
+reuse failure, omitted uncertainty summaries and an applicability inconsistency.
+See docs/RETURN_AUDIT.md and the draft docs/RETURN_DAY_RESOLUTION_PROPOSAL.md.
+C2/C3 need repairs and C4 remains BLOCKED. The original 522-test pass remains
+historical evidence, not proof that all acceptance requirements were met.
+This audit changes documentation only; its synthetic script/results and private
+receipt references remain external. The original checkout and accepted inputs
+were not changed. The trusted parent acceptance receipt remains UNCONFIRMED.
+
 The opt-in return-outcome contract and separate build/validation commands are
 implemented locally in isolated worktree `codex/readmissions-20260924`.
 C0 copied the uncommitted encounter hardening baseline without changing the
@@ -131,16 +145,16 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, obtain an explicit schema-version decision for the
-accepted parent evidence gap. A new accepted parent bundle with explicit
-precision, or an approved versioned rule proving equivalent precision from
-retained source fields, must then pass the complete parent validator. Only
-after that gate and refreshed C3 checks may a new external full-build attempt
-run; preserve all failed receipts and work. On terminal completion,
-independently validate the separate bundle, prove accepted source/parent
-artifacts byte-unchanged, and write the external acceptance seal. Cross-ID
-continuations remain unconfirmed because the flow table has no transfer or
-discharge authority.
+For return outcomes, review the calendar-day proposal and record approved
+scientific choices. Repair F1–F7, including a versioned proof for retained parent
+raw dates, real producer/validator and resume integration, and independent
+source/evidence/link completeness checks. Resolve trusted parent acceptance
+provenance and complete parent validation. Refresh C3 and installed runner
+identities, then establish bounded builder/validator resource readiness before
+one new locked full-build attempt. Preserve failed receipts/work. Full output
+validation, byte-unchanged source/parent proof and an external acceptance seal
+remain required. Cross-ID continuations remain unconfirmed because the flow
+table has no transfer or discharge authority.
 
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed

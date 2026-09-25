@@ -1,16 +1,23 @@
 # Return outcomes acceptance
 
-Status: **BLOCKED at C4: accepted parent schema decision required**. This page tracks private acceptance for
-the opt-in v1 return bundle. The rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
+Status: **BLOCKED: C2/C3 repairs and versioned parent precision compatibility proof
+required before C4**. This page tracks private acceptance for the opt-in v1
+return bundle. The executable rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
+The [2026-09-25 audit](RETURN_AUDIT.md) supersedes any earlier claim that C0–C3
+were fully satisfied. A [calendar-day v2 proposal](RETURN_DAY_RESOLUTION_PROPOSAL.md)
+is available for review; it has not been applied.
 
-The isolated review branch is `codex/readmissions-20260924`. C0–C3 public
-verification passed on code identity
+The isolated review branch is `codex/readmissions-20260924`. The recorded public
+suite and packaging checks passed on code identity
 `63ecb329b10d902acfa925e2bfdb28aa65eb6f2df1f2b4f09316a41924b66b17`:
 71 affected tests, 522 full-suite tests, Ruff check and format, offline lock
 check, non-editable wheel installation, and isolated old/new consumer smokes.
 The private source and parent bundle identities and C1 aggregate
 coverage profile have external receipts; private clinical rows and receipts
-remain outside Git.
+remain outside Git. New targeted synthetic probes reproduced defects in
+precision NULL handling, gas three-state results, link/evidence validation,
+resume scratch handling and uncertainty summaries. The passing test count
+therefore does not close C2 or C3.
 
 The 32-partition resource pilot completed both variants and passed its
 summary-key, artifact-hash, input-identity, and 100 GiB free-space gates.
@@ -28,8 +35,8 @@ preserves every evidence row. The old validator path remains the default.
 A locked full-scale preflight passed the memory-intensive exact-count stage,
 then stopped because the accepted schema 2.0 parent bundle lacks the required
 `event_datetime_precision` column in diagnosis, procedure, and medication
-component evidence for both variants. The producer retains raw `date` and
-`event_datetime` but does not write that explicit precision field for those
+component evidence for both variants. The producer retains raw `date` (or
+medication `start_date`) and `event_datetime` but does not write that field for those
 tables. The current validator requires it, and the accepted bundle cannot be
 rebuilt or modified under this request. The external schema audit records all
 six affected artifacts and the exact parent/code identities. No return bundle,
@@ -42,11 +49,14 @@ parseable as date-only values, and agree with the parsed event calendar dates;
 the parsed events have no time of day. Its private receipts remain external.
 This evidence does not add the missing field or authorize a new schema rule.
 
-An owner-approved schema-version decision is required: either supply a newly
-accepted parent bundle with the required field, or authorize a versioned
-validation rule for the existing bundle that proves equivalent precision from
-its retained source fields. Until that decision and its tests/private gate
-pass, do not bypass the parent validator or retry the outcomes build.
+The audit reproduced this mismatch with the unchanged synthetic evidence
+producer. Day-only dates are already permitted by v1. The recommended repair is
+a versioned parent-validation compatibility rule proving equivalent precision
+from retained raw fields while preserving the accepted parent schema and bytes.
+An unchanged producer rebuild would reproduce the missing field. Resolve the
+versioned compatibility rule, all audit findings, trusted parent acceptance provenance,
+complete parent validation and refreshed C3 gates before retrying the outcomes
+build. Do not bypass the validator.
 
 The equivalent public command shape is:
 
