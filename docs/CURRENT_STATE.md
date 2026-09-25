@@ -31,6 +31,9 @@ event precision across encounter starts, labs, catalog-matched arterial PaCO2
 and pH candidates, and medication starts, plus medication end/status capture and raw-header field
 presence, without returning rows or paths. It is a candidate-source screen;
 the accepted source limitation and scientific report gate are unchanged.
+It now also inventories arterial numeric values, mmHg unit labels, specimen
+and panel identifiers, and same-day groups containing both arterial elements.
+Those aggregate groups do not establish that panel IDs mean one specimen.
 The read-only `audit-cohort-source-capabilities` command exposes this screen
 through a validated canonical source and labels both acceptance and abstract
 report readiness false.

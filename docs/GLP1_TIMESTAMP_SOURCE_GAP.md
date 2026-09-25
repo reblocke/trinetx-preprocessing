@@ -57,8 +57,11 @@ be run against date-only records to claim the revised phenotype.
 ## Audit-tool scope
 
 The draft `audit_candidate_source_capabilities()` helper counts precision
-labels and populated medication fields in aggregate after canonical-source
-validation. The header-only `screen-glp1-export-headers` command reports
+labels, populated medication fields, and catalog-matched arterial numeric,
+unit and sample-linkage field capture in aggregate after canonical-source
+validation. Same-day specimen and panel group counts are structural hints,
+not proof of true paired samples or validated units. The header-only
+`screen-glp1-export-headers` command reports
 field-presence hints without clinical rows. Their outputs do not establish a
 clinical phenotype or issue an acceptance receipt. An owner-only capability
 run on the accepted snapshot agreed with the earlier audits, with stable

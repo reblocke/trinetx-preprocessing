@@ -46,14 +46,69 @@ class MedicationFieldCapture:
 
 
 @dataclass(frozen=True)
+class ArterialEvidenceCapture:
+    pco2_rows_with_numeric_value: int
+    pco2_rows_with_mmhg_unit: int
+    pco2_rows_with_specimen_id: int
+    pco2_rows_with_panel_id: int
+    ph_rows_with_numeric_value: int
+    ph_rows_with_specimen_id: int
+    ph_rows_with_panel_id: int
+    same_day_specimen_groups_with_both_elements: int
+    same_day_panel_groups_with_both_elements: int
+
+
+@dataclass(frozen=True)
 class CandidateSourceCapabilityAudit:
     encounter_starts: PrecisionCapture
     lab_events: PrecisionCapture
     arterial_pco2_candidates: PrecisionCapture
     arterial_ph_candidates: PrecisionCapture
+    arterial_evidence: ArterialEvidenceCapture
     medication_starts: PrecisionCapture
     medication_fields: MedicationFieldCapture
     raw_headers: tuple[RawHeaderCapture, ...]
+
+
+def _arterial_evidence(
+    connection: duckdb.DuckDBPyConnection,
+) -> ArterialEvidenceCapture:
+    matched = (
+        "WITH matched AS (SELECT lab.patient_id,lab.encounter_id,lab.date,"
+        "lab.timestamp_precision,lab.numeric_value,lab.units_of_measure,"
+        "lab.specimen_id,lab.panel_id,"
+        "EXISTS(SELECT 1 FROM element_membership AS m "
+        "WHERE m.source_record_id=lab.source_record_id "
+        "AND m.element_id='source.arterial_pco2' AND m.include IS TRUE) AS pco2,"
+        "EXISTS(SELECT 1 FROM element_membership AS m "
+        "WHERE m.source_record_id=lab.source_record_id "
+        "AND m.element_id='source.arterial_ph' AND m.include IS TRUE) AS ph "
+        "FROM source_lab_measurement AS lab) "
+    )
+    counts = connection.execute(
+        matched + "SELECT "
+        "count(*) FILTER(WHERE pco2 AND numeric_value IS NOT NULL),"
+        "count(*) FILTER(WHERE pco2 AND units_of_measure='mmhg'),"
+        "count(*) FILTER(WHERE pco2 AND nullif(trim(specimen_id),'') IS NOT NULL),"
+        "count(*) FILTER(WHERE pco2 AND nullif(trim(panel_id),'') IS NOT NULL),"
+        "count(*) FILTER(WHERE ph AND numeric_value IS NOT NULL),"
+        "count(*) FILTER(WHERE ph AND nullif(trim(specimen_id),'') IS NOT NULL),"
+        "count(*) FILTER(WHERE ph AND nullif(trim(panel_id),'') IS NOT NULL) "
+        "FROM matched"
+    ).fetchone()
+    pair_counts = []
+    for field in ("specimen_id", "panel_id"):
+        pair_counts.append(
+            connection.execute(
+                matched + "SELECT count(*) FROM (SELECT 1 FROM matched "
+                "WHERE patient_id IS NOT NULL AND encounter_id IS NOT NULL "
+                "AND date IS NOT NULL AND timestamp_precision='date_only' "
+                f"AND nullif(trim({field}),'') IS NOT NULL "
+                f"GROUP BY patient_id,encounter_id,date,{field} "
+                "HAVING bool_or(pco2) AND bool_or(ph))"
+            ).fetchone()[0]
+        )
+    return ArterialEvidenceCapture(*(int(value) for value in (*counts, *pair_counts)))
 
 
 def _precision(
@@ -196,6 +251,7 @@ def audit_candidate_source_capabilities(
         lab_events=precision[1],
         arterial_pco2_candidates=precision[2],
         arterial_ph_candidates=precision[3],
+        arterial_evidence=_arterial_evidence(connection),
         medication_starts=precision[4],
         medication_fields=MedicationFieldCapture(
             source_rows=int(medication_rows[0]),

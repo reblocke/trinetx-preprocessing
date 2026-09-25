@@ -27,14 +27,20 @@ def _source() -> duckdb.DuckDBPyConnection:
     )
     connection.execute(
         "CREATE TABLE source_lab_measurement("
-        "source_record_id VARCHAR,timestamp_precision VARCHAR,event_datetime TIMESTAMP)"
+        "source_record_id VARCHAR,timestamp_precision VARCHAR,event_datetime TIMESTAMP,"
+        "patient_id VARCHAR,encounter_id VARCHAR,date VARCHAR,numeric_value DOUBLE,"
+        "units_of_measure VARCHAR,specimen_id VARCHAR,panel_id VARCHAR)"
     )
     connection.execute(
         "INSERT INTO source_lab_measurement VALUES "
-        "('gas-1','date_only','2024-01-01'),"
-        "('ph-1','date_only','2024-01-02'),"
-        "('other-1','timestamp','2024-01-02 10:17:00'),"
-        "('gas-2','timestamp','2024-01-02 10:18:00')"
+        "('gas-1','date_only','2024-01-01','p','e','2024-01-01',50,"
+        "'mmhg','sample-1','panel-1'),"
+        "('ph-1','date_only','2024-01-01','p','e','2024-01-01',7.3,"
+        "NULL,'sample-1','panel-1'),"
+        "('other-1','timestamp','2024-01-02 10:17:00','p','e',"
+        "'2024-01-02 10:17:00',7.4,NULL,NULL,NULL),"
+        "('gas-2','timestamp','2024-01-02 10:18:00','p','e',"
+        "'2024-01-02 10:18:00',NULL,NULL,NULL,NULL)"
     )
     connection.execute(
         "CREATE TABLE element_membership("
@@ -93,6 +99,12 @@ def test_capability_audit_distinguishes_timed_parsed_date_only_and_raw_field_cap
     assert result.arterial_pco2_candidates.parsed_timestamp_rows == 1
     assert result.arterial_ph_candidates.source_rows == 1
     assert result.arterial_ph_candidates.date_only_rows == 1
+    assert result.arterial_evidence.pco2_rows_with_numeric_value == 1
+    assert result.arterial_evidence.pco2_rows_with_mmhg_unit == 1
+    assert result.arterial_evidence.pco2_rows_with_specimen_id == 1
+    assert result.arterial_evidence.ph_rows_with_numeric_value == 1
+    assert result.arterial_evidence.same_day_specimen_groups_with_both_elements == 1
+    assert result.arterial_evidence.same_day_panel_groups_with_both_elements == 1
     assert result.medication_starts.parsed_timestamp_rows == 1
     assert result.medication_starts.unparsed_timestamp_rows == 1
     assert result.medication_fields.source_rows == 3
@@ -129,8 +141,23 @@ def test_empty_candidate_has_zero_capability_without_imputing_capture():
     assert result.lab_events.parsed_timestamp_rows == 0
     assert result.arterial_pco2_candidates.source_rows == 0
     assert result.arterial_ph_candidates.source_rows == 0
+    assert result.arterial_evidence.same_day_specimen_groups_with_both_elements == 0
     assert result.medication_fields.rows_with_end_date == 0
     assert {item.source_files for item in result.raw_headers} == {0}
+
+
+def test_arterial_linkage_inventory_requires_same_day_without_asserting_pairing():
+    with _source() as connection:
+        connection.execute(
+            "UPDATE source_lab_measurement SET date='2024-01-02' "
+            "WHERE source_record_id='ph-1'"
+        )
+        result = cohort_source_capability_audit.audit_candidate_source_capabilities(
+            connection
+        )
+    assert result.arterial_evidence.same_day_specimen_groups_with_both_elements == 0
+    assert result.arterial_evidence.same_day_panel_groups_with_both_elements == 0
+    assert result.arterial_evidence.ph_rows_with_specimen_id == 1
 
 
 def test_missing_arterial_catalog_element_is_not_a_zero_candidate_result():

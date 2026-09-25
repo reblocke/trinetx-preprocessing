@@ -16,6 +16,9 @@ arterial values, units and linkage identifiers at the exact original
 patient/encounter key; it fails on conflicting date-only starts or undated
 arterial candidates. Synthetic tests pass. It does not accept a population,
 normalize clinical gas values, or produce a report.
+The aggregate candidate capability audit now also reports arterial numeric,
+unit, specimen and panel-field capture plus same-day linkage groups. These are
+source-mapping diagnostics, not clinically validated gas pairs.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the
