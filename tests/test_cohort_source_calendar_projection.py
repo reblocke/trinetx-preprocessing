@@ -129,3 +129,31 @@ def test_projection_rejects_missing_arterial_catalog_element():
             projection.project_calendar_encounter_evidence(
                 connection, patient_id="p", encounter_id="e"
             )
+
+
+def test_projection_accepts_observed_compact_dates_without_time_order():
+    with _source() as connection:
+        connection.execute(
+            "UPDATE source_encounter SET start_date='20240101' WHERE patient_id='p'"
+        )
+        connection.execute(
+            "UPDATE source_lab_measurement SET date='20240102' "
+            "WHERE source_record_id IN ('gas','ph')"
+        )
+        result = projection.project_calendar_encounter_evidence(
+            connection, patient_id="p", encounter_id="e"
+        )
+    assert result.encounter_start_date == date(2024, 1, 1)
+    assert {row.event_date for row in result.gas_candidates} == {date(2024, 1, 2)}
+
+
+def test_projection_rejects_invalid_compact_calendar_day():
+    with _source() as connection:
+        connection.execute(
+            "UPDATE source_lab_measurement SET date='20240230' "
+            "WHERE source_record_id='gas'"
+        )
+        with pytest.raises(ValueError, match="invalid observed calendar date"):
+            projection.project_calendar_encounter_evidence(
+                connection, patient_id="p", encounter_id="e"
+            )

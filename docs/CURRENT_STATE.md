@@ -37,6 +37,17 @@ Those aggregate groups do not establish that panel IDs mean one specimen.
 The read-only `audit-cohort-source-capabilities` command exposes this screen
 through a validated canonical source and labels both acceptance and abstract
 report readiness false.
+The candidate bulk calendar gas projection now reads caller-selected exact
+patient/encounter keys through temporary read-only tables and streams one raw
+evidence result per index. Synthetic parity and cleanup tests pass; private
+population-scale runtime and clinical mapping remain unvalidated.
+An owner-only full-source gas-policy audit completed with stable source
+identity but revealed a candidate parser mismatch: observed compact date-only
+strings were counted as invalid by an ISO-only draft check. The candidate
+parser and batch projection now handle both observed date forms. The audit's
+field-capture categories show absent specimen and specimen/panel link IDs in
+these catalog-matched candidates; a corrected audit and clinical source-policy
+review remain required before a paired-pH claim or phenotype estimate.
 An additional candidate audit now counts fixed categories for arterial unit,
 specimen, numeric, date and same-day linkage evidence without releasing raw
 labels or source keys. It has no CLI yet. Its results inform a future reviewed

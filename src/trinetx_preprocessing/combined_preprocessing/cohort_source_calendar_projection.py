@@ -13,7 +13,7 @@ from datetime import date
 
 import duckdb
 
-_DAY = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
+_DAY = re.compile(r"(?:\d{8}|\d{4}-\d{2}-\d{2})\Z")
 _GAS_ELEMENTS = ("source.arterial_pco2", "source.arterial_ph")
 
 
@@ -45,7 +45,11 @@ def _observed_day(raw: object, precision: object, *, label: str) -> date:
     if precision != "date_only" or not isinstance(raw, str) or not _DAY.fullmatch(raw):
         raise ValueError(f"{label} must have an observed date-only raw value")
     try:
-        return date.fromisoformat(raw)
+        return (
+            date(int(raw[:4]), int(raw[4:6]), int(raw[6:]))
+            if len(raw) == 8
+            else date.fromisoformat(raw)
+        )
     except ValueError as exc:
         raise ValueError(f"{label} has an invalid observed calendar date") from exc
 

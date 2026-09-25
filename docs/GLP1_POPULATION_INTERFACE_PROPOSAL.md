@@ -35,6 +35,17 @@ The audit materializes only catalog-matched candidate rows in temporary
 read-only-connection tables, then reuses that set for all fixed-category and
 linkage counts. It drops those tables on success or failure. This avoids
 repeating the full canonical-source join for each count.
+An owner-only candidate run at `f598ab6` completed in 1,394.25 seconds with
+stable source identity and an owner-only receipt read-back. It found that the
+catalog-matched arterial candidates have no populated specimen or specimen/panel
+link identifiers on this snapshot; same-day pH therefore cannot be called a
+linked sample. Its first date-validity result was invalidated by the draft
+parser accepting only hyphenated dates, while the source stores observed
+compact `YYYYMMDD` dates. The parser, batch start check and fixed-category
+date audit now accept both compact and hyphenated observed date-only forms.
+The audit also adds fixed hints for common unit-label variants while leaving
+clinical conversion and specimen meaning unapproved. A corrected private
+aggregate rerun is required before source policy review.
 
 ## Proposed upstream product
 
@@ -66,8 +77,10 @@ coverage gates in the trusted receipt. The open function reuses the existing
 read-only cohort-source API and checks file identity across the read. A
 synthetic receipt and database exercise positive and tamper rejection paths;
 they do not pass the private gates or authorize downstream adoption. Hashing
-the full database is an intentional once-per-open cost to bind exact bytes;
-its private runtime is still unmeasured.
+the full database is an intentional once-per-open cost to bind exact bytes.
+An owner-only standalone read-only SHA-256 pass over the 167.3 GiB canonical
+database took 924.88 seconds with stable identities and receipt read-back.
+That measures the digest alone, not a complete accepted-source open or report.
 
 The candidate `project_calendar_encounter_evidence()` reads one original
 patient/encounter key from a caller-opened validated source. It requires
@@ -79,6 +92,18 @@ precision and ambiguity fixtures pass. This per-encounter projection is a
 validation bridge, not a measured bulk report path or evidence of source
 acceptance. Clinical specimen, unit, plausibility and linkage policies remain
 downstream decisions.
+
+The candidate `iter_calendar_population_evidence()` accepts a caller-owned
+one-row-per-patient exact-key index relation and streams raw arterial candidates
+through read-only temporary tables. It validates original VARCHAR keys,
+observed date-only starts and ambiguous source records, scans gas membership
+once for the selected keys, and removes temporary tables on normal completion,
+early close or error. It never chooses the index or classifies a gas. A
+200-encounter/100,200-membership-row synthetic comparison returned identical
+per-encounter results in 0.020 seconds versus 1.846 seconds for repeated
+single-key projection, excluding source verification and trust hashing. This
+one-run fixture does not measure the private population or establish source
+acceptance; the full-source batch path still needs private runtime validation.
 
 The draft `audit_candidate_population()` compares an authenticated historical
 patient/index key table supplied by the caller against the unfiltered canonical

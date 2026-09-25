@@ -136,3 +136,31 @@ def test_candidate_temp_tables_are_removed_after_audit_failure(monkeypatch):
         assert connection.execute(
             "SELECT count(*) FROM duckdb_tables() WHERE table_name LIKE 'gas_audit_%'"
         ).fetchone() == (0,)
+
+
+def test_compact_observed_dates_are_not_misclassified_as_invalid():
+    with _source() as connection:
+        connection.execute(
+            "UPDATE source_lab_measurement SET date='20240101' WHERE date='2024-01-01'"
+        )
+        result = audit_candidate_gas_policy(connection)
+    assert result.pco2.missing_or_invalid_date == 1
+    assert result.ph.missing_or_invalid_date == 0
+    assert result.linkage.same_day_specimen_groups_with_both == 1
+
+
+def test_noncanonical_unit_hints_remain_in_other_category():
+    with _source() as connection:
+        connection.execute(
+            "UPDATE source_lab_measurement SET units_of_measure='mm Hg' "
+            "WHERE source_record_id='gas-2'"
+        )
+        connection.execute(
+            "UPDATE source_lab_measurement SET units_of_measure='pH' "
+            "WHERE source_record_id='ph-2'"
+        )
+        result = audit_candidate_gas_policy(connection)
+    assert result.pco2.mmhg_spaced_unit_rows == 1
+    assert result.pco2.other_unit_rows == 1
+    assert result.ph.ph_literal_unit_rows == 1
+    assert result.ph.other_unit_rows == 1

@@ -16,6 +16,12 @@ arterial values, units and linkage identifiers at the exact original
 patient/encounter key; it fails on conflicting date-only starts or undated
 arterial candidates. Synthetic tests pass. It does not accept a population,
 normalize clinical gas values, or produce a report.
+A bulk candidate projection now takes a caller-selected one-index-per-patient
+relation, validates exact keys and source starts, scans gas membership once,
+streams raw encounter candidates and drops temporary tables on exit. Eighteen
+focused single/bulk tests pass. A one-run 200-index/100,200-membership-row
+synthetic comparison matched the single-key results in 0.020 versus 1.846
+seconds; it excludes trust hashing and is not private-scale validation.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.
@@ -26,8 +32,14 @@ pass. It returns no raw labels or keys and does not approve clinical mapping.
 An owner-only first attempt exceeded a 3 GiB DuckDB query limit. A bounded
 6 GiB retry revealed repeated large source joins and was stopped before it
 produced a receipt. The audit now materializes the matched candidate set once
-in temporary tables and cleans them on exit; private runtime validation is
-pending.
+in temporary tables and cleans them on exit. An owner-only run at `f598ab6`
+then completed in 1,394.25 seconds
+with stable input identities and mode-0600 read-back. It exposed the draft
+ISO-only date-check error against observed compact `YYYYMMDD` source dates;
+specimen and specimen/panel link IDs were absent in the catalog-matched
+candidates. The parser, batch start check and audit now accept both observed
+date-only forms. Fixed unit-label hints were added. A corrected private rerun
+and clinical policy review remain open; no linked-pH or report claim follows.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the

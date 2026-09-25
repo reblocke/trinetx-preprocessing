@@ -31,7 +31,11 @@ class GasCandidateProfile:
     missing_specimen_rows: int
     other_specimen_rows: int
     mmhg_unit_rows: int
+    mmhg_spaced_unit_rows: int
+    mmhg_ucum_unit_rows: int
     kpa_unit_rows: int
+    ph_literal_unit_rows: int
+    unitless_literal_unit_rows: int
     missing_unit_rows: int
     other_unit_rows: int
     specimen_id_rows: int
@@ -78,7 +82,8 @@ def _profile(
         "count(*) FILTER(WHERE nullif(trim(source_record_id),'') IS NULL),"
         "count(*) FILTER(WHERE date IS NULL OR "
         "timestamp_precision IS DISTINCT FROM 'date_only' "
-        "OR try_strptime(date,'%Y-%m-%d') IS NULL),"
+        "OR coalesce(try_strptime(date,'%Y%m%d'),"
+        "try_strptime(date,'%Y-%m-%d')) IS NULL),"
         "count(*) FILTER(WHERE numeric_value IS NOT NULL "
         "AND isfinite(numeric_value)),"
         "count(*) FILTER(WHERE numeric_value IS NOT NULL "
@@ -90,7 +95,11 @@ def _profile(
         "count(*) FILTER(WHERE nullif(trim(specimen),'') IS NOT NULL "
         "AND lower(trim(specimen))!='arterial'),"
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='mmhg'),"
+        "count(*) FILTER(WHERE lower(trim(units_of_measure))='mm hg'),"
+        "count(*) FILTER(WHERE lower(trim(units_of_measure))='mm[hg]'),"
         "count(*) FILTER(WHERE lower(trim(units_of_measure))='kpa'),"
+        "count(*) FILTER(WHERE lower(trim(units_of_measure))='ph'),"
+        "count(*) FILTER(WHERE lower(trim(units_of_measure))='unitless'),"
         "count(*) FILTER(WHERE nullif(trim(units_of_measure),'') IS NULL),"
         "count(*) FILTER(WHERE nullif(trim(units_of_measure),'') IS NOT NULL "
         "AND lower(trim(units_of_measure)) NOT IN ('mmhg','kpa')) ,"
@@ -134,7 +143,8 @@ def _linkage(connection: duckdb.DuckDBPyConnection, table: str) -> GasLinkagePro
                 "AS ph_count FROM matched WHERE (pco2 OR ph) "
                 "AND nullif(trim(patient_id),'') IS NOT NULL "
                 "AND nullif(trim(encounter_id),'') IS NOT NULL "
-                "AND try_strptime(date,'%Y-%m-%d') IS NOT NULL "
+                "AND coalesce(try_strptime(date,'%Y%m%d'),"
+                "try_strptime(date,'%Y-%m-%d')) IS NOT NULL "
                 "AND timestamp_precision='date_only' "
                 f"AND nullif(trim({key}),'') IS NOT NULL "
                 f"GROUP BY patient_id,encounter_id,date,{key}) "
