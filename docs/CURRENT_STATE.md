@@ -84,6 +84,11 @@ when the corresponding source rows agree, with separate missing/conflict QA.
 Invalid source keys are counted, not silently incorporated. Synthetic
 read-only, duplicate, conflict, empty and rollback checks pass. It does not
 apply adult/type/context eligibility or select the study population.
+Owner-only aggregate checks on the historical patient scope found complete
+exact historical index-key presence and date/type/historical-age-proxy
+agreement at those keys, with age-18 boundary uncertainty still present.
+Source identities and private receipt read-backs passed. This does not
+accept the independent source population or a revised patient index.
 The candidate per-encounter calendar projection preserves exact original
 keys, raw observed dates, units and sample identifiers. It fails on
 conflicting starts or undated arterial candidates; synthetic tests pass.

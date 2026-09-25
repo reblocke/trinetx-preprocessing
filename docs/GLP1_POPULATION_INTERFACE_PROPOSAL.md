@@ -74,6 +74,14 @@ age from birth year, apply context exclusions or choose an index. This makes
 source uncertainty visible before downstream study rules are applied.
 Synthetic read-only, ambiguity, empty-population and prior-output-preservation
 fixtures pass. The full private source and scope gates remain open.
+An owner-only aggregate audit used the historical patient IDs as a bounded
+scope for this projection. A separate exact-index read-back found every
+historical index key in that candidate source and agreement of observed
+calendar date, encounter type and the historical birth-year age proxy at
+those keys. Age-18 boundary cases remain. Both audits passed stable source
+identity and private receipt read-back checks. They do not test the extra
+source population, context exclusions, clinical gas qualification or a new
+patient index and cannot accept this independent interface.
 
 The existing read-only `open_cohort_source()` / `validate_cohort_source()`
 boundary already exposes versioned canonical source tables with manifest,

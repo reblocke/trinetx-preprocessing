@@ -38,6 +38,13 @@ eligibility and age interpretation remain downstream study decisions.
 A one-run 200,000-encounter/100,000-patient in-memory synthetic build under a
 512 MB DuckDB limit took 0.127 seconds; this excludes canonical-source
 verification and is not a private runtime measurement.
+Two owner-only aggregate historical-patient-scope audits completed in 3.6 and
+3.9 minutes. The second independently reproduced the first source-field and
+descriptor categories, found every historical exact index key present, and
+found concordant source date, encounter type and historical age proxy at those
+keys. Age-18 boundary cases were present. Both runs used the same stable
+source identities and mode-0600 receipt read-back. They do not cover extra
+source patients, clinical gas qualification or new patient-index selection.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.
