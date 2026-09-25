@@ -67,7 +67,7 @@ def test_fixed_categories_and_ambiguous_same_day_link_groups():
     assert result.pco2.candidate_rows == 3
     assert result.pco2.missing_or_invalid_date == 1
     assert result.pco2.finite_numeric_rows == 2
-    assert result.pco2.pco2_over_200_rows == 1
+    assert result.pco2.raw_pco2_value_over_200_rows == 1
     assert result.pco2.arterial_specimen_rows == 1
     assert result.pco2.other_specimen_rows == 1
     assert result.pco2.missing_specimen_rows == 1

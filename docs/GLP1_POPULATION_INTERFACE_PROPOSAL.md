@@ -26,8 +26,8 @@ canonical source. It does not select a population or make a new source
 acceptable for the original abstract.
 The separate `cohort_source_gas_policy_audit.py` candidate counts fixed
 categories for catalog-matched arterial PaCO2 and pH rows: source-key and
-date completeness, numeric ranges, normalized unit classes, specimen-label
-classes, and same-day specimen/panel group multiplicity. It emits no source
+date completeness, raw numeric screening ranges, normalized unit classes,
+specimen-label classes, and same-day specimen/panel group multiplicity. It emits no source
 labels or row identifiers. These counts support clinical review of a future
 versioned mapping policy; they do not approve unit conversion, specimen
 semantics, plausibility limits, or sample linkage.

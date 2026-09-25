@@ -24,7 +24,7 @@ class GasCandidateProfile:
     missing_or_invalid_date: int
     finite_numeric_rows: int
     nonpositive_numeric_rows: int
-    pco2_over_200_rows: int
+    raw_pco2_value_over_200_rows: int
     ph_at_or_above_14_rows: int
     arterial_specimen_rows: int
     missing_specimen_rows: int
@@ -56,7 +56,7 @@ class CandidateGasPolicyAudit:
 def _profile(
     connection: duckdb.DuckDBPyConnection, element_id: str
 ) -> GasCandidateProfile:
-    pco2_over_200 = (
+    raw_pco2_value_over_200 = (
         "count(*) FILTER(WHERE numeric_value IS NOT NULL "
         "AND isfinite(numeric_value) AND numeric_value>200)"
         if element_id == "source.arterial_pco2"
@@ -84,7 +84,7 @@ def _profile(
         "AND isfinite(numeric_value)),"
         "count(*) FILTER(WHERE numeric_value IS NOT NULL "
         "AND isfinite(numeric_value) AND numeric_value<=0),"
-        f"{pco2_over_200},"
+        f"{raw_pco2_value_over_200},"
         f"{ph_at_or_above_14},"
         "count(*) FILTER(WHERE lower(trim(specimen))='arterial'),"
         "count(*) FILTER(WHERE nullif(trim(specimen),'') IS NULL),"
