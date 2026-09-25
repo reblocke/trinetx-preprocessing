@@ -17,6 +17,10 @@
 5. GLP-1 migration tests: direct-raw versus adapter-backed source and downstream
    parity across all five clinical domains, including traditional-only source
    candidates and concept-independent raw observability
+6. Return-outcome tests: opt-in synthetic episode, ICD/gas, partition/resume,
+   artifact-identity and summary reconciliation checks. The private source
+   capability preflight must pass before any outcomes-only resource pilot or
+   build; public fixtures never replace that gate.
 
 ## Commands
 ```bash
@@ -26,6 +30,8 @@ uv lock --check
 uv run pytest -q
 uv run python -m trinetx_preprocessing --help
 uv run python -m trinetx_preprocessing validate-cohort-source --help
+uv run python -m trinetx_preprocessing build-returns --help
+uv run python -m trinetx_preprocessing validate-returns --help
 ```
 
 ## Fixtures

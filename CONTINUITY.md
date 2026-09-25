@@ -25,6 +25,23 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+The opt-in return-outcome contract and separate build/validation commands are
+implemented locally in isolated worktree `codex/readmissions-20260924`.
+C0 copied the uncommitted encounter hardening baseline without changing the
+original checkout; its 109 encounter tests passed. The accepted parent manifest
+and canonical source sidecar hashes agree. A locked aggregate profile found
+date-only encounter starts/ends, missing/conflicting index episode ends, and
+shared ED/inpatient source IDs. A source-catalog preflight found that the
+accepted concept-filtered diagnosis source lacks four required J96 codes.
+Private return acceptance is **BLOCKED** before a resource pilot or build.
+The aggregate receipt is external; no private row-level product was published.
+Nine focused return tests, the final full suite (513 passed), Ruff check and
+format, `uv lock --check`, a non-editable wheel build, and Python `-I` installed
+CLI/legacy-consumer smokes passed. An earlier full run had one intermittent
+combined compatibility-export worker failure; that test passed in isolation
+and in the unchanged final full run. These checks do not satisfy the missing
+private source capability, resource pilot, or C4 acceptance seal.
+
 This ticket adds versioned per-table Parquet evidence contracts, independent
 feature-missingness and source-coverage reconciliations, explicit strict versus
 permitted-incomplete linkage policy, manifest-bound validation reports and
@@ -65,6 +82,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
+For return outcomes, obtain an approved canonical diagnosis source that retains
+the exact J96.02/J96.12/J96.22/J96.92/E66.2 codes, revalidate source/parent
+linkage and contract rules, then perform a resource pilot and one locked private
+outcomes-only build with independent validation and an external acceptance seal.
+
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed
 consumer readback, and verify the trusted receipt against exact manifest/report

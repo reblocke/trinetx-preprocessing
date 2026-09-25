@@ -772,8 +772,7 @@ def _count_retained_sources_without_included_membership(
             source_rows = _count(connection, table_name)
             included_membership_rows = int(
                 connection.execute(
-                    "SELECT count(*) FROM "
-                    f"{included_membership_relation}"
+                    f"SELECT count(*) FROM {included_membership_relation}"
                 ).fetchone()[0]
             )
             if (

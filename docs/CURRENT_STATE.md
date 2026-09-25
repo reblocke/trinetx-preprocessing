@@ -23,3 +23,8 @@ The owner-approved extraction uses downstream merged source 5ada7194d40f.
 The earlier pause awaiting a stable cohort head is superseded by this explicit
 refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
 not a validated medication-assisted-treatment phenotype.
+
+An opt-in, separate return-outcome interface is proposed in
+[RETURN_CONTRACT.md](RETURN_CONTRACT.md). Its private acceptance is BLOCKED:
+the accepted concept-filtered diagnosis source lacks four required exact J96
+codes. Existing encounter and cohort-source interfaces remain unchanged.
