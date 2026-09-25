@@ -146,6 +146,12 @@ separate time-of-day or medication end/status fields. No clinical values were
 read, so this is historical source-layout context, not a current-source or
 phenotype acceptance decision. A current alternative extract remains
 UNCONFIRMED.
+Current TriNetX public Dataworks material describes date-stamped records and
+optional requested enhancements but does not promise clinical times. Its
+publication guidance points to the designated institutional representative for
+contractual clarification. The timestamp-source-gap document now includes a
+prepared, unsent feasibility inquiry for that route. No recipient, request,
+new extract or source acceptance is established.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

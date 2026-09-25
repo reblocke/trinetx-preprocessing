@@ -101,6 +101,16 @@ extract can supply actual clinical event times, rather than another download
 of the date-only `YYYYMMDD` layout. Request a current field dictionary and a
 safe, aggregate precision inventory before any transfer. At minimum, ask for:
 
+[TriNetX's current Dataworks description](https://trinetx.com/solutions/datasets/)
+calls its observations date-stamped and says optional enhancements can be
+requested. It does not state that an available extract includes clinical times
+of day. [TriNetX's publication guidance](https://trinetx.com/publication/trinetx-publication-guidelines/)
+directs researchers to their designated TriNetX representative for contractual
+clarification and to an institutional account or healthcare partnership manager
+for publishing questions. The institutional TriNetX contact is therefore the
+appropriate route for a capability inquiry under the approved study/data-use
+process; a public website claim is not source acceptance.
+
 - Encounter `patient_id`, `encounter_id`, start datetime, time precision,
   source/HCO identifier, and source-record identity. Preserve all duplicate or
   conflicting source rows for review. End datetime is useful for context.
@@ -121,6 +131,27 @@ safe, aggregate precision inventory before any transfer. At minimum, ask for:
 The request must use the approved research/data-use route. Store any new raw
 export and full provenance outside Git. Do not transfer row-level data through
 an issue, PR, or external service.
+
+### Prepared feasibility inquiry (not sent)
+
+> For our approved, deidentified hypercapnia analysis, the current extract has
+> calendar dates for encounters and laboratory events. The primary phenotype
+> requires the first arterial PaCO2 within 24 hours of encounter start, paired
+> with pH; the documented medication-order gap requires order end/status and
+> history capture. Can an approved current Dataworks enhancement or site-specific
+> extract provide the fields and provenance listed above for the same study
+> population? Before arranging any transfer, please provide the current field
+> dictionary, whether each event value contains actual clinical time of day,
+> time-zone/date-shift semantics, source/HCO coverage, and a deidentified
+> aggregate field-presence and precision inventory. Please clarify whether the
+> medication records represent orders, prescriptions, administrations, or fills,
+> and whether end/status history is complete enough to assess activity at index.
+> We will review the permitted network and data-use terms through our approved
+> institutional route before requesting any new row-level extract.
+
+No recipient or send authorization has been supplied. The inquiry is a draft
+for the study's designated institutional TriNetX contact, not evidence that a
+timestamp-capable product exists or that a request has been submitted.
 
 ## Acceptance before use
 
