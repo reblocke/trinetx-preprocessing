@@ -1,8 +1,9 @@
-"""Bulk exact-key calendar gas candidates from an accepted cohort source.
+"""Bulk exact-key calendar gas candidates from a candidate cohort source.
 
-The caller owns patient-index selection and must open the source through its
-reviewed acceptance boundary. This adapter preserves raw gas evidence. It
-does not approve source scope, units, specimens, linkage or a phenotype.
+The caller owns candidate-encounter qualification and patient-index selection
+and must open the source through its reviewed acceptance boundary. This
+adapter preserves raw gas evidence. It does not approve source scope, units,
+specimens, linkage or a phenotype.
 """
 
 from __future__ import annotations
@@ -25,19 +26,21 @@ _ELEMENTS = frozenset({"source.arterial_pco2", "source.arterial_ph"})
 
 def _relation(value: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
-        raise ValueError("Calendar index relation must be a simple SQL identifier")
+        raise ValueError("Calendar key relation must be a simple SQL identifier")
     return f'"{value}"'
 
 
-def _check_keys(connection: duckdb.DuckDBPyConnection, relation: str) -> int:
+def _check_keys(
+    connection: duckdb.DuckDBPyConnection, relation: str, *, one_per_patient: bool
+) -> int:
     try:
         columns = connection.execute(
             f"DESCRIBE SELECT patient_id,encounter_id FROM {relation}"
         ).fetchall()
     except duckdb.Error as exc:
-        raise ValueError("Calendar index relation lacks original key columns") from exc
+        raise ValueError("Calendar key relation lacks original key columns") from exc
     if [row[1] for row in columns] != ["VARCHAR", "VARCHAR"]:
-        raise ValueError("Calendar index keys must retain original VARCHAR types")
+        raise ValueError("Calendar keys must retain original VARCHAR types")
     count, nonblank, patients, pairs = connection.execute(
         "SELECT count(*),"
         "count(*) FILTER(WHERE nullif(trim(patient_id),'') IS NOT NULL "
@@ -46,10 +49,12 @@ def _check_keys(connection: duckdb.DuckDBPyConnection, relation: str) -> int:
         "count(DISTINCT (patient_id,encounter_id)) "
         f"FROM {relation}"
     ).fetchone()
-    if count != nonblank or count != patients or count != pairs:
-        raise ValueError(
-            "Calendar index needs one nonblank exact encounter per patient"
-        )
+    if count != nonblank or count != pairs or (one_per_patient and count != patients):
+        if one_per_patient:
+            raise ValueError(
+                "Calendar index needs one nonblank exact encounter per patient"
+            )
+        raise ValueError("Calendar encounter keys need unique nonblank exact pairs")
     return int(count)
 
 
@@ -65,29 +70,27 @@ def _check_catalog(connection: duckdb.DuckDBPyConnection) -> None:
         raise ValueError("Cohort source lacks required arterial gas catalog elements")
 
 
-def iter_calendar_population_evidence(
+def _iter_calendar_evidence(
     connection: duckdb.DuckDBPyConnection,
     *,
-    index_relation: str,
+    key_relation: str,
+    one_per_patient: bool,
     fetch_size: int = 8192,
 ) -> Iterator[CalendarEncounterEvidence]:
-    """Stream one raw gas projection per caller-selected patient/encounter.
+    """Stream one raw gas projection per caller-supplied exact encounter key.
 
-    ``index_relation`` must be an existing one-row-per-patient relation with
-    original VARCHAR ``patient_id`` and ``encounter_id`` columns. Caller-owned
-    index and context decisions occur before this function. The function
-    creates only temporary tables in the read-only source connection and drops
-    them when the iterator is exhausted or closed. Fully consume or close the
-    iterator before reusing the connection.
+    The function creates only temporary tables in the read-only source
+    connection and drops them when exhausted or closed. Fully consume or
+    close the iterator before reusing the connection.
     """
-    relation = _relation(index_relation)
+    relation = _relation(key_relation)
     if (
         isinstance(fetch_size, bool)
         or not isinstance(fetch_size, int)
         or fetch_size < 1
     ):
         raise ValueError("Calendar projection fetch size must be positive")
-    count = _check_keys(connection, relation)
+    count = _check_keys(connection, relation, one_per_patient=one_per_patient)
     _check_catalog(connection)
     if count == 0:
         return
@@ -233,3 +236,42 @@ def iter_calendar_population_evidence(
     finally:
         for table in reversed(created):
             connection.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def iter_calendar_population_evidence(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    index_relation: str,
+    fetch_size: int = 8192,
+) -> Iterator[CalendarEncounterEvidence]:
+    """Stream one source projection per already selected patient index.
+
+    The index relation must have one original VARCHAR patient/encounter pair
+    per patient. Caller-owned index and context decisions precede this route.
+    """
+    yield from _iter_calendar_evidence(
+        connection,
+        key_relation=index_relation,
+        one_per_patient=True,
+        fetch_size=fetch_size,
+    )
+
+
+def iter_calendar_encounter_evidence(
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    encounter_relation: str,
+    fetch_size: int = 8192,
+) -> Iterator[CalendarEncounterEvidence]:
+    """Stream all caller-supplied candidate encounters before index selection.
+
+    The relation may contain repeated patients but must have unique original
+    VARCHAR patient/encounter pairs. This supports phenotype classification
+    before deciding which qualifying encounter is the patient index.
+    """
+    yield from _iter_calendar_evidence(
+        connection,
+        key_relation=encounter_relation,
+        one_per_patient=False,
+        fetch_size=fetch_size,
+    )

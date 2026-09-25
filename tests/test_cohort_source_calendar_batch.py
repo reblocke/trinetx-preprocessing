@@ -7,6 +7,7 @@ from trinetx_preprocessing.combined_preprocessing import (
     cohort_source_calendar_projection,
 )
 from trinetx_preprocessing.combined_preprocessing.cohort_source_calendar_batch import (
+    iter_calendar_encounter_evidence,
     iter_calendar_population_evidence,
 )
 
@@ -90,6 +91,56 @@ def test_bulk_projection_matches_exact_key_and_keeps_empty_gas_encounter():
     assert observed[0] == single
     assert (observed[1].patient_id, observed[1].encounter_id) == ("q", "f")
     assert observed[1].gas_candidates == ()
+
+
+def test_encounter_projection_keeps_repeated_patient_before_index_selection():
+    with _source() as connection:
+        connection.execute(
+            "CREATE TABLE candidate_encounters AS SELECT * FROM selected_index"
+        )
+        connection.execute("INSERT INTO candidate_encounters VALUES ('p','g')")
+        connection.execute(
+            "INSERT INTO source_encounter VALUES ('p','g','2024-01-03','date_only')"
+        )
+        connection.execute(
+            "INSERT INTO source_lab_measurement VALUES "
+            "('p','g','gas-g','2024-01-03','date_only',70,'mmhg','mmHg',"
+            "'arterial',NULL,NULL)"
+        )
+        connection.execute(
+            "INSERT INTO element_membership VALUES "
+            "('gas-g','source.arterial_pco2',TRUE)"
+        )
+        observed = list(
+            iter_calendar_encounter_evidence(
+                connection, encounter_relation="candidate_encounters", fetch_size=1
+            )
+        )
+        assert _temp_count(connection) == 0
+    assert [(item.patient_id, item.encounter_id) for item in observed] == [
+        ("p", "e"),
+        ("p", "g"),
+        ("q", "f"),
+    ]
+    assert observed[0].gas_candidates[0].source_record_id == "gas"
+    assert observed[1].gas_candidates[0].source_record_id == "gas-g"
+    assert observed[2].gas_candidates == ()
+
+
+def test_encounter_projection_rejects_duplicate_exact_pair():
+    with _source() as connection:
+        connection.execute(
+            "CREATE TABLE candidate_encounters AS SELECT * FROM selected_index"
+        )
+        connection.execute("INSERT INTO candidate_encounters VALUES ('p','g')")
+        connection.execute("INSERT INTO candidate_encounters VALUES ('p','g')")
+        with pytest.raises(ValueError, match="unique nonblank exact pairs"):
+            list(
+                iter_calendar_encounter_evidence(
+                    connection, encounter_relation="candidate_encounters"
+                )
+            )
+        assert _temp_count(connection) == 0
 
 
 @pytest.mark.parametrize(

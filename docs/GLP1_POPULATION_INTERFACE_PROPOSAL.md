@@ -112,6 +112,16 @@ single-key projection, excluding source verification and trust hashing. This
 one-run fixture does not measure the private population or establish source
 acceptance; the full-source batch path still needs private runtime validation.
 
+Candidate selection needs encounter-grain gas evidence before the patient
+index is chosen. The companion `iter_calendar_encounter_evidence()` uses the
+same bulk source scan for a caller-owned relation with unique original
+patient/encounter pairs while allowing repeated patients. It returns every
+candidate encounter with its raw date-only gas evidence, including encounters
+with no catalog-matched gas, so downstream rules can classify encounters
+before applying the explicit context-exclusion/index order. Synthetic
+repeated-encounter and duplicate-pair fixtures pass. This does not define the
+adult emergency/inpatient candidate pool or approve an arterial policy.
+
 The draft `audit_candidate_population()` compares an authenticated historical
 patient/index key table supplied by the caller against the unfiltered canonical
 `source_encounter` table. It returns aggregate exact-key, patient-present but

@@ -37,10 +37,14 @@ Those aggregate groups do not establish that panel IDs mean one specimen.
 The read-only `audit-cohort-source-capabilities` command exposes this screen
 through a validated canonical source and labels both acceptance and abstract
 report readiness false.
-The candidate bulk calendar gas projection now reads caller-selected exact
-patient/encounter keys through temporary read-only tables and streams one raw
-evidence result per index. Synthetic parity and cleanup tests pass; private
-population-scale runtime and clinical mapping remain unvalidated.
+The candidate bulk calendar gas projection now reads caller-supplied exact
+patient/encounter keys through temporary read-only tables. Its original
+one-index-per-patient route remains available, and a separate encounter-grain
+route allows repeated candidate encounters for a patient before index
+selection. Both stream one raw evidence result per exact encounter and clean
+temporary tables on exit. Synthetic repeated-encounter, parity and cleanup
+tests pass; private population-scale runtime and clinical mapping remain
+unvalidated.
 An owner-only full-source gas-policy audit completed with stable source
 identity but revealed a candidate parser mismatch: observed compact date-only
 strings were counted as invalid by an ISO-only draft check. The candidate

@@ -22,6 +22,12 @@ streams raw encounter candidates and drops temporary tables on exit. Eighteen
 focused single/bulk tests pass. A one-run 200-index/100,200-membership-row
 synthetic comparison matched the single-key results in 0.020 versus 1.846
 seconds; it excludes trust hashing and is not private-scale validation.
+The same bulk core now exposes an encounter-grain route for repeated candidate
+encounters before choosing one patient index. It requires unique exact
+patient/encounter pairs but does not require patient uniqueness; the original
+selected-index route still does. Synthetic repeated-patient, duplicate-pair
+and cleanup fixtures pass. Neither route chooses the clinical candidate pool
+or accepts the source.
 The aggregate candidate capability audit now also reports arterial numeric,
 unit, specimen and panel-field capture plus same-day linkage groups. These are
 source-mapping diagnostics, not clinically validated gas pairs.
