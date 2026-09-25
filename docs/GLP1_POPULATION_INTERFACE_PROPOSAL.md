@@ -189,7 +189,9 @@ one-row-per-patient exact-key index relation and streams raw arterial candidates
 through read-only temporary tables. It validates original VARCHAR keys,
 observed date-only starts and ambiguous source records, scans gas membership
 once for the selected keys, and removes temporary tables on normal completion,
-early close or error. It never chooses the index or classifies a gas. A
+early close or error. The projection preserves each candidate's normalized
+source code system and code alongside catalog membership for downstream
+provenance review. It never chooses the index or classifies a gas. A
 200-encounter/100,200-membership-row synthetic comparison returned identical
 per-encounter results in 0.020 seconds versus 1.846 seconds for repeated
 single-key projection, excluding source verification and trust hashing. This

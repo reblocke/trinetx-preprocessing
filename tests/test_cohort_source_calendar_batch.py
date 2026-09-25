@@ -43,18 +43,19 @@ def _source(database: str = ":memory:") -> duckdb.DuckDBPyConnection:
         "patient_id VARCHAR,encounter_id VARCHAR,source_record_id VARCHAR,"
         "date VARCHAR,timestamp_precision VARCHAR,numeric_value DOUBLE,"
         "units_of_measure VARCHAR,units_of_measure_raw VARCHAR,"
-        "specimen VARCHAR,specimen_id VARCHAR,panel_id VARCHAR)"
+        "specimen VARCHAR,specimen_id VARCHAR,panel_id VARCHAR,"
+        "code_system VARCHAR,code VARCHAR)"
     )
     connection.execute(
         "INSERT INTO source_lab_measurement VALUES "
         "('p','e','gas','2024-01-02','date_only',50,'mmhg','mmHg',"
-        "'arterial','sample','panel'),"
+        "'arterial','sample','panel','LOINC','2019-8'),"
         "('p','e','ph','2024-01-02','date_only',7.3,NULL,NULL,"
-        "'arterial','sample','panel'),"
+        "'arterial','sample','panel','LOINC','2744-1'),"
         "('p','e','unmatched','2024-01-01','date_only',99,NULL,NULL,"
-        "NULL,NULL,NULL),"
+        "NULL,NULL,NULL,NULL,NULL),"
         "('other','e','other-gas','2024-03-01','date_only',90,NULL,NULL,"
-        "NULL,NULL,NULL)"
+        "NULL,NULL,NULL,NULL,NULL)"
     )
     connection.execute(
         "CREATE TABLE element_membership("
@@ -105,7 +106,7 @@ def test_encounter_projection_keeps_repeated_patient_before_index_selection():
         connection.execute(
             "INSERT INTO source_lab_measurement VALUES "
             "('p','g','gas-g','2024-01-03','date_only',70,'mmhg','mmHg',"
-            "'arterial',NULL,NULL)"
+            "'arterial',NULL,NULL,'LOINC','2019-8')"
         )
         connection.execute(
             "INSERT INTO element_membership VALUES "
@@ -123,6 +124,11 @@ def test_encounter_projection_keeps_repeated_patient_before_index_selection():
         ("q", "f"),
     ]
     assert observed[0].gas_candidates[0].source_record_id == "gas"
+    gas = observed[0].gas_candidates[0]
+    assert (gas.code_system, gas.code) == (
+        "LOINC",
+        "2019-8",
+    )
     assert observed[1].gas_candidates[0].source_record_id == "gas-g"
     assert observed[2].gas_candidates == ()
 

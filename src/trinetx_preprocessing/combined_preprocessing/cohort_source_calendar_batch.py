@@ -129,7 +129,8 @@ def _iter_calendar_evidence(
             f"CREATE TEMP TABLE {labs} AS SELECT lab.patient_id,lab.encounter_id,"
             "lab.source_record_id,lab.date,lab.timestamp_precision,"
             "lab.numeric_value,lab.units_of_measure,lab.units_of_measure_raw,"
-            "lab.specimen,lab.specimen_id,lab.panel_id "
+            "lab.specimen,lab.specimen_id,lab.panel_id,"
+            "lab.code_system,lab.code "
             "FROM source_lab_measurement AS lab "
             f"JOIN {relation} AS k ON lab.patient_id=k.patient_id "
             "AND lab.encounter_id=k.encounter_id"
@@ -162,7 +163,7 @@ def _iter_calendar_evidence(
             "SELECT s.patient_id,s.encounter_id,s.first_start,s.source_rows,"
             "g.source_record_id,g.date,g.timestamp_precision,g.numeric_value,"
             "g.units_of_measure,g.units_of_measure_raw,g.specimen,g.specimen_id,"
-            "g.panel_id,g.pco2,g.ph "
+            "g.panel_id,g.code_system,g.code,g.pco2,g.ph "
             f"FROM {starts} AS s LEFT JOIN {gases} AS g "
             "ON s.patient_id=g.patient_id AND s.encounter_id=g.encounter_id "
             "ORDER BY s.patient_id,s.encounter_id,g.source_record_id"
@@ -201,7 +202,7 @@ def _iter_calendar_evidence(
                         "Arterial source-record keys must be unique and nonblank"
                     )
                 seen.add(record)
-                pco2, ph = row[13:15]
+                pco2, ph = row[15:17]
                 if bool(pco2) == bool(ph):
                     raise ValueError(
                         "One lab source record matches ambiguous arterial elements"
@@ -222,6 +223,8 @@ def _iter_calendar_evidence(
                         specimen=row[10],
                         specimen_id=row[11],
                         panel_id=row[12],
+                        code_system=row[13],
+                        code=row[14],
                     )
                 )
         if current_key is not None:

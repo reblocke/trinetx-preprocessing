@@ -33,16 +33,17 @@ def _source() -> duckdb.DuckDBPyConnection:
         "patient_id VARCHAR,encounter_id VARCHAR,source_record_id VARCHAR,"
         "date VARCHAR,timestamp_precision VARCHAR,numeric_value DOUBLE,"
         "units_of_measure VARCHAR,units_of_measure_raw VARCHAR,"
-        "specimen VARCHAR,specimen_id VARCHAR,panel_id VARCHAR)"
+        "specimen VARCHAR,specimen_id VARCHAR,panel_id VARCHAR,"
+        "code_system VARCHAR,code VARCHAR)"
     )
     connection.execute(
         "INSERT INTO source_lab_measurement VALUES "
         "('p','e','gas','2024-01-02','date_only',50,'mmhg','mmHg',"
-        "'arterial','sample-1','panel-1'),"
+        "'arterial','sample-1','panel-1','LOINC','2019-8'),"
         "('p','e','ph','2024-01-02','date_only',7.3,NULL,NULL,"
-        "'arterial','sample-1','panel-1'),"
-        "('p','e','uncataloged','2024-01-01','date_only',99,NULL,NULL,NULL,NULL,NULL),"
-        "('other','e','other-gas','2024-01-01','date_only',90,NULL,NULL,NULL,NULL,NULL)"
+        "'arterial','sample-1','panel-1','LOINC','2744-1'),"
+        "('p','e','uncataloged','2024-01-01','date_only',99,NULL,NULL,NULL,NULL,NULL,NULL,NULL),"
+        "('other','e','other-gas','2024-01-01','date_only',90,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
     )
     connection.execute(
         "CREATE TABLE element_membership("
@@ -75,6 +76,7 @@ def test_exact_key_projection_preserves_raw_fields_without_duplicates():
     )
     assert (gas.units_of_measure, gas.units_of_measure_raw) == ("mmhg", "mmHg")
     assert (gas.specimen_id, gas.panel_id) == ("sample-1", "panel-1")
+    assert (gas.code_system, gas.code) == ("LOINC", "2019-8")
 
 
 @pytest.mark.parametrize(

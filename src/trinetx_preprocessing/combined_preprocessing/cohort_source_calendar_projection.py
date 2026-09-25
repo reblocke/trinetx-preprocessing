@@ -29,6 +29,8 @@ class CalendarGasCandidate:
     specimen: str | None
     specimen_id: str | None
     panel_id: str | None
+    code_system: str | None
+    code: str | None
 
 
 @dataclass(frozen=True)
@@ -98,7 +100,7 @@ def project_calendar_encounter_evidence(
     rows = connection.execute(
         "SELECT lab.source_record_id,lab.date,lab.timestamp_precision,"
         "lab.numeric_value,lab.units_of_measure,lab.units_of_measure_raw,"
-        "lab.specimen,lab.specimen_id,lab.panel_id,"
+        "lab.specimen,lab.specimen_id,lab.panel_id,lab.code_system,lab.code,"
         "EXISTS(SELECT 1 FROM element_membership AS member "
         "WHERE member.source_record_id=lab.source_record_id "
         "AND member.element_id=? AND member.include IS TRUE) AS is_pco2,"
@@ -124,6 +126,8 @@ def project_calendar_encounter_evidence(
             specimen,
             specimen_id,
             panel_id,
+            code_system,
+            code,
             is_pco2,
             is_ph,
         ) = row
@@ -145,6 +149,8 @@ def project_calendar_encounter_evidence(
                 specimen=specimen,
                 specimen_id=specimen_id,
                 panel_id=panel_id,
+                code_system=code_system,
+                code=code,
             )
         )
     return CalendarEncounterEvidence(

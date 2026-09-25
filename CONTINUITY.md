@@ -26,7 +26,7 @@ ventilation-code candidates without changing the canonical product or declaring
 any observed clinical negative.
 The owner accepted a calendar-date GLP-1 abstract phenotype and prohibited
 all email sending. A new read-only candidate source projection keeps raw
-arterial values, units and linkage identifiers at the exact original
+arterial values, units, normalized source codes and linkage identifiers at the exact original
 patient/encounter key; it fails on conflicting date-only starts or undated
 arterial candidates. Synthetic tests pass. It does not accept a population,
 normalize clinical gas values, or produce a report.

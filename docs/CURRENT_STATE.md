@@ -47,7 +47,10 @@ patient/encounter keys through temporary read-only tables. Its original
 one-index-per-patient route remains available, and a separate encounter-grain
 route allows repeated candidate encounters for a patient before index
 selection. Both stream one raw evidence result per exact encounter and clean
-temporary tables on exit. Synthetic repeated-encounter, parity and cleanup
+temporary tables on exit. Each candidate now retains its normalized source
+code system and code as well as catalog membership, so a downstream
+missing-specimen policy can check the actual record. Synthetic
+repeated-encounter, parity and cleanup
 tests pass; private population-scale runtime and clinical mapping remain
 unvalidated.
 A separate read-only vital projection accepts one exact selected index per
