@@ -31,6 +31,10 @@ specimen-label classes, and same-day specimen/panel group multiplicity. It emits
 labels or row identifiers. These counts support clinical review of a future
 versioned mapping policy; they do not approve unit conversion, specimen
 semantics, plausibility limits, or sample linkage.
+The audit materializes only catalog-matched candidate rows in temporary
+read-only-connection tables, then reuses that set for all fixed-category and
+linkage counts. It drops those tables on success or failure. This avoids
+repeating the full canonical-source join for each count.
 
 ## Proposed upstream product
 

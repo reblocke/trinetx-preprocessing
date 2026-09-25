@@ -23,6 +23,11 @@ A separate fixed-category gas-policy audit now inventories catalog-matched
 arterial key/date completeness, normalized unit and specimen classes, numeric
 ranges and same-day specimen/panel group multiplicity. Focused synthetic tests
 pass. It returns no raw labels or keys and does not approve clinical mapping.
+An owner-only first attempt exceeded a 3 GiB DuckDB query limit. A bounded
+6 GiB retry revealed repeated large source joins and was stopped before it
+produced a receipt. The audit now materializes the matched candidate set once
+in temporary tables and cleans them on exit; private runtime validation is
+pending.
 Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
 plan: day precision is fixed, the missing times cannot be obtained, and email
 contact is prohibited. The downstream patient-level abstract now uses the

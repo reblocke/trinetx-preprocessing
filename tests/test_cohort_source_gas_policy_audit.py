@@ -64,6 +64,9 @@ def _source() -> duckdb.DuckDBPyConnection:
 def test_fixed_categories_and_ambiguous_same_day_link_groups():
     with _source() as connection:
         result = audit_candidate_gas_policy(connection)
+        assert connection.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE table_name LIKE 'gas_audit_%'"
+        ).fetchone() == (0,)
     assert result.pco2.candidate_rows == 3
     assert result.pco2.missing_or_invalid_date == 1
     assert result.pco2.finite_numeric_rows == 2
@@ -119,3 +122,17 @@ def test_empty_source_and_missing_catalog_are_distinct():
         )
         with pytest.raises(ValueError, match="required arterial gas catalog"):
             audit_candidate_gas_policy(connection)
+
+
+def test_candidate_temp_tables_are_removed_after_audit_failure(monkeypatch):
+    with _source() as connection:
+
+        def reject_profile(*_args):
+            raise ValueError("synthetic audit failure")
+
+        monkeypatch.setattr(cohort_source_gas_policy_audit, "_profile", reject_profile)
+        with pytest.raises(ValueError, match="synthetic audit failure"):
+            audit_candidate_gas_policy(connection)
+        assert connection.execute(
+            "SELECT count(*) FROM duckdb_tables() WHERE table_name LIKE 'gas_audit_%'"
+        ).fetchone() == (0,)

@@ -9,6 +9,7 @@ result under the study's restricted-data controls.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 import duckdb
 
@@ -54,7 +55,7 @@ class CandidateGasPolicyAudit:
 
 
 def _profile(
-    connection: duckdb.DuckDBPyConnection, element_id: str
+    connection: duckdb.DuckDBPyConnection, table: str, element_id: str
 ) -> GasCandidateProfile:
     raw_pco2_value_over_200 = (
         "count(*) FILTER(WHERE numeric_value IS NOT NULL "
@@ -69,13 +70,8 @@ def _profile(
         else "0"
     )
     counts = connection.execute(
-        "WITH matched AS (SELECT lab.patient_id,lab.encounter_id,"
-        "lab.source_record_id,lab.date,lab.timestamp_precision,"
-        "lab.numeric_value,lab.specimen,lab.units_of_measure,"
-        "lab.specimen_id,lab.panel_id FROM source_lab_measurement AS lab "
-        "WHERE EXISTS (SELECT 1 FROM element_membership AS m "
-        "WHERE m.source_record_id=lab.source_record_id "
-        "AND m.element_id=? AND m.include IS TRUE)) "
+        f"WITH matched AS (SELECT * FROM {table} WHERE "
+        f"{'pco2' if element_id == 'source.arterial_pco2' else 'ph'}) "
         "SELECT count(*),"
         "count(*) FILTER(WHERE nullif(trim(patient_id),'') IS NULL "
         "OR nullif(trim(encounter_id),'') IS NULL),"
@@ -101,7 +97,6 @@ def _profile(
         "count(*) FILTER(WHERE nullif(trim(specimen_id),'') IS NOT NULL),"
         "count(*) FILTER(WHERE nullif(trim(panel_id),'') IS NOT NULL) "
         "FROM matched",
-        [element_id],
     ).fetchone()
     result = GasCandidateProfile(element_id, *(int(value) for value in counts))
     if (
@@ -119,17 +114,11 @@ def _profile(
     return result
 
 
-def _linkage(connection: duckdb.DuckDBPyConnection) -> GasLinkageProfile:
+def _linkage(connection: duckdb.DuckDBPyConnection, table: str) -> GasLinkageProfile:
     matched = (
-        "WITH matched AS (SELECT lab.patient_id,lab.encounter_id,lab.date,"
-        "lab.timestamp_precision,lab.source_record_id,lab.specimen_id,lab.panel_id,"
-        "EXISTS (SELECT 1 FROM element_membership AS m "
-        "WHERE m.source_record_id=lab.source_record_id "
-        "AND m.element_id='source.arterial_pco2' AND m.include IS TRUE) AS pco2,"
-        "EXISTS (SELECT 1 FROM element_membership AS m "
-        "WHERE m.source_record_id=lab.source_record_id "
-        "AND m.element_id='source.arterial_ph' AND m.include IS TRUE) AS ph "
-        "FROM source_lab_measurement AS lab) "
+        "WITH matched AS (SELECT patient_id,encounter_id,date,"
+        "timestamp_precision,source_record_id,specimen_id,panel_id,pco2,ph "
+        f"FROM {table}) "
     )
     both = connection.execute(
         matched + "SELECT count(*) FROM matched WHERE pco2 AND ph"
@@ -173,8 +162,32 @@ def audit_candidate_gas_policy(
         raise ValueError(
             "Candidate source lacks required arterial gas catalog elements"
         )
-    return CandidateGasPolicyAudit(
-        pco2=_profile(connection, "source.arterial_pco2"),
-        ph=_profile(connection, "source.arterial_ph"),
-        linkage=_linkage(connection),
-    )
+    suffix = uuid4().hex
+    flags = f"gas_audit_flags_{suffix}"
+    matched = f"gas_audit_matched_{suffix}"
+    try:
+        connection.execute(
+            f"CREATE TEMP TABLE {flags} AS SELECT source_record_id,"
+            "bool_or(element_id='source.arterial_pco2') AS pco2,"
+            "bool_or(element_id='source.arterial_ph') AS ph "
+            "FROM element_membership WHERE include IS TRUE "
+            "AND element_id IN ('source.arterial_pco2','source.arterial_ph') "
+            "GROUP BY source_record_id"
+        )
+        connection.execute(
+            f"CREATE TEMP TABLE {matched} AS SELECT lab.patient_id,"
+            "lab.encounter_id,lab.source_record_id,lab.date,"
+            "lab.timestamp_precision,lab.numeric_value,lab.specimen,"
+            "lab.units_of_measure,lab.specimen_id,lab.panel_id,"
+            "flags.pco2,flags.ph FROM source_lab_measurement AS lab "
+            f"JOIN {flags} AS flags ON lab.source_record_id=flags.source_record_id"
+        )
+        connection.execute(f"DROP TABLE {flags}")
+        return CandidateGasPolicyAudit(
+            pco2=_profile(connection, matched, "source.arterial_pco2"),
+            ph=_profile(connection, matched, "source.arterial_ph"),
+            linkage=_linkage(connection, matched),
+        )
+    finally:
+        connection.execute(f"DROP TABLE IF EXISTS {matched}")
+        connection.execute(f"DROP TABLE IF EXISTS {flags}")
