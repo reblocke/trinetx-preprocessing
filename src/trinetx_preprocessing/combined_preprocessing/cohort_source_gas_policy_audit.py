@@ -69,7 +69,10 @@ def _profile(
         else "0"
     )
     counts = connection.execute(
-        "WITH matched AS (SELECT lab.* FROM source_lab_measurement AS lab "
+        "WITH matched AS (SELECT lab.patient_id,lab.encounter_id,"
+        "lab.source_record_id,lab.date,lab.timestamp_precision,"
+        "lab.numeric_value,lab.specimen,lab.units_of_measure,"
+        "lab.specimen_id,lab.panel_id FROM source_lab_measurement AS lab "
         "WHERE EXISTS (SELECT 1 FROM element_membership AS m "
         "WHERE m.source_record_id=lab.source_record_id "
         "AND m.element_id=? AND m.include IS TRUE)) "
