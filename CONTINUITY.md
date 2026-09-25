@@ -152,6 +152,11 @@ publication guidance points to the designated institutional representative for
 contractual clarification. The timestamp-source-gap document now includes a
 prepared, unsent feasibility inquiry for that route. No recipient, request,
 new extract or source acceptance is established.
+Draft header-only proposed-export triage now takes explicit encounter, lab and
+medication CSV paths, reads only their headers, and returns path-free aggregate
+field-presence counts with source/report acceptance false. Synthetic CLI tests
+cover fixed output and path-free errors. This does not prove that any new
+source contains actual clinical timestamps or order history.
 
 ## Working set
 `encounters/acceptance.py`, validator report, focused acceptance tests and the

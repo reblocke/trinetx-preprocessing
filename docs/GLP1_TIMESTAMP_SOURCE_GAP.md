@@ -85,7 +85,29 @@ identity in the approved local audit record, not in a public issue or PR.
 The spill root must already exist outside the repository; use an approved fast
 scratch volume when available.
 
-An owner-only run of this CLI at draft revision `ab77abd` against the existing
+For a newly proposed CSV layout, the header-only screen can run before a full
+preprocessing build. Pass every split file in each required domain; this command
+reads the first CSV record only and prints fixed aggregate field-presence counts,
+without paths, raw header names or patient rows:
+
+```bash
+uv run --locked trinetx-preprocessing screen-glp1-export-headers \
+  --encounter-file /approved/raw/encounter.csv \
+  --lab-file /approved/raw/lab.csv \
+  --medication-file /approved/raw/medication.csv
+```
+
+Repeat each file option for split files. The `files_with_datetime_named_field`
+count only flags column names containing `time`; it does not establish that a
+value represents a clinical time, or rule one out in a `start_date`/`date`
+column. Field presence does not establish medication-order history or source
+population coverage. Keep the local full path and source identity in the
+approved private record. The output explicitly marks source and report
+acceptance false; a value-level precision audit and the index-specific checks
+below remain required.
+
+An owner-only run of `audit-cohort-source-capabilities` at draft revision
+`ab77abd` against the existing
 accepted snapshot completed in 162 seconds with stable input identity and a
 clean spill directory. Its aggregate result agreed with the earlier field
 audit: the screened encounter-start, lab-event, and medication-start rows were

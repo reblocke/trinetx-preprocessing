@@ -43,6 +43,7 @@ from .combined_preprocessing.elements import (
     COMBINED_MEDICATION_REQUIRED_COLUMNS,
     is_medication_ingredient_export,
 )
+from .combined_preprocessing.export_header_capability import screen_export_headers
 from .combined_preprocessing.scratch import (
     COMBINED_LOCK_PREFIX,
     COMBINED_SCRATCH_PATH_PREFIXES,
@@ -611,6 +612,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional existing approved scratch directory for DuckDB spill.",
     )
+
+    header_parser = subparsers.add_parser(
+        "screen-glp1-export-headers",
+        help="Screen proposed source CSV headers without reading clinical rows.",
+    )
+    for domain in ("encounter", "lab", "medication"):
+        header_parser.add_argument(
+            f"--{domain}-file",
+            type=Path,
+            action="append",
+            required=True,
+            help=f"A proposed {domain} CSV; repeat for split files.",
+        )
 
     export_legacy_parser = subparsers.add_parser(
         "export-legacy",
@@ -1356,6 +1370,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "source_accepted": False,
                         "abstract_report_ready": False,
                         "counts": asdict(result),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+
+        if args.command == "screen-glp1-export-headers":
+            capture = screen_export_headers(
+                encounter_files=args.encounter_file,
+                lab_files=args.lab_file,
+                medication_files=args.medication_file,
+            )
+            print(
+                json.dumps(
+                    {
+                        "kind": "proposed_glp1_export_header_screen",
+                        "source_accepted": False,
+                        "abstract_report_ready": False,
+                        "header_only": True,
+                        "domains": [asdict(item) for item in capture],
                     },
                     indent=2,
                     sort_keys=True,
