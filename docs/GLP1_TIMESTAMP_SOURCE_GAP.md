@@ -1,221 +1,66 @@
-# Original GLP-1 abstract: timestamp source gate
+# GLP-1 source precision audit and revised calendar-date decision
 
-The original patient-level abstract requires the first available arterial
-PaCO2 from encounter start through 24 hours after start, ordered by clinical
-timestamp and source-record key, then paired with pH. This is the rule in
-[issue #6, section 6.2](https://github.com/reblocke/trinetx-preprocessing/issues/6).
-The accepted encounter bundle remains valid for its engineering contract, but
-its calendar-day anchor does not prove this temporal rule.
+This file retains the evidence behind the **historical** first-arterial-gas-
+within-24-hours limitation. The owner confirmed on 2026-09-24 that the TriNetX
+source has day resolution and the missing times cannot be obtained. The owner
+accepted a revised patient-level calendar-date phenotype and prohibited email
+contact. No source inquiry or timestamp acquisition remains open for this
+ticket. The downstream versioned GLP-1 abstract contract specifies the revised
+rule; the approved Stage 34 encounter proxy remains separate.
 
-## Observed limitation in the accepted source snapshot
+## Accepted-source evidence
 
-A bounded, aggregate-only private audit on 2026-09-24 checked the accepted
-bundle's manifest-bound canonical DuckDB. It found date-only precision for
-every preserved encounter start, every selected arterial PaCO2/pH source record,
-and the broader preserved lab domain. A separate aggregate inventory found
-date-only precision throughout the preserved vital, diagnosis, procedure, and
-medication domains too. Some bundle-linked encounters have
-multiple distinct source start dates. The canonical source preserves raw date
-strings and explicit precision labels; its parsed midnight values do not add
-an observed time of day. The audit did not select a study index or validate a
-scientific estimate. Its source identity and aggregate receipt remain private.
+A bounded aggregate-only private audit of the accepted manifest-bound canonical
+DuckDB found date-only precision for every preserved encounter start and
+catalog-matched arterial PaCO2/pH candidate. Preserved laboratory, vital,
+diagnosis, procedure and medication domains were also date-only. Some linked
+encounters have multiple distinct source start dates. Raw date strings and
+precision labels are retained; a parsed midnight does not supply a clinical
+time. Source identity and the path-free receipt remain private.
 
-The accepted build's work-manifest digest matches the bundle's recorded source
-identity. Direct header checks on its recorded, unchanged raw export files found
-only `start_date`/`end_date` in the encounter export and `date` in the lab,
-vital, diagnosis, and procedure exports; the medication export has `start_date`.
-No separate time-of-day column appears in these raw headers. This rules out a
-currently omitted raw time field in the accepted input layout; it does not
-establish whether TriNetX can provide times in a new approved export.
-The accepted medication export also lacks `end_date`, `order_status`, and
-`status` fields. An aggregate check of the manifest-bound canonical medication
-table found no populated values in those columns. A missing end date in this
-snapshot represents an absent source field, not evidence of an open order.
-This independently blocks the original documented no-active-order denominator.
-The source identity and path-free audit receipt remain private.
+Header checks on the unchanged accepted raw export found encounter
+`start_date`/`end_date`, laboratory, vital, diagnosis and procedure `date`, and
+medication `start_date`, without a separate clinical time field. A header-only
+screen of two archived 2022 layouts found the same field pattern. The archived
+screen did not read clinical values or prove those records' precision.
+The accepted medication export lacks `end_date`, `order_status` and `status`;
+those canonical medication columns have no populated values. Missing end data
+cannot be treated as an open or active order.
 
-A separate owner-only, header-only screen of two archived 2022 raw TriNetX
-export layouts found encounter `start_date`/`end_date`, lab `date`, and
-medication `start_date`, without separate time-of-day or medication end/status
-columns. It did not read clinical values or establish the precision of those
-older records. Its path-free, mode-0600 receipt remains outside Git. These
-historical layouts do not determine whether a current alternative product can
-supply the needed timestamps and order history.
+The TriNetX-authored [July 2021 deidentified dataset dictionary](https://www.stonybrookmedicine.edu/sites/default/files/TriNetX%20Research%20Data%20Dictionary%20-%20July%202021.pdf)
+describes encounter `start_date` and laboratory `date` as `YYYYMMDD` fields.
+This is consistent with the audited snapshot. It is historical background,
+not the approved study contract.
 
-A [TriNetX-authored July 2021 deidentified dataset dictionary](https://www.stonybrookmedicine.edu/sites/default/files/TriNetX%20Research%20Data%20Dictionary%20-%20July%202021.pdf)
-describes encounter `start_date` and laboratory `date` as eight-character
-`YYYYMMDD` fields. This is consistent with the accepted snapshot and makes a
-repeat of that standard layout unlikely to add hour precision. The dictionary
-is dated and does not determine whether a current alternative product or an
-approved site-specific extract can supply clinical event timestamps.
+## Scientific consequence
 
-The current snapshot cannot establish an exact first-24-hour interval or the
-first gas within it. The same precision limit affects other claims about
-pre-presentation and same-day order or measurement timing. Adding these
-date-only fields to the existing bundle would not resolve this. Do not infer
-midnight, choose an arbitrary conflicting start, or replace 24 hours with an
-inclusive calendar-day window in the original abstract without an approved
-scientific decision.
+The historical issue #6 first-observed arterial PaCO2 within an elapsed 24
+hours, with timed pH pairing, cannot be calculated from this accepted source.
+The owner-approved revision uses the encounter start **date** D, selects the
+first arterial testing date in D..D+1 before inspecting PaCO2 values, and
+classifies any valid arterial PaCO2 >45 mmHg on that date as the primary gas
+phenotype. pH is reported separately as genuinely linked sample evidence or
+explicitly unpaired same-day evidence. Pre-index history ends D-1; D records
+are separate. The full cleaned BMI>=30 patient cohort is the primary
+indication denominator; active medication and the historical no-active-order
+denominator are unavailable, while recorded prior orders may be described.
 
-The draft `audit_candidate_source_capabilities()` helper can screen a
-validated canonical source without returning patient rows, file paths or raw
-headers. It separately counts date-only rows, timestamp-labeled rows with and
-without a parsed datetime, and other/missing precision for encounter starts,
-lab events, catalog-matched arterial PaCO2 and pH candidates, and medication
-starts. The two arterial candidate counts use included catalog memberships and
-deduplicate repeated membership entries by source-record key; they do not
-establish clinical arterial provenance, index linkage, first-gas order, or pH
-pairing. The audit also counts populated medication end and
-status fields and how many raw encounter, lab and medication files contain
-those column names. A parsed midnight date remains date-only under this audit.
-The screen fails if either required arterial catalog element is absent, so an
-unsearched element cannot appear as zero observed candidates.
-These are aggregate source-capability diagnostics, not a gas-specific
-first-24-hour validation or an acceptance receipt. A new source still needs
-the index-specific arterial gas and pH, time-zone, shift and provenance checks
-below.
+The source-specific adapter must still reconcile original patient/encounter
+keys, conflicting encounter starts, arterial provenance, specimen/panel
+linkage, source coverage and incomplete historical index membership. Its
+calendar-date classification must retain missing and invalid evidence as
+unknown and compare D-only and first-day concordance sensitivity definitions.
+The accepted encounter bundle remains valid for its existing engineering
+contract. The historical timed selector remains a reproduction aid and cannot
+be run against date-only records to claim the revised phenotype.
 
-For an approved canonical product, run the read-only screen locally:
+## Audit-tool scope
 
-```bash
-uv run --locked trinetx-preprocessing audit-cohort-source-capabilities \
-  --database /approved/output/trinetx_preprocessed.duckdb \
-  --spill-root /approved/local/scratch
-```
-
-The command validates the canonical product first and emits aggregate JSON to
-standard output without source paths, row identifiers or raw headers. Its
-`source_accepted=false` and `abstract_report_ready=false` fields are deliberate;
-this screen does not issue an acceptance receipt. Retain full private source
-identity in the approved local audit record, not in a public issue or PR.
-The spill root must already exist outside the repository; use an approved fast
-scratch volume when available.
-
-For a newly proposed CSV layout, the header-only screen can run before a full
-preprocessing build. Pass every split file in each required domain; this command
-reads the first CSV record only and prints fixed aggregate field-presence counts,
-without paths, raw header names or patient rows:
-
-```bash
-uv run --locked trinetx-preprocessing screen-glp1-export-headers \
-  --encounter-file /approved/raw/encounter.csv \
-  --lab-file /approved/raw/lab.csv \
-  --medication-file /approved/raw/medication.csv
-```
-
-Repeat each file option for split files. The `files_with_datetime_named_field`
-count only flags column names containing `time`; it does not establish that a
-value represents a clinical time, or rule one out in a `start_date`/`date`
-column. Field presence does not establish medication-order history or source
-population coverage. Keep the local full path and source identity in the
-approved private record. The output explicitly marks source and report
-acceptance false; a value-level precision audit and the index-specific checks
-below remain required.
-
-The current canonical builder derives encounter, lab and medication event
-precision from the existing `start_date` or `date` values. A new export with
-actual times in those fields can be screened by the capability audit after a
-separately validated build. If times arrive only in additional columns, the
-current builder does not map them into those canonical event fields. That
-layout needs a versioned upstream field mapping and raw-to-canonical fixtures
-before its timestamps can be used; a positive header screen alone cannot
-promote it. A synthetic parser probe also showed that mixing naive timestamps
-and offset-bearing values can produce mixed datetime representations under the
-current Pandas path. Any proposed offset-bearing export therefore needs an
-explicit time-zone normalization policy and tested raw-to-canonical ordering
-before the first-24-hour rule can run.
-
-An owner-only run of `audit-cohort-source-capabilities` at draft revision
-`ab77abd` against the existing
-accepted snapshot completed in 162 seconds with stable input identity and a
-clean spill directory. Its aggregate result agreed with the earlier field
-audit: the screened encounter-start, lab-event, and medication-start rows were
-all date-only, and no medication end or status values were populated. The
-path-free, mode-0600 receipt remains outside Git. This confirms the current
-snapshot limitation; it does not accept a new source or resolve gas-specific
-timing and medication activity.
-
-## Request to the source provider
-
-Ask whether a current alternative TriNetX product or approved site-specific
-extract can supply actual clinical event times, rather than another download
-of the date-only `YYYYMMDD` layout. Request a current field dictionary and a
-safe, aggregate precision inventory before any transfer.
-
-The [University of Utah CTSI TriNetX page](https://ctsi.utah.edu/cores-and-services/bmic/research-data-resources/trinetx)
-lists BMIC (`bmic@ctsi.utah.edu`) for further information and links its
-institutional account-request route. This is a potential route to identify the
-study's designated TriNetX representative; it does not establish that BMIC is
-the approved recipient for this study or authorize sending the inquiry.
-
-[TriNetX's current Dataworks description](https://trinetx.com/solutions/datasets/)
-calls its observations date-stamped and says optional enhancements can be
-requested. It does not state that an available extract includes clinical times
-of day. [TriNetX's publication guidance](https://trinetx.com/publication/trinetx-publication-guidelines/)
-directs researchers to their designated TriNetX representative for contractual
-clarification and to an institutional account or healthcare partnership manager
-for publishing questions. The institutional TriNetX contact is therefore the
-appropriate route for a capability inquiry under the approved study/data-use
-process; a public website claim is not source acceptance. At minimum, ask for:
-
-- Encounter `patient_id`, `encounter_id`, start datetime, time precision,
-  source/HCO identifier, and source-record identity. Preserve all duplicate or
-  conflicting source rows for review. End datetime is useful for context.
-- Arterial PaCO2 and pH event datetimes, precision, stable source-record keys,
-  specimen/panel identifiers, original numeric values, units, and arterial
-  provenance. The two measurements need a defensible time basis for first-gas
-  ordering and the section 6.2 pairing hierarchy.
-- Medication order start and end datetimes with precision, status and
-  status-effective time if available, stable order IDs, ingredient/product,
-  and source capture period. Confirm whether these represent orders,
-  prescriptions, administrations, or another event; absent end/status fields
-  cannot establish an active versus documented-no-active order at index.
-- The extract's source snapshot and manifest, time-zone/offset semantics if
-  supplied, date-shift behavior if applicable, coverage interval, and field
-  dictionary. Confirm whether the time values describe the clinical event,
-  ingestion, or another timestamp type.
-
-The request must use the approved research/data-use route. Store any new raw
-export and full provenance outside Git. Do not transfer row-level data through
-an issue, PR, or external service.
-
-### Prepared feasibility inquiry (not sent)
-
-> For our approved, deidentified hypercapnia analysis, the current extract has
-> calendar dates for encounters and laboratory events. The primary phenotype
-> requires the first arterial PaCO2 within 24 hours of encounter start, paired
-> with pH; the documented medication-order gap requires order end/status and
-> history capture. Can an approved current Dataworks enhancement or site-specific
-> extract provide the fields and provenance listed above for the same study
-> population? Before arranging any transfer, please provide the current field
-> dictionary, whether each event value contains actual clinical time of day,
-> time-zone/date-shift semantics, source/HCO coverage, and a deidentified
-> aggregate field-presence and precision inventory. Please clarify whether the
-> medication records represent orders, prescriptions, administrations, or fills,
-> and whether end/status history is complete enough to assess activity at index.
-> We will review the permitted network and data-use terms through our approved
-> institutional route before requesting any new row-level extract.
-
-The study's designated recipient and send authorization have not been
-confirmed. The inquiry is a draft for the approved institutional TriNetX
-contact, not evidence that a timestamp-capable product exists or that a
-request has been submitted.
-
-## Acceptance before use
-
-The upstream build must preserve source precision and provenance, then report
-aggregate coverage of timed versus date-only encounter starts and arterial
-gases. Reconcile original patient/encounter keys, duplicate starts, absent
-events, and source snapshot identities against the accepted population. Confirm
-that each proposed patient index has a defensible encounter start and that gas
-events can be ordered and bounded by 24 hours. Date-only or conflicting cases
-remain explicitly unavailable under the original rule unless a separate
-scientific decision defines their handling.
-
-Publish any new source interface as a separately versioned, validated product
-with a fresh private acceptance receipt. Keep the existing accepted bundle
-immutable. Downstream must consume the trusted interface through its installed
-reader, reconcile patient/index membership, and pass hand-specified first-gas,
-boundary, tie, and pH-pairing fixtures before a primary estimate is released.
-The original abstract report remains blocked until these gates and its other
-scientific decisions are resolved; the approved Stage 34 proxy is separate.
+The draft `audit_candidate_source_capabilities()` helper counts precision
+labels and populated medication fields in aggregate after canonical-source
+validation. The header-only `screen-glp1-export-headers` command reports
+field-presence hints without clinical rows. Their outputs do not establish a
+clinical phenotype or issue an acceptance receipt. An owner-only capability
+run on the accepted snapshot agreed with the earlier audits, with stable
+source identity and private receipt. No additional timestamp-source search is
+part of the revised work.

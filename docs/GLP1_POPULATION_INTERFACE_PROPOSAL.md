@@ -15,11 +15,11 @@ source interchangeability for its validated contract. Retain it as evidence;
 it does not accept this new population interface or the original abstract's
 index membership, exact timing, and clinical estimates.
 
-This is a population-interface problem separate from the
-[timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md). A new timed export alone
+This population-interface problem remains separate from the accepted
+[calendar-date revision](GLP1_TIMESTAMP_SOURCE_GAP.md). The new D/D+1 gas rule
 does not make either existing compatibility-backed variant represent the
-original patient-level cohort. A new population interface alone does not
-restore the original first-24-hour phenotype from date-only events.
+historical patient/index population. A population interface still requires
+its own independent acceptance and downstream reconciliation.
 The draft source-capability audit in `cohort_source_capability_audit.py`
 provides aggregate timing and medication-field capture counts for a validated
 canonical source. It does not select a population or make a new source
@@ -150,9 +150,9 @@ encounters. Avoid changing the existing accepted variants or their receipt.
    study adapter must never silently fall back from an accepted bundle.
 5. Reconstruct the approved patient-index cohort downstream, then compare
    patient membership, index events, context exclusions, medication states,
-   and named denominators with the historical route. The original first-24-hour
-   result additionally requires a timestamp-capable approved source and its
-   own temporal/pH-pairing validation.
+   and named denominators with the historical route. Evaluate intentional
+   calendar-date phenotype changes separately from source-coverage changes;
+   source-specific arterial, pH and date-boundary validation remains required.
 
 Until these gates pass, the existing accepted encounter bundle remains an
 engineering product for its stated compatibility population. The historical

@@ -20,9 +20,10 @@ for the original patient-level GLP-1 abstract remains separate; see
 [NEXT_STEPS.md](../NEXT_STEPS.md).
 Aggregate source audits found that this accepted snapshot preserves only
 date-level encounter starts, arterial gas events, and other clinical-domain
-events. The original abstract's
-first-24-hour gas rule requires a new approved timestamp-capable source; see
-[the timestamp source gate](GLP1_TIMESTAMP_SOURCE_GAP.md).
+events. The owner accepted a revised patient-level calendar-date gas phenotype using
+the first arterial testing date on D or D+1; see the
+[precision audit and decision](GLP1_TIMESTAMP_SOURCE_GAP.md). The historical
+elapsed first-24-hour rule remains unavailable from this snapshot.
 The accepted medication export also lacks end and status fields, leaving the
 original documented no-active-order denominator unavailable from this source.
 Draft source-capability auditing can now summarize parsed versus date-only
@@ -36,14 +37,14 @@ report readiness false.
 A separate `screen-glp1-export-headers` command accepts explicitly listed
 proposed encounter, lab and medication CSVs and reads their headers only. It
 reports fixed aggregate field-presence counts without paths, raw header names
-or clinical rows. It is a pre-build triage aid, not precision or source
-acceptance; see the timestamp source gate.
+or clinical rows. It is a historical diagnostic aid, not precision or source
+acceptance; see the precision audit.
 An owner-only accepted-snapshot CLI run at `ab77abd` reproduced the date-only
 and absent medication end/status findings with stable source identity; its
 restricted aggregate receipt remains outside Git.
 An owner-only header screen of two archived 2022 raw export layouts found the
 same date-field pattern without separate time-of-day or medication end/status
-columns. It did not inspect values or rule out a current alternative extract.
+columns. It did not inspect values or establish source-specific clinical timing.
 Draft population-interface work has a trusted canonical-source verifier and an
 aggregate historical-key audit. An owner-only candidate run at `92fc880`
 reproduced independent key-coverage categories with stable input identities;

@@ -10,13 +10,22 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+Owner decision on 2026-09-24 supersedes the earlier timestamp-acquisition
+plan: day precision is fixed, the missing times cannot be obtained, and email
+contact is prohibited. The downstream patient-level abstract now uses the
+accepted D/D+1 first-testing-date PaCO2 rule, with pH separately labeled and
+recorded prior orders descriptive. Earlier source-contact and timestamp-source
+notes below are historical. Population/source and report-science acceptance
+remain open.
+
 Reuse accepted transformations; reconcile incompatible source projections before
 another private build. Owner approved the one-time authenticated companion import
 and targeted audit gates on 2026-09-20. See NEXT_STEPS.md. Publish two
 encounter-grain Parquet products with evidence, dictionary, manifest and QA.
 Move study analysis without claiming its known scientific defects are repaired.
-For the original abstract, seek an approved timestamp-capable TriNetX extract;
-do not reinterpret its first-24-hour rule from date-only fields.
+For the revised patient-level abstract, use the owner-approved D/D+1
+calendar-date rule and retain the historical timed selector only for
+reproduction. The source-population interface remains a separate gate.
 
 ## State
 The encounter split is merged: upstream `main` includes postmerge validation
@@ -67,16 +76,9 @@ establishes the original GLP-1 scientific report.
 
 ## Open questions
 The accepted source snapshot has date-only encounter starts and clinical events
-across the preserved domains. A new approved source export with clinical event
-times is needed for the original first-24-hour rule. A publicly accessible
-TriNetX-authored July 2021 deidentified dataset dictionary describes encounter
-and lab dates as eight-digit dates, consistent with this snapshot. A current
-alternative product or approved site-specific extract with real clinical event
-times and usable time-zone semantics remains UNCONFIRMED. See
-docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The current bundle remains immutable.
-The University of Utah CTSI publicly lists BMIC as its TriNetX information
-contact. Whether BMIC is this study's designated recipient is UNCONFIRMED; the
-prepared field-capability inquiry remains unsent.
+across the preserved domains. The owner-approved D/D+1 revision supersedes the
+previous timestamp-source search. No email contact is authorized. See
+docs/GLP1_TIMESTAMP_SOURCE_GAP.md. The accepted bundle remains immutable.
 An owner-only, path-free aggregate medication audit found that the accepted
 raw export lacks order end and status fields, and the corresponding canonical
 columns have no populated values. The source identity remained stable; its
@@ -133,8 +135,8 @@ The draft source-capability audit now counts encounter-start, lab-event and
 medication-start precision, parsed versus unparsed timestamp-labeled rows,
 populated medication end/status fields and raw-header field presence from a
 validated canonical connection. Thirteen focused capability/scope/population
-tests plus Ruff pass. A new timestamp-capable export has not been observed;
-gas-specific timing and clinical acceptance remain open.
+tests plus Ruff pass. The owner closed timestamp-source acquisition;
+calendar-date arterial provenance and clinical acceptance remain open.
 The candidate capability audit is now available as a read-only CLI command
 against a validated canonical product. It emits aggregate JSON only and marks
 source acceptance and abstract readiness false. A command test uses
@@ -147,14 +149,10 @@ A path-free, mode-0600 header-only receipt now records two archived 2022 raw
 TriNetX layouts. Encounter, lab and medication headers have date fields but no
 separate time-of-day or medication end/status fields. No clinical values were
 read, so this is historical source-layout context, not a current-source or
-phenotype acceptance decision. A current alternative extract remains
-UNCONFIRMED.
-Current TriNetX public Dataworks material describes date-stamped records and
-optional requested enhancements but does not promise clinical times. Its
-publication guidance points to the designated institutional representative for
-contractual clarification. The timestamp-source-gap document now includes a
-prepared, unsent feasibility inquiry for that route. No recipient, request,
-new extract or source acceptance is established.
+phenotype acceptance decision. No time-source acquisition is planned.
+Earlier public-product and inquiry research is superseded by the owner's
+fixed day-resolution decision. No emails may be sent. Historical source
+capability screens remain evidence of the accepted snapshot only.
 Draft header-only proposed-export triage now takes explicit encounter, lab and
 medication CSV paths, reads only their headers, and returns path-free aggregate
 field-presence counts with source/report acceptance false. Synthetic CLI tests
