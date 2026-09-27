@@ -84,6 +84,37 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
             "'date_only','date_only','',NULL)",
             [patient, encounter, f"extra-{row}", row, setting, start, end],
         )
+    partial_start_cases = (
+        ("psa", (("EMER", None, "2025-01-02"), ("IMP", "2025-01-02", "2025-01-03"))),
+        ("psb", (("EMER", None, "2024-01-04"), ("IMP", None, "2024-01-05"))),
+        ("psc", (("EMER", None, "2024-01-12"), ("IMP", "2024-01-12", "2024-01-13"))),
+        ("psd", (("IMP", "2025-01-02", "2025-01-03"),)),
+        ("pse", (("IMP", "2024-01-12", "2024-01-13"),)),
+        ("psf", (("EMER", None, "2024-01-01"), ("IMP", "2024-01-01", "2024-01-03"))),
+    )
+    for patient, returns in partial_start_cases:
+        db.execute(
+            "INSERT INTO preprocessed.source_encounter VALUES "
+            "(?,?,?,'synthetic',1,'partial-start','IMP',"
+            "'2024-01-01','2024-01-02','date_only','date_only','',NULL)",
+            [patient, f"{patient}-index", f"{patient}-index-record"],
+        )
+        for row, (setting, start, end) in enumerate(returns, start=1):
+            db.execute(
+                "INSERT INTO preprocessed.source_encounter VALUES "
+                "(?,?,?,'synthetic',?,'partial-start',?,?,?,?,?,'',NULL)",
+                [
+                    patient,
+                    f"{patient}-return",
+                    f"{patient}-return-record-{row}",
+                    row,
+                    setting,
+                    start,
+                    end,
+                    "date_only" if start is not None else None,
+                    "date_only",
+                ],
+            )
     db.execute(
         "INSERT INTO preprocessed.source_encounter VALUES "
         "('p','r1','duplicate-ed','synthetic',200,'fixture','EMER',"
@@ -114,6 +145,7 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
         ("r", "ri"),
         ("f", "fi"),
         ("k", "ki"),
+        *((patient, f"{patient}-index") for patient, _ in partial_start_cases),
     ):
         db.execute(
             "INSERT INTO fixture_index VALUES (?,?,?)",
@@ -159,6 +191,7 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
         "r",
         "f",
         "k",
+        *(patient for patient, _ in partial_start_cases),
     ):
         db.execute("INSERT INTO preprocessed.source_patient VALUES (?,NULL)", [patient])
         db.execute(
@@ -255,6 +288,43 @@ def _check_hand_expected(db: duckdb.DuckDBPyConnection) -> dict:
     ).fetchone()
     if converted != (True,):
         raise AssertionError(f"kPa conversion differs: {converted}")
+    partial_columns = ["encounter_id"]
+    for days in (30, 90, 365):
+        stem = f"outcome_acute_union_all_cause_{days}d"
+        partial_columns.extend(
+            (
+                f"{stem}_flag",
+                f"outcome_acute_union_possible_{days}d_count",
+                f"{stem}_count",
+            )
+        )
+    partial_rows = {
+        row[0]: {
+            "flags": row[1::3],
+            "possible": row[2::3],
+            "confirmed": row[3::3],
+        }
+        for row in db.execute(
+            f"SELECT {','.join(partial_columns)} FROM summary "
+            "WHERE patient_id IN ('psa','psb','psc','psd','pse','psf')"
+        ).fetchall()
+    }
+    expected_partial = {
+        "psa-index": ((None, None, None), (1, 1, 1), (0, 0, 0)),
+        "psb-index": ((None, None, None), (1, 1, 1), (0, 0, 0)),
+        "psc-index": ((None, None, None), (1, 1, 1), (0, 0, 0)),
+        "psd-index": ((False, False, False), (0, 0, 0), (0, 0, 0)),
+        "pse-index": ((True, True, True), (0, 0, 0), (1, 1, 1)),
+        "psf-index": ((False, False, False), (0, 0, 0), (0, 0, 0)),
+    }
+    for key, (flags, possible, confirmed) in expected_partial.items():
+        actual = partial_rows.get(key)
+        if actual != {
+            "flags": flags,
+            "possible": possible,
+            "confirmed": confirmed,
+        }:
+            raise AssertionError(f"Partial-start horizon differs for {key}: {actual}")
     return {
         "index_cases": len(expected),
         "day31": list(boundaries),
@@ -263,6 +333,7 @@ def _check_hand_expected(db: duckdb.DuckDBPyConnection) -> dict:
         "ed_admission": list(admission),
         "start_only": list(missing_end),
         "converted_gas": list(converted),
+        "partial_start_cases": len(expected_partial),
     }
 
 
@@ -378,6 +449,14 @@ def _corruptions(db: duckdb.DuckDBPyConnection, root: Path) -> list[str]:
             "SELECT * REPLACE (CASE WHEN encounter_id='i' "
             "THEN index_episode_end+INTERVAL 1 DAY "
             f"ELSE index_episode_end END AS index_episode_end) FROM {summary}",
+            validator._check_partition_geometry,
+        ),
+        (
+            "partial_start_provenance",
+            "links",
+            "SELECT * REPLACE (CASE WHEN index_encounter_id='psa-index' "
+            "THEN false ELSE return_has_missing_start END AS "
+            f"return_has_missing_start) FROM {links}",
             validator._check_partition_geometry,
         ),
     ]

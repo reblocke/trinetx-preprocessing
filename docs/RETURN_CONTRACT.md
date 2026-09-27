@@ -136,6 +136,14 @@ invalid order. Record these by category/window when the date permits assignment;
 undated uncertainty stays separate and must not be assigned an invented window.
 For conflicting dates spanning a boundary, preserve possible-window membership
 without arbitrarily selecting a single date to decide eligibility.
+If one source component start is missing, the earliest observed component start
+is only an upper bound on the true episode start. A known component on day 366
+therefore cannot rule out a return on days 1–365 when another component has no
+start. Conversely, a known component starting on or before the index end proves
+that the episode's earliest start cannot fall in a day-1-through-N window. Apply
+these bounds to possible-window counts and flags without inventing a start date.
+Each link retains `return_has_missing_start` so a validator can check this
+bound against the preserved source rows.
 
 Horizon flag rule: positive if at least one confirmed qualifying event
 exists; otherwise NULL if unresolved candidate timing could change the result.

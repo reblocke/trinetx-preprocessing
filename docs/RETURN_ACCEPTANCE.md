@@ -1,14 +1,74 @@
 # Return outcomes acceptance
 
-Status: **C0 provenance recovered; C1 v2 contract frozen; C2 implemented;
-C3 public and synthetic checks passed, private gate pending; C4 gated**.
+Status (2026-09-27): **C0–C1 evidenced; C2 partial-start uncertainty repaired;
+C3 public checks passed on repaired code; current-code private C3 and C4 gates
+pending**.
 This page tracks private acceptance for the opt-in v2
 return bundle. The executable rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
 The [2026-09-25 audit](RETURN_AUDIT.md) supersedes earlier completion claims.
 The owner explicitly resumed the goal under the calendar-day v2 contract.
 Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
 
-The calendar-day v2 build and independent validator are implemented on code
+The locked r3 C4 build on LOCKE STATION completed all 64 partitions and
+published a complete manifest for both variants. During independent validation,
+an additional hand-authored synthetic E2E found that a same-ID ED/inpatient
+return with an unknown ED start and an observed inpatient start on day 366 was
+reported as negative for every horizon. Under the approved contract, its start
+could be in each window, so those flags must remain unknown. The validator
+repeated the producer's possible-window formula and could not catch the error.
+The r3 worker was terminated after this scientific gate failure; both runner
+processes exited, no return-validation report or acceptance seal exists, and
+all r3 outputs and scratch remain external and unaccepted. The external failure
+receipt SHA-256 is
+`010966fc8aef1ed1a3487737ed47da6c599701b9153959b24f699d3250fa501a`;
+the terminal rejection receipt SHA-256 is
+`9b19ac4d294137592459db92d494d661adc01249ea99f9bf03f7fa48d3f177d5`.
+The public E2E was extended before the code repair and failed on the old result.
+The repaired E2E now passes six independent partial-start cases, a forged
+provenance rejection, and one-versus-three partition equivalence. Its external
+receipt SHA-256 is
+`d28bfe6d0c8afdd93b85946a60e8326207dcc305a842275f19531bf4bd03366c`.
+This code and contract change invalidates the prior code-bound public, parent,
+pilot and C4 receipts. A fresh locked build and all C3/C4 gates are required.
+On repaired code identity
+`de9d4268bb64ffa47411f019d42c7e3f1abd76a8935bd96d285d7081ba752d88`,
+the full pytest suite passed 464 cases with 238 existing warnings. Ruff check
+and format, offline lock, five legacy E2E workflows with readback-verified
+manifest SHA-256
+`61f8f8e8555dc003eb9256623d047b67d5785b434c40c21c787aecb13c6f7c4e`,
+and a fresh noneditable wheel with installed old-consumer API/CLI smoke checks
+passed. The synthetic wrapper E2E passed fresh, resumed and partitioned output
+multisets, collision and wrong-receipt checks; its independent readback receipt
+SHA-256 is
+`dc9c7af94c2647bc1591f3b415f9a82ac1f68439955d7ac3a6e5d2cdd7271126`.
+That wrapper stubs upstream validation. The accepted-parent validation and
+resource pilot must be repeated on this code before another private build.
+
+On the preceding code, the r6 accepted-parent validation passed FULL_DATA (2,662,675)
+and AFTER_EXCLUSION (833,476) with receipt SHA-256
+`c075bcfe2fc7b595723e5ba0c4d12219e50643c8ff5be10aeac7c7bf6a2098b0`.
+The first C4 build on LOCKE BOOK failed on ExFAT AppleDouble scratch files.
+The diagnosed APFS retry passed launch gates and began writing return
+partitions; its last verified checkpoint had 25 FULL_DATA partitions. A later
+write failed with an I/O error and RESEARCH FAST disappeared, so the runner
+could not produce a failure receipt. Its independent observation receipt is
+external (SHA-256
+`61e7e1f2f817a98f126bbd5b27ec7626eb3f38065aa21c7769e0f7ab9feefbf5`).
+At the handoff, the enclosure and NVMe controller are visible, but the
+controller reports a write-command timeout and exposes no disk. The actual
+completed count at failure is UNCONFIRMED. No complete C4 product,
+post-build input hash comparison, independent full return validation, or
+acceptance seal exists. Restore the same volume and audit its checkpoint and
+completed file hashes before any resume decision.
+A separate LOCKE STATION APFS volume passed read-only filesystem verification
+and a 4 GiB write/fsync/readback probe. A locked two-variant, 32-partition
+pilot passed with 82,928 FULL_DATA and 25,969 AFTER_EXCLUSION bucket keys;
+all 12 artifact hashes were independently verified. Its receipt SHA-256 is
+`4897d6574f93aa704c3d7133d8205357e4ca752de156ee9795bf2a751f4f73df`.
+A later C4 attempt used it; that r3 attempt was rejected as described above.
+The full C4 acceptance gates remain unchanged.
+
+The preceding calendar-day v2 build and independent validator were checked on code
 identity `c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
 The frozen suite passed 464 cases (238 existing performance warnings); Ruff
 check/format, `uv lock --check --offline`, `git diff --check`, noneditable wheel
@@ -52,9 +112,9 @@ partition validation, all 12 output hashes, matching source/parent/code
 identities, 4,773,183,488-byte peak process RSS, and more than 100 GiB free.
 Its readback-verified receipt SHA-256 is
 `e4fcbdd15956c920767bb76b11ad19f52f70e2ce53f4ed6e5788421cc6e6e4ad`.
-The code change invalidates the r4 code-bound parent gate. A fresh locked r5
-full parent validation is running on the current code; no current-code
-full-parent pass or C4 acceptance is claimed.
+That earlier code change invalidated the r4 code-bound parent gate. A subsequent
+r6 full parent validation passed on the former r3 code identity, as recorded
+above. The partial-start repair requires a new code-bound parent validation.
 
 The historical accepted parent receipt was recovered from the documented
 external handoff. An external C0 receipt, SHA-256

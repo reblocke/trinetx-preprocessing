@@ -94,6 +94,9 @@ def dictionary_entry(
     elif column == "days_after_index_end":
         definition = "Integer calendar days from observed index end to return start"
         unit = "calendar days"
+    elif column == "return_has_missing_start":
+        definition = "At least one source row for the return episode lacks a start date"
+        null_semantics = "Always true or false for a candidate return link"
     elif column.startswith("outcome_followup_observation_"):
         definition = "Last observed event relative to this calendar-day horizon"
         null_semantics = "NULL only if the published row is malformed"
@@ -315,6 +318,7 @@ def _links(db: duckdb.DuckDBPyConnection) -> None:
                e.episode_id AS return_episode_id, e.patient_id, e.encounter_id,
                e.episode_start AS return_start,
                e.latest_possible_start,
+               e.has_missing_start AS return_has_missing_start,
                e.start_precision AS return_start_precision,
                e.episode_end AS return_end,
                e.end_precision AS return_end_precision,
@@ -487,6 +491,8 @@ def _metric_tables(db: duckdb.DuckDBPyConnection) -> list[str]:
                 "temporal_state NOT IN ('confirmed','same_day_uncertain',"
                 "'overlap_or_prior','outside_horizon') AND "
                 "(return_start IS NULL OR temporal_state='derived_return_start' "
+                "OR (return_has_missing_start AND return_start::DATE "
+                ">= index_episode_end::DATE + INTERVAL 1 DAY) "
                 "OR (return_start::DATE <= index_episode_end::DATE "
                 f"+ INTERVAL {days} DAY AND latest_possible_start::DATE "
                 ">= index_episode_end::DATE + INTERVAL 1 DAY))"

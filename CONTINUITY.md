@@ -31,6 +31,72 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-27 readmissions checkpoint (supersedes the historical notes below):
+The locked C4 r3 run on LOCKE STATION completed both variants and all 64
+partitions, but a new E2E revealed a scientific uncertainty defect while its
+independent validator ran. A same-ID ED/inpatient return with one missing
+component start and another known start on day 366 was incorrectly marked as
+negative for 30/90/365-day all-cause horizons; the approved contract requires
+unknown because the missing start could be in any of those windows. The
+validator mirrored the builder formula, so its eventual pass could not close
+this gap. The r3 worker was terminated before a validation report or seal; both
+processes exited, the shared lock has no open holder, and all external output
+and scratch files remain preserved. The scientific-gate failure receipt SHA-256
+is `010966fc8aef1ed1a3487737ed47da6c599701b9153959b24f699d3250fa501a`;
+the terminal rejection receipt SHA-256 is
+`9b19ac4d294137592459db92d494d661adc01249ea99f9bf03f7fa48d3f177d5`.
+The expanded hand-authored E2E failed on the frozen r3 code before the repair.
+The repair carries source missing-start provenance into return links and uses
+the earliest observed component start as an upper bound. Six independent
+partial-start cases, forged provenance rejection, and one-versus-three
+partition equivalence pass in the readback-verified E2E receipt SHA-256
+`d28bfe6d0c8afdd93b85946a60e8326207dcc305a842275f19531bf4bd03366c`.
+The contract is clarified without changing its approved meaning. Repaired code
+identity is `de9d4268bb64ffa47411f019d42c7e3f1abd76a8935bd96d285d7081ba752d88`.
+Full pytest passed 464 cases (238 existing warnings); Ruff check/format,
+offline lock, five legacy E2Es with readback, noneditable wheel and installed
+old-consumer API/CLI smoke passed. The synthetic wrapper E2E also passed with
+readback-verified receipt SHA-256
+`dc9c7af94c2647bc1591f3b415f9a82ac1f68439955d7ac3a6e5d2cdd7271126`.
+Prior exact-parent, resource-pilot and C4 receipts bind the former code
+identity and must be refreshed. Do not reuse or seal r3.
+Next: freeze a reviewable commit, repeat exact parent and Station pilot,
+then run a fresh locked full C4 build,
+independent validation, byte comparison and seal.
+
+Historical 2026-09-26 readmissions checkpoint:
+The words "current" and "next" in the retained older notes below refer to
+their dated snapshots; the 2026-09-27 checkpoint above controls active work.
+C0–C2 and the public C3 proof are complete on code identity
+`c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
+The current-code r6 exact validation of the accepted parent passed both
+variants; its external receipt SHA-256 is
+`c075bcfe2fc7b595723e5ba0c4d12219e50643c8ff5be10aeac7c7bf6a2098b0`.
+The 32-partition pilot passed. The first C4 build on LOCKE BOOK stopped on
+ExFAT AppleDouble scratch files and was preserved without acceptance. The
+diagnosed retry on RESEARCH FAST APFS passed its launch gates and wrote at
+least 25 FULL_DATA partitions. During a later partition write, the SSD returned
+an I/O error and the volume disappeared. The runner exited; no C4 seal or
+post-build input-byte/independent-return validation exists. The last verified
+checkpoint was 25 partitions at 2026-09-26 12:27:21 UTC; the count at failure
+is UNCONFIRMED until the same volume is accessible. The external volume-loss
+observation receipt SHA-256 is
+`61e7e1f2f817a98f126bbd5b27ec7626eb3f38065aa21c7769e0f7ab9feefbf5`.
+At this handoff, macOS sees the OWC Express 1M2 enclosure and T-FORCE SSD in
+the hardware tree, but the NVMe controller reports a write-command timeout
+and exposes no disk or mount. A separate APFS volume, LOCKE STATION, passed
+read-only filesystem verification and a 4 GiB write/fsync/readback probe. A
+fresh location-specific, locked 32-partition pilot passed both variants:
+82,928 FULL_DATA and 25,969 AFTER_EXCLUSION bucket keys, all 12 artifact hashes,
+5,400,756,224-byte peak RSS, and more than 100 GiB free. Its receipt SHA-256
+is `4897d6574f93aa704c3d7133d8205357e4ca752de156ee9795bf2a751f4f73df`.
+The inaccessible RESEARCH FAST attempt remains preserved
+and unaccepted. The Station probe receipt SHA-256 is
+`225b05d2dee1dbbd7e211060246c0bcc2f68763a6ace4cf7d7ad7171e4f50a99`;
+the provisional location decision SHA-256 is
+`72237685750936cf907f0fb79725d0930de1dfdb867e8b2ed8864564b0329e72`.
+No full C4 replacement build has started.
+
 2026-09-25 resumed readmissions checkpoint: C0 historical parent receipt and
 source/parent identities were reverified; C1 calendar-day v2 D1–D6 contract is
 frozen. Opt-in v2 build/validator code is implemented with v1 as the default.
@@ -200,14 +266,16 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-For return outcomes, finish the locked r5 parent validation on current code
-identity `c16ef758b1d5506343d4de0d1a20b19b4ed704f93556de4fd1e710710dade2cf`.
-Seal the public C3 evidence to a clean commit, then run one locked full
-outcomes-only build and independent validator on LOCKE BOOK. Compare source and
-accepted-parent bytes before and after, retain external receipts, and update
-this ledger and acceptance docs. Diagnose any failure before retrying; do not
-weaken a gate. Cross-ID continuations remain unconfirmed because the flow
-table has no transfer or discharge authority.
+For return outcomes, use the verified LOCKE STATION pilot as a resource gate.
+If the volume remains healthy, a fresh, separate C4 attempt may use that APFS
+volume after exact
+source/parent/code/contract gate checks; preserve the RESEARCH FAST partial run
+without treating it as reusable or accepted. If RESEARCH FAST later returns,
+verify its identity and filesystem health and audit its checkpoint read-only
+before any resume. C4 still requires a complete locked outcomes build,
+independent full return validation, pre/post source and parent byte comparison,
+and an external acceptance seal. Cross-ID continuations remain unconfirmed
+because the flow table has no transfer or discharge authority.
 
 In the Mini private handoff, use the existing shared lock to
 revalidate the immutable accepted bundle, run downstream comparator and installed
