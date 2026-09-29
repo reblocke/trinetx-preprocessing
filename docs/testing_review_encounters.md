@@ -1,5 +1,8 @@
 # Encounter and handoff test review
 
+Historical cleanup inventory. Integration preserves the additional current-main
+regressions; see [the integration handoff](RETURN_INTEGRATION.md).
+
 Reviewed 2026-09-25 against the tests present at `8a1185b`. Scope: the eight
 files below; `test_encounter_stage.py` belongs to the clinical-stage review.
 

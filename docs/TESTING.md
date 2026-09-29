@@ -36,8 +36,10 @@ exceptions include:
    build; public fixtures never replace that gate.
 
 A component test with a mocked parent/source validator is not complete
-source-to-parent-to-returns E2E coverage. The resumed return goal requires
-the real parent/source gate and a locked full build before acceptance.
+source-to-parent-to-returns E2E coverage. Private acceptance requires the real
+parent/source gate and a locked full build. The original sealed revision passed
+those gates; the integrated revision needs its own acceptance. See
+[RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md).
 
 For the calendar-day v2 return partition, use a new external directory:
 

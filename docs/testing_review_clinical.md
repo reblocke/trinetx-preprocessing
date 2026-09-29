@@ -1,5 +1,8 @@
 # Clinical and legacy-pipeline test review
 
+Historical cleanup inventory. Status statements below describe 2026-09-25;
+current return acceptance is recorded in [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md).
+
 Date: 2026-09-25. Scope: 116 original test functions in the transform modules,
 domain stage modules, final assembly/source modules, legacy-NA compatibility,
 and traditional catalog. This review changes tests only; it does not authorize

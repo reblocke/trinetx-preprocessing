@@ -36,10 +36,14 @@ return validation requires the producing code identity; the old seal cannot
 validate a newly integrated runtime. Do not rewrite the old manifest or receipt,
 relax identity checks, or resume old partitions under the new identity.
 
-The bounded integration session targets a locally checked draft PR. No private
-source scans, parent revalidation, resource pilots, builds or analysis are part
-of that session. Public check results and the exact integrated revision are
-recorded in the integration handoff and external synthetic evidence.
+Public checks passed at integration commit `99b2a3a`: 492 pytest cases, both
+retained E2E runners with artifact readback, Ruff, formatting, lockfile and diff
+checks, and a noneditable wheel with existing consumer API/CLI checks without
+PYTHONPATH. The integrated package identity is
+`ae5f2428d3155868711c9d42cae72fa5c4178074a7b3c0a24654bafd4cb4b33b`.
+See the [integration handoff](RETURN_INTEGRATION.md) for scope and commands.
+Hosted CI is reported separately on the draft PR. No private source scans,
+parent revalidation, resource pilots, builds or analysis ran in this session.
 
 After reorganization, private acceptance of the integrated revision requires
 fresh exact-parent/resource gates, one locked outcomes-only build, independent

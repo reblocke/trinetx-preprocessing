@@ -38,9 +38,13 @@ receipt contract, coverage rules and cache format are preserved. Return parent
 validation is isolated in its own module, with its existing failure fixtures.
 The original sealed code and runtime remain available. Integration creates a
 new package identity; original private acceptance does not transfer to it.
-Public verification is in progress. Stop substantive conflict work after
-35 minutes and the entire session after 60 minutes. No private job is authorized
-in this session. See docs/RETURN_ACCEPTANCE.md.
+Public verification passed at integration commit `99b2a3a`: 492 pytest cases,
+Ruff, format, lock and diff checks; both retained E2E runners and artifact
+readback; noneditable wheel and existing consumer API/CLI smoke checks without
+PYTHONPATH. All 19 upstream-added regressions ran. Documentation-only updates
+follow that frozen source. Hosted CI is separate and is reported on the draft
+PR. No private job is authorized in this session. See
+docs/RETURN_INTEGRATION.md and docs/RETURN_ACCEPTANCE.md.
 
 Historical merged-encounter checkpoint (predates return integration):
 All pre-enrichment gates passed. Both legacy variants match authenticated
@@ -64,9 +68,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Finish the bounded public checks and draft PR, or record the first incomplete
-gate and exact continuation. After reorganization, complete review, fresh
-private acceptance and downstream return consumption before rollout.
+Review the integration draft and required CI. After reorganization, complete
+fresh private acceptance, the downstream return reader and its retained E2E,
+then merge and update the immutable downstream pin. Preserve the original
+accepted bundle and runtime throughout. The bounded session starts no recurring
+monitor or unattended continuation.
 
 Historical merged-encounter follow-up:
 Version-1.0 shared acceptance verification and validator report binding have

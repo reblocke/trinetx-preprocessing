@@ -1,5 +1,8 @@
 # Pipeline test review
 
+Historical cleanup inventory. Current integration verification is recorded in
+[the integration handoff](RETURN_INTEGRATION.md).
+
 Review date: 2026-09-25. Scope: CLI, complete preprocessing, cohort-source,
 configuration, storage, filesystem, hashing, profiling and work-manifest tests.
 Production code and acceptance gates are unchanged.

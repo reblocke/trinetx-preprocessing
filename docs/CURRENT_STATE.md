@@ -51,8 +51,9 @@ encounter interfaces, shared acceptance contract, coverage policy and cache
 format. Return-specific parent validation lives in a separate module and is
 called only by the opt-in return product. The command default remains v1.
 
-The integrated package has a different code identity. Its public checks and
-future private acceptance must be recorded separately from the existing seal.
+The integrated package has a different code identity. Public checks passed at
+`99b2a3a`; see the [integration handoff](RETURN_INTEGRATION.md). Hosted CI and
+future private acceptance are recorded separately from the existing seal.
 The accepted branch, runtime and private bundle remain the reproduction route.
 See [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md) for current gate status and
 [RETURN_CONTRACT.md](RETURN_CONTRACT.md) for definitions. Downstream return
