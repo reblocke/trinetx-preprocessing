@@ -5,18 +5,84 @@
 - Guard against silent behavior change during refactor.
 - Keep tests free of confidential data.
 
-## Test tiers
-1. Unit tests: pure transforms
-2. Regression tests: fixture-based output equivalence
-3. Integration tests: end-to-end on synthetic mini-cohort in default CSV mode
-   and chunked Parquet intermediate mode, including `run`, `baseline`,
-   `compare`, and `profile` command paths
-4. Cohort-source contract tests: manifest/schema/catalog validation, required
+## E2E first
+
+Follow the owner-required [testing policy](../AGENTS.md#testing-policy).
+Highly prefer E2E as the sole testing mechanism. Never write unit tests after
+implementation. If isolation is necessary, first write down the ways the system
+could fail and the failures missing from E2E coverage, then write the code.
+
+The primary synthetic workflows exercise the complete CSV and chunked Parquet
+pipeline, `run`/`baseline`/`compare`/`profile`, a repeatable canonical-source
+build, and the 36-file compatibility contract. Expected schemas come from the
+frozen fixture, independently of the implementation constant.
+
+The [2026-09-25 review](testing_review.md) accounts for every original test
+function, records deleted duplication, and justifies retained checks. These
+exceptions include:
+
+1. Clinical boundaries, missingness, duplicates, ties and malformed values absent
+   from the three-encounter E2E fixture, exercised through stage integrations or
+   necessary isolated regressions.
+2. Cohort-source contract tests: manifest/schema/catalog validation, required
    element and catalog-pin failures, read-only external spill cleanup, and
    traditional-rule coverage
-5. GLP-1 migration tests: direct-raw versus adapter-backed source and downstream
+3. GLP-1 migration tests: direct-raw versus adapter-backed source and downstream
    parity across all five clinical domains, including traditional-only source
    candidates and concept-independent raw observability
+4. Return-outcome tests: opt-in synthetic episode, ICD/gas, partition/resume,
+   artifact-identity and summary reconciliation checks. The private source
+   capability preflight must pass before any outcomes-only resource pilot or
+   build; public fixtures never replace that gate.
+
+A component test with a mocked parent/source validator is not complete
+source-to-parent-to-returns E2E coverage. Private acceptance requires the real
+parent/source gate and a locked full build. The original sealed revision passed
+those gates; the integrated revision needs its own acceptance. See
+[RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md).
+
+For the calendar-day v2 return partition, use a new external directory:
+
+```bash
+uv run python scripts/verify_return_v2_partition_e2e.py /external/new-return-e2e
+uv run python scripts/verify_return_v2_partition_e2e.py \
+  /external/new-return-e2e --verify
+```
+
+This E2E retains synthetic source data, all six outputs at one and three
+partitions, hand-authored results, independent reconciliation, adversarial
+corruption results, code/fixture/script identities and SHA-256 inventory. Its
+receipt identifies its partition scope; it does not replace full manifest-bound
+parent/source validation or private C4 acceptance.
+
+## Retained E2E artifact
+
+Use a **new external directory**. The runner rejects existing directories and
+symlinked ancestors; on macOS use `/private/tmp` rather than the `/tmp` symlink.
+
+```bash
+uv run python scripts/verify_e2e.py --output-dir /external/new-e2e-run
+uv run python scripts/verify_e2e.py --verify /external/new-e2e-run \
+  --manifest-sha256 <printed-manifest-sha256>
+```
+
+The directory retains the exact command, JUnit, stdout/stderr, exit status,
+source/configuration/fixture snapshot, lockfile, environment versions and all
+five workflows' generated products. A JSON manifest inventories their bytes
+and SHA-256 hashes. Verification checks the inventory and recorded outcome;
+an empty/skipped/failed selection or missing saved outputs cannot pass. Failed
+runs retain a failed receipt. Treat the printed manifest hash as an independent
+integrity anchor, not a signed acceptance seal.
+
+Repeat from the recorded revision with matching source hashes, or restore the
+retained `source/` files into a separate checkout of that revision, run
+`uv sync --locked`, and use a new output directory. The snapshot excludes private
+data. Preserve the original evidence at its recorded location because pytest
+creates absolute internal symlinks. Timings, temporary paths and logs may differ
+between runs. The existing E2E assertions verify deterministic output contracts.
+Some retained outputs deliberately contain negative-case corruption; the bundle
+is synthetic test evidence, not an accepted canonical product. Review before
+publishing generated artifacts.
 
 ## Commands
 ```bash
@@ -26,7 +92,12 @@ uv lock --check
 uv run pytest -q
 uv run python -m trinetx_preprocessing --help
 uv run python -m trinetx_preprocessing validate-cohort-source --help
+uv run python -m trinetx_preprocessing build-returns --help
+uv run python -m trinetx_preprocessing validate-returns --help
 ```
+
+The full suite includes the justified isolated and adversarial checks. Its pass
+does not replace the retained E2E artifact or private scientific acceptance.
 
 ## Fixtures
 - Put only synthetic or de-identified fixtures under `tests/fixtures/`.

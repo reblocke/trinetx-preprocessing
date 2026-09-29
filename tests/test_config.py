@@ -37,24 +37,6 @@ def _write_encounter_csv(path: Path) -> None:
     )
 
 
-def test_load_and_validate_config(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    work_dir.mkdir()
-    output_dir.mkdir()
-    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
-
-    config_path = tmp_path / "config.yaml"
-    _write_config(config_path)
-
-    config = load_config(config_path)
-    assert config.data_dir == data_dir.resolve()
-    assert config.storage.intermediate_format == "csv"
-    assert config.storage.emit_normalized_domain_tables is False
-    validate_config(config)
-
-
 def test_load_config_storage_options(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     work_dir = tmp_path / "work"
@@ -331,45 +313,6 @@ def test_validate_config_missing_files(tmp_path: Path) -> None:
         validate_config(config)
 
 
-def test_inspect_domain_paths_reports_all_domains_without_raising(
-    tmp_path: Path,
-) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    work_dir.mkdir()
-    output_dir.mkdir()
-    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        textwrap.dedent(
-            """
-            data_dir: data
-            work_dir: work
-            output_dir: output
-            domains:
-              encounter:
-                pattern: "Encounter/encounter*.csv"
-              labs:
-                pattern: "Lab Results/lab_result*.csv"
-            """
-        ).strip()
-        + "\n"
-    )
-
-    config = load_config(config_path)
-    inspections = inspect_domain_paths(config)
-
-    assert [(item.name, item.matched_count) for item in inspections] == [
-        ("encounter", 1),
-        ("labs", 0),
-    ]
-    assert inspections[0].search_dir == data_dir.resolve() / "Encounter"
-    assert inspections[0].search_dir_exists is True
-    assert inspections[1].search_dir == data_dir.resolve() / "Lab Results"
-    assert inspections[1].search_dir_exists is False
-
-
 def test_inspect_domain_paths_reports_present_empty_search_dir(
     tmp_path: Path,
 ) -> None:
@@ -442,25 +385,6 @@ def test_vitals_pattern_matches_historical_and_restored_spellings(
     }
 
 
-def test_inspect_domain_paths_can_cap_matches(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    work_dir.mkdir()
-    output_dir.mkdir()
-    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
-    _write_encounter_csv(data_dir / "Encounter" / "encounter0002.csv")
-    config_path = tmp_path / "config.yaml"
-    _write_config(config_path)
-
-    config = load_config(config_path)
-    inspections = inspect_domain_paths(config, max_matches=1)
-
-    assert len(inspections) == 1
-    assert inspections[0].matched_count == 1
-    assert inspections[0].truncated is True
-
-
 def test_inspect_domain_paths_caps_space_containing_domain_dirs(
     tmp_path: Path,
 ) -> None:
@@ -497,36 +421,6 @@ def test_inspect_domain_paths_caps_space_containing_domain_dirs(
     assert inspections[0].truncated is True
     assert inspections[0].first_path is not None
     assert inspections[0].first_path.name.startswith("lab_result")
-
-
-def test_inspect_domain_paths_can_filter_domains(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    work_dir.mkdir()
-    output_dir.mkdir()
-    _write_encounter_csv(data_dir / "Encounter" / "encounter0001.csv")
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        textwrap.dedent(
-            """
-            data_dir: data
-            work_dir: work
-            output_dir: output
-            domains:
-              encounter:
-                pattern: "Encounter/encounter*.csv"
-              labs:
-                pattern: "Lab Results/lab_result*.csv"
-            """
-        ).strip()
-        + "\n"
-    )
-
-    config = load_config(config_path)
-    inspections = inspect_domain_paths(config, domain_names={"labs"})
-
-    assert [item.name for item in inspections] == ["labs"]
 
 
 def test_load_config_rejects_unknown_storage_format(tmp_path: Path) -> None:

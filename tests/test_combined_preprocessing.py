@@ -212,46 +212,6 @@ def test_combined_resumable_identity_includes_duckdb_memory_limits(
     )
 
 
-def test_combined_pipeline_uses_sequential_fresh_phase_workers(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    config = load_config(_write_combined_config(tmp_path))
-    build_identity = combined_builder._combined_build_identity(config, strict=True)
-    paths = combined_builder._combined_build_paths(
-        config.output_dir,
-        build_identity=build_identity,
-    )
-    calls: list[tuple[str, object, tuple[object, ...], tuple[int, ...]]] = []
-
-    monkeypatch.setattr(
-        combined_builder,
-        "_run_isolated_phase_process",
-        lambda phase, target, args, *, lock_file_descriptors: calls.append(
-            (phase, target, args, lock_file_descriptors)
-        ),
-    )
-
-    combined_builder._run_combined_pipeline_isolated(
-        config,
-        strict=True,
-        paths=paths,
-        build_identity=build_identity,
-        lock_file_descriptors=(101, 102),
-    )
-
-    assert [phase for phase, _, _, _ in calls] == [
-        "pre-final",
-        "final-assembly",
-    ]
-    assert calls[0][1] is combined_builder._run_pre_final_pipeline_worker
-    assert calls[0][2] == (config, True)
-    assert calls[0][3] == (101, 102)
-    assert calls[1][1] is combined_builder._run_final_pipeline_worker
-    assert calls[1][2] == (config, True, paths, build_identity)
-    assert calls[1][3] == (101, 102)
-
-
 @pytest.mark.parametrize(
     "final_assembly_record",
     [
@@ -753,14 +713,6 @@ def test_spawned_worker_retains_canonical_lock_after_parent_descriptor_closes(
         fcntl.flock(contender.fileno(), fcntl.LOCK_UN)
 
 
-def test_combined_private_artifacts_reject_repository_paths() -> None:
-    with pytest.raises(ValueError, match="work directory"):
-        require_safe_output_location(
-            REPOSITORY_ROOT / "results" / "combined-work",
-            artifact_label="work directory",
-        )
-
-
 def test_combined_private_artifacts_reject_repository_case_alias() -> None:
     aliased_parent = REPOSITORY_ROOT.parent.with_name(
         REPOSITORY_ROOT.parent.name.swapcase()
@@ -775,56 +727,6 @@ def test_combined_private_artifacts_reject_repository_case_alias() -> None:
         require_safe_output_location(
             aliased_repository / "future-private-output",
         )
-
-
-def test_compatibility_evidence_guards_locations_before_hashing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    output_dir = tmp_path / "compatibility"
-    events: list[tuple[str, Path, str]] = []
-
-    def record_guard(path: Path, *, artifact_label: str) -> None:
-        events.append(("guard", path, artifact_label))
-
-    def record_hash(path: Path) -> CsvHashResult:
-        events.append(("hash", path, ""))
-        return CsvHashResult(
-            hash="0" * 64,
-            row_count=0,
-            columns=final_output_columns(),
-        )
-
-    monkeypatch.setattr(
-        combined_builder,
-        "require_safe_output_location",
-        record_guard,
-    )
-    monkeypatch.setattr(combined_evidence, "hash_csv_with_metadata", record_hash)
-
-    payload = capture_compatibility_evidence(output_dir)
-
-    assert payload["table_count"] == 36
-    assert events[:4] == [
-        ("guard", output_dir, "evidence compatibility output directory"),
-        (
-            "guard",
-            output_dir / "AMBULATORY",
-            "evidence compatibility hash directory",
-        ),
-        (
-            "guard",
-            output_dir / "EMERGENCY",
-            "evidence compatibility hash directory",
-        ),
-        (
-            "guard",
-            output_dir / "INPATIENT",
-            "evidence compatibility hash directory",
-        ),
-    ]
-    assert len(events) == 40
-    assert all(event == "hash" for event, _, _ in events[4:])
 
 
 @pytest.mark.parametrize("nested_symlink", [False, True])

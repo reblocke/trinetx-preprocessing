@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import warnings
 from contextlib import ExitStack
@@ -42,17 +41,6 @@ def _config(
             parquet_row_group_size=1,
         ),
     )
-
-
-def test_final_output_columns_match_legacy_schema_fixture() -> None:
-    fixture_path = Path(__file__).parent / "fixtures" / "final_output_columns.json"
-    expected = json.loads(fixture_path.read_text())
-
-    assert final_assembly.FINAL_OUTPUT_COLUMNS == expected
-    assert len(final_assembly.FINAL_OUTPUT_COLUMNS) == 534
-    assert final_assembly.FINAL_OUTPUT_COLUMNS.index(
-        "death_year_month"
-    ) < final_assembly.FINAL_OUTPUT_COLUMNS.index("location")
 
 
 def test_recode_base_columns_maps_canonical_ethnicity() -> None:
@@ -307,34 +295,6 @@ def test_legacy_lab_half_dtype_masks_extreme_values_without_warning() -> None:
 
     assert pd.isna(values.iloc[0])
     assert values.iloc[1] == pytest.approx(float(np.float16(7.4123456789)))
-
-
-def test_legacy_lab_float_rules_preserve_float_values() -> None:
-    rules = {rule.name: rule for rule in final_assembly.LAB_VALUE_RULES}
-
-    values = final_assembly._legacy_lab_feature_values(
-        rules["value_264648"],
-        pd.Series(["26464-8"], dtype="string"),
-        pd.Series(["16.26"]),
-    )
-    bnp_values = final_assembly._legacy_lab_feature_values(
-        rules["value_bnp"],
-        pd.Series(["42637-9"], dtype="string"),
-        pd.Series(["2681.0"]),
-    )
-
-    assert float(np.float32(str(values.iloc[0]))) == pytest.approx(
-        float(np.float32("16.26"))
-    )
-    assert float(np.float32(str(bnp_values.iloc[0]))) == pytest.approx(
-        float(np.float32("2681.0"))
-    )
-    assert float(np.float32(str(values.iloc[0]))) != pytest.approx(
-        _legacy_lab_feature_value(16.26)
-    )
-    assert float(np.float32(str(bnp_values.iloc[0]))) != pytest.approx(
-        _legacy_lab_feature_value(2681.0)
-    )
 
 
 def test_lactate_venous_blood_prefers_legacy_converted_code_on_ties(

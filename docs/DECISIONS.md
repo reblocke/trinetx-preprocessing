@@ -1878,3 +1878,51 @@ accepted populations or explaining the incompatible canonical projection.
 Encounter bundle schema 2.0 requires paired source provenance, explicit
 legacy comparison and coverage gates. Source cohort schema/catalog versions
 are unchanged. Parquet row ordering is a consumer-sort requirement.
+
+## 2026-09-25: E2E-first verification and provisional return decisions
+
+The owner requested removal of tests without concrete failure coverage missing
+from broader E2E workflows. Never write unit tests after implementation. Highly
+prefer E2E as the sole mechanism and retain verifiable, repeatable artifacts.
+Before necessary isolation, document failure modes and the E2E gap, then write
+code. See AGENTS.md, TESTING.md and the complete testing_review.md inventories.
+This does not remove private, scientific, integrity or runtime acceptance gates.
+
+The owner provisionally accepted all D1–D6 recommendations and repair strategies
+in RETURN_DECISION_PACKAGE.md, then explicitly deferred goal relaunch until the
+testing cleanup. This is a provisional decision record, not authorization to
+launch C4 or replace the executable v1 contract. The readmissions goal remains
+BLOCKED; final specification/implementation work resumes only when requested.
+
+## 2026-09-25: Resume readmissions under the calendar-day v2 contract
+
+The owner explicitly resumed the goal after accepting D1–D6 provisionally and
+completing the requested E2E-first test cleanup. Adopt those recommendations as
+the implementation contract in RETURN_CONTRACT.md. Dates are calendar-day
+observations with day 1 through each horizon; day zero is separately uncertain.
+Require coherent same-ID ED/inpatient intervals, distinct applicability for
+inpatient and ED-only indexes, observed episode intervals for phenotype evidence,
+confirmed-event counts with unresolved timing kept explicit, and three-state
+gas flags where mixed tested/untested returns remain unknown absent a positive.
+The parent schema remains 2.0; introduce a separate versioned validator rule
+that proves day-only precision from retained raw dates for recognized legacy
+evidence files. All pre-build, source, parity, private validation and resource
+gates remain mandatory. The historical v1 contract is archived in
+RETURN_CONTRACT_V1.md.
+
+## 2026-09-29: Integrate returns without replacing current encounter contracts
+
+The owner authorized a bounded integration with current main, targeting a
+locally validated draft PR within one hour. Preserve main's default encounter
+builder, validator, CLI, coverage vocabulary, checkpoint format and shared
+production acceptance API. The accepted return branch used a separate parent
+proof and report representation; retain it in `return_parent_validation.py`
+and route only return calls to it. Do not translate its receipt fields into
+production encounter acceptance or silently substitute either validator.
+
+The return contract, output rules and v1 command default remain unchanged.
+Main's regression coverage and the distinct return-parent fixtures are retained.
+Package identity changes upon integration, so the original C0–C4 acceptance
+continues to bind only its sealed revision. Private acceptance of the integrated
+package, downstream return reading and merging are deferred until after the
+task reorganization. Public checks cannot replace those gates.

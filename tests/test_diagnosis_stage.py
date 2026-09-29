@@ -53,7 +53,11 @@ def test_run_diagnosis_stage_outputs(tmp_path: Path) -> None:
 
     normalized = pd.read_csv(normalized_path, parse_dates=["date"])
     assert list(normalized.columns) == NORMALIZED_DIAGNOSIS_COLUMNS
+    assert len(normalized) == 9
+    assert normalized.loc[0, "code_system"] == "ICD-10"
     assert normalized.loc[0, "principal_diagnosis_indicator"] == "U"
+    assert normalized.loc[0, "admitting_diagnosis"] == "U"
+    assert normalized.loc[0, "reason_for_visit"] == "U"
     availability = pd.read_csv(work_dir / "analysis_diagnosis_availability.csv")
     assert (
         availability["encounter_id"].tolist()
@@ -77,3 +81,13 @@ def test_run_diagnosis_stage_outputs(tmp_path: Path) -> None:
 
     headache = pd.read_csv(work_dir / "HAS_headache.csv")
     assert headache.empty
+    for name, expected_codes in {
+        "HAS_J44": ["J44.1"],
+        "HAS_J441": ["J44.1"],
+        "HAS_I50_acute": ["I50.33"],
+        "HAS_I50": ["I50.33"],
+        "HAS_E11": ["E11.9"],
+        "HAS_R0602": ["R06.02"],
+        "HAS_Z79891": ["Z79.891"],
+    }.items():
+        assert pd.read_csv(work_dir / f"{name}.csv")["code"].tolist() == expected_codes

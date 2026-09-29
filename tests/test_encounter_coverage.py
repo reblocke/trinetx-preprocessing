@@ -209,3 +209,52 @@ def test_zero_linkage_is_never_corroborated():
         assert report["patient_linked"] == 0
         assert report["encounter_linked"] == 0
         assert report["patient_linked_proportion"] == 0
+
+
+def test_zero_encounter_source_never_passes_as_complete_or_corroborated():
+    with duckdb.connect() as db:
+        db.execute("""
+            ATTACH ':memory:' AS preprocessed;
+            CREATE TABLE legacy_base (pat_enc_hash VARCHAR,patient_id VARCHAR,
+                encounter_id VARCHAR,sex INT,race INT,ethnicity INT,
+                "location" INT,encounter_date INT);
+            CREATE TABLE preprocessed.source_patient (patient_id VARCHAR,sex VARCHAR,
+                race VARCHAR,ethnicity VARCHAR,patient_regional_location VARCHAR);
+            CREATE TABLE preprocessed.source_encounter (
+                patient_id VARCHAR,encounter_id VARCHAR,
+                start_datetime TIMESTAMP,end_datetime TIMESTAMP);
+            CREATE TABLE preprocessed.canonical_source_file_audit AS
+                SELECT 'labs' logical_domain;
+            CREATE TABLE preprocessed.patient_observability (patient_id VARCHAR,
+                logical_domain VARCHAR,event_count INT,
+                first_event_datetime TIMESTAMP,last_event_datetime TIMESTAMP);
+        """)
+        with pytest.raises(ValueError, match="approved exception"):
+            coverage_tables(db, policy="approved_incomplete_linkage")
+        report = coverage_tables(
+            db,
+            policy="approved_incomplete_linkage",
+            approved_exception="synthetic zero source",
+        )
+        assert report["rows"] == 0
+        assert not report["pass"]
+        assert not report["complete_encounter_linkage"]
+        assert report["patient_linked_proportion"] is None
+
+
+def test_cli_rejects_linkage_policy_outside_coverage_only(tmp_path):
+    from trinetx_preprocessing.encounters.cli import main
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "--compatibility-database",
+                str(tmp_path / "companion"),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--coverage-policy",
+                "approved_incomplete_linkage",
+                "--legacy-only",
+            ]
+        )
+    assert error.value.code == 2

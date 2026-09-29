@@ -58,6 +58,8 @@ def test_run_medications_stage_outputs(tmp_path: Path) -> None:
     normalized = pd.read_csv(normalized_path, parse_dates=["start_date"])
     assert list(normalized.columns) == NORMALIZED_MEDICATION_COLUMNS
     assert len(normalized) == 12
+    assert normalized.loc[0, "code_system"] == "ATC"
+    assert pd.isna(normalized.loc[10, "start_date"])
 
     ipmed_list1 = pd.read_csv(
         work_dir / "IPmed_list1.csv",
@@ -76,6 +78,12 @@ def test_run_medications_stage_outputs(tmp_path: Path) -> None:
         dtype={"code": "string"},
     )
     assert opmed_list6["code"].tolist() == ["21949"]
+    for name, expected_codes in {
+        "IPmed_list3": ["7213"],
+        "OPmed_list3": ["6813"],
+    }.items():
+        group = pd.read_csv(work_dir / f"{name}.csv", dtype={"code": "string"})
+        assert group["code"].tolist() == expected_codes
 
 
 def test_combined_stage_captures_ingredient_without_legacy_features(

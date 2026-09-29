@@ -78,6 +78,20 @@ def test_run_rfs_stage_outputs(tmp_path: Path) -> None:
     assert indexed.loc["E4", "rfs_obesity"]
     assert indexed.loc["E5", "rfs_ventsupport"]
     assert indexed.loc["E6", "rfs_predisposition"]
+    for category, expected_encounter in {
+        "ABG": "E1",
+        "VBG": "E2",
+        "RESPFAIL": "E3",
+        "OBESITY": "E4",
+        "VENTSUPPORT": "E5",
+        "PREDISPOSITION": "E6",
+    }.items():
+        events = pd.read_csv(work_dir / f"RFS_{category}.csv")
+        assert set(events["encounter_id"]) == {expected_encounter}
+        assert not indexed.loc["E7", f"rfs_{category.lower()}"]
+    assert indexed.loc["E4", "patient_id"] == "P4"
+    assert not list(work_dir.glob(".trinetx-rfs-membership-*"))
+    assert not list(work_dir.glob(".trinetx-rfs-encounters-*"))
 
 
 def test_run_rfs_stage_outputs_with_parquet_intermediates(tmp_path: Path) -> None:
@@ -176,35 +190,6 @@ def test_rfs_encounter_store_preserves_first_seen_encounter_row(
         {"patient_id": "P4", "encounter_id": "E3"},
     ]
     assert store.seen_count == 3
-
-
-def test_run_rfs_stage_removes_bucketed_scratch_directories(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    data_dir.mkdir()
-    work_dir.mkdir()
-    output_dir.mkdir()
-
-    _write_placeholder_encounter(data_dir / "Encounter" / "encounter0001.csv")
-    for filename in (
-        "encounter_NEW_0001.csv",
-        "lab_results_NEW_0001.csv",
-        "diagnosis_NEW_0001.csv",
-        "procedure_NEW_0001.csv",
-        "vital_signs_NEW_0001.csv",
-    ):
-        shutil.copy(FIXTURE_DIR / filename, work_dir / filename)
-
-    config_path = tmp_path / "config.yaml"
-    _write_config(config_path, data_dir, work_dir, output_dir)
-    config = load_config(config_path)
-    validate_config(config)
-
-    run_rfs_stage(config)
-
-    assert not list(work_dir.glob(".trinetx-rfs-membership-*"))
-    assert not list(work_dir.glob(".trinetx-rfs-encounters-*"))
 
 
 def test_rfs_membership_store_cleanup_raises_on_delete_error(

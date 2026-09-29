@@ -1,6 +1,6 @@
 # Current repository state
 
-Updated 2026-09-24. Python encounter preprocessing is implemented here. The
+Updated 2026-09-29. Python encounter preprocessing is implemented here. The
 original split merged at upstream `4bbe8cf` and downstream `d5d2691`;
 postmerge validator hardening is on upstream `main` at `cae58a2` and the strict
 downstream consumer merged as `c2302cb`. This is the current public status
@@ -41,3 +41,20 @@ The owner-approved extraction uses downstream merged source 5ada7194d40f.
 The earlier pause awaiting a stable cohort head is superseded by this explicit
 refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
 not a validated medication-assisted-treatment phenotype.
+
+## Opt-in return outcomes integration
+
+The approved calendar-day v2 return implementation completed C0–C4 on the
+sealed readmissions revision; review commit `82d3bd5` records that acceptance.
+The integration branch incorporates current `main` while preserving its
+encounter interfaces, shared acceptance contract, coverage policy and cache
+format. Return-specific parent validation lives in a separate module and is
+called only by the opt-in return product. The command default remains v1.
+
+The integrated package has a different code identity. Public checks passed at
+`99b2a3a`; see the [integration handoff](RETURN_INTEGRATION.md). Hosted CI and
+future private acceptance are recorded separately from the existing seal.
+The accepted branch, runtime and private bundle remain the reproduction route.
+See [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md) for current gate status and
+[RETURN_CONTRACT.md](RETURN_CONTRACT.md) for definitions. Downstream return
+consumption and study endpoint selection remain separate work.
