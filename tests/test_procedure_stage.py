@@ -54,6 +54,8 @@ def test_run_procedure_stage_outputs(tmp_path: Path) -> None:
     normalized = pd.read_csv(normalized_path, parse_dates=["date"])
     assert list(normalized.columns) == NORMALIZED_PROCEDURE_COLUMNS
     assert len(normalized) == 13
+    assert normalized.loc[0, "code_system"] == "CPT"
+    assert pd.isna(normalized.loc[12, "date"])
 
     has_94660 = pd.read_csv(
         work_dir / "HAS_94660.csv",
@@ -72,3 +74,9 @@ def test_run_procedure_stage_outputs(tmp_path: Path) -> None:
         dtype={"code": "string"},
     )
     assert has_ct_abdm["code"].tolist() == ["74150"]
+    for name, expected_codes in {
+        "HAS_99291": ["99292"],
+        "HAS_61911006": ["61911006"],
+    }.items():
+        group = pd.read_csv(work_dir / f"{name}.csv", dtype={"code": "string"})
+        assert group["code"].tolist() == expected_codes

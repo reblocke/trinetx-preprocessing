@@ -134,6 +134,15 @@ See the [preserved operator detail](docs/OPERATOR_AND_LEGACY_GUIDE.md#tests--qua
 - `docs/DATA_CONTRACT.md`: inputs, outputs, and required columns
 - `docs/ARCHITECTURE.md`: pipeline structure
 
+## Return outcomes
+
+The opt-in `build-returns` and `validate-returns` commands produce and validate
+a separate outcome bundle. Select `--contract-version 2.0` for the approved
+calendar-day definition; the command default remains v1. See the
+[return contract](docs/RETURN_CONTRACT.md) and
+[acceptance status](docs/RETURN_ACCEPTANCE.md). The earlier sealed revision
+has private acceptance; integration with current `main` requires its own gates.
+
 ## Maintenance and contact
 
 Contact the repository maintainer by opening a

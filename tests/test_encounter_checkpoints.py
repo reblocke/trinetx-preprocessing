@@ -115,3 +115,27 @@ def test_legacy_receipt_cannot_be_blessed_by_hashing_current_cache(tmp_path):
         cache = StageCache(db, {"source": "one"})
         with pytest.raises(ValueError, match="Legacy encounter cache"):
             cache.run("values", ["values_table"], lambda: None)
+
+
+def test_checkpoint_fingerprint_preserves_null_dates_and_duplicate_multiplicity(
+    tmp_path,
+):
+    with duckdb.connect(str(tmp_path / "typed.duckdb")) as db:
+        cache = StageCache(db, {"source": "typed"})
+        cache.run(
+            "typed",
+            ["typed_table"],
+            lambda: db.execute("""
+                CREATE TABLE typed_table AS SELECT CAST(NULL AS VARCHAR) label_text,
+                    DATE '2024-01-01' event_date UNION ALL
+                SELECT 'x',DATE '2024-01-01' UNION ALL SELECT 'x',DATE '2024-01-01'
+            """).fetchall(),
+        )
+        # Physical reordering does not change the sorted multiset fingerprint.
+        db.execute(
+            "CREATE TABLE reordered AS SELECT * FROM typed_table "
+            "ORDER BY label_text DESC"
+        )
+        db.execute("DROP TABLE typed_table")
+        db.execute("ALTER TABLE reordered RENAME TO typed_table")
+        assert cache.run("typed", ["typed_table"], lambda: None) == [[3]]

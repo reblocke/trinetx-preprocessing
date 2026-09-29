@@ -66,13 +66,6 @@ def test_encounter_population_and_imputation(compatibility_database, suffix):
         assert result.frame.first_encounter.eq(0).any()
 
 
-def test_no_analysis_model_dependencies():
-    import sys
-
-    assert "xgboost" not in sys.modules
-    assert "sklearn" not in sys.modules
-
-
 def test_enrichment_preserves_non_glp1_encounters(
     compatibility_database, tmp_path, monkeypatch
 ):

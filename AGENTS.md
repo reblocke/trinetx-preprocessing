@@ -54,6 +54,14 @@ An implementation request covers the necessary local edits, applicable safe chec
 - Use the pinned Python environment, `uv`, `pyproject.toml`, and `uv.lock`. Keep dependency changes and the lockfile together; Ruff is the only formatter/linter.
 - Keep transformations in importable code and I/O at explicit boundaries; use `pathlib.Path`, configurable paths, and no `os.chdir` in committed code. Validate schemas, units, ranges, and missingness. Report notebooks must run from a clean session.
 - For documentation-only changes, check affected references and `git diff --check`; validate `CITATION.cff` only if its metadata changes.
-- For Python behavior changes, run affected tests with `uv run pytest -q <test-path>` and Ruff checks on touched code. Add a regression test when it can catch the failure. Broaden checks for shared interfaces or unresolved failures; repeat only as needed after changes.
+- For Python behavior changes, run the affected E2E workflows and Ruff checks on touched code. Use the testing policy below when additional checks are needed. Broaden checks for shared interfaces or unresolved failures; repeat only as needed after changes.
 - For performance work, measure before/after and preserve exact output behavior. Small synthetic checks do not satisfy frozen-head private full-data parity.
 - Recheck affected public documentation and artifact claims. Report commands actually run and any remaining restricted-data or runtime gates; do not regenerate real-data products merely to validate a prose edit.
+
+## Testing policy
+- Never write unit tests after you write code.
+- Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
+- If you must test a system in isolation, first write down all the ways it could fail, then write the code.
+- Before any isolated test or implementation, record the concrete failure modes and why the existing E2E workflows cannot catch them. Use independent expected outputs; do not mirror the implementation or assert its internal bookkeeping.
+- Retain an isolated test only when it catches a real failure absent from E2E coverage. When moving its coverage into E2E, preserve the failure fixture and independent oracle before deleting the redundant test.
+- E2E evidence must retain the command, source/configuration/fixture identity, environment, exit status, test results and generated outputs with verifiable hashes. Use `scripts/verify_e2e.py`; see `docs/TESTING.md`. A synthetic artifact does not satisfy private-data or scientific acceptance gates.

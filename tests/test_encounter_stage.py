@@ -13,6 +13,10 @@ from trinetx_preprocessing.pipeline.encounter_stage import (
     _stable_string_hashes,
     run_encounter_stage,
 )
+from trinetx_preprocessing.transform.encounter import (
+    ALLOWED_ENCOUNTER_TYPES,
+    ENCOUNTER_COLUMNS,
+)
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent / "fixtures" / "encounter" / "encounter0001.csv"
@@ -78,25 +82,37 @@ def test_run_encounter_stage_outputs(tmp_path: Path) -> None:
         work_dir / "INPAT_encounters.csv",
     }
     assert set(outputs) == expected_outputs
+    normalized = pd.read_csv(work_dir / "encounter_NEW_0001.csv")
+    assert list(normalized.columns) == ENCOUNTER_COLUMNS
+    assert set(normalized["type"]) <= ALLOWED_ENCOUNTER_TYPES
+    assert "derived_by_TriNetX" not in normalized.columns
+    assert len(normalized) == 6
 
     amb = pd.read_csv(
         work_dir / "AMB_encounters.csv",
         parse_dates=["start_date", "end_date"],
     )
     assert list(amb["encounter_id"]) == ["E1"]
+    assert amb.iloc[0]["start_date"] == pd.Timestamp("2022-01-01")
+    assert amb.iloc[0]["end_date"] == pd.Timestamp("2022-01-03")
     assert amb.iloc[0]["LOS"] == 3
 
     emer = pd.read_csv(
         work_dir / "EMER_encounters.csv",
         parse_dates=["start_date", "end_date"],
     )
-    assert emer.iloc[0]["end_date"] == pd.Timestamp("2022-12-31")
+    assert len(emer) == 1
+    expected_end = pd.Timestamp("2022-12-31")
+    assert emer.iloc[0]["end_date"] == expected_end
+    assert emer.iloc[0]["LOS"] == (expected_end - pd.Timestamp("2022-02-01")).days + 1
 
     inpat = pd.read_csv(
         work_dir / "INPAT_encounters.csv",
         parse_dates=["start_date", "end_date"],
     )
     assert list(inpat["encounter_id"]) == ["E5"]
+    assert inpat.iloc[0]["LOS"] == 1
+    assert not list(work_dir.glob(".trinetx-encounter-reducer-*"))
 
 
 def test_encounter_reducer_store_preserves_earliest_encounter(
@@ -281,28 +297,6 @@ def test_encounter_reducer_reports_cross_setting_conflicts(tmp_path: Path) -> No
         "encounter_conflict_count": 1,
         "type_combinations": {"AMB+EMER+IMP": 1},
     }
-
-
-def test_run_encounter_stage_removes_reducer_scratch_database(tmp_path: Path) -> None:
-    data_dir = tmp_path / "data"
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    data_dir.mkdir()
-    work_dir.mkdir()
-    output_dir.mkdir()
-
-    encounter_dir = data_dir / "Encounter"
-    encounter_dir.mkdir()
-    shutil.copy(FIXTURE_PATH, encounter_dir / "encounter0001.csv")
-
-    config_path = tmp_path / "config.yaml"
-    _write_config(config_path, data_dir, work_dir, output_dir)
-    config = load_config(config_path)
-    validate_config(config)
-
-    run_encounter_stage(config)
-
-    assert not list(work_dir.glob(".trinetx-encounter-reducer-*"))
 
 
 def test_encounter_reducer_cleanup_raises_on_delete_error(

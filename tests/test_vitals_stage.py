@@ -55,12 +55,23 @@ def test_run_vitals_stage_outputs(tmp_path: Path) -> None:
     normalized = pd.read_csv(normalized_path, parse_dates=["date"])
     assert list(normalized.columns) == NORMALIZED_VITALS_COLUMNS
     assert len(normalized) == 18
+    assert normalized.loc[0, "code_system"] == "LOINC"
+    assert normalized.loc[0, "units_of_measure"] == "F"
 
     temp = pd.read_csv(work_dir / "value_759878.csv")
+    assert len(temp) == 1
     assert temp["value"].iloc[0] == pytest.approx(40.0, rel=1e-3)
 
     new_temp = pd.read_csv(work_dir / "value_New_Temp.csv")
+    assert len(new_temp) == 1
     assert new_temp["value"].iloc[0] == pytest.approx(98.6, rel=1e-3)
 
     weight = pd.read_csv(work_dir / "value_Weight.csv")
     assert weight["value"].tolist() == [180.0]
+    for name, expected_values in {
+        "value_RR": [20.0],
+        "value_SPO2": [95.0],
+        "value_Height": [70.0],
+    }.items():
+        group = pd.read_csv(work_dir / f"{name}.csv")
+        assert group["value"].tolist() == expected_values

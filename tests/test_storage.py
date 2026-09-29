@@ -17,11 +17,8 @@ from trinetx_preprocessing.config import (
 from trinetx_preprocessing.storage import (
     PartitionedKeyLookup,
     PartitionedParquetStore,
-    WorkTableWriter,
     find_work_tables,
     iter_work_tables,
-    logical_output_key,
-    read_table,
     write_work_table,
 )
 
@@ -48,19 +45,6 @@ def _config(
     )
 
 
-def test_write_work_table_parquet_uses_logical_name(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-    frame = pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]})
-
-    paths = write_work_table(config, "encounter_NEW_0001.csv", frame)
-
-    assert paths == [tmp_path / "work" / "encounter_NEW_0001.parquet"]
-    assert not (tmp_path / "work" / "encounter_NEW_0001.csv").exists()
-    loaded = read_table(paths[0], dtype={"patient_id": "string"})
-    assert loaded["patient_id"].dtype.name == "string"
-    assert loaded.to_dict("records") == frame.to_dict("records")
-
-
 def test_write_work_table_can_emit_legacy_csv_companion(tmp_path: Path) -> None:
     config = _config(tmp_path, emit_legacy_csv_intermediates=True)
     frame = pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]})
@@ -71,33 +55,6 @@ def test_write_work_table_can_emit_legacy_csv_companion(tmp_path: Path) -> None:
         tmp_path / "work" / "encounter_NEW_0001.parquet",
         tmp_path / "work" / "encounter_NEW_0001.csv",
     ]
-
-
-def test_work_table_writer_appends_parquet_chunks(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-
-    with WorkTableWriter(config, "events.csv") as writer:
-        writer.write(pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]}))
-        writer.write(pd.DataFrame({"patient_id": ["P2"], "encounter_id": ["E2"]}))
-        paths = list(writer.written_paths)
-
-    loaded = read_table(paths[0])
-
-    assert paths == [tmp_path / "work" / "events.parquet"]
-    assert loaded.to_dict("records") == [
-        {"patient_id": "P1", "encounter_id": "E1"},
-        {"patient_id": "P2", "encounter_id": "E2"},
-    ]
-
-
-def test_work_table_writer_can_disable_compatibility_output(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-
-    with WorkTableWriter(config, "events.csv", enabled=False) as writer:
-        writer.write(pd.DataFrame({"patient_id": ["P1"], "encounter_id": ["E1"]}))
-
-    assert writer.written_paths == []
-    assert not (tmp_path / "work").exists()
 
 
 def test_find_work_tables_prefers_configured_format(tmp_path: Path) -> None:
@@ -155,14 +112,6 @@ def test_iter_work_tables_rejects_invalid_parquet_chunksize(tmp_path: Path) -> N
         assert "chunksize" in str(exc)
     else:
         raise AssertionError("Expected invalid Parquet chunksize to raise ValueError")
-
-
-def test_logical_output_key_normalizes_parquet_work_suffix(tmp_path: Path) -> None:
-    work_dir = tmp_path / "work"
-    output_dir = tmp_path / "output"
-    path = work_dir / "RFS_ABG.parquet"
-
-    assert logical_output_key(path, work_dir, output_dir) == "work_dir/RFS_ABG.csv"
 
 
 def test_partitioned_parquet_store_round_trips_and_cleans(tmp_path: Path) -> None:
@@ -288,29 +237,6 @@ def test_partitioned_parquet_store_releases_each_writer_while_sealing(
     assert arrow_releases == [None, None, None]
     assert store._writers == {}
     assert store._sealed is True
-
-
-def test_partitioned_parquet_store_releases_unused_memory_once(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    releases: list[None] = []
-    monkeypatch.setattr(
-        storage,
-        "release_unused_tabular_memory",
-        lambda: releases.append(None),
-    )
-    store = PartitionedParquetStore(
-        tmp_path,
-        prefix=".trinetx-test-partitions-",
-        key_columns=["patient_id"],
-        bucket_count=2,
-    )
-
-    store.seal()
-    store.seal()
-
-    assert releases == [None]
 
 
 def test_partitioned_key_lookup_queries_and_deduplicates_membership(

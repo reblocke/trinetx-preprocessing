@@ -61,6 +61,10 @@ def test_run_labs_stage_outputs(tmp_path: Path) -> None:
     normalized = pd.read_csv(expected_output, parse_dates=["date"])
     assert list(normalized.columns) == NORMALIZED_LAB_COLUMNS
     assert len(normalized) == 3
+    assert normalized.loc[0, "code_system"] == "LOINC"
+    assert normalized.loc[0, "units_of_measure"] == "mmol/L"
+    assert normalized["code"].tolist() == ["6298-4", "2019-8", "2823-3"]
+    assert pd.isna(normalized.loc[1, "lab_result_num_val"])
 
     feature_index = pd.read_csv(work_dir / "analysis_lab_features.csv")
     assert feature_index["source_name"].tolist() == [

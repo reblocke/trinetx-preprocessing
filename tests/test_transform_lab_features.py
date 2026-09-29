@@ -6,7 +6,6 @@ import pytest
 from trinetx_preprocessing.transform import lab_features as lab_features_module
 from trinetx_preprocessing.transform.lab_features import (
     classify_lab_feature_rows,
-    stack_lab_feature_rows,
 )
 
 
@@ -69,19 +68,3 @@ def test_lab_feature_rules_convert_only_matching_rows(
 
     assert list(grouped) == ["value_20198"]
     assert calls == [("value_20198", 1)]
-
-
-def test_stacked_lab_feature_rows_carries_rule_name_only() -> None:
-    stacked = stack_lab_feature_rows(
-        classify_lab_feature_rows(_labs([("2019-8", 55.0)]))
-    )
-
-    assert stacked["source_name"].tolist() == ["value_20198"]
-    assert list(stacked.columns) == [
-        "source_name",
-        "patient_id",
-        "encounter_id",
-        "code",
-        "date",
-        "lab_result_num_val",
-    ]

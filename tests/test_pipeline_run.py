@@ -280,6 +280,9 @@ def test_run_pipeline_end_to_end(tmp_path: Path) -> None:
 
     result = cli_main(["run", "--config", str(config_path)])
     assert result == 0
+    expected_columns = json.loads(
+        (Path(__file__).parent / "fixtures" / "final_output_columns.json").read_text()
+    )
 
     expected_non_empty = {
         ("ABG", "AMB"),
@@ -299,7 +302,7 @@ def test_run_pipeline_end_to_end(tmp_path: Path) -> None:
             assert after_path.exists()
 
             after = pd.read_csv(after_path)
-            assert list(after.columns) == FINAL_OUTPUT_COLUMNS
+            assert list(after.columns) == expected_columns
             if (category, setting) in expected_non_empty:
                 assert not after.empty
             else:
@@ -429,6 +432,10 @@ def test_baseline_compare_profile_end_to_end_with_parquet_intermediates(
     assert baseline_manifest["tables"]
     assert any(
         entry["key"] == "output_dir/AMBULATORY/RFS_ABG_ENC_AMB_AFTER.csv"
+        for entry in baseline_manifest["tables"]
+    )
+    assert any(
+        entry["key"] == "work_dir/RFS_ABG.csv" and entry["physical_format"] == "parquet"
         for entry in baseline_manifest["tables"]
     )
 

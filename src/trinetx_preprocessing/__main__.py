@@ -11,6 +11,14 @@ from .cli import main as cli_main
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI entry point."""
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "build-returns":
+        from .encounters.return_cli import build_main
+
+        return build_main(arguments[1:])
+    if arguments and arguments[0] == "validate-returns":
+        from .encounters.return_cli import validate_main
+
+        return validate_main(arguments[1:])
     if arguments and arguments[0] == "validate-encounters":
         from .encounters.cli import validate_main
 
