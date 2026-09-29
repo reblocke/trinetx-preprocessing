@@ -51,6 +51,21 @@ def run(root):
             "INSERT INTO preprocessed.source_lab_measurement "
             "SELECT * FROM preprocessed.source_lab_measurement LIMIT 1"
         )
+        db.execute(
+            "INSERT INTO preprocessed.element_membership "
+            "SELECT * FROM preprocessed.element_membership LIMIT 1"
+        )
+        for include in ("FALSE", "NULL"):
+            db.execute(
+                "INSERT INTO preprocessed.element_membership "
+                f"SELECT * REPLACE ({include} AS include) "
+                "FROM preprocessed.element_membership LIMIT 1"
+            )
+        db.execute(
+            "INSERT INTO preprocessed.element_membership "
+            "SELECT * REPLACE ('unrelated.element' AS element_id) "
+            "FROM preprocessed.element_membership LIMIT 1"
+        )
         for variant, clause in (
             ("FULL_DATA", ""),
             ("AFTER_EXCLUSION", " WHERE patient_id='p'"),
@@ -78,6 +93,26 @@ def run(root):
         parent_bundle=parent,
         work_dir=root / "verify-work",
     )
+    with duckdb.connect() as db:
+        members = f"read_parquet({literal(stage / '*_element_membership.parquet')})"
+        assert (
+            db.execute(
+                f"SELECT count(*) FROM {members} WHERE element_id='unrelated.element'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            db.execute(
+                f"SELECT count(*) FROM {members} WHERE include IS NULL"
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            db.execute(
+                f"SELECT count(*) FROM {members} WHERE include=FALSE"
+            ).fetchone()[0]
+            >= 1
+        )
     rejected = []
     # Byte rebind reaches exact source reconciliation, rather than stopping at
     # an old artifact hash. Expected source and original patient routing stay fixed.
@@ -95,6 +130,11 @@ def run(root):
             "SELECT * FROM saved UNION ALL SELECT * FROM saved LIMIT 1000000",
         ),
         ("changed typed value", "SELECT * REPLACE ('wrong' AS code) FROM saved"),
+        (
+            "coercible changed type",
+            "SELECT * REPLACE "
+            "(source_row_number::VARCHAR AS source_row_number) FROM saved",
+        ),
         ("misrouted patient", "SELECT * REPLACE ('outside' AS patient_id) FROM saved"),
     ):
         with duckdb.connect() as db:
@@ -104,6 +144,12 @@ def run(root):
             )
             candidate.unlink()
             db.execute(f"COPY ({query}) TO {literal(candidate)} (FORMAT PARQUET)")
+            manifest["schemas"]["source_diagnosis"] = [
+                [r[0], r[1]]
+                for r in db.execute(
+                    f"DESCRIBE SELECT * FROM read_parquet({literal(candidate)})"
+                ).fetchall()
+            ]
         manifest["outputs"][candidate.name].update(
             bytes=candidate.stat().st_size, sha256=sha256(candidate)
         )

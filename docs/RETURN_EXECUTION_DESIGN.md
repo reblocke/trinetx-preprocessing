@@ -117,3 +117,23 @@ An interrupted draft seal must remain preserved and must not prevent a new,
 independently verified seal. Completed receipts are immutable. Missing or altered
 receipt/report evidence must fail closed. These recovery cases were recorded
 before changing controller publication and draft naming.
+
+### Membership staging cost experiment
+
+The initial private profile identified the broad catalog-membership join as a
+preparation bottleneck. Both the preserved producer and independent validator
+read exactly the arterial, venous and unspecified blood PCO2 source elements.
+Stage those required membership elements only, retaining true, false and null
+inclusion values and duplicate multiplicity. This pushes an existing source
+predicate earlier; it does not select patients, encounters or clinical outcomes.
+The independent canonical comparison must cover every required complete row.
+The E2E fixture includes unrelated memberships, repeated required memberships,
+and false/null inclusion values, and must preserve exact direct/staged outputs.
+
+Computational identity discovery must also invalidate on unknown Python code
+under the packaged catalog directory. Only its non-code resources are excluded
+because the actual return catalog is bound through the canonical source.
+The source proof must reject a staged column type changed with equal-looking
+values even when the staged schema and hashes are rebound. Compare actual types
+directly with canonical source types before SQL multiset comparison, which can
+otherwise coerce unequal types into a common type.

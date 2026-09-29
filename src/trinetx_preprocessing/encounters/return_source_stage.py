@@ -19,6 +19,11 @@ from .builder import VARIANTS, literal, sha256
 from .compatibility import no_symlinks
 
 STAGE_VERSION = "1.0"
+REQUIRED_MEMBERSHIP_ELEMENTS = (
+    "source.arterial_pco2",
+    "source.venous_pco2",
+    "source.unspecified_blood_pco2",
+)
 COLUMNS = {
     "source_encounter": (
         "patient_id",
@@ -108,9 +113,11 @@ def _expected(db, table, partitions):
     # It never derives expected source values or membership from staged rows.
     fields = ",".join(f's."{c}"' for c in COLUMNS[table])
     if table == "element_membership":
+        elements = ",".join(literal(e) for e in REQUIRED_MEMBERSHIP_ELEMENTS)
         return (
             f"SELECT {fields},p._return_bucket FROM canonical.{table} s "
-            "JOIN lab_patient_buckets p USING (source_record_id)"
+            "JOIN lab_patient_buckets p USING (source_record_id) "
+            f"WHERE s.element_id IN ({elements})"
         )
     return (
         f"SELECT {fields}, hash(s.patient_id::VARCHAR)%{partitions} AS _return_bucket "
@@ -130,6 +137,8 @@ def _read_manifest(stage, expected_manifest_sha256, identity):
         manifest.get("stage_contract_version") != STAGE_VERSION
         or manifest.get("status") != "verified"
         or manifest.get("identity") != identity
+        or manifest.get("required_membership_elements")
+        != list(REQUIRED_MEMBERSHIP_ELEMENTS)
         or type(n) is not int
         or not 1 <= n <= 1024
     ):
@@ -194,6 +203,17 @@ def _reconcile(db, stage, manifest, events=None):
     for table, columns in COLUMNS.items():
         if events:
             events.emit("source_stage", "reconciliation_start", table=table)
+        selection = ",".join(f'"{c}"' for c in columns)
+        canonical_schema = [
+            [r[0], r[1]]
+            for r in db.execute(
+                f"DESCRIBE SELECT {selection} FROM canonical.{table}"
+            ).fetchall()
+        ]
+        if manifest["schemas"].get(table) != canonical_schema:
+            raise ValueError(
+                f"Source-stage types differ from canonical source: {table}"
+            )
         parts = []
         for bucket in range(n):
             name = f"{bucket:04d}_{table}.parquet"
@@ -268,6 +288,7 @@ def create_source_stage(
         "status": "building",
         "partitions": partitions,
         "identity": identity,
+        "required_membership_elements": list(REQUIRED_MEMBERSHIP_ELEMENTS),
         "outputs": {},
         "schemas": {},
     }
@@ -283,10 +304,12 @@ def create_source_stage(
             # materialization, avoiding N repeated canonical history reads.
             fields = ",".join(f's."{c}"' for c in columns)
             if table == "element_membership":
+                elements = ",".join(literal(e) for e in REQUIRED_MEMBERSHIP_ELEMENTS)
                 query = (
                     f"SELECT {fields},p._return_bucket FROM canonical.{table} s "
                     "JOIN lab_patient_buckets p "
-                    "ON s.source_record_id=p.source_record_id"
+                    "ON s.source_record_id=p.source_record_id "
+                    f"WHERE s.element_id IN ({elements})"
                 )
             else:
                 query = (

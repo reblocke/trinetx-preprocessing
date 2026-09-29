@@ -47,7 +47,7 @@ def component_identities() -> dict:
         for p in sorted(package.rglob("*"))
         if p.is_file()
         and p.suffix in {".py", ".json", ".yaml", ".yml", ".csv"}
-        and p.relative_to(package).parts[0] != "catalog"
+        and (p.relative_to(package).parts[0] != "catalog" or p.suffix == ".py")
     }
     classified = set().union(*ROLE_FILES.values())
     shared = {n: v for n, v in files.items() if n not in classified}

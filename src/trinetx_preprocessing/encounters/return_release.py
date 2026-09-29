@@ -327,6 +327,9 @@ def seal_return_product(
         expected_receipt_sha256=sha256(draft),
         validation_report_path=validation_report_path,
     )
+    # Artifact/key verification can take time on a full product. Recheck the
+    # previously byte-proven input identities immediately before publication.
+    inputs.check_unchanged()
     draft.replace(receipt_path)
     fsync_directory_strict(receipt_path.parent)
     return receipt
