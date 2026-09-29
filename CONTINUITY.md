@@ -1,9 +1,11 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Integrate the accepted readmissions branch with current main within one hour.
-Target a locally validated draft PR; preserve an explicit handoff if the deadline
-prevents completion. Defer private runs, downstream changes and merging.
+Implement the approved combined readmissions execution redesign and strict
+return-summary consumer, then complete one final private acceptance and ordered
+upstream/downstream rollout. Preserve calendar-day contract 2.0, both original
+variants, original keys and missingness. The 4–5 hour objective is measured;
+all correctness gates and demonstrated runtime improvement remain mandatory.
 
 ## Constraints/Assumptions
 Preserve FULL_DATA and AFTER_EXCLUSION membership, timing, repeated encounters,
@@ -32,6 +34,32 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-29: the owner authorized the combined implementation, private acceptance
+and ordered merges, superseding the earlier integration-only session limit.
+Isolated branches start at upstream `d81a22b` and downstream `4a57843`.
+Failure-first execution/consumer expectations are recorded upstream in
+`docs/RETURN_EXECUTION_DESIGN.md`. Both pinned development environments are
+ready. Implementation and bounded profiling are active; no redesigned product
+is accepted and no final private run has started. Execute at High effort.
+
+Current implementation checkpoint: strict return acceptance/schema/key verification,
+bounded downstream reads, exact parent joins and aggregate reporting are implemented.
+Synthetic reader/report E2E passes with corruption rejections and explicit nullable
+state denominators. Source staging preserves exact typed rows; direct/staged six-table
+comparisons pass. Real synthetic source and v2 parent validation, cold/warm
+prerequisites, interrupted/resumed production, one/two workers and signed validation
+checkpoint reuse pass together. Existing clinical partition E2E and 67 affected
+return/parent regressions pass. These are development checks, not installed/private
+acceptance. Noneditable installed reader, execution and full producer/consumer
+E2Es now pass outside both checkouts on downstream's pinned Python, with retained
+artifact readback. The existing installed encounter checks pass. Controller
+publication/recovery E2E passes; full regression checks and the bounded staged
+resource pilot are active. Private timings remain external. The final private
+run has not started. Remaining: review, final installed candidate wheels, pilot
+forecast, CI, final private acceptance and ordered rollout.
+
+The following entries are historical checkpoints, not current release claims:
+
 2026-09-29 bounded readmissions integration: base `c81650b`, accepted branch
 `82d3bd5`, separate integration checkout. Current main encounter APIs, shared
 receipt contract, coverage rules and cache format are preserved. Return parent

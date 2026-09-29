@@ -58,3 +58,15 @@ The accepted branch, runtime and private bundle remain the reproduction route.
 See [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md) for current gate status and
 [RETURN_CONTRACT.md](RETURN_CONTRACT.md) for definitions. Downstream return
 consumption and study endpoint selection remain separate work.
+
+## Combined return redesign candidate
+
+The merged integration at `d81a22b` is the baseline for the owner-approved
+[execution and consumer redesign](RETURN_EXECUTION_DESIGN.md). Candidate code
+adds verified source staging, authenticated prerequisite/checkpoint reuse,
+independent materialized validation, a separate return acceptance verifier and
+a locked controller. The downstream candidate adds an explicit trusted summary
+reader and aggregate reporting. The v1 defaults and encounter interfaces remain
+supported. Synthetic installed-pair evidence is retained externally; the new
+producer has not yet passed its required full private acceptance. No combined
+release or study endpoint selection is claimed.

@@ -117,6 +117,29 @@ def products_retained(products: dict) -> bool:
 
 
 def verify(root: Path, expected_hash: str | None = None) -> dict:
+    if not (root / MANIFEST).exists() and (root / "e2e.json").is_file():
+        path = root / "e2e.json"
+        if expected_hash and sha256(path) != expected_hash:
+            raise ValueError("Return E2E manifest differs from supplied hash")
+        receipt = json.loads(path.read_text())
+        if receipt.get("schema") != "trinetx-return-e2e-v1":
+            raise ValueError("Unsupported return E2E evidence schema")
+        files = {}
+        for item in sorted(root.rglob("*")):
+            if item.is_symlink():
+                raise ValueError("Return E2E evidence cannot contain symlinks")
+            if item.is_file() and item != path and item.suffix != ".key":
+                files[str(item.relative_to(root))] = {
+                    "bytes": item.stat().st_size,
+                    "sha256": sha256(item),
+                }
+        if files != receipt.get("inventory"):
+            raise ValueError("Return E2E inventory or hashes differ")
+        if sha256(root / "runner.py") != receipt.get("script_sha256"):
+            raise ValueError("Return E2E runner identity differs")
+        if receipt.get("status") != "passed" or receipt.get("exit_status") != 0:
+            raise ValueError("Return E2E run did not pass")
+        return receipt
     manifest_path = root / MANIFEST
     if expected_hash and sha256(manifest_path) != expected_hash:
         raise ValueError("Manifest SHA-256 differs from the supplied hash")

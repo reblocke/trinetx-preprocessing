@@ -57,6 +57,36 @@ parent/source validation or private C4 acceptance.
 
 ## Retained E2E artifact
 
+### Return execution redesign
+
+The opt-in redesign has three retained workflows. Each requires a new external
+directory and records its runner, inputs, environment, result and artifact hashes:
+
+```bash
+uv run python scripts/verify_return_execution_e2e.py /external/return-execution
+uv run python scripts/verify_return_product_e2e.py /external/return-product
+uv run python scripts/verify_return_lock_e2e.py /external/return-lock
+uv run python scripts/verify_e2e.py --verify /external/return-product \
+  --manifest-sha256 <sha256-of-e2e.json>
+```
+
+The execution workflow covers raw-history staging, exact clinical parity and
+corruptions. The product workflow validates a real synthetic canonical source
+and parent, runs direct/staged production and independent validation, exercises
+interruption/reuse and the locked controller, compares all tables, and seals a
+synthetic product. Its labeled pilot/runtime fixtures make no performance claim.
+The lock workflow checks ownership after controller death with an active worker.
+
+For installed-pair verification, build noneditable upstream and downstream wheels
+and install into an isolated environment using downstream's pinned Python and
+locked dependencies. Copy the drivers and their synthetic fixtures outside both
+checkouts, remove `PYTHONPATH`, and run the execution/product drivers with
+`--require-installed`. Add `--consumer` to the product driver to exercise the
+downstream trusted reader, exact joins and report. Also run downstream's
+`verify_return_reader_e2e.py --require-installed` and existing installed encounter
+checks. Retain wheel hashes and read back every E2E manifest. These checks do not
+replace the single final private acceptance and committed-pin release checks.
+
 Use a **new external directory**. The runner rejects existing directories and
 symlinked ancestors; on macOS use `/private/tmp` rather than the `/tmp` symlink.
 

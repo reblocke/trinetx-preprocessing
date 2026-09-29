@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: astral-sh/setup-uv@v8.3.2
@@ -29,3 +29,25 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run python -m pytest -q
+      - name: Retained return execution E2E
+        run: |
+          uv run python scripts/verify_return_execution_e2e.py "$RUNNER_TEMP/return-execution"
+          uv run python scripts/verify_return_product_e2e.py "$RUNNER_TEMP/return-product"
+          uv run python scripts/verify_return_lock_e2e.py "$RUNNER_TEMP/return-lock"
+          for name in return-execution return-product return-lock; do
+            digest="$(sha256sum "$RUNNER_TEMP/$name/e2e.json" | cut -d ' ' -f 1)"
+            uv run python scripts/verify_e2e.py --verify "$RUNNER_TEMP/$name" --manifest-sha256 "$digest"
+          done
+      # These drivers use only the reviewed synthetic fixtures. Authentication
+      # keys are local replay state and are never uploaded with public evidence.
+      - name: Retain synthetic return evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-return-e2e
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/return-execution
+            ${{ runner.temp }}/return-product
+            ${{ runner.temp }}/return-lock
+            !${{ runner.temp }}/return-*/**/*.key
