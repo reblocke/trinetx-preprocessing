@@ -23,7 +23,7 @@ not establish clinical eligibility, and observed follow-up is not complete
 capture. Preserve unsupported timing and phenotypes as unknown.
 
 ## State
-The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The active readmissions work is isolated on `codex/readmissions-20260924`; the v2 builder memory repair is committed at `cc6d4cc`. The original checkout's unrelated changes remain untouched.
+The approved encounter implementation is merged upstream at `4bbe8cfee3dad3b7c07fb8c42d7217804150b650` and downstream at `d5d269168eafc7905c9238a5486fc03a62b55ec3`. Both required hosted CI checks passed. The accepted readmissions work is isolated on `codex/readmissions-20260924`; the sealed package code identity is `de9d4268bb64ffa47411f019d42c7e3f1abd76a8935bd96d285d7081ba752d88`. The original checkout's unrelated changes remain untouched.
 
 ## Done
 Implementation, 10 focused encounter checks, relocated GLP-1 fixtures, bounded
@@ -31,6 +31,29 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-29 readmissions checkpoint (supersedes the dated notes below):
+C0–C4 engineering acceptance passed under calendar-day v2. The current-code
+exact parent validation and 32-partition pilot passed. One fresh locked r4
+outcomes-only build on LOCKE STATION completed both independent variants and
+all 64 patient partitions without resume. The independent full validator
+checked source, episode mappings, evidence, links, phenotype states, summary
+rules, schemas, original keys and every output hash. The external acceptance
+seal SHA-256 is
+`683e882935bab49302b72378e58da03ac2c6065ee3cdd8b3a161093d99e5de4c`;
+the independent terminal rehash and seal audit SHA-256 is
+`51aef498874bfa0bf19cfe6a2e897e37392a4ff0b5a6fb6476ae4b98bfe8757d`.
+The latter verified the canonical source, all 44 parent files, all 386 output
+artifacts, gate bindings and unchanged pre/post input bytes. Final-code public
+C3 passed full pytest, Ruff, offline lock, five legacy E2Es, wheel and old
+consumer smoke checks. A supplemental readback-verified source-to-output E2E
+explicitly covers same-ID ED/inpatient progression and an unlinked cross-ID
+possible transfer; its receipt SHA-256 is
+`634469d1d9ba8884085687765f72f6c5f42e1fd74c10c3fddfa1cba85335bbb2`.
+All private rows, manifests, logs and receipts remain external. The earlier r3
+scientific rejection and storage failures remain preserved as historical
+evidence. Engineering acceptance does not establish complete clinical capture,
+intraday order, planned status or causality. See docs/RETURN_ACCEPTANCE.md.
+
 2026-09-27 readmissions checkpoint (supersedes the historical notes below):
 The locked C4 r3 run on LOCKE STATION completed both variants and all 64
 partitions, but a new E2E revealed a scientific uncertainty defect while its

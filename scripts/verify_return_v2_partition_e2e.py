@@ -74,6 +74,12 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
         ("f", "fr", "IMP", "2024-01-03", "2024-01-04"),
         ("k", "ki", "IMP", "2024-01-01", "2024-01-02"),
         ("k", "kr", "IMP", "2024-01-03", "2024-01-04"),
+        ("x", "xi", "IMP", "2024-01-01", "2024-01-02"),
+        ("x", "xed", "EMER", "2024-01-03", "2024-01-04"),
+        ("x", "xip", "IMP", "2024-01-04", "2024-01-06"),
+        ("y", "yi", "IMP", "2024-01-01", "2024-01-02"),
+        ("y", "yr", "EMER", "2024-01-03", "2024-01-04"),
+        ("y", "yr", "IMP", "2024-01-04", "2024-01-06"),
     ]
     for row, (patient, encounter, setting, start, end) in enumerate(
         encounters, start=100
@@ -145,6 +151,8 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
         ("r", "ri"),
         ("f", "fi"),
         ("k", "ki"),
+        ("x", "xi"),
+        ("y", "yi"),
         *((patient, f"{patient}-index") for patient, _ in partial_start_cases),
     ):
         db.execute(
@@ -191,6 +199,8 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
         "r",
         "f",
         "k",
+        "x",
+        "y",
         *(patient for patient, _ in partial_start_cases),
     ):
         db.execute("INSERT INTO preprocessed.source_patient VALUES (?,NULL)", [patient])
@@ -241,6 +251,8 @@ def _check_hand_expected(db: duckdb.DuckDBPyConnection) -> dict:
         "ri": ("available", 0, False, 0, None, 0, 0),
         "fi": ("available", 1, True, 0, False, 1, 0),
         "ki": ("available", 1, True, 0, None, 0, 1),
+        "xi": ("available", 2, True, 0, None, 0, 1),
+        "yi": ("available", 1, True, 0, None, 0, 1),
     }
     for key, wanted in expected.items():
         if rows.get(key) != wanted:
@@ -288,6 +300,25 @@ def _check_hand_expected(db: duckdb.DuckDBPyConnection) -> dict:
     ).fetchone()
     if converted != (True,):
         raise AssertionError(f"kPa conversion differs: {converted}")
+    transfer_categories = {
+        row[0]: row[1:]
+        for row in db.execute(
+            "SELECT encounter_id,"
+            "outcome_inpatient_all_cause_30d_count,"
+            "outcome_ed_only_all_cause_30d_count,"
+            "outcome_any_ed_all_cause_30d_count,"
+            "outcome_acute_union_all_cause_30d_count "
+            "FROM summary WHERE encounter_id IN ('xi','yi')"
+        ).fetchall()
+    }
+    expected_transfer_categories = {
+        "xi": (1, 1, 1, 2),
+        "yi": (1, 0, 1, 1),
+    }
+    if transfer_categories != expected_transfer_categories:
+        raise AssertionError(
+            f"Transfer linkage categories differ: {transfer_categories}"
+        )
     partial_columns = ["encounter_id"]
     for days in (30, 90, 365):
         stem = f"outcome_acute_union_all_cause_{days}d"
@@ -333,6 +364,7 @@ def _check_hand_expected(db: duckdb.DuckDBPyConnection) -> dict:
         "ed_admission": list(admission),
         "start_only": list(missing_end),
         "converted_gas": list(converted),
+        "transfer_linkage": transfer_categories,
         "partial_start_cases": len(expected_partial),
     }
 

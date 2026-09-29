@@ -1,6 +1,6 @@
 # Current repository state
 
-Updated 2026-09-27. Python encounter preprocessing is implemented and merged.
+Updated 2026-09-29. Python encounter preprocessing is implemented and merged.
 Public merge and hosted CI state, historical private-run reports, unverified
 private gates, and the supported revalidation/build workflows are summarized in
 [ENCOUNTER_RELEASE.md](ENCOUNTER_RELEASE.md). Product definitions and commands
@@ -24,25 +24,17 @@ The earlier pause awaiting a stable cohort head is superseded by this explicit
 refactor. Unadjudicated Stata outpatient-MAT source codes remain candidates,
 not a validated medication-assisted-treatment phenotype.
 
-An opt-in, separate return-outcome interface is implemented for review in
-[RETURN_CONTRACT.md](RETURN_CONTRACT.md). Exact wildcard catalog rules retain
-the required J96 diagnosis rows; the initial source-capability check was too
-narrow and has been corrected. An earlier v1 resource pilot completed, but its
-full build stopped during parent validation. The [return audit](RETURN_AUDIT.md) identifies
-an inherited producer/validator precision-schema mismatch and additional return
-implementation defects. The owner resumed C0–C4 on 2026-09-25 after the E2E-first testing cleanup;
-see [the testing review](testing_review.md). The accepted [calendar-day v2
-contract](RETURN_CONTRACT.md) governs the implemented opt-in v2 builder and
-validator. An exact accepted-parent validation and a two-variant resource pilot
-passed on the preceding code. The opt-in v2 builder uses a 4 GiB DuckDB cap;
-v1 remains at 1 GiB. The LOCKE BOOK and RESEARCH FAST C4 attempts failed on
-external storage and remain preserved. A later LOCKE STATION C4 build completed
-both variants, but a hand-authored E2E exposed an undercount of possible returns
-when one same-ID component start is missing and another observed start lies
-beyond the horizon. The validator mirrored the producer's calculation, so the
-run was stopped without a validation report or acceptance seal. The E2E-first
-repair passes its expanded synthetic proof. Full pytest, Ruff, offline lock,
-legacy E2E and installed-wheel old-consumer checks passed on repaired code.
-Accepted-parent, pilot and full private gates must be rerun. See [return
-acceptance](RETURN_ACCEPTANCE.md). Existing encounter products and cohort-source
-interfaces are preserved.
+The separate, opt-in [calendar-day v2 return contract](RETURN_CONTRACT.md) now
+has C0–C4 engineering acceptance. A current-code exact accepted-parent check,
+two-variant resource pilot, one locked outcomes-only build, independent full
+validation and terminal seal audit passed. The accepted build completed both
+variants across 64 patient partitions; all output hashes, schemas, original
+keys, evidence and summaries were checked, and canonical-source and parent
+bytes were unchanged. The synthetic E2E also covers same-ID ED/inpatient
+progression and an unlinked possible transfer across distinct IDs. See the
+[return acceptance record](RETURN_ACCEPTANCE.md) for evidence identities,
+commands and scientific limits. Earlier failed or rejected builds and the
+[2026-09-25 return audit](RETURN_AUDIT.md) remain historical evidence. The
+opt-in v2 builder uses a 4 GiB DuckDB cap; v1 remains at 1 GiB. Existing
+encounter products, the 36-file bridge and cohort-source interfaces remain
+unchanged.

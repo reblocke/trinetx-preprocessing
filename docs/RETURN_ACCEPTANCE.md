@@ -1,13 +1,58 @@
 # Return outcomes acceptance
 
-Status (2026-09-27): **C0–C1 evidenced; C2 partial-start uncertainty repaired;
-C3 public checks passed on repaired code; current-code private C3 and C4 gates
-pending**.
+Status (2026-09-29): **C0–C4 engineering acceptance passed for the opt-in
+calendar-day v2 return bundle**. The locked r4 outcomes-only build completed
+both independent variants on code identity
+`de9d4268bb64ffa47411f019d42c7e3f1abd76a8935bd96d285d7081ba752d88`.
+Its independent full validator passed all 64 patient partitions and verified
+every original index key, source episode, evidence row, link, phenotype,
+summary rule, schema and output hash. The external acceptance seal passed,
+with SHA-256
+`683e882935bab49302b72378e58da03ac2c6065ee3cdd8b3a161093d99e5de4c`.
+A second, terminal auditor independently rehashed the canonical database,
+all 44 accepted-parent files and all 386 output artifacts, checked the seal's
+gate bindings and confirmed pre/post input byte equality. Its report SHA-256
+is `51aef498874bfa0bf19cfe6a2e897e37392a4ff0b5a6fb6476ae4b98bfe8757d`.
+The output manifest and independent validation report SHA-256 values are
+`f346f5b347ecf7dbaa86a7a60fd7c043bcd2af40b4fa5a440b39efc359b7b69a`
+and `317de5c6b741fcb9e031f68587cdeed75259c6428c2d8165c951ed08765ce086`.
+Private row-level data, manifests, logs and receipts remain outside Git.
+
+The current-code C0 provenance, exact accepted-parent validation and final
+resource pilot passed with external receipt SHA-256 values
+`5aefcd5c0fefdb7e59a3f564ea787f2a32a382204fb365554a31af189ccebef9`,
+`c733f7976dc9fd7a4f04800edcdc988717b620f4d31a3d417b689218f09c9155`
+and `143aea8c583cc064c78a95aecef2ddada3616d020d2b5fc05069b2b106543cec`.
+The 32-partition pilot's independent artifact audit passed. C3 passed full
+pytest (464 cases), Ruff, offline lock, five legacy E2Es, a noneditable wheel
+and installed old-consumer API/CLI checks. Its public proof SHA-256 is
+`2ee5dda936a2ee84db74b972b1b7ef6be07672c95c817b2fcedf9ddc91e0a40c`.
+The source-to-output v2 E2E, wrapper resume/collision/tamper E2E and private
+source/parent gates supply complementary evidence. An additional readback-verified
+source-to-output E2E for same-ID progression and unlinked cross-ID possible
+transfer passed after the seal, with receipt SHA-256
+`634469d1d9ba8884085687765f72f6c5f42e1fd74c10c3fddfa1cba85335bbb2`.
+It changed only the synthetic E2E script, leaving the sealed package code and
+contract identities unchanged.
+
+This is an engineering acceptance of observed calendar-day outcomes. It does
+not establish complete return capture, exact intraday ordering, planned status,
+causality or clinical eligibility. The preexisting encounter products, 36-file
+compatibility bridge and old cohort-source consumer remain the supported
+unchanged interfaces.
+
 This page tracks private acceptance for the opt-in v2
 return bundle. The executable rules are in [RETURN_CONTRACT.md](RETURN_CONTRACT.md).
-The [2026-09-25 audit](RETURN_AUDIT.md) supersedes earlier completion claims.
+The [2026-09-25 audit](RETURN_AUDIT.md) records defects at an earlier revision;
+its earlier blocked status is historical.
 The owner explicitly resumed the goal under the calendar-day v2 contract.
 Historical v1 text remains in [RETURN_CONTRACT_V1.md](RETURN_CONTRACT_V1.md).
+
+## Historical repair and retry record
+
+The dated findings below describe earlier rejected runs and checkpoints. Their
+"pending" statements apply to those snapshots; the 2026-09-29 status above
+governs the accepted r4 build.
 
 The locked r3 C4 build on LOCKE STATION completed all 64 partitions and
 published a complete manifest for both variants. During independent validation,

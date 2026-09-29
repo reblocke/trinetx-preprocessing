@@ -1,5 +1,10 @@
 # Return implementation audit — 2026-09-25
 
+Historical audit of an earlier revision. The repaired calendar-day v2 build
+passed C0–C4 engineering acceptance on 2026-09-29; see the current
+[return acceptance record](RETURN_ACCEPTANCE.md). The status and next actions
+below describe the audited revision, not the current accepted build.
+
 Status: **C2/C3 require repairs; C4 remains BLOCKED.** This audit reviews
 `a5338f5` on `codex/readmissions-20260924`, whose package code identity is
 `63ecb329b10d902acfa925e2bfdb28aa65eb6f2df1f2b4f09316a41924b66b17`.
