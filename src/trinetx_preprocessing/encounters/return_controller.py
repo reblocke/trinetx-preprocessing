@@ -68,6 +68,12 @@ def execute(config_path: Path, *, resume=False):
         raise ValueError("Resource pilot does not cover this candidate/configuration")
     database = no_symlinks(Path(config["database"]))
     parent = no_symlinks(Path(config["parent_bundle"]))
+    external_receipt = config.get("reuse_prerequisite_receipt_path")
+    external_digest = config.get("trusted_prerequisite_receipt_sha256")
+    if (external_receipt is None) != (external_digest is None):
+        raise ValueError(
+            "Explicit prerequisite reuse requires receipt and trusted SHA-256"
+        )
     reference = no_symlinks(Path(config["reference_bundle"]))
     run_root = no_symlinks(Path(config["run_root"]))
     work = no_symlinks(Path(config["work_root"]))
@@ -144,6 +150,11 @@ def execute(config_path: Path, *, resume=False):
         # then rehash all actual input bytes through prepare_prerequisites.
         prior = phases.authenticated_record("prerequisites", run_binding)
         reuse = {}
+        if external_receipt is not None:
+            reuse = {
+                "reuse_receipt_path": no_symlinks(Path(external_receipt)),
+                "expected_reuse_sha256": external_digest,
+            }
         if prior is not None:
             previous = no_symlinks(Path(prior["result"]["receipt_path"]))
             if not previous.is_relative_to(evidence):

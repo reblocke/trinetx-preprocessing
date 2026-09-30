@@ -171,3 +171,21 @@ relation. This gives the optimizer actual intermediate cardinality and avoids
 the correlated-query delimiter table. Reuse the independent unrestricted oracle
 and all existing failure fixtures. No resource-limit increase or successful
 private feasibility claim follows from query-plan inspection alone.
+
+### Explicit prerequisite reuse across corrected candidates
+
+A corrected source-stage identity requires a new frozen controller configuration;
+the failed run's configuration-bound checkpoint cannot simply be rewritten.
+Allow the new configuration to name an explicit prerequisite receipt and an
+externally trusted SHA-256 together. Reuse must rehash all current input bytes
+and require identical source/parent validator, environment, contract and catalog
+dependencies through the existing prerequisite verifier. Preserve the old
+receipt and issue a new receipt binding its digest. A missing digest, wrong
+digest or changed dependency must fail before source staging; there is no cold
+fallback after rejected explicit reuse.
+
+Extend the installed product E2E before implementing this interface: complete a
+new controller run using the independently produced prerequisite receipt, prove
+the new receipt records its exact predecessor, and reject incomplete trust,
+incorrect digest and a rebound receipt with mismatched validator dependency.
+Retain the existing fresh-run and interrupted/resumed execution coverage.

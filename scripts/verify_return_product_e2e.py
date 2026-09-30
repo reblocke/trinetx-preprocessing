@@ -349,6 +349,8 @@ def run(root, *, consumer=False):
                 "reference_receipt_path": str(controller_reference_path.resolve()),
                 "trusted_reference_receipt_sha256": sha256(controller_reference_path),
                 "reference_validation_report_path": str(direct_report_path.resolve()),
+                "reuse_prerequisite_receipt_path": str(cold.receipt_path.resolve()),
+                "trusted_prerequisite_receipt_sha256": cold.receipt_sha256,
             }
         )
         + "\n"
@@ -363,6 +365,40 @@ def run(root, *, consumer=False):
         str((root / "controller.lock").resolve()),
     ]
     environment = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    original_config = json.loads(config.read_text())
+    changed = json.loads(cold.receipt_path.read_text())
+    changed["dependencies"]["parent_validator"] = "changed-validator"
+    changed_path = evidence / "changed-prerequisite-dependency.json"
+    changed_path.write_text(json.dumps(changed) + "\n")
+    for label, updates in (
+        ("missing-trust", {"trusted_prerequisite_receipt_sha256": None}),
+        ("wrong-trust", {"trusted_prerequisite_receipt_sha256": "0" * 64}),
+        (
+            "changed-dependency",
+            {
+                "reuse_prerequisite_receipt_path": str(changed_path.resolve()),
+                "trusted_prerequisite_receipt_sha256": sha256(changed_path),
+            },
+        ),
+    ):
+        rejected_root = root / f"controller-rejected-{label}"
+        rejected_config = {
+            **original_config,
+            **updates,
+            "run_root": str(rejected_root.resolve()),
+            "work_root": str((root / f"controller-rejected-work-{label}").resolve()),
+        }
+        config.write_text(json.dumps(rejected_config) + "\n")
+        rejected = subprocess.run(
+            command, env=environment, capture_output=True, text=True
+        )
+        (evidence / f"controller-rejected-{label}.log").write_text(
+            rejected.stdout + rejected.stderr
+        )
+        assert rejected.returncode != 0
+        assert not (rejected_root / "source-stage").exists()
+        assert not (rejected_root / "outcomes").exists()
+    config.write_text(json.dumps(original_config) + "\n")
     outcomes = []
     for attempt, extra in enumerate(([], ["--resume"])):
         process = subprocess.run(
@@ -375,6 +411,14 @@ def run(root, *, consumer=False):
         outcomes.append(json.loads(process.stdout))
     assert outcomes[0]["receipt_sha256"] == outcomes[1]["receipt_sha256"]
     assert outcomes[0]["receipt_path"] == outcomes[1]["receipt_path"]
+    reused_receipts = list(
+        (root / "controller-run" / "evidence").glob("prerequisites-*.json")
+    )
+    assert len(reused_receipts) == 1
+    assert (
+        json.loads(reused_receipts[0].read_text())["reused_from_sha256"]
+        == cold.receipt_sha256
+    )
     if consumer:
         from trinetx_analysis.return_bundle import (
             join_return_summary,
