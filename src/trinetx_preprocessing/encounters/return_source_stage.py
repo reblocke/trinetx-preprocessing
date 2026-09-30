@@ -100,18 +100,24 @@ def _connect(database, parent_bundle, work_dir, partitions):
     # distinct; it routes memberships without multiplying their multiplicity.
     # Only required memberships consume this map. Keep unrelated laboratory
     # history in the raw laboratory stage without materializing its routing here.
-    # EXISTS preserves false/null inclusion and does not multiply repeated rows.
+    # Materialization gives the optimizer the actual required-key cardinality;
+    # correlated EXISTS can otherwise build a delimiter table of all lab IDs.
+    # No include predicate: false/null memberships are required evidence too.
     elements = ",".join(literal(e) for e in REQUIRED_MEMBERSHIP_ELEMENTS)
+    db.execute(
+        "CREATE TEMP TABLE required_lab_records AS SELECT DISTINCT source_record_id "
+        "FROM canonical.element_membership "
+        f"WHERE element_id IN ({elements})"
+    )
     db.execute(
         "CREATE TEMP TABLE lab_patient_buckets AS SELECT DISTINCT "
         "s.source_record_id,"
         f"hash(s.patient_id::VARCHAR)%{partitions} AS _return_bucket "
         "FROM canonical.source_lab_measurement s SEMI JOIN original_patients p "
         "ON s.patient_id=p.patient_id "
-        "WHERE EXISTS (SELECT 1 FROM canonical.element_membership m "
-        "WHERE m.source_record_id=s.source_record_id "
-        f"AND m.element_id IN ({elements}))"
+        "SEMI JOIN required_lab_records m ON m.source_record_id=s.source_record_id"
     )
+    db.execute("DROP TABLE required_lab_records")
     return db
 
 

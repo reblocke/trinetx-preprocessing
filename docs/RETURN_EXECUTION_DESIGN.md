@@ -162,3 +162,12 @@ Synthetic success is insufficient for the observed scale failure: full-size
 routing must finish under the unchanged resource limit before a revised resource
 receipt or another frozen acceptance attempt can be considered. Preserve the
 failed attempt, its prerequisite receipt, and its original forecast.
+
+The first restricted routing query also failed at full scale. Its query plan
+decorrelated `EXISTS` through a large delimiter join; a direct semi-join rewrite
+still planned a hash build from the broad laboratory side. Materialize distinct
+required membership record IDs first, then join laboratory rows to that compact
+relation. This gives the optimizer actual intermediate cardinality and avoids
+the correlated-query delimiter table. Reuse the independent unrestricted oracle
+and all existing failure fixtures. No resource-limit increase or successful
+private feasibility claim follows from query-plan inspection alone.
