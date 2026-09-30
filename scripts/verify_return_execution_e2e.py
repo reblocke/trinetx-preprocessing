@@ -31,6 +31,8 @@ def run(root):
     from trinetx_preprocessing.encounters.return_execution import ProgressEvents
     from trinetx_preprocessing.encounters.return_source_stage import (
         COLUMNS,
+        _connect,
+        _reconcile_monolithic_reference,
         attach_source_partition,
         create_source_stage,
         verify_source_stage,
@@ -143,6 +145,8 @@ def run(root):
         parent_bundle=parent,
         work_dir=root / "verify-32-work",
     )
+    with _connect(source, parent, root / "reference-verifier-work", 3) as db:
+        _reconcile_monolithic_reference(db, stage, receipt)
     expected_names = {
         f"{bucket:04d}_{table}.parquet" for bucket in range(32) for table in COLUMNS
     }
@@ -182,6 +186,15 @@ def run(root):
         for event in progress
         if event["phase"] == "source_stage" and event["event"] == "table_write_complete"
     } == set(COLUMNS)
+    reconciled_buckets = [
+        (event["table"], event["bucket"])
+        for event in progress
+        if event["phase"] == "source_stage" and event["event"] == "bucket_reconciled"
+    ]
+    assert len(reconciled_buckets) == len(expected_names)
+    assert set(reconciled_buckets) == {
+        (table, bucket) for table in COLUMNS for bucket in range(32)
+    }
     # One staging thread does not reliably make multiple pieces for a bucket.
     # Split a verified source fixture and check the exact consolidated rows.
     from trinetx_preprocessing.encounters.return_source_stage import (
@@ -362,6 +375,60 @@ def run(root):
         else:
             raise AssertionError(f"Did not reject {label}")
         candidate.write_bytes(original)
+    wrong_bucket = next(
+        stage / name
+        for name in manifest["outputs"]
+        if "source_diagnosis" in name and stage / name != candidate
+    )
+    wrong_bucket_original = wrong_bucket.read_bytes()
+    with duckdb.connect() as db:
+        db.execute(
+            "CREATE TABLE saved_source AS SELECT * FROM "
+            f"read_parquet({literal(candidate)})"
+        )
+        db.execute(
+            "CREATE TABLE saved_target AS SELECT * FROM "
+            f"read_parquet({literal(wrong_bucket)})"
+        )
+        candidate.unlink()
+        wrong_bucket.unlink()
+        db.execute(
+            "COPY (SELECT * FROM saved_source WHERE FALSE) "
+            f"TO {literal(candidate)} (FORMAT PARQUET)"
+        )
+        db.execute(
+            "COPY (SELECT * FROM saved_target UNION ALL SELECT * FROM saved_source) "
+            f"TO {literal(wrong_bucket)} (FORMAT PARQUET)"
+        )
+    for path in (candidate, wrong_bucket):
+        manifest["outputs"][path.name].update(
+            bytes=path.stat().st_size,
+            sha256=sha256(path),
+            rows=pq.ParquetFile(path).metadata.num_rows,
+        )
+    (stage / "manifest.json").write_text(json.dumps(manifest) + "\n")
+    try:
+        verify_source_stage(
+            stage,
+            expected_manifest_sha256=sha256(stage / "manifest.json"),
+            identity=identity,
+            database=source,
+            parent_bundle=parent,
+            work_dir=root / f"verify-{len(rejected)}",
+        )
+    except ValueError:
+        rejected.append("unchanged row in wrong bucket")
+    else:
+        raise AssertionError("Did not reject an unchanged row in the wrong bucket")
+    try:
+        with _connect(source, parent, root / "reference-wrong-bucket-work", 3) as db:
+            _reconcile_monolithic_reference(db, stage, manifest)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Original reference accepted a wrong-bucket row")
+    candidate.write_bytes(original)
+    wrong_bucket.write_bytes(wrong_bucket_original)
     # Restore the original trusted receipt and verify before downstream use.
     (stage / "manifest.json").write_text(
         json.dumps(receipt, sort_keys=True, indent=2) + "\n"

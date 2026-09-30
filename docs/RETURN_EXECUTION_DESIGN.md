@@ -214,6 +214,31 @@ configuration, environment and artifact identities. Do not publish another
 full-run forecast until complete full-size staging and independent canonical
 reconciliation pass.
 
+### Bounded canonical stage comparison: expectations before implementation
+
+The writer repair leaves the independent canonical comparison as a separate
+resource-bound step. Retain its original SQL comparison route for E2E reference.
+Before changing the verifier, extend the retained execution workflow to require
+one durable completion event per compared bucket and relation. The unchanged
+fixture must still pass both three- and 32-bucket complete canonical proofs.
+Rebinding a manifest and local file hashes must not let missing, extra,
+duplicated, null-changed, coercible-type-changed or wrong-bucket rows pass.
+Include a case that moves an otherwise unchanged row to another bucket: a
+global unpartitioned row multiset would miss it. Empty expected and actual
+buckets must remain typed and comparable. Native expected partition output
+may contain several pieces for a bucket; extra, missing, corrupt or symlinked
+pieces must fail closed.
+
+If full-size evidence justifies the change, derive expected rows from the
+canonical database and accepted original patients in one verifier-owned
+partitioned pass. Compare each staged bucket to only its independently routed
+canonical bucket using exact column/type equality and bidirectional complete-row
+`EXCEPT ALL`. Do not derive expected values from staged data, replace row
+comparison with hashes, or reuse an unfinished expected partition. A relation
+completes only after every bucket passes; the full stage remains unpublished
+until all six relations pass. Measure verifier time, memory and spill separately
+from writing. A synthetic pass does not replace full-size canonical proof.
+
 ### Explicit prerequisite reuse across corrected candidates
 
 A corrected source-stage identity requires a new frozen controller configuration;

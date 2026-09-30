@@ -208,13 +208,14 @@ def verify_source_stage(
         ):
             raise ValueError("Source-stage verification work overlaps an input")
         with _connect(database, parent_bundle, work_dir, manifest["partitions"]) as db:
-            _reconcile(db, stage, manifest)
+            _reconcile(db, stage, manifest, work_dir)
     if sha256(stage / "manifest.json") != expected_manifest_sha256:
         raise ValueError("Source-stage manifest changed during verification")
     return manifest
 
 
-def _reconcile(db, stage, manifest, events=None):
+def _reconcile(db, stage, manifest, work_dir, events=None):
+    """Prove complete typed rows against independently routed canonical buckets."""
     n = manifest["partitions"]
     for table, columns in COLUMNS.items():
         if events:
@@ -223,6 +224,120 @@ def _reconcile(db, stage, manifest, events=None):
         canonical_schema = [
             [r[0], r[1]]
             for r in db.execute(
+                f"DESCRIBE SELECT {selection} FROM canonical.{table}"
+            ).fetchall()
+        ]
+        if manifest["schemas"].get(table) != canonical_schema:
+            raise ValueError(
+                f"Source-stage types differ from canonical source: {table}"
+            )
+        expected = _expected(db, table, n)
+        expected_schema = [
+            [row[0], row[1]] for row in db.execute("DESCRIBE " + expected).fetchall()
+        ]
+        if expected_schema[:-1] != canonical_schema or expected_schema[-1] != [
+            "_return_bucket",
+            "UBIGINT",
+        ]:
+            raise ValueError(f"Source-stage canonical types differ: {table}")
+        expected_root = no_symlinks(work_dir / f"expected-{table}-{uuid.uuid4().hex}")
+        db.execute(
+            f"COPY ({expected}) TO {literal(expected_root)} "
+            "(FORMAT PARQUET, COMPRESSION ZSTD, "
+            "PARTITION_BY (_return_bucket), WRITE_PARTITION_COLUMNS FALSE)"
+        )
+        expected_directories = {f"_return_bucket={bucket}" for bucket in range(n)}
+        if expected_root.exists():
+            for child in expected_root.iterdir():
+                if (
+                    child.name not in expected_directories
+                    or child.is_symlink()
+                    or not child.is_dir()
+                ):
+                    raise ValueError(f"Unexpected canonical partition: {table}")
+        for bucket in range(n):
+            name = f"{bucket:04d}_{table}.parquet"
+            path = stage / name
+            schema = [
+                [row[0], row[1]]
+                for row in db.execute(
+                    f"DESCRIBE SELECT * FROM read_parquet({literal(path)})"
+                ).fetchall()
+            ]
+            if schema != manifest["schemas"][table] or [c[0] for c in schema] != list(
+                columns
+            ):
+                raise ValueError(f"Source-stage schema differs: {name}")
+            bucket_dir = expected_root / f"_return_bucket={bucket}"
+            pieces = []
+            if bucket_dir.exists():
+                if bucket_dir.is_symlink() or not bucket_dir.is_dir():
+                    raise ValueError(f"Invalid canonical partition: {name}")
+                pieces = sorted(bucket_dir.iterdir())
+                if any(
+                    piece.is_symlink()
+                    or not piece.is_file()
+                    or piece.suffix != ".parquet"
+                    for piece in pieces
+                ):
+                    raise ValueError(f"Invalid canonical partition piece: {name}")
+            expected_rows = sum(
+                pq.ParquetFile(piece).metadata.num_rows for piece in pieces
+            )
+            if (
+                pq.ParquetFile(path).metadata.num_rows
+                != manifest["outputs"][name]["rows"]
+                or manifest["outputs"][name]["rows"] != expected_rows
+            ):
+                raise ValueError(f"Source-stage canonical row count differs: {name}")
+            if pieces:
+                paths = "[" + ",".join(literal(piece) for piece in pieces) + "]"
+                expected_bucket = (
+                    f"SELECT * FROM read_parquet({paths}, hive_partitioning=false)"
+                )
+            else:
+                expected_bucket = (
+                    f"SELECT {selection} FROM canonical.{table} WHERE FALSE"
+                )
+            actual_bucket = f"SELECT * FROM read_parquet({literal(path)})"
+            bucket_schema = [
+                [row[0], row[1]]
+                for row in db.execute("DESCRIBE " + expected_bucket).fetchall()
+            ]
+            if bucket_schema != canonical_schema:
+                raise ValueError(f"Canonical partition types differ: {name}")
+            db.execute(
+                "CREATE OR REPLACE TEMP VIEW expected_bucket AS " + expected_bucket
+            )
+            db.execute("CREATE OR REPLACE TEMP VIEW actual_bucket AS " + actual_bucket)
+            different = db.execute(
+                "SELECT count(*) FROM ("
+                "(SELECT * FROM expected_bucket EXCEPT ALL "
+                "SELECT * FROM actual_bucket) "
+                "UNION ALL "
+                "(SELECT * FROM actual_bucket EXCEPT ALL SELECT * FROM expected_bucket)"
+                ")"
+            ).fetchone()[0]
+            if different:
+                raise ValueError(f"Source-stage exact typed multiset differs: {name}")
+            if events:
+                events.emit(
+                    "source_stage", "bucket_reconciled", table=table, bucket=bucket
+                )
+        if expected_root.exists():
+            shutil.rmtree(expected_root)
+        if events:
+            events.emit("source_stage", "reconciliation_complete", table=table)
+
+
+def _reconcile_monolithic_reference(db, stage, manifest):
+    """Original exact global comparison retained for bounded E2E reference use."""
+    n = manifest["partitions"]
+    for table, columns in COLUMNS.items():
+        selection = ",".join(f'"{column}"' for column in columns)
+        canonical_schema = [
+            [row[0], row[1]]
+            for row in db.execute(
                 f"DESCRIBE SELECT {selection} FROM canonical.{table}"
             ).fetchall()
         ]
@@ -270,8 +385,6 @@ def _reconcile(db, stage, manifest, events=None):
         db.execute("DROP TABLE independently_expected")
         if expected_schema != manifest["schemas"][table]:
             raise ValueError(f"Source-stage canonical types differ: {table}")
-        if events:
-            events.emit("source_stage", "reconciliation_complete", table=table)
 
 
 def _complete_partition(db, *, pieces, target, columns, empty_source):
@@ -451,7 +564,7 @@ def create_source_stage(
                     partitions=partitions,
                     seconds=time.monotonic() - table_started,
                 )
-        _reconcile(db, staging, manifest, events=events)
+        _reconcile(db, staging, manifest, work_dir, events=events)
     manifest["status"] = "verified"
     write_text_atomic(
         staging / "manifest.json", json.dumps(manifest, sort_keys=True, indent=2) + "\n"

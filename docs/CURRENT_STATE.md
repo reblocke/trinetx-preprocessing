@@ -67,6 +67,10 @@ adds verified source staging, authenticated prerequisite/checkpoint reuse,
 independent materialized validation, a separate return acceptance verifier and
 a locked controller. The downstream candidate adds an explicit trusted summary
 reader and aggregate reporting. The v1 defaults and encounter interfaces remain
-supported. Synthetic installed-pair evidence is retained externally; the new
+supported. Source staging writes patient buckets in one pass; its verifier
+independently partitions canonical expected rows and compares complete typed
+rows with duplicate multiplicity in each bucket. The original global comparator
+is retained as a synthetic reference route. Synthetic installed-pair evidence
+is retained externally; the new
 producer has not yet passed its required full private acceptance. No combined
 release or study endpoint selection is claimed.

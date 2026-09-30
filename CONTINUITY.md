@@ -37,12 +37,16 @@ function/class ASTs match their accepted originals. Reference port untouched.
 2026-09-30 source partition writer repair is under review on an isolated branch
 from the frozen candidate. The prior full-size attempt was stopped with its
 terminal and partial evidence retained externally. The new writer emits durable
-partition events, reads counts from Parquet metadata and keeps independent exact
-canonical reconciliation. Failure-first execution and product E2Es pass locally,
-including 32 buckets and typed empty files. Installed-wheel verification and a
-bounded full-size source-stage experiment are still required. No redesigned
-product is accepted and rollout remains BLOCKED. Earlier entries below describe
-the historical candidate state.
+partition events and reads counts from Parquet metadata. Installed candidate-pair
+E2Es and current hosted CI passed for that writer candidate. A bounded full-size
+diagnostic completed writing but failed the independent canonical verifier's
+resource gate; all failed artifacts are retained outside the repository. A
+bounded, independently routed exact verifier is now implemented locally with
+red-before-green execution E2E, original global reference comparison, product
+E2E and lock E2E passing. Current review, installed-wheel and hosted CI checks,
+then a separately bounded full-size canonical proof, remain pending. No
+redesigned product is accepted and rollout remains BLOCKED. Earlier entries
+below describe the historical candidate state.
 
 2026-09-29: the owner authorized the combined implementation, private acceptance
 and ordered merges, superseding the earlier integration-only session limit.
