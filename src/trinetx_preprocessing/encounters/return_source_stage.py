@@ -98,12 +98,19 @@ def _connect(database, parent_bundle, work_dir, partitions):
         raise ValueError("Parent contains a null original patient key")
     # A source record may legitimately occur more than once. This mapping is
     # distinct; it routes memberships without multiplying their multiplicity.
+    # Only required memberships consume this map. Keep unrelated laboratory
+    # history in the raw laboratory stage without materializing its routing here.
+    # EXISTS preserves false/null inclusion and does not multiply repeated rows.
+    elements = ",".join(literal(e) for e in REQUIRED_MEMBERSHIP_ELEMENTS)
     db.execute(
         "CREATE TEMP TABLE lab_patient_buckets AS SELECT DISTINCT "
         "s.source_record_id,"
         f"hash(s.patient_id::VARCHAR)%{partitions} AS _return_bucket "
         "FROM canonical.source_lab_measurement s SEMI JOIN original_patients p "
-        "ON s.patient_id=p.patient_id"
+        "ON s.patient_id=p.patient_id "
+        "WHERE EXISTS (SELECT 1 FROM canonical.element_membership m "
+        "WHERE m.source_record_id=s.source_record_id "
+        f"AND m.element_id IN ({elements}))"
     )
     return db
 

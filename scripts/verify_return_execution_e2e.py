@@ -66,6 +66,29 @@ def run(root):
             "SELECT * REPLACE ('unrelated.element' AS element_id) "
             "FROM preprocessed.element_membership LIMIT 1"
         )
+        # Membership routing must not require the unrelated laboratory history
+        # in memory, but every raw laboratory row must still reach its shard.
+        db.execute(
+            "INSERT INTO preprocessed.source_lab_measurement "
+            "SELECT s.* REPLACE ('unrelated-' || i AS source_record_id) "
+            "FROM (SELECT * FROM preprocessed.source_lab_measurement LIMIT 1) s "
+            "CROSS JOIN range(256) r(i)"
+        )
+        for record, include in (("false-only", "FALSE"), ("null-only", "NULL")):
+            db.execute(
+                "INSERT INTO preprocessed.source_lab_measurement "
+                f"SELECT * REPLACE ('{record}' AS source_record_id) "
+                "FROM preprocessed.source_lab_measurement LIMIT 1"
+            )
+            db.execute(
+                "INSERT INTO preprocessed.element_membership VALUES "
+                f"('{record}', 'source.arterial_pco2', {include})"
+            )
+        db.execute(
+            "INSERT INTO preprocessed.source_lab_measurement "
+            "SELECT * REPLACE ('q' AS patient_id, 'qi' AS encounter_id) "
+            "FROM preprocessed.source_lab_measurement WHERE source_record_id='g1'"
+        )
         for variant, clause in (
             ("FULL_DATA", ""),
             ("AFTER_EXCLUSION", " WHERE patient_id='p'"),
@@ -105,7 +128,7 @@ def run(root):
             db.execute(
                 f"SELECT count(*) FROM {members} WHERE include IS NULL"
             ).fetchone()[0]
-            == 1
+            >= 2
         )
         assert (
             db.execute(
@@ -113,6 +136,34 @@ def run(root):
             ).fetchone()[0]
             >= 1
         )
+        labs = f"read_parquet({literal(stage / '*_source_lab_measurement.parquet')})"
+        assert (
+            db.execute(
+                f"SELECT count(*) FROM {labs} WHERE source_record_id LIKE 'unrelated-%'"
+            ).fetchone()[0]
+            == 256
+        )
+        # Independent oracle retains the original broad routing expression;
+        # it does not use the producer's restricted mapping or helper SQL.
+        db.execute(f"ATTACH {literal(source)} AS oracle (READ_ONLY)")
+        parent_files = literal(parent / "encounter_features_*.parquet")
+        expected = (
+            "SELECT m.source_record_id,m.element_id,m.include,r.bucket FROM "
+            "oracle.element_membership m JOIN (SELECT DISTINCT l.source_record_id,"
+            "hash(l.patient_id::VARCHAR)%3 bucket FROM oracle.source_lab_measurement l "
+            "WHERE l.patient_id IN (SELECT patient_id FROM "
+            f"read_parquet({parent_files}))) "
+            "r USING (source_record_id) WHERE m.element_id IN "
+            "('source.arterial_pco2','source.venous_pco2','source.unspecified_blood_pco2')"
+        )
+        actual_parts = []
+        for bucket in range(3):
+            path = stage / f"{bucket:04d}_element_membership.parquet"
+            actual_parts.append(
+                f"SELECT *,{bucket}::UBIGINT bucket FROM read_parquet({literal(path)})"
+            )
+        actual = "SELECT * FROM (" + " UNION ALL ".join(actual_parts) + ")"
+        _assert_equal_multiset(db, expected, actual, "unrestricted membership oracle")
     rejected = []
     # Byte rebind reaches exact source reconciliation, rather than stopping at
     # an old artifact hash. Expected source and original patient routing stay fixed.

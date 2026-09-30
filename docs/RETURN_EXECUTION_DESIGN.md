@@ -137,3 +137,28 @@ The source proof must reject a staged column type changed with equal-looking
 values even when the staged schema and hashes are rebound. Compare actual types
 directly with canonical source types before SQL multiset comparison, which can
 otherwise coerce unequal types into a common type.
+
+### Full-size membership routing recovery
+
+The first full candidate failed before staging history: its distinct routing
+table covered every laboratory record for original patients, although only the
+three required membership elements consume that table. The smaller pilot did
+not expose this memory failure. Keep the memory limit unchanged. Restrict only
+membership routing to records having at least one required element; keep all
+laboratory history in the staged laboratory relation.
+
+Before implementation, extend the retained execution E2E with unrelated laboratory
+records, required memberships that are solely false or null, duplicate laboratory
+and membership rows, and a source record associated with multiple original
+patients. Independently compare staged membership rows and routing against the
+original unrestricted laboratory mapping, including exact duplicate multiplicity.
+Require all unrelated laboratory rows to remain staged, and preserve the existing
+direct/staged six-table comparisons and independent clinical validation.
+
+Failure cases are lost false/null memberships, extra copies caused by joining
+membership duplicates into routing, collapsed patient buckets, missing unrelated
+laboratory history, and a proof sharing the same filtering mistake as production.
+Synthetic success is insufficient for the observed scale failure: full-size
+routing must finish under the unchanged resource limit before a revised resource
+receipt or another frozen acceptance attempt can be considered. Preserve the
+failed attempt, its prerequisite receipt, and its original forecast.
