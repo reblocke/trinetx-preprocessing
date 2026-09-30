@@ -287,7 +287,14 @@ def execute(config_path: Path, *, resume=False):
             "target_seconds": 18000,
             "target_gap_seconds": max(0, total - 18000),
             "preseal_only": True,
-            "includes_cold_setup_and_recovery_downtime": True,
+            "includes_cold_setup_and_recovery_downtime": external_receipt is None,
+            "prerequisite_mode": (
+                "external_verified_reuse"
+                if external_receipt is not None
+                else "cold_or_same_run_resume"
+            ),
+            "includes_same_run_recovery_downtime": True,
+            "includes_prior_candidate_time": False,
             "reference_acceptance_sha256": config["trusted_reference_receipt_sha256"],
             "resource_pilot_sha256": config["trusted_resource_pilot_sha256"],
             "events_sha256_before_seal": sha256(events.path),

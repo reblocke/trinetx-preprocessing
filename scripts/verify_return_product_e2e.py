@@ -419,6 +419,15 @@ def run(root, *, consumer=False):
         json.loads(reused_receipts[0].read_text())["reused_from_sha256"]
         == cold.receipt_sha256
     )
+    runtime_receipts = list(
+        (root / "controller-run" / "evidence").glob("runtime-*.json")
+    )
+    assert len(runtime_receipts) == 1
+    reuse_runtime = json.loads(runtime_receipts[0].read_text())
+    assert reuse_runtime["prerequisite_mode"] == "external_verified_reuse"
+    assert reuse_runtime["includes_cold_setup_and_recovery_downtime"] is False
+    assert reuse_runtime["includes_same_run_recovery_downtime"] is True
+    assert reuse_runtime["includes_prior_candidate_time"] is False
     if consumer:
         from trinetx_analysis.return_bundle import (
             join_return_summary,

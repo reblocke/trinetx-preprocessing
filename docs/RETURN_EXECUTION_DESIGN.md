@@ -189,3 +189,9 @@ new controller run using the independently produced prerequisite receipt, prove
 the new receipt records its exact predecessor, and reject incomplete trust,
 incorrect digest and a rebound receipt with mismatched validator dependency.
 Retain the existing fresh-run and interrupted/resumed execution coverage.
+
+Runtime evidence for explicit cross-candidate reuse must identify it as reuse,
+not cold prerequisite execution. It includes recovery downtime within the new
+run, but excludes prior candidate time; retain and report that earlier time
+separately. The product E2E must inspect the emitted runtime receipt for these
+distinctions before any acceptance record is described as a cold measurement.
