@@ -2,9 +2,11 @@
 """Retained direct/staged/recovered return execution E2E; synthetic only.
 
 Failure expectations: duplicate/null raw values survive exact stage proofs;
-removed, changed, extra and misrouted rows fail verification. Original variants
-remain independent. Direct and staged outputs match the existing clinical oracle.
-Changed stage bytes are never reused. Checkpointed validation must recheck bytes.
+removed, changed, extra and misrouted rows fail verification. All 32 source
+partitions include typed empty files and metadata counts. Multiple native pieces
+must consolidate without loss. Original variants remain independent. Direct and
+staged outputs match the existing clinical oracle. Changed stage bytes are never
+reused. Checkpointed validation must recheck bytes.
 """
 
 from __future__ import annotations
@@ -13,10 +15,12 @@ import argparse
 import json
 import platform
 import runpy
+import shutil
 import sys
 from pathlib import Path
 
 import duckdb
+import pyarrow.parquet as pq
 
 from trinetx_preprocessing.encounters.builder import literal, sha256
 
@@ -24,7 +28,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(root):
+    from trinetx_preprocessing.encounters.return_execution import ProgressEvents
     from trinetx_preprocessing.encounters.return_source_stage import (
+        COLUMNS,
         attach_source_partition,
         create_source_stage,
         verify_source_stage,
@@ -116,6 +122,138 @@ def run(root):
         parent_bundle=parent,
         work_dir=root / "verify-work",
     )
+    # The original small stage cannot establish the full 32-file-per-relation
+    # publication contract. Use the same independently proven source fixture.
+    stage32 = root / "stage-32"
+    stage_events = root / "stage-32-events.jsonl"
+    stage32_receipt = create_source_stage(
+        database=source,
+        parent_bundle=parent,
+        output_dir=stage32,
+        work_dir=root / "stage-32-work",
+        partitions=32,
+        identity=identity,
+        events=ProgressEvents(stage_events),
+    )
+    verify_source_stage(
+        stage32,
+        expected_manifest_sha256=sha256(stage32 / "manifest.json"),
+        identity=identity,
+        database=source,
+        parent_bundle=parent,
+        work_dir=root / "verify-32-work",
+    )
+    expected_names = {
+        f"{bucket:04d}_{table}.parquet" for bucket in range(32) for table in COLUMNS
+    }
+    assert set(stage32_receipt["outputs"]) == expected_names
+    assert {p.name for p in stage32.iterdir()} == expected_names | {"manifest.json"}
+    empty_files = 0
+    for table in COLUMNS:
+        # One source record can map to several patient buckets. Its required
+        # memberships legitimately appear once per distinct bucket, so their
+        # total depends on partition count. Check them against canonical below.
+        if table != "element_membership":
+            assert sum(
+                stage32_receipt["outputs"][f"{bucket:04d}_{table}.parquet"]["rows"]
+                for bucket in range(32)
+            ) == sum(
+                receipt["outputs"][f"{bucket:04d}_{table}.parquet"]["rows"]
+                for bucket in range(3)
+            )
+        for bucket in range(32):
+            name = f"{bucket:04d}_{table}.parquet"
+            rows = pq.ParquetFile(stage32 / name).metadata.num_rows
+            assert rows == stage32_receipt["outputs"][name]["rows"]
+            empty_files += rows == 0
+    assert empty_files > 0
+    progress = [json.loads(line) for line in stage_events.read_text().splitlines()]
+    written = [
+        (event["table"], event["bucket"])
+        for event in progress
+        if event["phase"] == "source_stage" and event["event"] == "partition_written"
+    ]
+    assert len(written) == len(expected_names)
+    assert set(written) == {
+        (table, bucket) for table in COLUMNS for bucket in range(32)
+    }
+    assert {
+        event["table"]
+        for event in progress
+        if event["phase"] == "source_stage" and event["event"] == "table_write_complete"
+    } == set(COLUMNS)
+    # One staging thread does not reliably make multiple pieces for a bucket.
+    # Split a verified source fixture and check the exact consolidated rows.
+    from trinetx_preprocessing.encounters.return_source_stage import (
+        _complete_partition,
+    )
+
+    multi = root / "multi-piece"
+    multi.mkdir()
+    lab_name = max(
+        (
+            name
+            for name in stage32_receipt["outputs"]
+            if "source_lab_measurement" in name
+        ),
+        key=lambda name: stage32_receipt["outputs"][name]["rows"],
+    )
+    lab = stage32 / lab_name
+    assert pq.ParquetFile(lab).metadata.num_rows >= 2
+    piece_paths = [multi / f"piece-{i}.parquet" for i in range(2)]
+    target = multi / "joined.parquet"
+    with duckdb.connect() as db:
+        for i, piece in enumerate(piece_paths):
+            db.execute(
+                "COPY (SELECT * EXCLUDE (_piece) FROM "
+                "(SELECT *,row_number() OVER ()%2 AS _piece "
+                f"FROM read_parquet({literal(lab)})) WHERE _piece={i}) "
+                f"TO {literal(piece)} (FORMAT PARQUET)"
+            )
+        assert (
+            _complete_partition(
+                db,
+                pieces=piece_paths,
+                target=target,
+                columns=COLUMNS["source_lab_measurement"],
+                empty_source=f"read_parquet({literal(lab)})",
+            )
+            == pq.ParquetFile(lab).metadata.num_rows
+        )
+        _assert_equal_multiset(
+            db,
+            f"SELECT * FROM read_parquet({literal(lab)})",
+            f"SELECT * FROM read_parquet({literal(target)})",
+            "multiple-piece source writer",
+        )
+    empty_dir = root / "empty-canonical"
+    empty_dir.mkdir()
+    empty_source = empty_dir / "source.duckdb"
+    shutil.copyfile(source, empty_source)
+    with duckdb.connect(str(empty_source)) as db:
+        db.execute("DELETE FROM source_diagnosis")
+    empty_stage = root / "stage-empty-diagnosis"
+    empty_identity = {"source_fixture_sha256": sha256(empty_source)}
+    empty_receipt = create_source_stage(
+        database=empty_source,
+        parent_bundle=parent,
+        output_dir=empty_stage,
+        work_dir=root / "stage-empty-work",
+        partitions=8,
+        identity=empty_identity,
+    )
+    verify_source_stage(
+        empty_stage,
+        expected_manifest_sha256=sha256(empty_stage / "manifest.json"),
+        identity=empty_identity,
+        database=empty_source,
+        parent_bundle=parent,
+        work_dir=root / "verify-empty-work",
+    )
+    for bucket in range(8):
+        name = f"{bucket:04d}_source_diagnosis.parquet"
+        assert empty_receipt["outputs"][name]["rows"] == 0
+        assert pq.ParquetFile(empty_stage / name).metadata.num_rows == 0
     with duckdb.connect() as db:
         members = f"read_parquet({literal(stage / '*_element_membership.parquet')})"
         assert (
@@ -147,23 +285,28 @@ def run(root):
         # it does not use the producer's restricted mapping or helper SQL.
         db.execute(f"ATTACH {literal(source)} AS oracle (READ_ONLY)")
         parent_files = literal(parent / "encounter_features_*.parquet")
-        expected = (
-            "SELECT m.source_record_id,m.element_id,m.include,r.bucket FROM "
-            "oracle.element_membership m JOIN (SELECT DISTINCT l.source_record_id,"
-            "hash(l.patient_id::VARCHAR)%3 bucket FROM oracle.source_lab_measurement l "
-            "WHERE l.patient_id IN (SELECT patient_id FROM "
-            f"read_parquet({parent_files}))) "
-            "r USING (source_record_id) WHERE m.element_id IN "
-            "('source.arterial_pco2','source.venous_pco2','source.unspecified_blood_pco2')"
-        )
-        actual_parts = []
-        for bucket in range(3):
-            path = stage / f"{bucket:04d}_element_membership.parquet"
-            actual_parts.append(
-                f"SELECT *,{bucket}::UBIGINT bucket FROM read_parquet({literal(path)})"
+        for staged_source, partitions in ((stage, 3), (stage32, 32)):
+            expected = (
+                "SELECT m.source_record_id,m.element_id,m.include,r.bucket FROM "
+                "oracle.element_membership m JOIN (SELECT DISTINCT l.source_record_id,"
+                f"hash(l.patient_id::VARCHAR)%{partitions} bucket "
+                "FROM oracle.source_lab_measurement l "
+                "WHERE l.patient_id IN (SELECT patient_id FROM "
+                f"read_parquet({parent_files}))) "
+                "r USING (source_record_id) WHERE m.element_id IN "
+                "('source.arterial_pco2','source.venous_pco2','source.unspecified_blood_pco2')"
             )
-        actual = "SELECT * FROM (" + " UNION ALL ".join(actual_parts) + ")"
-        _assert_equal_multiset(db, expected, actual, "unrestricted membership oracle")
+            actual_parts = []
+            for bucket in range(partitions):
+                path = staged_source / f"{bucket:04d}_element_membership.parquet"
+                actual_parts.append(
+                    f"SELECT *,{bucket}::UBIGINT bucket "
+                    f"FROM read_parquet({literal(path)})"
+                )
+            actual = "SELECT * FROM (" + " UNION ALL ".join(actual_parts) + ")"
+            _assert_equal_multiset(
+                db, expected, actual, f"unrestricted membership oracle {partitions}"
+            )
     rejected = []
     # Byte rebind reaches exact source reconciliation, rather than stopping at
     # an old artifact hash. Expected source and original patient routing stay fixed.
@@ -333,6 +476,11 @@ def run(root):
         "status": "passed",
         "stage_corruptions_rejected": rejected,
         "exact_routes": ["direct", "staged"],
+        "source_stage_partitions_verified": 32,
+        "typed_empty_files_verified": empty_files,
+        "partition_completion_events_verified": len(written),
+        "multiple_piece_consolidation_verified": True,
+        "empty_source_relation_verified": "source_diagnosis",
     }
 
 

@@ -172,6 +172,48 @@ the correlated-query delimiter table. Reuse the independent unrestricted oracle
 and all existing failure fixtures. No resource-limit increase or successful
 private feasibility claim follows from query-plan inspection alone.
 
+### Source partition write repair: expectations before implementation
+
+The prior writer materialized each source relation and requested a filtered
+COPY and a separate count for every one of 32 buckets. The existing three-bucket
+synthetic workflow did not establish the full-size write cost. Operational
+measurements and stopped-attempt evidence remain external. A completed Parquet
+footer does not establish scientific or release acceptance.
+
+Before changing the writer, extend the retained execution E2E with a 32-bucket
+stage from the same independently specified fixture. For all six relations,
+require exactly 32 files and the original canonical field order and SQL types,
+including valid typed Parquet files for empty buckets. Compare each manifest
+row count to that file's completed Parquet metadata, and independently reconcile
+all typed rows, nulls, duplicates and routing against the canonical database.
+All required gas memberships, including false and null inclusion, and all
+unrelated laboratory history must remain present. A source record associated
+with several original patients may route membership rows to several distinct
+buckets; compare that relation to an independent canonical routing oracle at
+each partition count rather than assuming its row total is constant across
+different partition counts. A stage is not published until every relation and
+the independent proof pass.
+
+A single-thread native partition writer may emit only one piece per occupied
+bucket, so the ordinary E2E cannot reliably trigger the multiple-piece path.
+Within the same retained workflow, split a known source fixture into two Parquet
+pieces and require the bounded consolidation step to reconstruct its exact typed
+multiset and metadata row count. This focused fixture catches a real writer
+failure otherwise absent from the E2E; it does not replace full stage proof.
+Also require a durable completion event for each final file and a relation-level
+write result. An absent or altered file, extra piece, wrong bucket, changed type,
+truncated file or interrupted publication must fail the independent proof or
+inventory gate even if counts and local hashes are rebound.
+
+For the first full-size repaired measurement, use the separately recorded private
+diagnostic budget and stop conditions. Record actual query, normalization,
+metadata, flush, hash and independent proof times and storage headroom outside
+the repository. A timeout is incomplete, not a passing pilot. Reuse a fully
+verified stage only with authenticated matching producer, validator, input,
+configuration, environment and artifact identities. Do not publish another
+full-run forecast until complete full-size staging and independent canonical
+reconciliation pass.
+
 ### Explicit prerequisite reuse across corrected candidates
 
 A corrected source-stage identity requires a new frozen controller configuration;

@@ -8,10 +8,13 @@ trusted manifest is prerequisite evidence, never product acceptance.
 from __future__ import annotations
 
 import json
+import shutil
+import time
 import uuid
 from pathlib import Path
 
 import duckdb
+import pyarrow.parquet as pq
 
 from ..combined_preprocessing.builder import require_safe_output_location
 from ..filesystem import fsync_directory_strict, fsync_file_strict, write_text_atomic
@@ -271,6 +274,31 @@ def _reconcile(db, stage, manifest, events=None):
             events.emit("source_stage", "reconciliation_complete", table=table)
 
 
+def _complete_partition(db, *, pieces, target, columns, empty_source):
+    """Normalize one bucket using bounded reads; count completed Parquet metadata."""
+    target = no_symlinks(target)
+    if target.exists():
+        raise FileExistsError(f"Source-stage partition already exists: {target.name}")
+    selection = ",".join(f'"{column}"' for column in columns)
+    pieces = [no_symlinks(piece) for piece in pieces]
+    if not pieces:
+        db.execute(
+            f"COPY (SELECT {selection} FROM {empty_source} WHERE FALSE) "
+            f"TO {literal(target)} (FORMAT PARQUET, COMPRESSION ZSTD)"
+        )
+    elif len(pieces) == 1:
+        pieces[0].replace(target)
+    else:
+        paths = "[" + ",".join(literal(piece) for piece in pieces) + "]"
+        db.execute(
+            f"COPY (SELECT {selection} FROM "
+            f"read_parquet({paths}, hive_partitioning=false)) "
+            f"TO {literal(target)} (FORMAT PARQUET, COMPRESSION ZSTD)"
+        )
+    fsync_file_strict(target)
+    return pq.ParquetFile(target).metadata.num_rows
+
+
 def create_source_stage(
     *,
     database: Path,
@@ -313,8 +341,9 @@ def create_source_stage(
         for table, columns in COLUMNS.items():
             if events:
                 events.emit("source_stage", "table_scan_start", table=table)
-            # Materialize once from the source. Partition scans touch this local
-            # materialization, avoiding N repeated canonical history reads.
+            table_started = time.monotonic()
+            # Preserve the canonical selection, original-patient scope and
+            # duplicate multiplicity; change only its physical write plan.
             fields = ",".join(f's."{c}"' for c in columns)
             if table == "element_membership":
                 elements = ",".join(literal(e) for e in REQUIRED_MEMBERSHIP_ELEMENTS)
@@ -331,35 +360,97 @@ def create_source_stage(
                     f"FROM canonical.{table} s "
                     "SEMI JOIN original_patients p USING (patient_id)"
                 )
-            db.execute("CREATE TEMP TABLE staged_relation AS " + query)
-            if events:
-                events.emit("source_stage", "table_materialized", table=table)
             selection = ",".join(f'"{c}"' for c in columns)
             manifest["schemas"][table] = [
                 [r[0], r[1]]
                 for r in db.execute(
-                    f"DESCRIBE SELECT {selection} FROM staged_relation"
+                    f"DESCRIBE SELECT {selection} FROM canonical.{table}"
                 ).fetchall()
             ]
+            partition_root = no_symlinks(staging / f".partitioned-{table}")
+            if events:
+                events.emit("source_stage", "table_write_start", table=table)
+            db.execute(
+                f"COPY ({query}) TO {literal(partition_root)} "
+                "(FORMAT PARQUET, COMPRESSION ZSTD, "
+                "PARTITION_BY (_return_bucket), WRITE_PARTITION_COLUMNS FALSE)"
+            )
+            if events:
+                events.emit(
+                    "source_stage",
+                    "table_partitioned",
+                    table=table,
+                    seconds=time.monotonic() - table_started,
+                )
+            expected_directories = {
+                f"_return_bucket={bucket}" for bucket in range(partitions)
+            }
+            no_symlinks(partition_root)
+            if partition_root.exists():
+                for child in partition_root.iterdir():
+                    if (
+                        child.name not in expected_directories
+                        or child.is_symlink()
+                        or not child.is_dir()
+                    ):
+                        raise ValueError(
+                            f"Unexpected source-stage partition directory: {table}"
+                        )
+            table_rows = 0
             for bucket in range(partitions):
                 name = f"{bucket:04d}_{table}.parquet"
                 path = staging / name
-                db.execute(
-                    f"COPY (SELECT {selection} FROM staged_relation "
-                    f"WHERE _return_bucket={bucket}) "
-                    f"TO {literal(path)} (FORMAT PARQUET, COMPRESSION ZSTD)"
+                bucket_dir = partition_root / f"_return_bucket={bucket}"
+                pieces = []
+                if bucket_dir.exists():
+                    if bucket_dir.is_symlink() or not bucket_dir.is_dir():
+                        raise ValueError(f"Invalid source-stage partition: {name}")
+                    pieces = sorted(bucket_dir.iterdir())
+                    if any(
+                        piece.is_symlink()
+                        or not piece.is_file()
+                        or piece.suffix != ".parquet"
+                        for piece in pieces
+                    ):
+                        raise ValueError(f"Invalid source-stage piece: {name}")
+                started = time.monotonic()
+                count = _complete_partition(
+                    db,
+                    pieces=pieces,
+                    target=path,
+                    columns=columns,
+                    empty_source=f"canonical.{table}",
                 )
-                fsync_file_strict(path)
-                count = db.execute(
-                    "SELECT count(*) FROM staged_relation "
-                    f"WHERE _return_bucket={bucket}"
-                ).fetchone()[0]
+                fsync_directory_strict(staging)
                 manifest["outputs"][name] = {
                     "bytes": path.stat().st_size,
                     "sha256": sha256(path),
                     "rows": count,
                 }
-            db.execute("DROP TABLE staged_relation")
+                table_rows += count
+                if events:
+                    events.emit(
+                        "source_stage",
+                        "partition_written",
+                        table=table,
+                        bucket=bucket,
+                        pieces=len(pieces),
+                        bytes=manifest["outputs"][name]["bytes"],
+                        rows=count,
+                        seconds=time.monotonic() - started,
+                    )
+            if partition_root.exists():
+                shutil.rmtree(partition_root)
+                fsync_directory_strict(staging)
+            if events:
+                events.emit(
+                    "source_stage",
+                    "table_write_complete",
+                    table=table,
+                    rows=table_rows,
+                    partitions=partitions,
+                    seconds=time.monotonic() - table_started,
+                )
         _reconcile(db, staging, manifest, events=events)
     manifest["status"] = "verified"
     write_text_atomic(

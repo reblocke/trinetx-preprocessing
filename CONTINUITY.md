@@ -34,6 +34,16 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-09-30 source partition writer repair is under review on an isolated branch
+from the frozen candidate. The prior full-size attempt was stopped with its
+terminal and partial evidence retained externally. The new writer emits durable
+partition events, reads counts from Parquet metadata and keeps independent exact
+canonical reconciliation. Failure-first execution and product E2Es pass locally,
+including 32 buckets and typed empty files. Installed-wheel verification and a
+bounded full-size source-stage experiment are still required. No redesigned
+product is accepted and rollout remains BLOCKED. Earlier entries below describe
+the historical candidate state.
+
 2026-09-29: the owner authorized the combined implementation, private acceptance
 and ordered merges, superseding the earlier integration-only session limit.
 Isolated branches start at upstream `d81a22b` and downstream `4a57843`.
