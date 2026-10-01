@@ -877,10 +877,12 @@ def _bounded_element_availability(
     encounter_coverage_path: Path,
     evidence_rows: int,
     partitions: int,
+    events=None,
 ) -> dict[tuple[str, str, str], int]:
     """Count exact encounter-element availability in disjoint key partitions."""
     if evidence_rows == 0:
         return {}
+    _validation_event(events, "availability_partition_start", stem=stem)
     root = work / f"{stem}_availability_parts"
     db.execute(
         "COPY (SELECT index_event_id,element_id,domain, "
@@ -897,18 +899,46 @@ def _bounded_element_availability(
     ).fetchone()[0]
     if projected_rows != evidence_rows:
         raise ValueError("Encounter availability projection lost rows")
+    # Route coverage once, rather than decoding the whole coverage relation for
+    # every evidence bucket. Preserve duplicates and NULLs; the parent checks
+    # and complete joined-row proof remain authoritative.
+    coverage_root = work / f"{stem}_coverage_availability_parts"
+    coverage_rows = db.execute(
+        f"SELECT count(*) FROM read_parquet({literal(encounter_coverage_path)})"
+    ).fetchone()[0]
+    db.execute(
+        "COPY (SELECT index_event_id,domain,history_state, "
+        f"hash(index_event_id)%{partitions} AS partition_id FROM "
+        f"read_parquet({literal(encounter_coverage_path)})) TO "
+        f"{literal(coverage_root)} (FORMAT PARQUET, COMPRESSION ZSTD, "
+        "PARTITION_BY (partition_id))"
+    )
+    if (
+        not list(coverage_root.rglob("*.parquet"))
+        or db.execute(
+            "SELECT count(*) FROM read_parquet("
+            f"{literal(coverage_root / '**/*.parquet')})"
+        ).fetchone()[0]
+        != coverage_rows
+    ):
+        raise ValueError("Encounter availability coverage projection lost rows")
+    _validation_event(events, "availability_partition_complete", stem=stem)
     joined_rows = 0
     observed: dict[tuple[str, str, str], int] = {}
     for bucket in range(partitions):
         part = root / f"partition_id={bucket}"
         if not part.is_dir():
             continue
+        coverage_part = coverage_root / f"partition_id={bucket}"
+        if not coverage_part.is_dir():
+            raise ValueError("Encounter availability bucket has no coverage")
+        _validation_event(events, "availability_bucket_start", stem=stem, bucket=bucket)
         groups = db.execute(
             "SELECT e.element_id,e.domain,c.history_state, "
             "count(DISTINCT e.index_event_id) AS observed, "
             "count(*) AS joined_rows "
             f"FROM read_parquet({literal(part / '*.parquet')}) e "
-            f"JOIN read_parquet({literal(encounter_coverage_path)}) c "
+            f"JOIN read_parquet({literal(coverage_part / '*.parquet')}) c "
             "ON c.index_event_id=e.index_event_id AND c.domain=e.domain "
             f"WHERE hash(c.index_event_id)%{partitions}={bucket} "
             "GROUP BY 1,2,3"
@@ -917,9 +947,17 @@ def _bounded_element_availability(
             key = (element_id, domain, state)
             observed[key] = observed.get(key, 0) + count
             joined_rows += rows
+        _validation_event(
+            events, "availability_bucket_complete", stem=stem, bucket=bucket
+        )
     if joined_rows != evidence_rows:
         raise ValueError("Encounter availability join changed row multiplicity")
     return observed
+
+
+def _validation_event(events, event, **details):
+    if events is not None:
+        events.emit("parent_validation", event, **details)
 
 
 def validate_bundle(
@@ -1014,6 +1052,7 @@ def validate_bundle(
         )
         db.execute("SET temp_directory=?", [str(work / "spill")])
         for variant in VARIANTS:
+            _validation_event(resource_events, "variant_start", variant=variant)
             stem = f"encounter_features_{variant.lower()}"
             db.execute(
                 "CREATE OR REPLACE VIEW features AS SELECT * FROM "
@@ -1098,6 +1137,9 @@ def validate_bundle(
                     )
             evidence_counts = {}
             for table in (*EVIDENCE_TABLES, "encounter_source_coverage"):
+                _validation_event(
+                    resource_events, "artifact_start", variant=variant, table=table
+                )
                 path = root / f"{stem}_{table}.parquet"
                 if table in EVIDENCE_CONTRACTS:
                     required_fields = EVIDENCE_CONTRACTS[table]
@@ -1211,12 +1253,16 @@ def validate_bundle(
                         exception=exception,
                         legacy=policy_origin != "bundle",
                     )
+                _validation_event(
+                    resource_events, "artifact_complete", variant=variant, table=table
+                )
             element_evidence_path = root / (
                 stem + "_encounter_element_evidence.parquet"
             )
             encounter_coverage_path = root / (
                 stem + "_encounter_source_coverage.parquet"
             )
+            _validation_event(resource_events, "availability_start", variant=variant)
             if distinct_count_partitions is None:
                 actual_availability = db.execute(f"""
                     WITH observed AS (
@@ -1247,6 +1293,7 @@ def validate_bundle(
                         "retained_rows"
                     ],
                     partitions=distinct_count_partitions,
+                    events=resource_events,
                 )
                 totals = {
                     (domain, state): amount
@@ -1296,8 +1343,12 @@ def validate_bundle(
                             f"differ for {element['element_id']} / "
                             f"{state_info['history_state']}"
                         )
+            _validation_event(resource_events, "availability_complete", variant=variant)
             summaries = []
             for token in ("hba1c", "systolic_bp", "egfr"):
+                _validation_event(
+                    resource_events, "summary_start", variant=variant, summary=token
+                )
                 selected = next(
                     (
                         element
@@ -1320,7 +1371,19 @@ def validate_bundle(
                         lookback_days=windows["measurement_lookback_days"],
                     )
                 )
+                _validation_event(
+                    resource_events, "summary_complete", variant=variant, summary=token
+                )
+            _validation_event(
+                resource_events, "summary_start", variant=variant, summary="normalized"
+            )
             summaries.append(_reconcile_normalized_summaries(db, root=root, stem=stem))
+            _validation_event(
+                resource_events,
+                "summary_complete",
+                variant=variant,
+                summary="normalized",
+            )
             summary_results[variant] = summaries
             results[variant] = {
                 "rows": counts[0],
@@ -1328,6 +1391,9 @@ def validate_bundle(
                 "evidence_rows": evidence_counts,
                 "pass": True,
             }
+            _validation_event(
+                resource_events, "variant_checks_complete", variant=variant
+            )
     if digest(root / "manifest.json") != manifest_hash:
         raise ValueError("Manifest changed during validation")
     validator_hash = code_identity()

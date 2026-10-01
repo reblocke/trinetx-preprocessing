@@ -21,3 +21,17 @@ retained E2Es; do not substitute these synthetic checks for private acceptance.
   solely because totals agree.
 - Validation initializes scratch before nested report creation. Success and
   actual failure both write a report with the established shape and exit code.
+
+## Parent coverage resource correction
+
+Before implementation, the remaining failure modes are lost or multiplied
+coverage rows, inconsistent key routing, changed NULL/type semantics, skipped
+zero-evidence states, and a partitioned report differing from the original
+unpartitioned validator. Progress events must stay separate from report fields.
+The retained product E2E exercises complete source/parent products, both variants
+and the selected parent memory setting; the existing independent parent-report
+comparison checks report equivalence. Small fixtures cannot establish full-size
+I/O cost or host memory pressure, so current installed private evidence remains
+required. Partition coverage once using its original key, preserve every row,
+and retain complete row-count and joined-multiplicity reconciliation. Existing
+resource stops and acceptance gates stay unchanged.

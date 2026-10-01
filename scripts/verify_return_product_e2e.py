@@ -109,7 +109,7 @@ def run(root, *, consumer=False):
         parent_bundle=parent,
         receipt_path=evidence / "cold.json",
         work_dir=root / "parent-check",
-        memory_limit_mib=12288,
+        memory_limit_mib=8192,
         events=ProgressEvents(evidence / "parent-resource-events.jsonl"),
     )
     warm = prepare_prerequisites(
@@ -121,12 +121,20 @@ def run(root, *, consumer=False):
         expected_reuse_sha256=cold.receipt_sha256,
     )
     assert not (root / "unused-parent-check").exists()
-    parent_settings = [
+    parent_events = [
         json.loads(line)
         for line in (evidence / "parent-resource-events.jsonl").read_text().splitlines()
     ]
-    assert parent_settings[-1]["effective_memory_limit"] == "12.0 GiB"
+    parent_settings = [
+        event for event in parent_events if event["event"] == "resource_settings"
+    ]
+    assert parent_settings[-1]["effective_memory_limit"] == "8.0 GiB"
     assert parent_settings[-1]["effective_threads"] == 1
+    assert {
+        event["variant"]
+        for event in parent_events
+        if event["event"] == "variant_checks_complete"
+    } == {"FULL_DATA", "AFTER_EXCLUSION"}
     assert cold.receipt["inputs"] == warm.receipt["inputs"]
     try:
         prepare_prerequisites(
@@ -322,7 +330,7 @@ def run(root, *, consumer=False):
     policy = {
         "policy_version": "1.0",
         "stage_memory_limit_mib": 12288,
-        "parent_memory_limit_mib": 12288,
+        "parent_memory_limit_mib": 8192,
         "global_memory_limit_mib": 12288,
         "worker_memory_limit_mib": 5120,
         "threads": 1,
