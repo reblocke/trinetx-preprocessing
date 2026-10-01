@@ -173,6 +173,18 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-10-01: the owner selected the three-workstream preprocessing completion
+plan: reconcile preserved local fixes, close the bounded calendar source API,
+and finish return resource/private acceptance and upstream publication. A clean
+integration candidate composes source PR #21 with return PR #24. The additive
+raw transport retains unusable matched evidence; the strict gas API is preserved.
+Resource limits are explicit and policy-bound. Local dirty work is preserved
+with a verified external recovery snapshot. Historical cache/linkage hardening
+is already integrated under the current contracts; only missing corrections are
+ported. Public/current installed/private gates are still in progress. Acceptance
+remains BLOCKED and the heartbeat remains PAUSED. No downstream study work is
+counted as completed by this preprocessing closeout.
+
 2026-09-30 source partition writer repair is under review on an isolated branch
 from the frozen candidate. The prior full-size attempt was stopped with its
 terminal and partial evidence retained externally. The new writer emits durable

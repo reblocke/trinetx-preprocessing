@@ -38,6 +38,13 @@ jobs:
             digest="$(sha256sum "$RUNNER_TEMP/$name/e2e.json" | cut -d ' ' -f 1)"
             uv run python scripts/verify_e2e.py --verify "$RUNNER_TEMP/$name" --manifest-sha256 "$digest"
           done
+      - name: Retained preprocessing closeout E2Es
+        run: |
+          for name in calendar_transport encounter_closeout; do
+            uv run python "scripts/verify_${name}_e2e.py" "$RUNNER_TEMP/$name"
+            digest="$(sha256sum "$RUNNER_TEMP/$name/receipt.json" | cut -d ' ' -f 1)"
+            uv run python "scripts/verify_${name}_e2e.py" "$RUNNER_TEMP/$name" --verify --receipt-sha256 "$digest"
+          done
       # These drivers use only the reviewed synthetic fixtures. Authentication
       # keys are local replay state and are never uploaded with public evidence.
       - name: Retain synthetic return evidence
@@ -50,4 +57,6 @@ jobs:
             ${{ runner.temp }}/return-execution
             ${{ runner.temp }}/return-product
             ${{ runner.temp }}/return-lock
+            ${{ runner.temp }}/calendar_transport
+            ${{ runner.temp }}/encounter_closeout
             !${{ runner.temp }}/return-*/**/*.key

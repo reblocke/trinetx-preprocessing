@@ -232,3 +232,14 @@ is retained as a synthetic reference route. Synthetic installed-pair evidence
 is retained externally; the new
 producer has not yet passed its required full private acceptance. No combined
 release or study endpoint selection is claimed.
+
+## Preprocessing closeout candidate (2026-10-01)
+
+The owner selected bounded calendar source-access closeout, reconciliation of
+preserved local fixes, and final return resource/private acceptance. The composed
+candidate adds [raw exact-key transport](CALENDAR_SOURCE_TRANSPORT.md), preserving
+undated/unusable records and distinct unavailable/query-failure states, without
+changing clinical eligibility or the existing strict gas API. Explicit resource
+settings preserve default callers and require matching pilot coverage. Current
+private acceptance and upstream publication remain pending; historical accepted
+products retain their recorded scope. The follow-up automation remains paused.
