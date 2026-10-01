@@ -929,6 +929,7 @@ def validate_bundle(
     linkage_policy=None,
     linkage_exception=None,
     memory_limit_mib=1024,
+    resource_events=None,
     distinct_count_partitions=None,
     validation_contract_version=VALIDATION_CONTRACT_VERSION,
 ):
@@ -1005,8 +1006,11 @@ def validate_bundle(
     with duckdb.connect(str(work / "validation.duckdb")) as db:
         from .return_resources import configure_connection
 
-        effective_resources = configure_connection(
-            db, memory_limit_mib=memory_limit_mib
+        configure_connection(
+            db,
+            memory_limit_mib=memory_limit_mib,
+            events=resource_events,
+            phase="parent_validation",
         )
         db.execute("SET temp_directory=?", [str(work / "spill")])
         for variant in VARIANTS:
@@ -1331,7 +1335,6 @@ def validate_bundle(
         "pass": True,
         "validation_contract_version": validation_contract_version,
         "precision_representations": precision_representations,
-        "resource_settings": effective_resources,
         "product_kind": manifest["kind"],
         "bundle_manifest_sha256": manifest_hash,
         "schema_version": SCHEMA_VERSION,

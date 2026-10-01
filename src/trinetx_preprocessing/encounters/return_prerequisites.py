@@ -100,6 +100,7 @@ def prepare_prerequisites(
     reuse_receipt_path: Path | None = None,
     expected_reuse_sha256: str | None = None,
     memory_limit_mib=4096,
+    events=None,
 ) -> VerifiedPrerequisites:
     from .return_resources import check_settings
 
@@ -163,6 +164,7 @@ def prepare_prerequisites(
             bundle=parent_bundle,
             work_dir=work_dir,
             memory_limit_mib=memory_limit_mib,
+            resource_events=events,
             distinct_count_partitions=32,
             validation_contract_version=DAY_PRECISION_VALIDATION_VERSION,
         )

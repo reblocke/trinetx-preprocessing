@@ -177,6 +177,7 @@ def execute(config_path: Path, *, resume=False):
             receipt_path=evidence / f"prerequisites-{attempt}.json",
             work_dir=work / f"parent-validation-{attempt}",
             memory_limit_mib=policy["parent_memory_limit_mib"],
+            events=events,
             **reuse,
         )
         if (

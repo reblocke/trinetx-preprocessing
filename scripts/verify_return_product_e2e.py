@@ -109,6 +109,8 @@ def run(root, *, consumer=False):
         parent_bundle=parent,
         receipt_path=evidence / "cold.json",
         work_dir=root / "parent-check",
+        memory_limit_mib=12288,
+        events=ProgressEvents(evidence / "parent-resource-events.jsonl"),
     )
     warm = prepare_prerequisites(
         database=source,
@@ -119,6 +121,12 @@ def run(root, *, consumer=False):
         expected_reuse_sha256=cold.receipt_sha256,
     )
     assert not (root / "unused-parent-check").exists()
+    parent_settings = [
+        json.loads(line)
+        for line in (evidence / "parent-resource-events.jsonl").read_text().splitlines()
+    ]
+    assert parent_settings[-1]["effective_memory_limit"] == "12.0 GiB"
+    assert parent_settings[-1]["effective_threads"] == 1
     assert cold.receipt["inputs"] == warm.receipt["inputs"]
     try:
         prepare_prerequisites(
