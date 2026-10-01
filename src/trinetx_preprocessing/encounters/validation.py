@@ -279,6 +279,32 @@ def _reconcile_element_evidence(db, root, stem, inventory, work):
                     f"Element availability differs: {element} {label} "
                     f"observed={matched} coverage={total}",
                 )
+    # Reconcile counts by encounter as well as totals. An absent summary row
+    # remains NULL; a present row with another element has an unmatched zero.
+    selected = [row for row in inventory if row["element_id"] in RAW_SUMMARY_ELEMENTS]
+    count_expressions = []
+    comparisons = []
+    for index, row in enumerate(selected):
+        column = next(c for c in row["columns"] if c.endswith("_record_count"))
+        count_expressions.append(
+            "count(*) FILTER (WHERE element_id="
+            f"{literal(row['element_id'])}) AS n{index}"
+        )
+        comparisons.append(f"f.{ident(column)} IS DISTINCT FROM c.n{index}")
+    if selected:
+        mismatches = db.execute(
+            "WITH counts AS (SELECT index_event_id,"
+            + ",".join(count_expressions)
+            + " FROM element_evidence GROUP BY index_event_id) "
+            "SELECT count(*) FROM features f LEFT JOIN counts c "
+            "ON f.pat_enc_hash=c.index_event_id WHERE " + " OR ".join(comparisons)
+        ).fetchone()[0]
+        if mismatches:
+            raise ArtifactInvariantError(
+                f"{stem}.parquet",
+                "catalogue_encounter_count",
+                f"Catalogue counts differ by encounter: encounters={mismatches}",
+            )
     # These raw value/date/unit triplets are selected together from one
     # baseline record. A later same-encounter context row stays in evidence.
     for element in RAW_SUMMARY_ELEMENTS:

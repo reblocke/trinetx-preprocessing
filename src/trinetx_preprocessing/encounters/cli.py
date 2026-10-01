@@ -104,6 +104,7 @@ def validate_main(argv=None):
     import json
     import sys
 
+    from ..combined_preprocessing.builder import require_safe_output_location
     from .acceptance import ACCEPTANCE_CONTRACT_VERSION
     from .validation import ArtifactInvariantError, validate_bundle
 
@@ -111,6 +112,9 @@ def validate_main(argv=None):
     for name in ("bundle", "work-dir", "report"):
         parser.add_argument("--" + name, type=Path, required=True)
     args = parser.parse_args(argv)
+    require_safe_output_location(
+        args.report, artifact_label="encounter validation report"
+    )
     try:
         result = validate_bundle(bundle=args.bundle, work_dir=args.work_dir)
     except Exception as exc:
@@ -133,8 +137,10 @@ def validate_main(argv=None):
                 }
             ],
         }
+        args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2) + "\n")
         print(f"Encounter validation failed; see {args.report}", file=sys.stderr)
         return 1
+    args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, indent=2) + "\n")
     return 0
