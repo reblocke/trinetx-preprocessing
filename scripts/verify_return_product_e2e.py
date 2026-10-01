@@ -15,6 +15,7 @@ import argparse
 import json
 import platform
 import runpy
+import shutil
 import sys
 from pathlib import Path
 
@@ -135,6 +136,66 @@ def run(root, *, consumer=False):
         for event in parent_events
         if event["event"] == "variant_checks_complete"
     } == {"FULL_DATA", "AFTER_EXCLUSION"}
+    assert {
+        event["variant"]
+        for event in parent_events
+        if event["event"] == "normalized_summary_bucket_complete"
+    } == {"FULL_DATA", "AFTER_EXCLUSION"}
+    from trinetx_preprocessing.encounters.return_parent_validation import (
+        DAY_PRECISION_VALIDATION_VERSION,
+        validate_bundle,
+    )
+
+    original_report = validate_bundle(
+        bundle=parent,
+        work_dir=root / "parent-unpartitioned-oracle",
+        validation_contract_version=DAY_PRECISION_VALIDATION_VERSION,
+    )
+    assert cold.receipt["parent_report"] == original_report
+    (evidence / "parent-unpartitioned-report.json").write_text(
+        json.dumps(original_report, sort_keys=True, indent=2) + "\n"
+    )
+    # Independent semantic failures after refreshing artifact hashes: these must
+    # reach the bounded summary proof rather than fail solely on byte identity.
+    for label, suffix, column, value in (
+        ("lab-value", "", "glp1_lab_a1c_latest", -999.0),
+        ("bp-value", "", "glp1_bp_latest_sbp", -999.0),
+        ("lab-unit", "_component_lab_evidence", "normalized_unit", "invalid"),
+    ):
+        altered = root / f"parent-normalized-negative-{label}"
+        shutil.copytree(parent, altered)
+        path = altered / f"encounter_features_full_data{suffix}.parquet"
+        table = pq.read_table(path)
+        index = table.schema.get_field_index(column)
+        assert index >= 0 and len(table) > 0
+        table = table.set_column(
+            index,
+            column,
+            pa.array([value] * len(table), type=table.schema.field(index).type),
+        )
+        pq.write_table(table, path)
+        changed_manifest = json.loads((altered / "manifest.json").read_text())
+        changed_manifest["outputs"] = {
+            n: v for n, v in artifact_inventory(altered).items() if n != "manifest.json"
+        }
+        (altered / "manifest.json").write_text(json.dumps(changed_manifest) + "\n")
+        try:
+            validate_bundle(
+                bundle=altered,
+                work_dir=root / f"parent-normalized-negative-work-{label}",
+                memory_limit_mib=1024,
+                distinct_count_partitions=4,
+                validation_contract_version=DAY_PRECISION_VALIDATION_VERSION,
+            )
+        except ValueError as error:
+            assert "normalized lab/vital summary reconciliation failed" in str(error)
+            (evidence / f"parent-normalized-negative-{label}.txt").write_text(
+                str(error) + "\n"
+            )
+        else:
+            raise AssertionError(
+                f"Bounded normalized summary accepted {label} mutation"
+            )
     assert cold.receipt["inputs"] == warm.receipt["inputs"]
     try:
         prepare_prerequisites(

@@ -1,11 +1,13 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Implement the approved combined readmissions execution redesign and strict
-return-summary consumer, then complete one final private acceptance and ordered
-upstream/downstream rollout. Preserve calendar-day contract 2.0, both original
-variants, original keys and missingness. The 4–5 hour objective is measured;
-all correctness gates and demonstrated runtime improvement remain mandatory.
+Complete the owner-approved preprocessing closeout: preserve and integrate the
+remaining local fixes, finish the bounded GLP-1 source interface, and accept and
+publish the calendar-day return product with an installed-reader handoff.
+Preserve contract 2.0, both original variants, original keys and missingness.
+The earlier combined upstream/downstream rollout remains historical scope;
+downstream dependency pinning, publication and study analysis are handoff tasks.
+All correctness gates and demonstrated runtime improvement remain mandatory.
 
 ## Constraints/Assumptions
 Preserve FULL_DATA and AFTER_EXCLUSION membership, timing, repeated encounters,
@@ -173,6 +175,13 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+The current closeout candidate is under review. Bounded parent availability and
+normalized-summary checks retain exact rows, ranking, units, NULL semantics and
+the existing report contract. Synthetic complete-product equivalence and
+negative checks pass; current private prerequisites and final return acceptance
+remain blocked. No publication is authorized by a synthetic or historical seal.
+The original checkout, accepted products and failed attempts remain preserved.
+
 2026-10-01: the owner selected the three-workstream preprocessing completion
 plan: reconcile preserved local fixes, close the bounded calendar source API,
 and finish return resource/private acceptance and upstream publication. A clean

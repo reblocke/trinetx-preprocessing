@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import duckdb
+import pyarrow.parquet as pq
 
 from ..combined_preprocessing.builder import require_safe_output_location
 from .builder import EVIDENCE_TABLES, SCHEMA_VERSION, VARIANTS, code_identity, literal
@@ -737,20 +738,30 @@ def _reconcile_element_summary(db, *, root, stem, item, token, lookback_days):
 def _reconcile_normalized_summaries(db, *, root, stem):
     lab = root / f"{stem}_component_lab_evidence.parquet"
     bp = root / f"{stem}_component_bp_evidence.parquet"
+    return _reconcile_normalized_summary_relations(
+        db,
+        features="features",
+        lab=f"read_parquet({literal(lab)})",
+        bp=f"read_parquet({literal(bp)})",
+        stem=stem,
+    )
+
+
+def _reconcile_normalized_summary_relations(db, *, features, lab, bp, stem):
     lab_bad = db.execute(f"""
         WITH ranked AS (
           SELECT index_event_id,normalized_numeric_value,event_datetime,
             row_number() OVER (PARTITION BY index_event_id
               ORDER BY event_datetime DESC,source_record_hash DESC) AS winner
-          FROM read_parquet({literal(lab)}) WHERE concept_set_id='hba1c'
+          FROM {lab} WHERE concept_set_id='hba1c'
         )
-        SELECT count(*) FROM features f LEFT JOIN ranked r
+        SELECT count(*) FROM {features} f LEFT JOIN ranked r
           ON r.index_event_id=f.pat_enc_hash AND r.winner=1
         WHERE f.glp1_lab_a1c_latest IS DISTINCT FROM r.normalized_numeric_value
            OR f.glp1_lab_a1c_latest_date IS DISTINCT FROM r.event_datetime
     """).fetchone()[0]
     lab_units_bad = db.execute(f"""
-        SELECT count(*) FROM read_parquet({literal(lab)})
+        SELECT count(*) FROM {lab}
         WHERE concept_set_id='hba1c' AND
           (normalized_unit IS DISTINCT FROM '%' OR
            normalized_numeric_value IS DISTINCT FROM CASE
@@ -763,7 +774,7 @@ def _reconcile_normalized_summaries(db, *, root, stem):
             row_number() OVER (PARTITION BY index_event_id,concept_set_id
               ORDER BY CASE WHEN upper(trim(encounter_type))='AMB' THEN 0 ELSE 1 END,
                        event_datetime DESC,source_record_hash DESC) AS winner
-          FROM read_parquet({literal(bp)})
+          FROM {bp}
         ), expected AS (
           SELECT index_event_id,
             max(normalized_numeric_value) FILTER
@@ -773,14 +784,14 @@ def _reconcile_normalized_summaries(db, *, root, stem):
             max(event_datetime) FILTER (WHERE winner=1) AS latest_bp_date
           FROM ranked GROUP BY index_event_id
         )
-        SELECT count(*) FROM features f LEFT JOIN expected e
+        SELECT count(*) FROM {features} f LEFT JOIN expected e
           ON e.index_event_id=f.pat_enc_hash
         WHERE f.glp1_bp_latest_sbp IS DISTINCT FROM e.latest_sbp
            OR f.glp1_bp_latest_dbp IS DISTINCT FROM e.latest_dbp
            OR f.glp1_bp_latest_bp_date IS DISTINCT FROM e.latest_bp_date
     """).fetchone()[0]
     bp_units_bad = db.execute(f"""
-        SELECT count(*) FROM read_parquet({literal(bp)})
+        SELECT count(*) FROM {bp}
         WHERE normalized_numeric_value IS DISTINCT FROM CASE
           WHEN lower(trim(coalesce(units_of_measure,''))) IN
             ('mmhg','mm hg','mm_hg','mm[hg]','torr') THEN raw_numeric_value
@@ -811,6 +822,106 @@ def _reconcile_normalized_summaries(db, *, root, stem):
             "not exhaustive phenotype validation"
         ),
     }
+
+
+def _bounded_normalized_summaries(
+    db, *, root, work, stem, variant, partitions, events=None
+):
+    """Run the unchanged normalized-summary proof on disjoint original keys."""
+    columns = {
+        "features": (
+            "pat_enc_hash,glp1_lab_a1c_latest,glp1_lab_a1c_latest_date,"
+            "glp1_bp_latest_sbp,glp1_bp_latest_dbp,glp1_bp_latest_bp_date"
+        ),
+        "lab": (
+            "index_event_id,concept_set_id,normalized_numeric_value,event_datetime,"
+            "source_record_hash,normalized_unit,units_of_measure,raw_numeric_value"
+        ),
+        "bp": (
+            "index_event_id,concept_set_id,normalized_numeric_value,event_datetime,"
+            "source_record_hash,encounter_type,units_of_measure,raw_numeric_value"
+        ),
+    }
+    sources = {
+        "features": root / f"{stem}.parquet",
+        "lab": root / f"{stem}_component_lab_evidence.parquet",
+        "bp": root / f"{stem}_component_bp_evidence.parquet",
+    }
+    roots = {}
+    schemas = {}
+    _validation_event(events, "normalized_summary_partition_start", variant=variant)
+    for name, source in sources.items():
+        selection = columns[name]
+        key = "pat_enc_hash" if name == "features" else "index_event_id"
+        relation = f"read_parquet({literal(source)})"
+        schemas[name] = [
+            row[:2]
+            for row in db.execute(
+                f"DESCRIBE SELECT {selection} FROM {relation}"
+            ).fetchall()
+        ]
+        rows = pq.ParquetFile(source).metadata.num_rows
+        part_root = work / f"{stem}_normalized_{name}_parts"
+        roots[name] = part_root
+        if rows:
+            db.execute(
+                f"COPY (SELECT {selection},hash({key})%{partitions} AS partition_id "
+                f"FROM {relation}) TO {literal(part_root)} "
+                "(FORMAT PARQUET, COMPRESSION ZSTD, PARTITION_BY (partition_id))"
+            )
+            files = list(part_root.rglob("*.parquet"))
+            if (
+                not files
+                or sum(pq.ParquetFile(p).metadata.num_rows for p in files) != rows
+            ):
+                raise ValueError("Normalized-summary projection changed row total")
+    _validation_event(events, "normalized_summary_partition_complete", variant=variant)
+    report = None
+    for bucket in range(partitions):
+        _validation_event(
+            events, "normalized_summary_bucket_start", variant=variant, bucket=bucket
+        )
+        for name, source in sources.items():
+            selection = columns[name]
+            key = "pat_enc_hash" if name == "features" else "index_event_id"
+            part = roots[name] / f"partition_id={bucket}"
+            relation = (
+                f"read_parquet({literal(part / '*.parquet')}, hive_partitioning=false)"
+                if part.is_dir()
+                else f"read_parquet({literal(source)})"
+            )
+            predicate = "" if part.is_dir() else " WHERE FALSE"
+            view = f"normalized_summary_{name}"
+            db.execute(
+                f"CREATE OR REPLACE TEMP VIEW {view} AS "
+                f"SELECT {selection} FROM {relation}{predicate}"
+            )
+            actual_schema = [
+                row[:2] for row in db.execute(f"DESCRIBE {view}").fetchall()
+            ]
+            if actual_schema != schemas[name]:
+                raise ValueError("Normalized-summary projection changed logical types")
+            if db.execute(
+                f"SELECT count(*) FROM {view} WHERE hash({key})%{partitions} "
+                f"IS DISTINCT FROM {bucket}"
+            ).fetchone()[0]:
+                raise ValueError("Normalized-summary projection changed key routing")
+        checked = _reconcile_normalized_summary_relations(
+            db,
+            features="normalized_summary_features",
+            lab="normalized_summary_lab",
+            bp="normalized_summary_bp",
+            stem=stem,
+        )
+        # Every reported numeric field is an exact mismatch count. Each bucket
+        # must have zero mismatches; the unchanged report contains those zeros.
+        if report is not None and checked != report:
+            raise ValueError("Normalized-summary bucket reports differ")
+        report = checked
+        _validation_event(
+            events, "normalized_summary_bucket_complete", variant=variant, bucket=bucket
+        )
+    return report
 
 
 def _bounded_element_distinct_counts(
@@ -1377,7 +1488,19 @@ def validate_bundle(
             _validation_event(
                 resource_events, "summary_start", variant=variant, summary="normalized"
             )
-            summaries.append(_reconcile_normalized_summaries(db, root=root, stem=stem))
+            summaries.append(
+                _reconcile_normalized_summaries(db, root=root, stem=stem)
+                if distinct_count_partitions is None
+                else _bounded_normalized_summaries(
+                    db,
+                    root=root,
+                    work=work,
+                    stem=stem,
+                    variant=variant,
+                    partitions=distinct_count_partitions,
+                    events=resource_events,
+                )
+            )
             _validation_event(
                 resource_events,
                 "summary_complete",

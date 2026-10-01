@@ -35,3 +35,18 @@ I/O cost or host memory pressure, so current installed private evidence remains
 required. Partition coverage once using its original key, preserve every row,
 and retain complete row-count and joined-multiplicity reconciliation. Existing
 resource stops and acceptance gates stay unchanged.
+
+## Parent normalized-summary resource correction
+
+Before implementation, the remaining failure modes are splitting a ranking key
+across buckets, dropping or multiplying component rows, changing winner ordering
+or raw unit/NULL rules, skipping unmatched feature rows or empty component
+buckets, and a bounded result differing from the independent unpartitioned
+report. Route the narrow original feature/lab/BP columns once by the original
+encounter key; preserve their types and rows. Keep the existing summary SQL and
+report fields, with progress events outside the report. The retained product E2E
+must compare its complete parent report with the unpartitioned path and reject
+independent mutations of normalized values/dates/units through the bounded path.
+Existing small fixtures cannot expose full-size ranking/join memory pressure;
+current private measurements remain required. No resource screen, scientific
+definition or acceptance gate is relaxed.
