@@ -1003,8 +1003,11 @@ def validate_bundle(
     coverage_results = {}
     precision_representations = {}
     with duckdb.connect(str(work / "validation.duckdb")) as db:
-        db.execute(f"SET memory_limit='{memory_limit_mib}MiB'")
-        db.execute("SET threads=1")
+        from .return_resources import configure_connection
+
+        effective_resources = configure_connection(
+            db, memory_limit_mib=memory_limit_mib
+        )
         db.execute("SET temp_directory=?", [str(work / "spill")])
         for variant in VARIANTS:
             stem = f"encounter_features_{variant.lower()}"
@@ -1328,6 +1331,7 @@ def validate_bundle(
         "pass": True,
         "validation_contract_version": validation_contract_version,
         "precision_representations": precision_representations,
+        "resource_settings": effective_resources,
         "product_kind": manifest["kind"],
         "bundle_manifest_sha256": manifest_hash,
         "schema_version": SCHEMA_VERSION,

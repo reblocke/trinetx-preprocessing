@@ -311,6 +311,15 @@ def run(root, *, consumer=False):
 
     from trinetx_preprocessing.encounters.return_evidence import component_identities
 
+    policy = {
+        "policy_version": "1.0",
+        "stage_memory_limit_mib": 12288,
+        "parent_memory_limit_mib": 12288,
+        "global_memory_limit_mib": 12288,
+        "worker_memory_limit_mib": 5120,
+        "threads": 1,
+        "max_workers": 2,
+    }
     controller_reference = json.loads(accepted_path.read_text())
     controller_reference.update(build_seconds=1_000_000, validate_seconds=1_000_000)
     controller_reference_path = evidence / "controller-reference-fixture.json"
@@ -322,6 +331,7 @@ def run(root, *, consumer=False):
                 "status": "passed",
                 "component_identities": component_identities(),
                 "verified_workers": [1, 2],
+                "resource_policy": policy,
                 "partitions": 2,
                 "forecast_total_seconds": 60,
                 "scope": "synthetic controller fixture; no private resource claim",
@@ -339,6 +349,7 @@ def run(root, *, consumer=False):
                 "resource_pilot_path": str(pilot.resolve()),
                 "trusted_resource_pilot_sha256": sha256(pilot),
                 "workers": 2,
+                "resource_policy": policy,
                 "partitions": 2,
                 "database": str(source.resolve()),
                 "parent_bundle": str(parent.resolve()),
@@ -366,6 +377,46 @@ def run(root, *, consumer=False):
     ]
     environment = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     original_config = json.loads(config.read_text())
+    # A pilot for a different or unrecorded profile must fail before input reads.
+    from trinetx_preprocessing.encounters.return_controller import execute
+
+    for stale_policy in (None, {**policy, "stage_memory_limit_mib": 3072}):
+        stale = json.loads(pilot.read_text())
+        stale["resource_policy"] = stale_policy
+        stale_path = evidence / ("stale-policy-" + str(stale_policy is None) + ".json")
+        stale_path.write_text(json.dumps(stale) + "\n")
+        invalid_config = evidence / (
+            "stale-config-" + str(stale_policy is None) + ".json"
+        )
+        invalid_config.write_text(
+            json.dumps(
+                {
+                    **original_config,
+                    "resource_pilot_path": str(stale_path),
+                    "trusted_resource_pilot_sha256": sha256(stale_path),
+                    "database": str(root / "absent-canonical"),
+                }
+            )
+            + "\n"
+        )
+        try:
+            execute(invalid_config)
+        except ValueError as exc:
+            assert "Resource pilot" in str(exc)
+        else:
+            raise AssertionError("Uncovered resource policy accepted")
+    for invalid in (True, 0, -1, "12288", 12289):
+        invalid_policy = {**policy, "stage_memory_limit_mib": invalid}
+        bad_config = evidence / ("invalid-policy-" + str(invalid) + ".json")
+        bad_config.write_text(
+            json.dumps({**original_config, "resource_policy": invalid_policy}) + "\n"
+        )
+        try:
+            execute(bad_config)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Invalid operational policy accepted")
     changed = json.loads(cold.receipt_path.read_text())
     changed["dependencies"]["parent_validator"] = "changed-validator"
     changed_path = evidence / "changed-prerequisite-dependency.json"
@@ -491,6 +542,31 @@ def run(root, *, consumer=False):
             ]
         )
         == 4
+    )
+    settings = [
+        json.loads(line)
+        for line in (root / "controller-run/evidence/events.jsonl")
+        .read_text()
+        .splitlines()
+        if json.loads(line).get("event") == "resource_settings"
+    ]
+    assert {x["phase"] for x in settings} >= {
+        "source_stage",
+        "build",
+        "validation",
+        "global_validation",
+        "reference_comparison",
+    }
+    assert all(x["effective_threads"] == 1 for x in settings)
+    assert all(
+        x["requested_memory_limit_mib"]
+        == (5120 if x["phase"] in ("build", "validation") else 12288)
+        for x in settings
+    )
+    assert all(
+        x["effective_memory_limit"]
+        == ("5.0 GiB" if x["phase"] in ("build", "validation") else "12.0 GiB")
+        for x in settings
     )
     return {
         "status": "passed",

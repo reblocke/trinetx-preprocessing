@@ -262,3 +262,17 @@ not cold prerequisite execution. It includes recovery downtime within the new
 run, but excludes prior candidate time; retain and report that earlier time
 separately. The product E2E must inspect the emitted runtime receipt for these
 distinctions before any acceptance record is described as a cold measurement.
+
+## Explicit resource policy
+
+The controller accepts an optional complete `resource_policy` object, version
+`1.0`, with `stage_memory_limit_mib`, `parent_memory_limit_mib`,
+`global_memory_limit_mib`, `worker_memory_limit_mib`, `threads` and `max_workers`.
+Absent policy retains existing operational defaults. An opt-in profile uses
+12,288 MiB for serialized heavy phases and 5,120 MiB per worker, at most two
+workers and initially one engine thread. Invalid settings are rejected before
+input reads; the trusted resource pilot must cover the same effective policy.
+Stage/build/validation operational reuse and frozen configuration bind policy.
+Requested/effective settings and expected-partition-write timings are retained
+in runtime evidence. Limits do not replace independent exact typed row, routing,
+key, source-byte, reference or acceptance proofs.

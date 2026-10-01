@@ -88,7 +88,12 @@ class ProgressEvents:
         )
 
 
-def source_stage_identity(inputs: VerifiedPrerequisites, partitions: int) -> dict:
+def source_stage_identity(
+    inputs: VerifiedPrerequisites, partitions: int, resource_limits=None
+) -> dict:
+    from .return_resources import resource_policy
+
+    policy = resource_policy(resource_limits)
     identities = component_identities()
     return {
         "inputs_sha256": canonical_digest(inputs.receipt["inputs"]),
@@ -96,6 +101,7 @@ def source_stage_identity(inputs: VerifiedPrerequisites, partitions: int) -> dic
         "environment": identities["environment"],
         "partitions": partitions,
         "stage_contract_version": "1.0",
+        "resource_policy": policy,
     }
 
 
@@ -113,18 +119,32 @@ def _production_identities(inputs, partitions):
     }
 
 
-def _connection(work_dir, *, memory_limit_mib=3072):
+def _connection(
+    work_dir, *, memory_limit_mib=3072, threads=1, events=None, phase="resources"
+):
+    from .return_resources import check_settings, configure_connection
+
+    check_settings(memory_limit_mib, threads)
     work_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     db = duckdb.connect()
-    db.execute("SET threads=1")
-    db.execute(f"SET memory_limit='{memory_limit_mib}MiB'")
+    configure_connection(
+        db,
+        memory_limit_mib=memory_limit_mib,
+        threads=threads,
+        events=events,
+        phase=phase,
+    )
     db.execute("SET temp_directory=?", [str(work_dir)])
     return db
 
 
 def _build_one(job):
     started = time.monotonic()
-    with _connection(Path(job["scratch"])) as db:
+    with _connection(
+        Path(job["scratch"]),
+        memory_limit_mib=job["resource_policy"]["worker_memory_limit_mib"],
+        threads=job["resource_policy"]["threads"],
+    ) as db:
         if job["stage"] is None:
             db.execute(f"ATTACH {literal(job['database'])} AS preprocessed (READ_ONLY)")
         else:
@@ -139,6 +159,13 @@ def _build_one(job):
             "CREATE TEMP VIEW index_file AS SELECT * FROM read_parquet("
             + literal(job["index_file"])
             + ")"
+        )
+        from .return_resources import configure_connection
+
+        effective = configure_connection(
+            db,
+            memory_limit_mib=job["resource_policy"]["worker_memory_limit_mib"],
+            threads=job["resource_policy"]["threads"],
         )
         result = build_partition_v2(
             db,
@@ -157,7 +184,12 @@ def _build_one(job):
         ):
             raise ValueError("Produced return schema differs from frozen v2 contract")
         fsync_file_strict(path)
-    return {"pass": True, "artifacts": result, "seconds": time.monotonic() - started}
+    return {
+        "pass": True,
+        "artifacts": result,
+        "seconds": time.monotonic() - started,
+        "resources": effective,
+    }
 
 
 def run_partition_jobs(worker, jobs, workers):
@@ -200,8 +232,13 @@ def build_returns_v2(
     source_stage: Path | None = None,
     expected_stage_sha256: str | None = None,
     events: ProgressEvents,
+    resource_limits=None,
 ) -> dict:
     """Build through verified prerequisites; preserve the direct reference route."""
+    from .return_resources import check_workers, resource_policy
+
+    policy = resource_policy(resource_limits)
+    check_workers(policy, workers)
     if type(partitions) is not int or not 1 <= partitions <= 1024:
         raise ValueError("Invalid patient partition count")
     if (source_stage is None) != (expected_stage_sha256 is None):
@@ -220,7 +257,7 @@ def build_returns_v2(
         raise FileExistsError("Completed return bundle cannot be overwritten")
     inputs.check_unchanged()
     production = _production_identities(inputs, partitions)
-    stage_identity = source_stage_identity(inputs, partitions)
+    stage_identity = source_stage_identity(inputs, partitions, policy)
     if source_stage is not None:
         verify_source_stage(
             source_stage,
@@ -228,6 +265,7 @@ def build_returns_v2(
             identity=stage_identity,
         )
     binding = {
+        "resource_policy": policy,
         "inputs_sha256": canonical_digest(inputs.receipt["inputs"]),
         "production": production,
         "partitions": partitions,
@@ -280,6 +318,7 @@ def build_returns_v2(
                     shutil.move(str(no_symlinks(p)), str(archive / p.name))
             jobs.append(
                 {
+                    "resource_policy": policy,
                     "variant": variant,
                     "bucket": bucket,
                     "partitions": partitions,
@@ -307,7 +346,16 @@ def build_returns_v2(
             t: staging / f"{job['variant'].lower()}_{job['bucket']:04d}_{t}.parquet"
             for t in TABLES
         }
-        checkpoints.complete(key, binding, paths, {"pass": True})
+        checkpoints.complete(
+            key, binding, paths, {"pass": True, "resources": result["resources"]}
+        )
+        events.emit(
+            "build",
+            "resource_settings",
+            variant=job["variant"],
+            bucket=job["bucket"],
+            **result["resources"],
+        )
         progress["completed"][key] = result["artifacts"]
         write_text_atomic(
             progress_path, json.dumps(progress, sort_keys=True, indent=2) + "\n"

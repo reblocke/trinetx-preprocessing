@@ -78,11 +78,28 @@ COLUMNS = {
 }
 
 
-def _connect(database, parent_bundle, work_dir, partitions):
+def _connect(
+    database,
+    parent_bundle,
+    work_dir,
+    partitions,
+    *,
+    memory_limit_mib=3072,
+    threads=1,
+    events=None,
+):
+    from .return_resources import check_settings, configure_connection
+
+    check_settings(memory_limit_mib, threads)
     no_symlinks(work_dir).mkdir(mode=0o700, parents=True, exist_ok=False)
     db = duckdb.connect()
-    db.execute("SET threads=1")
-    db.execute("SET memory_limit='3072MiB'")
+    configure_connection(
+        db,
+        memory_limit_mib=memory_limit_mib,
+        threads=threads,
+        events=events,
+        phase="source_stage",
+    )
     db.execute("SET temp_directory=?", [str(work_dir)])
     db.execute(f"ATTACH {literal(no_symlinks(database))} AS canonical (READ_ONLY)")
     files = [
@@ -189,6 +206,9 @@ def verify_source_stage(
     database: Path | None = None,
     parent_bundle: Path | None = None,
     work_dir: Path | None = None,
+    memory_limit_mib=3072,
+    threads=1,
+    events=None,
 ) -> dict:
     """Rehash every file; optionally repeat independent exact canonical proof."""
     manifest = _read_manifest(stage, expected_manifest_sha256, identity)
@@ -207,8 +227,16 @@ def verify_source_stage(
             for p in (stage, parent_bundle, database.parent)
         ):
             raise ValueError("Source-stage verification work overlaps an input")
-        with _connect(database, parent_bundle, work_dir, manifest["partitions"]) as db:
-            _reconcile(db, stage, manifest, work_dir)
+        with _connect(
+            database,
+            parent_bundle,
+            work_dir,
+            manifest["partitions"],
+            memory_limit_mib=memory_limit_mib,
+            threads=threads,
+            events=events,
+        ) as db:
+            _reconcile(db, stage, manifest, work_dir, events)
     if sha256(stage / "manifest.json") != expected_manifest_sha256:
         raise ValueError("Source-stage manifest changed during verification")
     return manifest
@@ -241,11 +269,21 @@ def _reconcile(db, stage, manifest, work_dir, events=None):
         ]:
             raise ValueError(f"Source-stage canonical types differ: {table}")
         expected_root = no_symlinks(work_dir / f"expected-{table}-{uuid.uuid4().hex}")
+        expected_started = time.monotonic()
+        if events:
+            events.emit("source_stage", "expected_partition_write_start", table=table)
         db.execute(
             f"COPY ({expected}) TO {literal(expected_root)} "
             "(FORMAT PARQUET, COMPRESSION ZSTD, "
             "PARTITION_BY (_return_bucket), WRITE_PARTITION_COLUMNS FALSE)"
         )
+        if events:
+            events.emit(
+                "source_stage",
+                "expected_partition_write_complete",
+                table=table,
+                seconds=time.monotonic() - expected_started,
+            )
         expected_directories = {f"_return_bucket={bucket}" for bucket in range(n)}
         if expected_root.exists():
             for child in expected_root.iterdir():
@@ -421,8 +459,13 @@ def create_source_stage(
     partitions: int = 32,
     identity: dict,
     events=None,
+    memory_limit_mib=3072,
+    threads=1,
 ) -> dict:
     """Scan canonical history into reusable shards, then prove all typed rows."""
+    from .return_resources import check_settings
+
+    check_settings(memory_limit_mib, threads)
     if type(partitions) is not int or not 1 <= partitions <= 1024:
         raise ValueError("Invalid patient partition count")
     output_dir, work_dir = no_symlinks(output_dir), no_symlinks(work_dir)
@@ -448,7 +491,15 @@ def create_source_stage(
     }
     if events:
         events.emit("source_stage", "patient_routing_start")
-    with _connect(database, parent_bundle, work_dir, partitions) as db:
+    with _connect(
+        database,
+        parent_bundle,
+        work_dir,
+        partitions,
+        memory_limit_mib=memory_limit_mib,
+        threads=threads,
+        events=events,
+    ) as db:
         if events:
             events.emit("source_stage", "patient_routing_complete")
         for table, columns in COLUMNS.items():

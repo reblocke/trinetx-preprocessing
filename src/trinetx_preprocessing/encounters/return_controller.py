@@ -38,6 +38,10 @@ def execute(config_path: Path, *, resume=False):
         or config.get("scope") != "private_candidate_acceptance"
     ):
         raise ValueError("Unsupported return execution configuration")
+    from .return_resources import check_workers, resource_policy
+
+    policy = resource_policy(config.get("resource_policy"))
+    check_workers(policy, config.get("workers", 1))
     current = component_identities()
     if config.get("frozen_component_identities") != current:
         raise ValueError("Execution differs from the explicitly frozen candidate")
@@ -49,6 +53,7 @@ def execute(config_path: Path, *, resume=False):
     partitions = config.get("partitions", 32)
     if (
         pilot.get("status") != "passed"
+        or resource_policy(pilot.get("resource_policy")) != policy
         or any(
             pilot.get("component_identities", {}).get(role) != current[role]
             for role in (
@@ -124,6 +129,7 @@ def execute(config_path: Path, *, resume=False):
         "resume" if resume else "start",
         config_sha256=config_hash,
         attempt=attempt,
+        resource_policy=policy,
     )
     try:
         accepted = phases.authenticated_record("product-acceptance", run_binding)
@@ -170,6 +176,7 @@ def execute(config_path: Path, *, resume=False):
             parent_bundle=parent,
             receipt_path=evidence / f"prerequisites-{attempt}.json",
             work_dir=work / f"parent-validation-{attempt}",
+            memory_limit_mib=policy["parent_memory_limit_mib"],
             **reuse,
         )
         if (
@@ -185,7 +192,7 @@ def execute(config_path: Path, *, resume=False):
         )
         events.emit("prerequisites", "complete", receipt_sha256=inputs.receipt_sha256)
         stage = run_root / "source-stage"
-        stage_binding = source_stage_identity(inputs, partitions)
+        stage_binding = source_stage_identity(inputs, partitions, policy)
         stage_files = {"manifest": stage / "manifest.json"}
         if phases.reusable("source-stage", stage_binding, stage_files):
             trusted_stage = sha256(stage / "manifest.json")
@@ -204,6 +211,8 @@ def execute(config_path: Path, *, resume=False):
                 work_dir=work / f"source-stage-{attempt}",
                 partitions=partitions,
                 identity=stage_binding,
+                memory_limit_mib=policy["stage_memory_limit_mib"],
+                threads=policy["threads"],
                 events=events,
             )
             phases.complete("source-stage", stage_binding, stage_files, {"pass": True})
@@ -217,6 +226,7 @@ def execute(config_path: Path, *, resume=False):
                 checkpoint_key_path=evidence / "producer.key",
                 partitions=partitions,
                 workers=workers,
+                resource_limits=policy,
                 source_stage=stage,
                 expected_stage_sha256=trusted_stage,
                 events=events,
@@ -251,6 +261,7 @@ def execute(config_path: Path, *, resume=False):
             checkpoint_key_path=evidence / "validator.key",
             report_path=validation_path,
             workers=workers,
+            resource_limits=policy,
             source_stage=stage,
             expected_stage_sha256=trusted_stage,
             events=events,
@@ -268,6 +279,8 @@ def execute(config_path: Path, *, resume=False):
             ),
             work_dir=work / f"reference-{attempt}",
             report_path=comparison_path,
+            memory_limit_mib=policy["global_memory_limit_mib"],
+            threads=policy["threads"],
             events=events,
         )
         unchanged_path = evidence / f"unchanged-inputs-{attempt}.json"
@@ -280,6 +293,7 @@ def execute(config_path: Path, *, resume=False):
         baseline_seconds = baseline["build_seconds"] + baseline["validate_seconds"]
         total = time.time() - started
         runtime = {
+            "resource_policy": policy,
             "status": "passed" if 0 < total < baseline_seconds else "failed",
             "bundle_manifest_sha256": sha256(bundle / "manifest.json"),
             "candidate_total_seconds": total,

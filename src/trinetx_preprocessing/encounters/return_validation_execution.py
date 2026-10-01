@@ -36,7 +36,11 @@ def _validate_one(job):
     from .return_source_stage import attach_source_partition
 
     started = time.monotonic()
-    with _connection(Path(job["scratch"])) as db:
+    with _connection(
+        Path(job["scratch"]),
+        memory_limit_mib=job["resource_policy"]["worker_memory_limit_mib"],
+        threads=job["resource_policy"]["threads"],
+    ) as db:
         if job["stage"] is None:
             db.execute(f"ATTACH {literal(job['database'])} AS preprocessed (READ_ONLY)")
         else:
@@ -66,9 +70,21 @@ def _validate_one(job):
             f"FROM read_parquet({literal(job['parent_file'])}) "
             f"WHERE hash(patient_id::VARCHAR)%{job['partitions']}={job['bucket']}"
         )
+        from .return_resources import configure_connection
+
+        effective = configure_connection(
+            db,
+            memory_limit_mib=job["resource_policy"]["worker_memory_limit_mib"],
+            threads=job["resource_policy"]["threads"],
+        )
         validate_partition_materialized(db)
         rows = db.execute("SELECT count(*) FROM summary").fetchone()[0]
-    return {"pass": True, "rows": rows, "seconds": time.monotonic() - started}
+    return {
+        "pass": True,
+        "rows": rows,
+        "seconds": time.monotonic() - started,
+        "resources": effective,
+    }
 
 
 def validate_return_product(
@@ -82,10 +98,16 @@ def validate_return_product(
     source_stage=None,
     expected_stage_sha256=None,
     events,
+    resource_limits=None,
 ):
     """Independently validate all partitions and mandatory global product proofs."""
     import json
     import uuid
+
+    from .return_resources import check_workers, resource_policy
+
+    policy = resource_policy(resource_limits)
+    check_workers(policy, workers)
 
     import pyarrow.parquet as pq
 
@@ -166,7 +188,13 @@ def validate_return_product(
     for name in expected:
         verify_return_output(bundle, manifest, name)
     dictionary = json.loads((bundle / "data_dictionary.json").read_text())
-    with _connection(work_dir / f"global-{uuid.uuid4().hex}") as db:
+    with _connection(
+        work_dir / f"global-{uuid.uuid4().hex}",
+        memory_limit_mib=policy["global_memory_limit_mib"],
+        threads=policy["threads"],
+        events=events,
+        phase="global_validation",
+    ) as db:
         for variant in VARIANTS:
             for bucket in range(partitions):
                 for table in TABLES:
@@ -226,7 +254,7 @@ def validate_return_product(
             }
             if progress["completed"][f"{variant}:{bucket}"] != expected_part:
                 raise ValueError("Return producer artifact receipt differs")
-    stage_identity = source_stage_identity(inputs, partitions)
+    stage_identity = source_stage_identity(inputs, partitions, policy)
     if (source_stage is None) != (expected_stage_sha256 is None):
         raise ValueError(
             "Validation stage requires an explicit trusted manifest digest"
@@ -245,6 +273,7 @@ def validate_return_product(
         "validator_environment": current["environment"],
     }
     binding = {
+        "resource_policy": policy,
         "manifest_sha256": manifest_hash,
         "identities": identities,
         "input_bytes_sha256": canonical_digest(inputs.receipt["inputs"]),
@@ -270,6 +299,7 @@ def validate_return_product(
                 continue
             jobs.append(
                 {
+                    "resource_policy": policy,
                     "variant": variant,
                     "bucket": bucket,
                     "partitions": partitions,
@@ -306,6 +336,13 @@ def validate_return_product(
             f"{job['variant']}:{job['bucket']}", binding, artifacts, result
         )
         completed += 1
+        events.emit(
+            "validation",
+            "resource_settings",
+            variant=job["variant"],
+            bucket=job["bucket"],
+            **result["resources"],
+        )
         events.completed(
             "validation",
             job["variant"],

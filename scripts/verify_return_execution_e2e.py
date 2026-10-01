@@ -106,6 +106,31 @@ def run(root):
                 f"COPY (SELECT * FROM fixture_index{clause}) "
                 f"TO {literal(target)} (FORMAT PARQUET)"
             )
+    # Opt-in settings must be effective before canonical rows are attached.
+    with _connect(
+        source,
+        parent,
+        root / "profile-connection",
+        3,
+        memory_limit_mib=12288,
+        threads=1,
+    ) as profile_db:
+        assert (
+            profile_db.execute("SELECT current_setting('memory_limit')").fetchone()[0]
+            == "12.0 GiB"
+        )
+        assert (
+            profile_db.execute("SELECT current_setting('threads')").fetchone()[0] == 1
+        )
+    for invalid in (True, 0, -1, "12288"):
+        try:
+            _connect(
+                source, parent, root / "invalid-profile", 3, memory_limit_mib=invalid
+            )
+        except ValueError:
+            assert not (root / "invalid-profile").exists()
+        else:
+            raise AssertionError("Invalid stage budget was accepted")
     stage = root / "stage"
     identity = {"source_fixture_sha256": sha256(source)}
     receipt = create_source_stage(

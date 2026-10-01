@@ -82,8 +82,13 @@ def compare_retained_reference(
     work_dir: Path,
     report_path: Path,
     events=None,
+    memory_limit_mib=3072,
+    threads=1,
 ) -> dict:
     """Compare all six typed row multisets for both independent variants."""
+    from .return_resources import check_settings
+
+    check_settings(memory_limit_mib, threads)
     bundle, reference_bundle = no_symlinks(bundle), no_symlinks(reference_bundle)
     report_path, work_dir = no_symlinks(report_path), no_symlinks(work_dir)
     for path in (report_path.parent, work_dir):
@@ -137,7 +142,13 @@ def compare_retained_reference(
             raise ValueError("Retained reference source/parent provenance differs")
     groups = math.gcd(candidate["partitions"], reference["partitions"])
     checked = []
-    with _connection(work_dir) as db:
+    with _connection(
+        work_dir,
+        memory_limit_mib=memory_limit_mib,
+        threads=threads,
+        events=events,
+        phase="reference_comparison",
+    ) as db:
         for variant in VARIANTS:
             for table in TABLES:
                 for bucket in range(groups):

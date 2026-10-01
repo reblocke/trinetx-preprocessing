@@ -99,7 +99,11 @@ def prepare_prerequisites(
     work_dir: Path,
     reuse_receipt_path: Path | None = None,
     expected_reuse_sha256: str | None = None,
+    memory_limit_mib=4096,
 ) -> VerifiedPrerequisites:
+    from .return_resources import check_settings
+
+    check_settings(memory_limit_mib)
     database, parent_bundle = no_symlinks(database), no_symlinks(parent_bundle)
     receipt_path, work_dir = no_symlinks(receipt_path), no_symlinks(work_dir)
     for path in (receipt_path.parent, work_dir):
@@ -151,14 +155,14 @@ def prepare_prerequisites(
         source_report, parent_report = old["source_report"], old["parent_report"]
         reused_from = expected_reuse_sha256
     else:
-        source = validate_cohort_source(database)
+        source = validate_cohort_source(database, memory_limit_mib=memory_limit_mib)
         if not source.valid or source.metadata is None:
             raise ValueError("Canonical cohort source failed validation")
         _require_source_capabilities(database)
         parent_report = validate_bundle(
             bundle=parent_bundle,
             work_dir=work_dir,
-            memory_limit_mib=4096,
+            memory_limit_mib=memory_limit_mib,
             distinct_count_partitions=32,
             validation_contract_version=DAY_PRECISION_VALIDATION_VERSION,
         )
