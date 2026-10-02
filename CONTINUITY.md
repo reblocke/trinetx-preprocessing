@@ -15,6 +15,18 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner approved worker lifetime recovery through the upstream acceptance,
+publication and installed-reader endpoint, while downstream work proceeds
+independently. Production and independent validation now use bounded single-job
+spawned executors, including the one-worker route. A result is exposed only after
+its executor joins; submitted work is drained on failure or iterator closure.
+Native lifecycle events supplement the existing resource observations. Locally
+defined progress callbacks remain in the controller and are not pickled.
+Conservative component invalidation is preserved: current installed/private
+evidence is required after the shared scheduler change. Historical failed
+attempts remain immutable and unaccepted. The underlying native allocation
+mechanism is UNCONFIRMED. Private acceptance and publication remain pending.
+
 A read-only selected-patient diagnosis/lab/procedure history projection now preserves
 all catalog-matched raw rows across encounters and an explicit no-match marker.
 It requires an exact one-index-per-patient key relation and declared catalog

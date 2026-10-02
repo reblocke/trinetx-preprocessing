@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import closing
+
 from . import return_validation_v2 as reference
 
 
@@ -324,32 +326,35 @@ def validate_return_product(
         reused_partitions=completed,
         workers=workers,
     )
-    for index, (job, result) in enumerate(
-        run_partition_jobs(_validate_one, jobs, workers)
-    ):
-        inputs.check_unchanged()
-        artifacts = {
-            t: bundle / f"{job['variant'].lower()}_{job['bucket']:04d}_{t}.parquet"
-            for t in TABLES
-        }
-        checkpoints.complete(
-            f"{job['variant']}:{job['bucket']}", binding, artifacts, result
+    with closing(
+        run_partition_jobs(
+            _validate_one, jobs, workers, events=events, phase="validation"
         )
-        completed += 1
-        events.emit(
-            "validation",
-            "resource_settings",
-            variant=job["variant"],
-            bucket=job["bucket"],
-            **result["resources"],
-        )
-        events.completed(
-            "validation",
-            job["variant"],
-            job["bucket"],
-            result["seconds"],
-            len(jobs) - index - 1,
-        )
+    ) as results:
+        for index, (job, result) in enumerate(results):
+            inputs.check_unchanged()
+            artifacts = {
+                t: bundle / f"{job['variant'].lower()}_{job['bucket']:04d}_{t}.parquet"
+                for t in TABLES
+            }
+            checkpoints.complete(
+                f"{job['variant']}:{job['bucket']}", binding, artifacts, result
+            )
+            completed += 1
+            events.emit(
+                "validation",
+                "resource_settings",
+                variant=job["variant"],
+                bucket=job["bucket"],
+                **result["resources"],
+            )
+            events.completed(
+                "validation",
+                job["variant"],
+                job["bucket"],
+                result["seconds"],
+                len(jobs) - index - 1,
+            )
     if completed != len(VARIANTS) * partitions:
         raise ValueError("Incomplete return validation partitions")
     for name in expected:

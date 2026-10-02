@@ -66,6 +66,7 @@ directory and records its runner, inputs, environment, result and artifact hashe
 uv run python scripts/verify_return_execution_e2e.py /external/return-execution
 uv run python scripts/verify_return_product_e2e.py /external/return-product
 uv run python scripts/verify_return_lock_e2e.py /external/return-lock
+uv run python scripts/verify_return_worker_lifetime_e2e.py /external/return-worker-lifetime
 uv run python scripts/verify_e2e.py --verify /external/return-product \
   --manifest-sha256 <sha256-of-e2e.json>
 ```
@@ -83,6 +84,14 @@ and parent, runs direct/staged production and independent validation, exercises
 interruption/reuse and the locked controller, compares all tables, and seals a
 synthetic product. Its labeled pilot/runtime fixtures make no performance claim.
 The lock workflow checks ownership after controller death with an active worker.
+The worker lifetime workflow retains native process observations across complete
+synthetic build/validation job sequences at one, two and four workers. Deliberately
+retained touched pages detect process reuse independently of scheduler state.
+It also checks uneven/empty lists, failure and abrupt-exit propagation, iterator
+closure, and controller-death lock ownership at every supported worker count.
+Partition jobs run in importable spawned workers even at one worker; each result
+is exposed only after its single-job executor has joined. Production and
+validation events additionally retain worker start, job exit and reap records.
 
 For installed-pair verification, build noneditable upstream and downstream wheels
 and install into an isolated environment using downstream's pinned Python and

@@ -8,7 +8,8 @@ import os
 import shutil
 import time
 import uuid
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from contextlib import closing
 from pathlib import Path
 
 import duckdb
@@ -34,13 +35,42 @@ def set_execution_lock_descriptor(descriptor: int) -> None:
     _EXECUTION_LOCK_DESCRIPTOR = descriptor
 
 
-def _run_locked_partition(worker, job, transferred):
+def _run_locked_partition(worker, job, transferred, observation):
     descriptor = None if transferred is None else transferred.detach()
+    passed = False
+    events = None
     try:
-        return worker(job)
+        if observation is not None:
+            path, started, phase = observation
+            # Callbacks/subclasses remain in the controller. Only immutable
+            # path/clock values cross the spawn boundary.
+            events = ProgressEvents(Path(path))
+            events.started = started
+            events.emit(
+                phase,
+                "worker_start",
+                pid=os.getpid(),
+                parent_pid=os.getppid(),
+                variant=job["variant"],
+                bucket=job["bucket"],
+            )
+        result = worker(job)
+        passed = True
+        return os.getpid(), result
     finally:
-        if descriptor is not None:
-            os.close(descriptor)
+        try:
+            if events is not None:
+                events.emit(
+                    phase,
+                    "worker_job_exit",
+                    pid=os.getpid(),
+                    passed=passed,
+                    variant=job["variant"],
+                    bucket=job["bucket"],
+                )
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
 
 class ProgressEvents:
@@ -192,32 +222,86 @@ def _build_one(job):
     }
 
 
-def run_partition_jobs(worker, jobs, workers):
+def run_partition_jobs(worker, jobs, workers, *, events=None, phase=None):
+    """Bound concurrency with a fresh spawned process for every partition.
+
+    Joining each single-job executor before exposing its result prevents native
+    allocations from accumulating across jobs, including the one-worker route.
+    On errors or iterator closure, submitted jobs finish and all executors join;
+    no replacement is scheduled and the original worker exception propagates.
+    """
     if type(workers) is not int or workers not in (1, 2, 4):
         raise ValueError("Supported worker counts are 1, 2 and 4")
-    if workers == 1:
-        for job in jobs:
-            yield job, worker(job)
-    else:
-        # Spawn prevents inheriting a live DuckDB connection across fork.
-        with ProcessPoolExecutor(
-            max_workers=workers, mp_context=multiprocessing.get_context("spawn")
-        ) as pool:
-            from multiprocessing.reduction import DupFd
+    if (events is None) != (phase is None):
+        raise ValueError("Worker observations require both events and phase")
+    from multiprocessing.reduction import DupFd
 
-            futures = {
-                pool.submit(
-                    _run_locked_partition,
-                    worker,
-                    job,
-                    None
-                    if _EXECUTION_LOCK_DESCRIPTOR is None
-                    else DupFd(_EXECUTION_LOCK_DESCRIPTOR),
-                ): job
-                for job in jobs
-            }
-            for future in as_completed(futures):
-                yield futures[future], future.result()
+    pending = iter(jobs)
+    active = {}
+    observation = None if events is None else (str(events.path), events.started, phase)
+
+    def submit_next():
+        try:
+            job = next(pending)
+        except StopIteration:
+            return False
+        # Spawn prevents inheriting a live DuckDB connection across fork.
+        pool = ProcessPoolExecutor(
+            max_workers=1, mp_context=multiprocessing.get_context("spawn")
+        )
+        try:
+            future = pool.submit(
+                _run_locked_partition,
+                worker,
+                job,
+                None
+                if _EXECUTION_LOCK_DESCRIPTOR is None
+                else DupFd(_EXECUTION_LOCK_DESCRIPTOR),
+                observation,
+            )
+        except BaseException:
+            pool.shutdown(wait=True)
+            raise
+        active[future] = job, pool
+        return True
+
+    try:
+        for _ in range(workers):
+            if not submit_next():
+                break
+        while active:
+            done, _ = wait(active, return_when=FIRST_COMPLETED)
+            completed = []
+            # Inspect the complete ready batch before scheduling replacements.
+            for future in done:
+                job, pool = active.pop(future)
+                try:
+                    pid, result = future.result()
+                finally:
+                    pool.shutdown(wait=True)
+                if events is not None:
+                    events.emit(
+                        phase,
+                        "worker_reaped",
+                        pid=pid,
+                        variant=job["variant"],
+                        bucket=job["bucket"],
+                    )
+                completed.append((job, result))
+            yield from completed
+            # A failure can become ready while the caller checkpoints a yielded
+            # result. Observe it before filling any newly available slot.
+            for future in active:
+                if future.done() and future.exception() is not None:
+                    future.result()
+            for _ in completed:
+                if not submit_next():
+                    break
+    finally:
+        # Do not cancel a submitted DupFd transfer: drain it so the child closes
+        # the inherited lock description. No new jobs are submitted here.
+        for _, pool in active.values():
+            pool.shutdown(wait=True)
 
 
 def build_returns_v2(
@@ -337,37 +421,38 @@ def build_returns_v2(
                 }
             )
     events.emit("build", "start", scheduled_partitions=len(jobs), workers=workers)
-    for index, (job, result) in enumerate(
-        run_partition_jobs(_build_one, jobs, workers)
-    ):
-        inputs.check_unchanged()
-        key = f"{job['variant']}:{job['bucket']}"
-        paths = {
-            t: staging / f"{job['variant'].lower()}_{job['bucket']:04d}_{t}.parquet"
-            for t in TABLES
-        }
-        checkpoints.complete(
-            key, binding, paths, {"pass": True, "resources": result["resources"]}
-        )
-        events.emit(
-            "build",
-            "resource_settings",
-            variant=job["variant"],
-            bucket=job["bucket"],
-            **result["resources"],
-        )
-        progress["completed"][key] = result["artifacts"]
-        write_text_atomic(
-            progress_path, json.dumps(progress, sort_keys=True, indent=2) + "\n"
-        )
-        fsync_directory_strict(staging)
-        events.completed(
-            "build",
-            job["variant"],
-            job["bucket"],
-            result["seconds"],
-            len(jobs) - index - 1,
-        )
+    with closing(
+        run_partition_jobs(_build_one, jobs, workers, events=events, phase="build")
+    ) as results:
+        for index, (job, result) in enumerate(results):
+            inputs.check_unchanged()
+            key = f"{job['variant']}:{job['bucket']}"
+            paths = {
+                t: staging / f"{job['variant'].lower()}_{job['bucket']:04d}_{t}.parquet"
+                for t in TABLES
+            }
+            checkpoints.complete(
+                key, binding, paths, {"pass": True, "resources": result["resources"]}
+            )
+            events.emit(
+                "build",
+                "resource_settings",
+                variant=job["variant"],
+                bucket=job["bucket"],
+                **result["resources"],
+            )
+            progress["completed"][key] = result["artifacts"]
+            write_text_atomic(
+                progress_path, json.dumps(progress, sort_keys=True, indent=2) + "\n"
+            )
+            fsync_directory_strict(staging)
+            events.completed(
+                "build",
+                job["variant"],
+                job["bucket"],
+                result["seconds"],
+                len(jobs) - index - 1,
+            )
     if set(progress["completed"]) != {
         f"{v}:{b}" for v in VARIANTS for b in range(partitions)
     }:

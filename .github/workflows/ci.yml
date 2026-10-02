@@ -34,7 +34,8 @@ jobs:
           uv run python scripts/verify_return_execution_e2e.py "$RUNNER_TEMP/return-execution"
           uv run python scripts/verify_return_product_e2e.py "$RUNNER_TEMP/return-product"
           uv run python scripts/verify_return_lock_e2e.py "$RUNNER_TEMP/return-lock"
-          for name in return-execution return-product return-lock; do
+          uv run python scripts/verify_return_worker_lifetime_e2e.py "$RUNNER_TEMP/return-worker-lifetime"
+          for name in return-execution return-product return-lock return-worker-lifetime; do
             digest="$(sha256sum "$RUNNER_TEMP/$name/e2e.json" | cut -d ' ' -f 1)"
             uv run python scripts/verify_e2e.py --verify "$RUNNER_TEMP/$name" --manifest-sha256 "$digest"
           done
@@ -57,6 +58,7 @@ jobs:
             ${{ runner.temp }}/return-execution
             ${{ runner.temp }}/return-product
             ${{ runner.temp }}/return-lock
+            ${{ runner.temp }}/return-worker-lifetime
             ${{ runner.temp }}/calendar_transport
             ${{ runner.temp }}/encounter_closeout
             !${{ runner.temp }}/return-*/**/*.key
