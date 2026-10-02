@@ -175,6 +175,18 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+Local comparator repair on 2026-10-02 replaces repeated bidirectional `EXCEPT ALL`
+work with signed multiplicity aggregation over every declared canonical column.
+The independent original monolithic oracle, schema, routing, source-byte and
+reference checks remain unchanged. Failure modes preceded implementation;
+execution E2E passed before and after the change, and product E2E plus Ruff pass.
+E2E covers duplicate NULLs/special floating values and same-count NaN corruption.
+This is synthetic local candidate evidence only. The source-stage component
+identity changes; prior installed, CI and private receipts at `7275f77` remain
+historical evidence for that revision. Current installed-pair/CI evidence,
+full private canonical proof, measured performance, final acceptance and
+publication remain pending. No scientific definition or interface changed.
+
 The current closeout candidate is under review. Bounded parent availability and
 normalized-summary checks retain exact rows, ranking, units, NULL semantics and
 the existing report contract. Synthetic complete-product equivalence and

@@ -348,13 +348,19 @@ def _reconcile(db, stage, manifest, work_dir, events=None):
                 "CREATE OR REPLACE TEMP VIEW expected_bucket AS " + expected_bucket
             )
             db.execute("CREATE OR REPLACE TEMP VIEW actual_bucket AS " + actual_bucket)
+            # For each complete typed row, the signed sum is its exact
+            # expected-minus-actual multiplicity. Summing absolute differences
+            # is the original bidirectional EXCEPT ALL row count. This avoids
+            # its repeated window/join pipelines without hashing away values
+            # or changing DuckDB's NULL and floating-value equality semantics.
             different = db.execute(
-                "SELECT count(*) FROM ("
-                "(SELECT * FROM expected_bucket EXCEPT ALL "
-                "SELECT * FROM actual_bucket) "
-                "UNION ALL "
-                "(SELECT * FROM actual_bucket EXCEPT ALL SELECT * FROM expected_bucket)"
-                ")"
+                "SELECT coalesce(sum(abs(multiplicity_delta)),0) FROM ("
+                "SELECT sum(_multiset_delta) AS multiplicity_delta FROM ("
+                f"SELECT {selection},1::BIGINT AS _multiset_delta "
+                "FROM expected_bucket UNION ALL "
+                f"SELECT {selection},-1::BIGINT AS _multiset_delta "
+                "FROM actual_bucket) "
+                f"GROUP BY {selection})"
             ).fetchone()[0]
             if different:
                 raise ValueError(f"Source-stage exact typed multiset differs: {name}")

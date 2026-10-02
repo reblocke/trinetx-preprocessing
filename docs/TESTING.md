@@ -75,7 +75,9 @@ typed empty files and metadata counts, multiple-piece consolidation, durable
 completion events, exact clinical parity and corruptions. It requires a
 completion event for every independently compared canonical bucket and
 it rejects an unchanged row moved into a wrong bucket even after local hashes
-are rebound, along with lost duplicates and type drift. The product workflow
+are rebound, along with lost duplicates and type drift. Duplicate NULLs and
+special floating values retain the original independent multiset oracle;
+same-count NaN corruption is rejected by both comparators. The product workflow
 validates a real synthetic canonical source
 and parent, runs direct/staged production and independent validation, exercises
 interruption/reuse and the locked controller, compares all tables, and seals a

@@ -276,3 +276,19 @@ Stage/build/validation operational reuse and frozen configuration bind policy.
 Requested/effective settings and expected-partition-write timings are retained
 in runtime evidence. Limits do not replace independent exact typed row, routing,
 key, source-byte, reference or acceptance proofs.
+
+## Exact multiset comparison work
+
+Before changing the bucket comparator, retain these failure expectations:
+duplicate multiplicity, NULLs, NaN/infinities and signed zero must have the same
+equality semantics as the original DuckDB `EXCEPT ALL` oracle. Equal row counts
+must not hide changed values or rows placed in the wrong bucket. Canonical
+column types and routing remain independent checks; no hash substitutes for rows.
+
+The execution E2E covers missing/extra/changed rows, type drift and routing.
+Its raw-history fixture also covers duplicate special floating values and a
+same-count NaN corruption to exercise this comparator change. The
+original monolithic oracle remains independent of the bucket implementation.
+Synthetic equality and query plans do not establish private-scale performance or
+acceptance. A changed comparator needs current installed evidence and complete
+private canonical proof before its result can authorize a final build.

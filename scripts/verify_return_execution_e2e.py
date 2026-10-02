@@ -82,6 +82,18 @@ def run(root):
             "FROM (SELECT * FROM preprocessed.source_lab_measurement LIMIT 1) s "
             "CROSS JOIN range(256) r(i)"
         )
+        # Unmatched raw history still needs exact duplicate/NULL/float proof.
+        # No memberships are added, so these records cannot alter clinical gas.
+        db.execute(
+            "INSERT INTO preprocessed.source_lab_measurement "
+            "SELECT s.* REPLACE ('000-comparator-' || kind AS source_record_id, "
+            "value AS numeric_value) "
+            "FROM (SELECT * FROM preprocessed.source_lab_measurement LIMIT 1) s "
+            "CROSS JOIN (VALUES ('null',NULL::DOUBLE),('nan','NaN'::DOUBLE),"
+            "('inf','Infinity'::DOUBLE),('negative-inf','-Infinity'::DOUBLE),"
+            "('zero',0.0::DOUBLE),('negative-zero',-0.0::DOUBLE)) v(kind,value) "
+            "CROSS JOIN range(2) duplicates(i)"
+        )
         for record, include in (("false-only", "FALSE"), ("null-only", "NULL")):
             db.execute(
                 "INSERT INTO preprocessed.source_lab_measurement "
@@ -462,6 +474,66 @@ def run(root):
         stage,
         expected_manifest_sha256=sha256(stage / "manifest.json"),
         identity=identity,
+    )
+    # Rebind unchanged row counts/hashes after altering special raw values.
+    # Both the bucketed verifier and original independent oracle must reject.
+    with duckdb.connect() as db:
+        special_files = db.execute(
+            "SELECT filename,count(*) FROM read_parquet("
+            f"{literal(stage / '*_source_lab_measurement.parquet')},filename=true) "
+            "WHERE source_record_id='000-comparator-nan' GROUP BY filename"
+        ).fetchall()
+    assert len(special_files) == 1 and special_files[0][1] == 2
+    lab_path = Path(special_files[0][0])
+    lab_original = lab_path.read_bytes()
+    with duckdb.connect() as db:
+        db.execute(
+            f"CREATE TABLE saved_lab AS SELECT * FROM read_parquet({literal(lab_path)})"
+        )
+        assert (
+            db.execute(
+                "SELECT count(*) FROM saved_lab WHERE "
+                "source_record_id='000-comparator-nan'"
+            ).fetchone()[0]
+            == 2
+        )
+        lab_path.unlink()
+        db.execute(
+            "COPY (SELECT * REPLACE (CASE WHEN "
+            "source_record_id='000-comparator-nan' THEN 0.0 "
+            "ELSE numeric_value END AS numeric_value) FROM saved_lab) "
+            f"TO {literal(lab_path)} (FORMAT PARQUET)"
+        )
+    changed_float = json.loads(json.dumps(receipt))
+    changed_float["outputs"][lab_path.name].update(
+        bytes=lab_path.stat().st_size, sha256=sha256(lab_path)
+    )
+    (stage / "manifest.json").write_text(json.dumps(changed_float) + "\n")
+    try:
+        verify_source_stage(
+            stage,
+            expected_manifest_sha256=sha256(stage / "manifest.json"),
+            identity=identity,
+            database=source,
+            parent_bundle=parent,
+            work_dir=root / "verify-changed-special-float",
+        )
+    except ValueError:
+        rejected.append("changed special raw float with equal row count")
+    else:
+        raise AssertionError("Bucketed comparison accepted changed raw NaN")
+    try:
+        with _connect(
+            source, parent, root / "reference-changed-special-float", 3
+        ) as db:
+            _reconcile_monolithic_reference(db, stage, changed_float)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Original comparison accepted changed raw NaN")
+    lab_path.write_bytes(lab_original)
+    (stage / "manifest.json").write_text(
+        json.dumps(receipt, sort_keys=True, indent=2) + "\n"
     )
     for variant in ("FULL_DATA", "AFTER_EXCLUSION"):
         for route in ("direct", "staged"):
