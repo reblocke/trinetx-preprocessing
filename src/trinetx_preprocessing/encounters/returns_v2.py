@@ -71,7 +71,10 @@ def dictionary_entry(
         role = "identity"
         definition = "Original composite-key member or deterministic record identity"
     elif column in {"episode_start", "episode_end", "return_start", "return_end"}:
-        definition = "Observed source episode boundary; parsed time is provenance"
+        definition = (
+            "Retained source episode boundary; usability requires observed "
+            "dates with known precision, checked independently of raw time"
+        )
         unit = "calendar date with retained source timestamp"
     elif column in {
         "episode_state",
@@ -205,7 +208,15 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
                  upper(trim(coalesce(source_type,''))) IN {ED_TYPES} AS is_ed,
                  upper(trim(coalesce(source_type,''))) IN {INPATIENT_TYPES} AS is_ip,
                  upper(trim(coalesce(source_type,''))) IN {NONACUTE_TYPES}
-                   AS is_nonacute
+                   AS is_nonacute,
+                 CASE WHEN start_timestamp_precision IN ('date_only','timestamp')
+                   AND lower(trim(coalesce(start_date_derived_by_TriNetX,'')))
+                       NOT IN {TRUE_VALUES}
+                   THEN start_datetime::DATE END AS start_day,
+                 CASE WHEN end_timestamp_precision IN ('date_only','timestamp')
+                   AND lower(trim(coalesce(end_date_derived_by_TriNetX,'')))
+                       NOT IN {TRUE_VALUES}
+                   THEN end_datetime::DATE END AS end_day
           FROM episode_source
         ), grouped AS (
           SELECT episode_id, patient_id, encounter_id,
@@ -214,10 +225,14 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
                  CASE WHEN count(*) FILTER (WHERE end_datetime IS NULL)=0
                       THEN max(end_datetime) END AS episode_end,
                  CASE WHEN count(*) FILTER
-                        (WHERE start_timestamp_precision IS NULL)>0 THEN NULL
-                      WHEN count(DISTINCT start_timestamp_precision)>1
+                        (WHERE start_datetime IS NOT NULL
+                          AND start_timestamp_precision IS NULL)>0 THEN NULL
+                      WHEN count(DISTINCT start_timestamp_precision)
+                           FILTER (WHERE start_datetime IS NOT NULL)>1
                         THEN 'mixed'
-                      ELSE min(start_timestamp_precision) END AS start_precision,
+                      ELSE min(start_timestamp_precision)
+                           FILTER (WHERE start_datetime IS NOT NULL)
+                      END AS start_precision,
                  CASE WHEN count(*) FILTER
                         (WHERE end_timestamp_precision IS NULL)>0 THEN NULL
                       WHEN count(DISTINCT end_timestamp_precision)>1
@@ -228,11 +243,11 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
                  bool_or(is_nonacute) AS has_nonacute,
                  bool_or(NOT (is_ip OR is_ed OR is_nonacute))
                    AS has_unknown_setting,
-                 count(DISTINCT start_datetime) AS distinct_starts,
-                 count(DISTINCT end_datetime) AS distinct_ends,
-                 count(DISTINCT (start_datetime,end_datetime))
+                 count(DISTINCT start_day) AS distinct_starts,
+                 count(DISTINCT end_day) AS distinct_ends,
+                 count(DISTINCT (start_day,end_day))
                    FILTER (WHERE is_ed) AS ed_intervals,
-                 count(DISTINCT (start_datetime,end_datetime))
+                 count(DISTINCT (start_day,end_day))
                    FILTER (WHERE is_ip) AS ip_intervals,
                  min(start_datetime) FILTER (WHERE is_ed) AS ed_start,
                  min(end_datetime) FILTER (WHERE is_ed) AS ed_end,
@@ -240,7 +255,7 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
                  min(end_datetime) FILTER (WHERE is_ip) AS ip_end,
                  bool_or(start_datetime IS NULL) AS has_missing_start,
                  bool_or(end_datetime IS NULL) AS has_missing_end,
-                 bool_or(end_datetime < start_datetime) AS has_invalid_order,
+                 coalesce(bool_or(end_day < start_day),false) AS has_invalid_order,
                  bool_or(lower(trim(coalesce(
                    start_date_derived_by_TriNetX,''))) IN {TRUE_VALUES})
                    AS has_derived_start,
@@ -260,11 +275,16 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
           WHEN has_invalid_order THEN 'invalid_episode_order'
           WHEN has_ed AND has_inpatient AND
                (ed_start IS NULL OR ip_start IS NULL
-                OR ed_end IS NULL OR ip_end IS NULL)
+                OR ed_end IS NULL OR ip_end IS NULL
+                OR has_derived_start OR has_derived_end
+                OR start_precision IS NULL OR end_precision IS NULL
+                OR start_precision NOT IN ('date_only','timestamp')
+                OR end_precision NOT IN ('date_only','timestamp'))
             THEN 'incomplete_ed_inpatient_continuation'
           WHEN has_ed AND has_inpatient AND
-               NOT (ed_start<=ip_start AND ip_start<=ed_end
-                    AND ed_end<=ip_end)
+               NOT (ed_start::DATE<=ip_start::DATE
+                    AND ip_start::DATE<=ed_end::DATE
+                    AND ed_end::DATE<=ip_end::DATE)
             THEN 'incoherent_ed_inpatient_continuation'
           WHEN has_missing_start THEN 'missing_start'
           WHEN has_missing_end THEN 'start_only'
@@ -289,6 +309,7 @@ def _episodes(db: duckdb.DuckDBPyConnection, bucket: int, partitions: int) -> No
                       THEN 'unknown_index_setting'
                     WHEN e.episode_start IS NULL OR e.episode_end IS NULL
                       THEN 'missing_episode_end'
+                    WHEN e.has_derived_start THEN 'derived_episode_start'
                     WHEN e.has_derived_end THEN 'derived_episode_end'
                     WHEN e.episode_state NOT IN ('coherent')
                       THEN e.episode_state
@@ -324,15 +345,21 @@ def _links(db: duckdb.DuckDBPyConnection) -> None:
                e.end_precision AS return_end_precision,
                e.episode_state AS return_episode_state,
                e.has_inpatient, e.has_ed, e.source_record_count,
-               date_diff('day',i.episode_end::DATE,e.episode_start::DATE)
-                 AS days_after_index_end,
+               CASE WHEN NOT e.has_derived_start
+                    AND e.start_precision IN ('date_only','timestamp')
+                 THEN date_diff('day',i.episode_end::DATE,e.episode_start::DATE)
+                 END AS days_after_index_end,
                CASE WHEN e.episode_start IS NULL THEN 'missing_return_start'
                     WHEN e.has_derived_start THEN 'derived_return_start'
-                    WHEN e.episode_state NOT IN ('coherent','start_only')
-                      THEN e.episode_state
                     WHEN e.start_precision NOT IN ('date_only','timestamp')
                       OR e.start_precision IS NULL
                       THEN 'unknown_return_precision'
+                    WHEN e.episode_state NOT IN ('coherent','start_only')
+                      AND NOT (e.episode_state='conflicting_component_intervals'
+                        AND e.distinct_starts=1 AND NOT e.has_missing_start
+                        AND NOT e.has_invalid_order
+                        AND NOT (e.has_ed AND e.has_inpatient))
+                      THEN e.episode_state
                     WHEN e.episode_start::DATE=i.episode_end::DATE
                       THEN 'same_day_uncertain'
                     WHEN e.episode_start::DATE<i.episode_end::DATE
@@ -362,18 +389,35 @@ def _links(db: duckdb.DuckDBPyConnection) -> None:
 
 def _evidence(db: duckdb.DuckDBPyConnection) -> None:
     _create_evidence(db, create_outcomes=False)
+    # Retain all raw rows; the private disposition is excluded from publication.
+    db.execute(
+        """
+        CREATE TEMP TABLE episode_intervals AS
+        SELECT episode_id, CASE
+          WHEN episode_start IS NULL THEN 'missing_episode_start'
+          WHEN episode_end IS NULL THEN 'missing_episode_end'
+          WHEN has_derived_start THEN 'derived_episode_start'
+          WHEN start_precision IS NULL
+            OR start_precision NOT IN ('date_only','timestamp')
+            THEN 'unknown_start_precision'
+          WHEN has_derived_end THEN 'derived_episode_end'
+          WHEN end_precision IS NULL
+            OR end_precision NOT IN ('date_only','timestamp')
+            THEN 'unknown_end_precision'
+          WHEN episode_state<>'coherent' THEN 'incoherent_return_episode'
+          ELSE NULL END AS rejection_reason
+        FROM episodes
+        """
+    )
     for table in ("diagnosis_evidence", "gas_evidence"):
         db.execute(
-            f"UPDATE {table} SET rejection_reason='unknown_event_precision' "
-            "WHERE rejection_reason IS NULL AND "
-            "(timestamp_precision IS NULL OR "
-            "timestamp_precision NOT IN ('date_only','timestamp'))"
-        )
-        db.execute(
-            f"UPDATE {table} AS d SET "
-            "rejection_reason='incoherent_return_episode' "
-            "FROM episodes e WHERE d.episode_id=e.episode_id "
-            "AND d.rejection_reason IS NULL AND e.episode_state<>'coherent'"
+            f"UPDATE {table} AS d SET rejection_reason=CASE "
+            "WHEN e.rejection_reason IS NOT NULL THEN e.rejection_reason "
+            "WHEN d.event_datetime IS NOT NULL AND "
+            "(d.timestamp_precision IS NULL OR "
+            "d.timestamp_precision NOT IN ('date_only','timestamp')) "
+            "THEN 'unknown_event_precision' ELSE d.rejection_reason END "
+            "FROM episode_intervals e WHERE d.episode_id=e.episode_id"
         )
     metrics = []
     for specimen in ("abg", "vbg"):
@@ -408,11 +452,15 @@ def _evidence(db: duckdb.DuckDBPyConnection) -> None:
         "gases AS (SELECT episode_id, "
         + ", ".join(metrics)
         + " FROM gas_evidence GROUP BY episode_id) "
-        "SELECT e.episode_id, coalesce(d.icd_hypercapnia,false) "
+        "SELECT e.episode_id, r.rejection_reason IS NOT NULL "
+        "AS _interval_unavailable, "
+        "CASE WHEN r.rejection_reason IS NULL "
+        "THEN coalesce(d.icd_hypercapnia,false) END "
         "AS icd_hypercapnia, "
         + ", ".join(gas_select)
         + " FROM return_episode_keys e LEFT JOIN diagnoses d "
-        "USING (episode_id) LEFT JOIN gases g USING (episode_id)"
+        "USING (episode_id) LEFT JOIN gases g USING (episode_id) "
+        "JOIN episode_intervals r USING (episode_id)"
     )
     unions = {}
     for suffix in ("gt45", "gt50", "ge45", "ge50"):
@@ -441,7 +489,13 @@ def _evidence(db: duckdb.DuckDBPyConnection) -> None:
         + " END"
     )
     unions["any_hypercapnia"] = unions["icd_or_gas_inclusive"]
-    fields = ["l.*", "o.icd_hypercapnia", "o.abg_tested", "o.vbg_tested"]
+    fields = [
+        "l.*",
+        "o.icd_hypercapnia",
+        "o.abg_tested",
+        "o.vbg_tested",
+        "o._interval_unavailable",
+    ]
     fields.extend(
         f"o.{specimen}_{suffix}"
         for specimen in ("abg", "vbg")
@@ -490,7 +544,8 @@ def _metric_tables(db: duckdb.DuckDBPyConnection) -> list[str]:
             potential = (
                 "temporal_state NOT IN ('confirmed','same_day_uncertain',"
                 "'overlap_or_prior','outside_horizon') AND "
-                "(return_start IS NULL OR temporal_state='derived_return_start' "
+                "(return_start IS NULL OR temporal_state IN "
+                "('derived_return_start','unknown_return_precision') "
                 "OR (return_has_missing_start AND return_start::DATE "
                 ">= index_episode_end::DATE + INTERVAL 1 DAY) "
                 "OR (return_start::DATE <= index_episode_end::DATE "
@@ -522,7 +577,7 @@ def _metric_tables(db: duckdb.DuckDBPyConnection) -> list[str]:
                 )
                 if criterion != "all_cause":
                     unknown = (
-                        f"{base} AND return_episode_state<>'coherent'"
+                        f"{base} AND icd_hypercapnia IS NULL"
                         if criterion == "icd_hypercapnia"
                         else f"{base} AND {criterion} IS NULL"
                     )
@@ -537,7 +592,7 @@ def _metric_tables(db: duckdb.DuckDBPyConnection) -> list[str]:
                             f"{criterion} IS NOT NULL) "
                             f"AS {criterion}_tested_count",
                             f"count(*) FILTER (WHERE {base} AND "
-                            "return_episode_state<>'coherent') "
+                            "_interval_unavailable) "
                             f"AS {criterion}_unavailable_count",
                         )
                     )
@@ -715,7 +770,7 @@ def build_partition_v2(
         "episodes": "SELECT * FROM episodes",
         "diagnosis_evidence": "SELECT * FROM diagnosis_evidence",
         "gas_evidence": "SELECT * FROM gas_evidence",
-        "links": "SELECT * FROM links_enriched",
+        "links": "SELECT * EXCLUDE (_interval_unavailable) FROM links_enriched",
         "summary": _summary_query(),
     }
     paths = {name: output / f"{prefix}_{name}.parquet" for name in queries}
@@ -732,6 +787,7 @@ def build_partition_v2(
         "diagnosis_evidence",
         "gas_evidence",
         "episode_outcomes",
+        "episode_intervals",
         "links_enriched",
     ):
         db.execute(f"DROP TABLE {table}")

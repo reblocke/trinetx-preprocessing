@@ -2,6 +2,18 @@
 
 Record decisions that affect behavior, reproducibility, or maintainability.
 
+## 2026-10-03: Narrow calendar-day return repair
+
+The owner approved return audit revision 2 and clarified that derived dates or
+unknown precision preclude using those dates for timing, interval comparisons
+or window bounds. Preserve raw evidence and existing rejection/unavailable
+fields. Repair the existing v2 outcomes and independent validator using calendar
+dates, preserve valid-start all-cause returns with unusable ends, and prevent
+concurrent validation-report overwrite. This authorizes code/synthetic
+qualification only; historical private acceptance remains bound to its original
+implementation. No regenerated product or downstream study change is included.
+See [recorded failure scenarios](RETURN_AUDIT_REPAIR.md).
+
 ## Template
 - Date:
 - Decision:

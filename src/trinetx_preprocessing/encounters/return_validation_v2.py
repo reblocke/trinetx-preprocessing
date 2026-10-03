@@ -113,7 +113,15 @@ def _check_partition_episodes(
         CREATE OR REPLACE TEMP {"TABLE" if materialize else "VIEW"}
         reconstructed_episodes AS
         WITH classified AS (
-          SELECT *, upper(trim(coalesce(source_type,''))) AS setting
+          SELECT *, upper(trim(coalesce(source_type,''))) AS setting,
+                 CASE WHEN start_timestamp_precision IN ('timestamp','date_only')
+                   AND lower(trim(coalesce(start_date_derived_by_TriNetX,'')))
+                       NOT IN ('1','true','yes','y')
+                   THEN CAST(start_datetime AS DATE) END AS observed_start_day,
+                 CASE WHEN end_timestamp_precision IN ('timestamp','date_only')
+                   AND lower(trim(coalesce(end_date_derived_by_TriNetX,'')))
+                       NOT IN ('1','true','yes','y')
+                   THEN CAST(end_datetime AS DATE) END AS observed_end_day
           FROM episode_source
         ), grouped AS (
           SELECT episode_id, min(patient_id) AS patient_id,
@@ -123,11 +131,15 @@ def _check_partition_episodes(
                  max(start_datetime) AS latest_possible_start,
                  CASE WHEN bool_or(end_datetime IS NULL) THEN NULL
                       ELSE max(end_datetime) END AS episode_end,
-                 CASE WHEN bool_or(start_timestamp_precision IS NULL)
+                 CASE WHEN bool_or(start_datetime IS NOT NULL
+                                   AND start_timestamp_precision IS NULL)
                         THEN NULL
-                      WHEN count(DISTINCT start_timestamp_precision)>1
+                      WHEN count(DISTINCT start_timestamp_precision)
+                           FILTER (WHERE start_datetime IS NOT NULL)>1
                         THEN 'mixed'
-                      ELSE min(start_timestamp_precision) END AS start_precision,
+                      ELSE min(start_timestamp_precision)
+                           FILTER (WHERE start_datetime IS NOT NULL)
+                      END AS start_precision,
                  CASE WHEN bool_or(end_timestamp_precision IS NULL)
                         THEN NULL
                       WHEN count(DISTINCT end_timestamp_precision)>1
@@ -141,12 +153,12 @@ def _check_partition_episodes(
                    ('IMP','INPAT','INPATIENT','EMER','ED','EMERGENCY',
                     'AMB','AMBULATORY','OUTPAT','OUTPATIENT'))
                    AS has_unknown_setting,
-                 count(DISTINCT start_datetime) AS distinct_starts,
-                 count(DISTINCT end_datetime) AS distinct_ends,
-                 count(DISTINCT (start_datetime,end_datetime))
+                 count(DISTINCT observed_start_day) AS distinct_starts,
+                 count(DISTINCT observed_end_day) AS distinct_ends,
+                 count(DISTINCT (observed_start_day,observed_end_day))
                    FILTER (WHERE setting IN ('EMER','ED','EMERGENCY'))
                    AS ed_intervals,
-                 count(DISTINCT (start_datetime,end_datetime))
+                 count(DISTINCT (observed_start_day,observed_end_day))
                    FILTER (WHERE setting IN ('IMP','INPAT','INPATIENT'))
                    AS ip_intervals,
                  min(start_datetime) FILTER
@@ -159,7 +171,8 @@ def _check_partition_episodes(
                    (WHERE setting IN ('IMP','INPAT','INPATIENT')) AS ip_end,
                  bool_or(start_datetime IS NULL) AS has_missing_start,
                  bool_or(end_datetime IS NULL) AS has_missing_end,
-                 bool_or(end_datetime<start_datetime) AS has_invalid_order,
+                 coalesce(bool_or(observed_end_day<observed_start_day),false)
+                   AS has_invalid_order,
                  bool_or(lower(trim(coalesce(start_date_derived_by_TriNetX,'')))
                    IN ('1','true','yes','y')) AS has_derived_start,
                  bool_or(lower(trim(coalesce(end_date_derived_by_TriNetX,'')))
@@ -177,11 +190,16 @@ def _check_partition_episodes(
                     WHEN has_invalid_order THEN 'invalid_episode_order'
                     WHEN has_ed AND has_inpatient AND
                          (ed_start IS NULL OR ip_start IS NULL
-                          OR ed_end IS NULL OR ip_end IS NULL)
+                          OR ed_end IS NULL OR ip_end IS NULL
+                          OR has_derived_start OR has_derived_end
+                          OR start_precision IS NULL OR end_precision IS NULL
+                          OR start_precision NOT IN ('date_only','timestamp')
+                          OR end_precision NOT IN ('date_only','timestamp'))
                       THEN 'incomplete_ed_inpatient_continuation'
                     WHEN has_ed AND has_inpatient AND
-                         NOT (ed_start<=ip_start AND ip_start<=ed_end
-                              AND ed_end<=ip_end)
+                         NOT (CAST(ed_start AS DATE)<=CAST(ip_start AS DATE)
+                              AND CAST(ip_start AS DATE)<=CAST(ed_end AS DATE)
+                              AND CAST(ed_end AS DATE)<=CAST(ip_end AS DATE))
                       THEN 'incoherent_ed_inpatient_continuation'
                     WHEN has_missing_start THEN 'missing_start'
                     WHEN has_missing_end THEN 'start_only'
@@ -258,7 +276,9 @@ def _check_partition_pairs(db: duckdb.DuckDBPyConnection) -> None:
         "l.return_start IS DISTINCT FROM e.episode_start OR "
         "l.return_end IS DISTINCT FROM e.episode_end OR "
         "l.days_after_index_end IS DISTINCT FROM "
-        "date_diff('day',s.index_episode_end::DATE,e.episode_start::DATE)",
+        "(CASE WHEN e.has_derived_start OR e.start_precision IS NULL "
+        "OR e.start_precision NOT IN ('date_only','timestamp') THEN NULL "
+        "ELSE date_diff('day',s.index_episode_end::DATE,e.episode_start::DATE) END)",
         "link identity and calendar geometry",
     )
 
@@ -273,6 +293,7 @@ def _check_partition_geometry(db: duckdb.DuckDBPyConnection) -> None:
         "THEN 'unknown_index_setting' "
         "WHEN e.episode_start IS NULL OR e.episode_end IS NULL "
         "THEN 'missing_episode_end' "
+        "WHEN e.has_derived_start THEN 'derived_episode_start' "
         "WHEN e.has_derived_end THEN 'derived_episode_end' "
         "WHEN e.episode_state<>'coherent' THEN e.episode_state "
         "WHEN e.start_precision IS NULL OR e.start_precision "
@@ -302,10 +323,13 @@ def _check_partition_geometry(db: duckdb.DuckDBPyConnection) -> None:
     temporal = (
         "CASE WHEN e.episode_start IS NULL THEN 'missing_return_start' "
         "WHEN e.has_derived_start THEN 'derived_return_start' "
-        "WHEN e.episode_state NOT IN ('coherent','start_only') "
-        "THEN e.episode_state "
         "WHEN e.start_precision IS NULL OR e.start_precision "
         "NOT IN ('date_only','timestamp') THEN 'unknown_return_precision' "
+        "WHEN e.episode_state NOT IN ('coherent','start_only') AND NOT "
+        "(e.episode_state='conflicting_component_intervals' "
+        "AND e.distinct_starts=1 AND NOT e.has_missing_start "
+        "AND NOT e.has_invalid_order AND NOT (e.has_ed AND e.has_inpatient)) "
+        "THEN e.episode_state "
         "WHEN e.episode_start::DATE=s.index_episode_end::DATE "
         "THEN 'same_day_uncertain' "
         "WHEN e.episode_start::DATE<s.index_episode_end::DATE "
@@ -433,7 +457,17 @@ def _check_partition_evidence(
         "USING (episode_id) WHERE d.rejection_reason IS DISTINCT FROM "
         "(CASE WHEN e.episode_start IS NULL THEN 'missing_episode_start' "
         "WHEN e.episode_end IS NULL THEN 'missing_episode_end' "
+        "WHEN e.has_derived_start THEN 'derived_episode_start' "
+        "WHEN e.start_precision IS NULL OR e.start_precision "
+        "NOT IN ('date_only','timestamp') THEN 'unknown_start_precision' "
+        "WHEN e.has_derived_end THEN 'derived_episode_end' "
+        "WHEN e.end_precision IS NULL OR e.end_precision "
+        "NOT IN ('date_only','timestamp') THEN 'unknown_end_precision' "
+        "WHEN e.episode_state<>'coherent' THEN 'incoherent_return_episode' "
         "WHEN d.event_datetime IS NULL THEN 'missing_date' "
+        "WHEN d.timestamp_precision IS NULL OR "
+        "d.timestamp_precision NOT IN ('date_only','timestamp') "
+        "THEN 'unknown_event_precision' "
         "WHEN d.event_datetime::DATE<e.episode_start::DATE "
         "OR d.event_datetime::DATE>e.episode_end::DATE "
         "THEN 'outside_episode' "
@@ -443,23 +477,30 @@ def _check_partition_evidence(
         "WHEN upper(trim(coalesce(d.code,''))) NOT IN "
         "('J96.02','J96.12','J96.22','J96.92','E66.2') "
         "THEN 'other_code' "
-        "WHEN d.timestamp_precision IS NULL OR "
-        "d.timestamp_precision NOT IN ('date_only','timestamp') "
-        "THEN 'unknown_event_precision' "
-        "WHEN e.episode_state<>'coherent' "
-        "THEN 'incoherent_return_episode' ELSE NULL END)",
+        "ELSE NULL END)",
         "diagnosis eligibility",
     )
     _assert_zero(
         db,
         "WITH item AS (SELECT g.*,e.episode_start,e.episode_end,"
-        "e.episode_state,count(DISTINCT g.gas_kind) OVER "
+        "e.episode_state,e.has_derived_start,e.has_derived_end,"
+        "e.start_precision,e.end_precision,count(DISTINCT g.gas_kind) OVER "
         "(PARTITION BY g.source_record_id) AS specimen_catalogs "
         "FROM gas_evidence g JOIN episodes e USING (episode_id)) "
         "SELECT count(*) FROM item WHERE rejection_reason IS DISTINCT FROM "
         "(CASE WHEN episode_start IS NULL THEN 'missing_episode_start' "
         "WHEN episode_end IS NULL THEN 'missing_episode_end' "
+        "WHEN has_derived_start THEN 'derived_episode_start' "
+        "WHEN start_precision IS NULL OR start_precision "
+        "NOT IN ('date_only','timestamp') THEN 'unknown_start_precision' "
+        "WHEN has_derived_end THEN 'derived_episode_end' "
+        "WHEN end_precision IS NULL OR end_precision "
+        "NOT IN ('date_only','timestamp') THEN 'unknown_end_precision' "
+        "WHEN episode_state<>'coherent' THEN 'incoherent_return_episode' "
         "WHEN event_datetime IS NULL THEN 'missing_date' "
+        "WHEN timestamp_precision IS NULL OR "
+        "timestamp_precision NOT IN ('date_only','timestamp') "
+        "THEN 'unknown_event_precision' "
         "WHEN event_datetime::DATE<episode_start::DATE "
         "OR event_datetime::DATE>episode_end::DATE "
         "THEN 'outside_episode' "
@@ -472,11 +513,7 @@ def _check_partition_evidence(
         "THEN 'invalid_value' "
         "WHEN value_mmhg IS NULL THEN 'unsupported_unit' "
         "WHEN NOT isfinite(value_mmhg) THEN 'invalid_converted_value' "
-        "WHEN timestamp_precision IS NULL OR "
-        "timestamp_precision NOT IN ('date_only','timestamp') "
-        "THEN 'unknown_event_precision' "
-        "WHEN episode_state<>'coherent' "
-        "THEN 'incoherent_return_episode' ELSE NULL END)",
+        "ELSE NULL END)",
         "gas rejection reasons",
     )
 
@@ -514,10 +551,15 @@ def _check_partition_phenotypes(
         "diagnosis_counts AS (SELECT episode_id, "
         "count(*) FILTER (WHERE rejection_reason IS NULL)>0 AS positive "
         "FROM diagnosis_evidence GROUP BY episode_id) "
-        "SELECT r.episode_id,coalesce(d.positive,false) "
+        "SELECT r.episode_id, CASE WHEN e.episode_state='coherent' "
+        "AND NOT e.has_derived_start AND NOT e.has_derived_end "
+        "AND e.start_precision IN ('date_only','timestamp') "
+        "AND e.end_precision IN ('date_only','timestamp') "
+        "THEN coalesce(d.positive,false) END "
         "AS icd_hypercapnia, "
         + ", ".join(projected)
         + " FROM (SELECT DISTINCT return_episode_id AS episode_id FROM links) r "
+        "JOIN episodes e USING (episode_id) "
         "LEFT JOIN gas_counts g USING (episode_id) "
         "LEFT JOIN diagnosis_counts d USING (episode_id)"
     )
@@ -671,7 +713,8 @@ def _check_summary_metric(
     possible = (
         "temporal_state NOT IN ('confirmed','same_day_uncertain',"
         "'overlap_or_prior','outside_horizon') AND "
-        "(return_start IS NULL OR temporal_state='derived_return_start' OR "
+        "(return_start IS NULL OR temporal_state IN "
+        "('derived_return_start','unknown_return_precision') OR "
         "(return_has_missing_start AND return_start::DATE "
         ">=index_episode_end::DATE+INTERVAL 1 DAY) OR "
         "(return_start::DATE<=index_episode_end::DATE "
@@ -703,7 +746,7 @@ def _check_summary_metric(
         )
         if criterion != "all_cause":
             unresolved = (
-                "return_episode_state<>'coherent'"
+                "icd_hypercapnia IS NULL"
                 if criterion == "icd_hypercapnia"
                 else f"{criterion} IS NULL"
             )
@@ -717,14 +760,20 @@ def _check_summary_metric(
                     f"sum(CASE WHEN {confirmed} AND {criterion} IS NOT NULL "
                     f"THEN 1 ELSE 0 END) AS {criterion}_tested",
                     f"sum(CASE WHEN {confirmed} AND "
-                    "return_episode_state<>'coherent' "
+                    "(return_episode_state<>'coherent' OR has_derived_start "
+                    "OR has_derived_end OR start_precision IS NULL "
+                    "OR end_precision IS NULL "
+                    "OR start_precision NOT IN ('date_only','timestamp') "
+                    "OR end_precision NOT IN ('date_only','timestamp')) "
                     f"THEN 1 ELSE 0 END) AS {criterion}_unavailable",
                 )
             )
     db.execute(
         "CREATE TEMP TABLE expected_metric AS SELECT "
         + ", ".join(aggregates)
-        + " FROM links WHERE "
+        + " FROM (SELECT l.*,e.has_derived_start,e.has_derived_end,"
+        "e.start_precision,e.end_precision FROM links l JOIN episodes e "
+        "ON l.return_episode_id=e.episode_id) WHERE "
         + categories[kind]
         + " GROUP BY index_event_id"
     )

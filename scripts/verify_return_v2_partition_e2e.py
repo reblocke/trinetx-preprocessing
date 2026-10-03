@@ -209,6 +209,195 @@ def _extend_fixture(db: duckdb.DuckDBPyConnection) -> None:
             [patient],
         )
 
+    _extend_audit_fixture(db)
+
+
+def _extend_audit_fixture(db: duckdb.DuckDBPyConnection) -> None:
+    # Literal counterexamples and expected outcomes were recorded before repair.
+    cases = {
+        "observed": [("IMP", "2024-01-05", "2024-01-07", "timestamp", "timestamp", "")],
+        "derived_end": [
+            ("IMP", "2024-01-05", "2024-01-07", "date_only", "date_only", "true")
+        ],
+        "unknown_end": [("IMP", "2024-01-05", "2024-01-07", "date_only", None, "")],
+        "unsupported_end": [
+            ("IMP", "2024-01-05", "2024-01-07", "date_only", "unknown", "")
+        ],
+        "mixed_end": [
+            ("IMP", "2024-01-05", "2024-01-07", "date_only", precision, "")
+            for precision in ("date_only", "timestamp")
+        ],
+        "end_conflict": [
+            ("IMP", "2024-01-05", end, "date_only", "date_only", "")
+            for end in ("2024-01-07", "2024-01-08")
+        ],
+        "clock_duplicate": [
+            ("IMP", start, end, "timestamp", "timestamp", "")
+            for start, end in (
+                ("2024-01-05 18:00", "2024-01-07 09:00"),
+                ("2024-01-05 09:00", "2024-01-07 18:00"),
+            )
+        ],
+        "clock_progression": [
+            (
+                "EMER",
+                "2024-01-05 18:00",
+                "2024-01-05 09:00",
+                "timestamp",
+                "timestamp",
+                "",
+            ),
+            (
+                "IMP",
+                "2024-01-05 08:00",
+                "2024-01-07 18:00",
+                "timestamp",
+                "timestamp",
+                "",
+            ),
+        ],
+        "start_conflict": [
+            ("IMP", start, "2024-01-07", "date_only", "date_only", "")
+            for start in ("2024-01-05", "2024-01-06")
+        ],
+        "invalid_order": [
+            ("IMP", "2024-01-05", "2024-01-04", "date_only", "date_only", "")
+        ],
+        "unknown_far": [("IMP", "2026-01-05", "2026-01-07", None, "date_only", "")],
+        "derived_far": [
+            ("IMP", "2026-01-05", "2026-01-07", "date_only", "date_only", "")
+        ],
+        "mixed_start": [
+            ("IMP", "2026-01-05", "2026-01-07", precision, "date_only", "")
+            for precision in ("date_only", "timestamp")
+        ],
+    }
+    for name, components in cases.items():
+        patient = f"audit-{name}"
+        db.execute(
+            "INSERT INTO preprocessed.source_encounter (patient_id,encounter_id,s"
+            "ource_record_id,source_file,source_row_number,source_id,type,start_d"
+            "atetime,end_datetime,start_timestamp_precision,end_timestamp_precisi"
+            "on,end_date_derived_by_TriNetX,start_date_derived_by_TriNetX) VALUES"
+            " (?,?,?,'synthetic',1,'audit','IMP','2024-01-01','2024-01-02','date_"
+            "only','date_only','','')",
+            [patient, patient + "-index", patient + "-index-record"],
+        )
+        db.execute(
+            "INSERT INTO fixture_index VALUES (?,?,?)",
+            [patient, patient + "-index", patient + "-key"],
+        )
+        for row, (
+            setting,
+            start,
+            end,
+            start_precision,
+            end_precision,
+            derived_end,
+        ) in enumerate(components, 1):
+            db.execute(
+                "INSERT INTO preprocessed.source_encounter (patient_id,encounter_id,s"
+                "ource_record_id,source_file,source_row_number,source_id,type,start_d"
+                "atetime,end_datetime,start_timestamp_precision,end_timestamp_precisi"
+                "on,end_date_derived_by_TriNetX,start_date_derived_by_TriNetX) VALUES"
+                " (?,?,?,'synthetic',?,'audit',?,?,?,?,?,?,?)",
+                [
+                    patient,
+                    patient + "-return",
+                    patient + f"-component-{row}",
+                    row,
+                    setting,
+                    start,
+                    end,
+                    start_precision,
+                    end_precision,
+                    derived_end,
+                    "true" if name == "derived_far" else "",
+                ],
+            )
+        db.execute(
+            "INSERT INTO preprocessed.source_diagnosis VALUES (?, ?, ?, "
+            "'synthetic', 1, 'audit', 'ICD10CM', 'J96.02', '2024-01-06', "
+            "'date_only')",
+            [patient, patient + "-return", patient + "-dx"],
+        )
+        db.execute(
+            "INSERT INTO preprocessed.source_lab_measurement VALUES (?, ?, ?, "
+            "'synthetic', 1, 'audit', 'LOINC', '2019-8', '2024-01-06', "
+            "'date_only', 'arterial', '', '', 60, 'mmHg')",
+            [patient, patient + "-return", patient + "-gas"],
+        )
+        db.execute(
+            "INSERT INTO preprocessed.element_membership VALUES (?, "
+            "'source.arterial_pco2', true)",
+            [patient + "-gas"],
+        )
+        db.execute(
+            "INSERT INTO preprocessed.source_patient VALUES (?, NULL)", [patient]
+        )
+        db.execute(
+            "INSERT INTO preprocessed.patient_observability VALUES (?, '2024-01-07')",
+            [patient],
+        )
+
+
+def _check_audit_expected(db: duckdb.DuckDBPyConnection) -> dict:
+    positive = (1, True, 1, True, 1, True, 1, 0)
+    unavailable_end = (1, True, 0, None, 0, None, 0, 1)
+    unresolved_start = (0, None, 0, None, 0, None, 0, 0)
+    expected = {
+        "observed": positive,
+        "clock_duplicate": positive,
+        "clock_progression": positive,
+        "derived_end": unavailable_end,
+        "unknown_end": unavailable_end,
+        "unsupported_end": unavailable_end,
+        "mixed_end": unavailable_end,
+        "end_conflict": unavailable_end,
+        "start_conflict": unresolved_start,
+        "invalid_order": unresolved_start,
+        "unknown_far": unresolved_start,
+        "derived_far": unresolved_start,
+        "mixed_start": unresolved_start,
+    }
+    columns = (
+        "outcome_acute_union_all_cause_30d_count,"
+        "outcome_acute_union_all_cause_30d_flag,"
+        "outcome_acute_union_icd_hypercapnia_30d_count,"
+        "outcome_acute_union_icd_hypercapnia_30d_flag,"
+        "outcome_acute_union_abg_ge45_30d_count,"
+        "outcome_acute_union_abg_ge45_30d_flag,"
+        "outcome_acute_union_abg_ge45_30d_tested_count,"
+        "outcome_acute_union_abg_ge45_30d_phenotype_unavailable_count"
+    )
+    results = {}
+    for name, wanted in expected.items():
+        actual = db.execute(
+            f"SELECT {columns} FROM summary WHERE patient_id=?", [f"audit-{name}"]
+        ).fetchone()
+        results[name] = list(actual)
+        if actual != wanted:
+            raise AssertionError(f"Audit case {name}: {actual}, expected {wanted}")
+    for name in ("unknown_far", "derived_far", "mixed_start"):
+        timing = db.execute(
+            "SELECT days_after_index_end FROM links WHERE patient_id=?",
+            [f"audit-{name}"],
+        ).fetchone()
+        if timing != (None,):
+            raise AssertionError(f"Unusable date computed timing: {name}: {timing}")
+        for days in (30, 90, 365):
+            actual = db.execute(
+                f"SELECT outcome_acute_union_possible_{days}d_count,"
+                f"outcome_acute_union_all_cause_{days}d_flag "
+                "FROM summary WHERE patient_id=?",
+                [f"audit-{name}"],
+            ).fetchone()
+            if actual != (1, None):
+                raise AssertionError(
+                    f"Unusable date bounded horizon: {name}, {days}: {actual}"
+                )
+    return results
+
 
 def _views(db: duckdb.DuckDBPyConnection, root: Path, partitions: int) -> None:
     for table in TABLES:
@@ -492,6 +681,42 @@ def _corruptions(db: duckdb.DuckDBPyConnection, root: Path) -> list[str]:
             validator._check_partition_geometry,
         ),
     ]
+    cases.extend(
+        [
+            (
+                "derived_end_qualified_gas",
+                "gas_evidence",
+                "SELECT * REPLACE (CASE WHEN source_record_id='audit-derived_end-gas'"
+                " THEN NULL ELSE rejection_reason END AS rejection_reason) FROM " + gas,
+                validator._check_partition_evidence,
+            ),
+            (
+                "unknown_end_qualified_diagnosis",
+                "diagnosis_evidence",
+                "SELECT * REPLACE (CASE WHEN source_record_id='audit-unknown_end-dx' "
+                "THEN NULL ELSE rejection_reason END AS rejection_reason) FROM "
+                + diagnosis,
+                validator._check_partition_evidence,
+            ),
+            (
+                "unusable_start_timing",
+                "links",
+                "SELECT * REPLACE (CASE WHEN patient_id='audit-unknown_far' THEN 734 "
+                "ELSE days_after_index_end END AS days_after_index_end) FROM " + links,
+                validator._check_partition_pairs,
+            ),
+            (
+                "derived_end_positive_summary",
+                "summary",
+                "SELECT * REPLACE (CASE WHEN patient_id='audit-derived_end' THEN true"
+                " ELSE outcome_acute_union_icd_hypercapnia_30d_flag END AS "
+                "outcome_acute_union_icd_hypercapnia_30d_flag) FROM " + summary,
+                lambda connection: validator._check_summary_metric(
+                    connection, kind="acute_union", days=30
+                ),
+            ),
+        ]
+    )
     rejected = []
     for label, table, query, check in cases:
         _views(db, root, 1)
@@ -688,6 +913,7 @@ def run(root: Path) -> dict:
                 output=single,
             )
             _views(db, single, 1)
+            receipt["audit_expected"] = _check_audit_expected(db)
             receipt["hand_expected"] = _check_hand_expected(db)
             _check_independent(db)
             receipt["independent_reconciliation"] = "pass"

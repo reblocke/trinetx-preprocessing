@@ -1,11 +1,17 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Implement and qualify the owner-approved audit corrections, update upstream PR26
-and the paired immutable GLP-1 child dependency/lock, and retain a verifiable
-installed-interface handoff. Current delivery and readiness scopes are recorded
-in docs/CURRENT_STATE.md. Upstream merge and child activation remain separate
-owner decisions; the child migration PR stays a draft.
+Implement and qualify narrow return audit revision 2 on a separate branch based
+on qualified PR26 head `b744764`. Exclude derived/unknown dates from timing and
+interval decisions, preserve valid-start all-cause events with unusable ends,
+use calendar dates and prevent validation-report overwrite. Deliver a dependent
+PR against `codex/shared-readers-closeout`, with final-head hosted CI and artifact
+readback. No private job, regenerated product or downstream change is included.
+
+The prior source transport/shared-reader audit corrections are qualified on
+PR26 with a separately pinned draft GLP-1 child. Their delivery and readiness
+scopes remain in docs/CURRENT_STATE.md; upstream merge and child activation are
+separate owner decisions.
 
 The earlier preprocessing closeout is completed historical scope: preserve and integrate the
 remaining local fixes, finish the bounded GLP-1 source interface, and accept and
@@ -21,6 +27,17 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner approved narrow return audit revision 2 on 2026-10-03. Concrete failure
+scenarios were recorded before implementation in docs/RETURN_AUDIT_REPAIR.md.
+Retained before-repair artifacts reproduce incorrect interval qualification,
+clock-time conflicts and report overwrite. The corrected v2 partition E2E
+passed 13 hand-authored audit cases and 16 semantic corruptions; existing
+partial-start expectations remain unchanged. Execution and product E2Es passed,
+including six native CLI report-publication cases. Independent readback verified
+the artifacts and unchanged columns/types across all six public tables. Ruff
+passes. Hosted final-head CI and its retained artifact readback are required for
+delivery. Historical private acceptance is not reissued for these corrections.
+
 The corrected transport and all six retained E2Es passed locally, including
 concurrent directory ownership and preserved failure receipts. A distinct
 noneditable wheel passed transport and real Parquet reader qualification outside

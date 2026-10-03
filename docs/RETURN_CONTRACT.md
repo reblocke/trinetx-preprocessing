@@ -23,6 +23,18 @@ minutes or within-day order. Timestamp-valued source observations, if encountere
 use their recorded calendar date under this explicitly day-based contract;
 original timestamps remain evidence and do not rescue same-day ordering.
 
+The owner clarified on 2026-10-03 that derived dates and NULL, mixed or
+unsupported precision cannot establish outcome timing, interval coherence or
+possible-window bounds. Retain their raw values and existing provenance/reason
+fields; do not infer usable precision. A row with no date is missing rather
+than an unknown-precision observation: another component's valid observed date
+can still supply the existing partial-start bound. Component uniqueness, order
+and ED/inpatient progression use observed calendar dates, irrespective of clock
+times. A single-setting return with a definite observed start can still qualify
+all-cause when only its end is unusable or conflicting; interval-dependent
+evidence remains unavailable. Genuine start conflicts, invalid observed date
+order and unresolved ED/inpatient progression remain unqualified.
+
 Let `D0` be the observed, non-derived, nonconflicting index episode end date.
 Let `Dr` be an observed, non-derived, nonconflicting return start date.
 Define `days_after_index_end = Dr - D0` using integer calendar-day subtraction.
