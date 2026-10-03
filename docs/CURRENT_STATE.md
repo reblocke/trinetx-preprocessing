@@ -1,10 +1,32 @@
 # Current repository state
 
+## Current delivery status
+
+Updated 2026-10-03. This table is the current summary; the dated narrative below
+retains earlier decisions and qualification scopes rather than reopening them.
+Private product and receipt identities remain in the owner-only handoff.
+
+| Product/interface | Accepted or qualified scope | Consumer and pin authority | Delivery status |
+| --- | --- | --- | --- |
+| Canonical captured-source DuckDB | Historical source-equivalence and bounded source-access acceptance retain their original source/runtime identities; source access does not select a clinical cohort | GLP-1 child and upstream builders; caller-trusted source receipt and catalog/schema provenance | Existing accepted product preserved; [source acceptance](GLP1_SOURCE_ACCEPTANCE.md) and [source closeout](GLP1_CLOSEOUT_RECONCILIATION.md) are separately scoped |
+| Independent FULL_DATA / AFTER_EXCLUSION encounter bundles | Original-key linkage, independent transformations and their retained engineering acceptance | Shared upstream reader and study consumers; caller-trusted bundle receipt | Accepted products preserved; new shared reader publication is under review in [upstream PR26](https://github.com/reblocke/trinetx-preprocessing/pull/26) |
+| Calendar-day return product | Full private acceptance at `0bb9c905655d`, published through `9159e59ff7d9`; strict reader, parent joins and aggregate quality retain that scope | Upstream generic readers/report and downstream studies; separate return receipt | Accepted implementation published; shared reader relocation is in PR26 |
+| Raw calendar source transport | Corrected inventory availability and collision-free key relations have retained synthetic and installed-wheel qualification; historical private evidence is not reissued for changed transport code | GLP-1 child; original caller-selected keys and selectors | Audit corrections included in PR26; current candidate is distinct from default-branch delivery |
+| GLP-1 child integration | Source migration and installed Python interfaces only; `report_ready=false` / `extraction_ready=false` | [Child dependency declaration](https://github.com/reblocke/glp1-eligibility-hypercapnia/blob/codex/study-migration/pyproject.toml) and paired lock are the immutable pin authority | [Child PR1](https://github.com/reblocke/glp1-eligibility-hypercapnia/pull/1) remains a draft; merge/activation and [study completion](https://github.com/reblocke/glp1-eligibility-hypercapnia/issues/2) are owner-managed |
+
+The approved GLP-1 phenotype uses the first arterial-testing date on D or D+1,
+not an elapsed timestamp window. Missing clinical history remains unknown or
+unavailable. No new export is required by this closeout. Monolith compatibility
+adoption remains with its active owner task. See [audit corrections](AUDIT_CORRECTIONS.md)
+and [shared-reader delivery](SHARED_READER_MIGRATION.md) for verification boundaries.
+
+## Historical split and qualification record
+
 Updated 2026-10-03. Python encounter preprocessing is implemented here. The
 original split merged at upstream `4bbe8cf` and downstream `d5d2691`;
 postmerge validator hardening is on upstream `main` at `cae58a2` and the strict
-downstream consumer merged as `c2302cb`. This is the current public status
-summary; private source, bundle and receipt
+downstream consumer merged as `c2302cb`. This records the earlier split checkpoint;
+private source, bundle and receipt
 identities remain in the owner-only release record.
 See [ENCOUNTER_PREPROCESSING.md](ENCOUNTER_PREPROCESSING.md) for the command,
 products, timing, identifiers, missingness and verification boundary.
@@ -250,3 +272,15 @@ private acceptance passed at `0bb9c905655d`; upstream publication and the merged
 installed-package handoff completed at `9159e59ff7d9`. Historical accepted products
 retain their recorded scope. The completed monitor was removed; downstream
 integration and study-specific acceptance remain separately owned.
+
+## Shared installed readers (2026-10-03)
+
+Trusted encounter scans and return-summary access now live in the upstream
+`encounters.reader` and `encounters.return_reader` modules. The generic
+`encounters.return_quality` report retains all alternatives and their original
+denominators. These relocate the retained downstream implementations; schemas,
+signatures, rejection behavior and scientific definitions are preserved.
+See [SHARED_READER_MIGRATION.md](SHARED_READER_MIGRATION.md) for the boundary
+expectations and delivery order. Historical private acceptance remains bound to
+its original scope and runtime; installed synthetic interface qualification does
+not establish downstream study readiness.

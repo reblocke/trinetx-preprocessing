@@ -43,7 +43,6 @@ def run(root):
     )
     from trinetx_preprocessing.encounters.returns_v2 import build_partition_v2
 
-    root.mkdir(parents=True, exist_ok=False)
     (root / "canonical").mkdir()
     source = root / "canonical" / "source.duckdb"
     parent = root / "parent"
@@ -653,8 +652,6 @@ def main():
     p.add_argument("artifact_dir", type=Path)
     p.add_argument("--require-installed", action="store_true")
     args = p.parse_args()
-    if args.artifact_dir.exists():
-        p.error("Artifact directory exists; retain it and choose a new destination")
     import importlib.metadata
     import os
 
@@ -663,6 +660,10 @@ def main():
     installed = Path(trinetx_preprocessing.__file__).is_relative_to(Path(sys.prefix))
     if args.require_installed and (not installed or "PYTHONPATH" in os.environ):
         p.error("Require noneditable installed package and removed PYTHONPATH")
+    try:
+        args.artifact_dir.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        p.error(f"Choose a fresh artifact directory: {exc}")
     result = {
         "command": sys.argv,
         "python": sys.version,
@@ -676,7 +677,6 @@ def main():
         result.update(
             status="failed", error=f"{type(exc).__name__}: {exc}", exit_status=1
         )
-    args.artifact_dir.mkdir(parents=True, exist_ok=True)
     (args.artifact_dir / "runner.py").write_bytes(Path(__file__).read_bytes())
     result["schema"] = "trinetx-return-e2e-v1"
     result["installed_noneditable"] = installed

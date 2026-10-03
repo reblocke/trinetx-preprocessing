@@ -51,7 +51,6 @@ def run(root, *, consumer=False):
         _assert_equal_multiset,
     )
 
-    root.mkdir(parents=True, exist_ok=False)
     canonical = root / "canonical"
     canonical.mkdir()
     source = runpy.run_path(str(ROOT / "tests/test_cohort_source.py"))[
@@ -557,13 +556,12 @@ def run(root, *, consumer=False):
     assert reuse_runtime["includes_same_run_recovery_downtime"] is True
     assert reuse_runtime["includes_prior_candidate_time"] is False
     if consumer:
-        from trinetx_analysis.return_bundle import (
+        from trinetx_preprocessing.encounters.return_acceptance import KEYS
+        from trinetx_preprocessing.encounters.return_quality import build_quality_report
+        from trinetx_preprocessing.encounters.return_reader import (
             join_return_summary,
             open_return_summary,
         )
-        from trinetx_analysis.return_quality import build_quality_report
-
-        from trinetx_preprocessing.encounters.return_acceptance import KEYS
 
         for variant in VARIANTS:
             with open_return_summary(
@@ -660,8 +658,6 @@ def main():
     p.add_argument("--require-installed", action="store_true")
     p.add_argument("--consumer", action="store_true")
     args = p.parse_args()
-    if args.artifact_dir.exists():
-        p.error("Artifact directory exists; retain it and choose a new destination")
     import importlib.metadata
     import os
 
@@ -670,6 +666,10 @@ def main():
     installed = Path(trinetx_preprocessing.__file__).is_relative_to(Path(sys.prefix))
     if args.require_installed and (not installed or "PYTHONPATH" in os.environ):
         p.error("Require noneditable installed package and removed PYTHONPATH")
+    try:
+        args.artifact_dir.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        p.error(f"Choose a fresh artifact directory: {exc}")
     result = {
         "command": sys.argv,
         "python": sys.version,
@@ -686,7 +686,6 @@ def main():
         result.update(
             status="failed", error=f"{type(exc).__name__}: {exc}", exit_status=1
         )
-    args.artifact_dir.mkdir(parents=True, exist_ok=True)
     (args.artifact_dir / "runner.py").write_bytes(Path(__file__).read_bytes())
     result["schema"] = "trinetx-return-e2e-v1"
     result["installed_noneditable"] = installed

@@ -5,25 +5,25 @@
 This public repository normalizes captured TriNetX exports into a canonical,
 manifest-bound source DuckDB and creates reusable encounter-level feature
 bundles. Study cohort decisions, GLP-1 indications, weights, prevalence,
-figures and reporting belong to
-[trinetx-hypercapnia-code](https://github.com/reblocke/trinetx-hypercapnia-code).
+figures and reporting belong to the study repositories. The patient-level GLP-1
+study is owned by
+[glp1-eligibility-hypercapnia](https://github.com/reblocke/glp1-eligibility-hypercapnia);
+[trinetx-hypercapnia-code](https://github.com/reblocke/trinetx-hypercapnia-code)
+retains the monolith references and separately managed compatibility adoption.
 The direct Stata implementation, accepted Python port and 36-file CSV/DTA
 workflows remain reproduction references. No real TriNetX records or private
 validation artifacts belong in this repository.
 
-[Current state](docs/CURRENT_STATE.md) records dated implementation and gate
-status; [encounter preprocessing](docs/ENCOUNTER_PREPROCESSING.md) is the
-maintained production and verification runbook. The historical bundle passed
-fresh complete-linkage coverage and stronger validation at merged upstream
-revision `cae58a2`; an identity-bound private engineering receipt and installed
-production read passed at the trusted downstream pin merged as `c2302cb`.
-Those engineering gates do not establish acceptance of the original patient-level
-GLP-1 report. The accepted snapshot has date-only encounter starts and arterial
-gas events, so that report's first-24-hour rule needs a new approved timestamp
-source; see the [timestamp source gate](docs/GLP1_TIMESTAMP_SOURCE_GAP.md).
-A merged interface or complete manifest alone does not establish those gates.
-The earlier GLP-1 source acceptance is
-[historical evidence](docs/GLP1_SOURCE_ACCEPTANCE.md), not a new encounter receipt.
+[Current delivery status](docs/CURRENT_STATE.md#current-delivery-status) is the
+authoritative product, acceptance, consumer and pin summary;
+[encounter preprocessing](docs/ENCOUNTER_PREPROCESSING.md) is the maintained
+production and verification runbook. The approved patient-level GLP-1 method
+uses the first arterial-testing **date** on D or D+1. The historical elapsed
+first-24-hour rule cannot be recovered from date-only records and is superseded;
+no new timestamp acquisition is required by this work. See the
+[precision evidence and calendar-date decision](docs/GLP1_TIMESTAMP_SOURCE_GAP.md).
+Engineering source/encounter acceptance, interface qualification, default-branch
+delivery and clinical study readiness remain separate.
 
 ## Products and handoff
 
@@ -46,7 +46,7 @@ See [schema, independent-variant and timing details](docs/ENCOUNTER_PREPROCESSIN
 | Small public example | From this repository root, use bundled fixtures and a new external output root with the command below | Synthetic source DuckDB plus 36 CSVs; inspect output and successful exit. This does **not** exercise `build-encounters`. |
 | Restricted source/encounter production | Approved raw exports and authenticated companion under private external roots; follow the [encounter runbook](docs/ENCOUNTER_PREPROCESSING.md#run) from this checkout | Independent bundles and evidence; stage completion is not validation or acceptance. Do not repeat the one-time import without its identity authority. |
 | Bundle validation | Approved existing private bundle; run the [artifact validator](docs/ENCOUNTER_PREPROCESSING.md#run) in a new private work directory | Validation report plus separate retained-reference comparison and acceptance review. A downstream reader hash check is narrower. |
-| Downstream consumption | Validated bundle and approved study context; use the downstream [encounter reader](https://github.com/reblocke/trinetx-hypercapnia-code/blob/master/docs/ENCOUNTER_PREPROCESSING.md) | Read-only encounter rows; study selection remains downstream. |
+| Downstream consumption | Validated bundle and approved study context; use the upstream [trusted consumer interfaces](#trusted-consumer-interfaces) | Read-only encounter rows; study selection belongs to the child study repository. |
 | Historical reproduction | Preserved reference inputs and approved environment; use the [operator and legacy notes](docs/OPERATOR_AND_LEGACY_GUIDE.md) | Historical CSV/DTA or comparison artifacts, evaluated against their own dated receipts. |
 
 <a id="quickstart-synthetic-fixtures"></a>
@@ -142,6 +142,27 @@ calendar-day definition; the command default remains v1. See the
 [return contract](docs/RETURN_CONTRACT.md) and
 [acceptance status](docs/RETURN_ACCEPTANCE.md). The earlier sealed revision
 has private acceptance; integration with current `main` requires its own gates.
+
+## Trusted consumer interfaces
+
+Use `trinetx_preprocessing.encounters.reader` for accepted encounter features,
+companions and lazy DuckDB scans. Use
+`trinetx_preprocessing.encounters.return_reader` for verified return summaries
+and complete original-parent joins. Both require caller-supplied receipt trust;
+production never falls back to the separate development encounter reader.
+
+The generic aggregate report is available through:
+
+```bash
+python -m trinetx_preprocessing.encounters.return_quality \
+  --bundle <accepted-return-bundle> --receipt <acceptance-json> \
+  --trusted-acceptance-sha256 <trusted-digest> \
+  --validation-report <validation-json> --output <fresh-external-directory>
+```
+
+See [shared reader migration](docs/SHARED_READER_MIGRATION.md) and
+[testing](docs/TESTING.md) for qualification scope. Study index selection,
+eligibility, weights and clinical reporting belong to the child repositories.
 
 ## Maintenance and contact
 

@@ -6,6 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import runpy
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pyarrow as pa
@@ -16,6 +19,161 @@ from trinetx_preprocessing.encounters.cli import validate_main
 from trinetx_preprocessing.encounters.validation import validate_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def check_runner_artifact_history(root):
+    """Exercise real CLI lifecycles with a bounded adversarial payload fixture."""
+    project = root / "cli-lifecycle"
+    scripts = project / "scripts"
+    scripts.mkdir(parents=True)
+    fixtures = project / "tests"
+    fixtures.mkdir()
+    for name in (
+        "test_cohort_source_calendar_history.py",
+        "test_encounter_validation.py",
+    ):
+        shutil.copy2(ROOT / "tests" / name, fixtures / name)
+    wrapper = project / "invoke.py"
+    shutil.copy2(ROOT / "tests/fixtures/e2e_runner_payload.py", wrapper)
+    observations = []
+
+    def inventory(path):
+        return {
+            str(p.relative_to(path)): sha256(p)
+            for p in sorted(path.rglob("*"))
+            if p.is_file()
+        }
+
+    def invoke(command, log):
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        log.write_text(result.stdout + result.stderr)
+        return result.returncode
+
+    for name in (
+        "calendar_transport",
+        "encounter_closeout",
+        "encounter_reader",
+        "return_reader",
+        "return_execution",
+        "return_product",
+    ):
+        driver = scripts / ("verify_" + name + "_e2e.py")
+        shutil.copy2(ROOT / "scripts" / driver.name, driver)
+        for status in ("passed", "failed"):
+            output = project / (name + "-existing-" + status)
+            output.mkdir()
+            (output / "nested").mkdir()
+            (output / "nested/sentinel").write_bytes(b"preserve every artifact\n")
+            for filename in ("receipt.json", "e2e.json"):
+                (output / filename).write_text(json.dumps({"status": status}) + "\n")
+            (output / "runner.py").write_text("# Retained original runner\n")
+            before = inventory(output)
+            command = [sys.executable, str(wrapper), str(driver), str(output)]
+            exit_status = invoke(command, project / (output.name + ".log"))
+            assert exit_status == 2, (name, status, exit_status)
+            assert inventory(output) == before, (name, status, "artifacts changed")
+            observations.append(
+                {
+                    "runner": name,
+                    "case": status,
+                    "command": command,
+                    "exit_status": exit_status,
+                    "preserved": before,
+                }
+            )
+        file_output = project / (name + "-file")
+        file_output.write_bytes(b"retained file\n")
+        link_output = project / (name + "-link")
+        link_output.symlink_to(file_output)
+        for output in (file_output, link_output):
+            command = [sys.executable, str(wrapper), str(driver), str(output)]
+            assert invoke(command, project / (output.name + ".log")) == 2
+            assert file_output.read_bytes() == b"retained file\n"
+            observations.append(
+                {
+                    "runner": name,
+                    "case": "existing_symlink"
+                    if output == link_output
+                    else "existing_file",
+                    "command": command,
+                    "exit_status": 2,
+                    "target_sha256": sha256(file_output),
+                }
+            )
+        assert link_output.is_symlink() and link_output.readlink() == file_output
+        # The link is fixture setup, not an E2E artifact to preserve or upload.
+        link_output.unlink()
+
+        output = project / (name + "-fresh-failure")
+        command = [sys.executable, str(wrapper), str(driver), str(output), "--fail"]
+        assert invoke(command, project / (output.name + ".log")) == 1
+        receipt = output / (
+            "receipt.json"
+            if name in ("calendar_transport", "encounter_closeout", "encounter_reader")
+            else "e2e.json"
+        )
+        saved = json.loads(receipt.read_text())
+        assert saved["status"] == "failed" and saved["exit_status"] == 1
+        assert "Deliberate synthetic" in saved.get("failure", saved.get("error", ""))
+        assert sha256(output / "runner.py") == sha256(driver)
+        observations.append(
+            {
+                "runner": name,
+                "case": "fresh_failure",
+                "command": command,
+                "exit_status": 1,
+                "receipt_sha256": sha256(receipt),
+            }
+        )
+
+        output = project / (name + "-race")
+        ready = project / (name + "-ready")
+        ready.mkdir()
+        command = [
+            sys.executable,
+            str(wrapper),
+            str(driver),
+            str(output),
+            "--race-ready",
+            str(ready),
+        ]
+        processes = [
+            subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            )
+            for _ in range(2)
+        ]
+        for number, process in enumerate(processes):
+            try:
+                log, _ = process.communicate(timeout=60)
+            except subprocess.TimeoutExpired:
+                for child in processes:
+                    child.kill()
+                    child.wait()
+                raise
+            (project / (output.name + f"-{number}.log")).write_text(log)
+        assert sorted(p.returncode for p in processes) == [0, 2], name
+        winner = next(p for p in processes if p.returncode == 0)
+        saved = json.loads((output / receipt.name).read_text())
+        assert saved["status"] == "passed" and saved["exit_status"] == 0
+        assert (
+            json.loads((output / "fixture-payload.json").read_text())["owner_pid"]
+            == winner.pid
+        )
+        assert sha256(output / "runner.py") == sha256(driver)
+        observations.append(
+            {
+                "runner": name,
+                "case": "concurrent_claim",
+                "command": command,
+                "exit_statuses": [0, 2],
+                "receipt_sha256": sha256(output / receipt.name),
+            }
+        )
+    (project / "observations.json").write_text(
+        json.dumps(observations, indent=2) + "\n"
+    )
+    return observations
 
 
 def prepare(path, *, corrupt=None):
@@ -124,7 +282,7 @@ def check_cli_report_history(root, bundle, *, name, nested, expected_exit):
 
 
 def run(root):
-    root.mkdir(parents=True, exist_ok=False)
+    lifecycle = check_runner_artifact_history(root)
     good = prepare(root / "good")
     assert validate_bundle(bundle=good, work_dir=root / "good-work")["pass"]
     for mutation in ("compensating", "absent_zero", "present_null"):
@@ -153,6 +311,7 @@ def run(root):
         "exit_status": 0,
         "mutations_rejected": ["compensating", "absent_zero", "present_null"],
         "cli_report_history": report_checks,
+        "runner_artifact_history": lifecycle,
     }
 
 
@@ -181,6 +340,10 @@ def main():
             raise ValueError("Source changed during E2E")
         print("Retained E2E receipt and artifact hashes verified")
         return 0
+    try:
+        args.artifact_dir.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        parser.error(f"Choose a fresh artifact directory: {exc}")
     source_paths = sorted((ROOT / "src").rglob("*.py"))
     source_before = {str(p.relative_to(ROOT)): sha256(p) for p in source_paths}
     result = {"status": "failed", "exit_status": 1}

@@ -1,7 +1,13 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Complete the owner-approved preprocessing closeout: preserve and integrate the
+Implement and qualify the owner-approved audit corrections, update upstream PR26
+and the paired immutable GLP-1 child dependency/lock, and retain a verifiable
+installed-interface handoff. Current delivery and readiness scopes are recorded
+in docs/CURRENT_STATE.md. Upstream merge and child activation remain separate
+owner decisions; the child migration PR stays a draft.
+
+The earlier preprocessing closeout is completed historical scope: preserve and integrate the
 remaining local fixes, finish the bounded GLP-1 source interface, and accept and
 publish the calendar-day return product with an installed-reader handoff.
 Preserve contract 2.0, both original variants, original keys and missingness.
@@ -15,6 +21,33 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The corrected transport and all six retained E2Es passed locally, including
+concurrent directory ownership and preserved failure receipts. A distinct
+noneditable wheel passed transport and real Parquet reader qualification outside
+the checkout. Focused source tests passed; final-head hosted CI and child
+installed-pair readback remain delivery gates.
+
+The owner approved the bounded 2026-10-03 audit corrections: atomic retained E2E
+directory ownership in six runners, source availability from the canonical input
+inventory, collision-free raw transport SQL aliases, current delivery/status
+documentation and a paired immutable GLP-1 child dependency/lock update.
+Retained CLI and source transport failure scenarios were recorded before edits.
+Only the raw transport module changes production behavior; accepted databases,
+source producer and encounter/return transformations remain unchanged.
+Historical private acceptance is not reissued for the changed transport.
+Current qualification and delivery live in docs/CURRENT_STATE.md; child clinical
+readiness remains false and monolith adoption remains separately owned.
+
+The owner approved relocating trusted encounter/return readers and the generic
+return quality report upstream, qualifying the standalone GLP-1 child and
+reconciling issues #22/#6. The relocated implementations retain their original
+AST behavior after import routing and Ruff formatting. Installed synthetic
+readers and the GLP-1 key audit/BMI/policy/CLI checks passed. Original private
+source-access artifacts were independently authenticated without rerunning
+their completed queries. The monolith has a separately owned active
+qualification branch; preserve it and deliver compatibility imports as a patch.
+Clinical study readiness and activation remain downstream gates.
+
 The owner approved worker lifetime recovery through the upstream acceptance,
 publication and installed-reader endpoint, while downstream work proceeds
 independently. Production and independent validation now use bounded single-job
