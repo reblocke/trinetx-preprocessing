@@ -6,6 +6,10 @@ maintained in [CURRENT_STATE.md](CURRENT_STATE.md),
 [the release follow-up](../NEXT_STEPS.md). Those records supersede the earlier
 unverified-receipt checkpoint formerly recorded here.
 
+`validate-encounters` requires a fresh external report destination. Existing
+successful or failed reports retain their exact bytes when a rerun is rejected;
+use a new report path and work directory for each validation attempt.
+
 The separate return integration is documented in
 [RETURN_ACCEPTANCE.md](RETURN_ACCEPTANCE.md). Acceptance of the original
 readmissions revision does not transfer to the integrated package identity.

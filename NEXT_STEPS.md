@@ -3,10 +3,11 @@
 The calendar-day return integration has a separate
 [acceptance record](docs/RETURN_ACCEPTANCE.md). Fresh full private acceptance of
 the integrated implementation at `0bb9c905655d` and a separate installed consumer
-passed. Finish public review and publication, authenticate the merged
-implementation and distinct noneditable installed package, then deliver the
-upstream handoff. Downstream dependency pinning, publication and study analysis
-remain downstream-owned. Preserve all historical products and failed attempts.
+passed. PR #24 merged at `9159e59ff7d9`; the merged implementation and distinct
+noneditable installed package/reader were authenticated, and the upstream
+handoff was delivered. The completed monitor was removed. Downstream dependency
+pinning, publication and study analysis remain downstream-owned. Preserve all
+historical products and failed attempts.
 
 The original encounter split is merged: upstream `main` now includes postmerge
 validator hardening at `cae58a2`, and downstream `master` includes the strict
@@ -21,8 +22,9 @@ and [encounter interface](docs/ENCOUNTER_PREPROCESSING.md) for the maintained
 status and commands.
 
 Revalidate the existing immutable bundle before considering a rebuild. The
-validator needs a fresh private work directory and report outside Git, under the
-same private `build.lock` used by comparisons. A new build requires the
+validator requires a fresh private work directory and report outside Git; it
+refuses to overwrite existing report bytes. Run under the same private
+`build.lock` used by comparisons. A new build requires the
 authenticated compatibility companion, legacy-reference gate, explicit linkage
 policy, enrichment, artifact validation and retained-reference comparison shown
 in the encounter interface. Neither route proves fresh-source equivalence,

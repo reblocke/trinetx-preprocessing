@@ -1,19 +1,24 @@
 # Return outcomes acceptance
 
 Updated 2026-10-03. **The integrated implementation at `0bb9c905655d` passed
-fresh full private acceptance.** Publication and authentication of the merged
-installed package remain in progress. Public integration checks and private
-product acceptance are separate evidence records.
+fresh full private acceptance.** PR #24 merged at `9159e59ff7d9`; the merged
+implementation and distinct noneditable installed package/reader were
+authenticated, and the upstream handoff was delivered. Public integration checks
+and private product acceptance are separate evidence records.
 
 ## Current integrated acceptance
 
-The current implementation passed a fresh complete source stage, production and
+The accepted implementation passed a fresh complete source stage, production and
 independent validation over both original variants, mandatory global keys, exact
 retained-reference comparisons, unchanged-input authentication and a new product
 seal. Native observations verified fresh partition workers and joined exits.
 A separate noneditable installed consumer passed strict reading, exact accepted
 parent joins and aggregate quality denominator checks. Independent terminal
 composition completed within the original authorized clock.
+
+This acceptance remains bound to its original implementation, installed runtime
+and artifacts. Later CLI-only report handling does not replace or rewrite those
+receipts.
 
 Private artifacts, measurements and receipts remain external. Prior failed
 attempts remain unaccepted and retained. The implementation preserves calendar-day
