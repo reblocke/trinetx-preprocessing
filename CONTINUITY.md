@@ -25,8 +25,9 @@ defined progress callbacks remain in the controller and are not pickled.
 Conservative component invalidation is preserved: current installed/private
 evidence is required after the shared scheduler change. Historical failed
 attempts remain immutable and unaccepted. The underlying native allocation
-mechanism is UNCONFIRMED. Fresh full private acceptance at `0bb9c905655d` passed; publication and the
-merged installed-package handoff remain pending.
+mechanism is UNCONFIRMED. Fresh full private acceptance at `0bb9c905655d` passed;
+PR #24 merged at `9159e59ff7d9`, and the authenticated merged installed-package
+handoff was delivered. Downstream adoption remains separately owned.
 
 A read-only selected-patient diagnosis/lab/procedure history projection now preserves
 all catalog-matched raw rows across encounters and an explicit no-match marker.
@@ -188,14 +189,29 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-10-03 report-preservation follow-up: the owner authorized push and merge.
+The existing encounter closeout E2E reproduced the report-overwrite failure
+before implementation. Its extended complete synthetic CLI workflows now pass
+for successful and failed reports, nested and external paths, and reruns with
+reused or fresh work directories. Exact report bytes and hashes are preserved.
+The retained receipt readback and all 16 existing validation cases passed.
+The five standard synthetic pipeline workflows and their artifact readback,
+Ruff, touched-code formatting, locked dependencies and changed-document links
+also passed. Hosted exact-head CI and merge state are recorded on the PR.
+The maintained failure-report shape, linkage policy and cache format are
+unchanged. The old dirty checkout has an authenticated external recovery snapshot;
+already integrated hardening is preserved through the current main contracts.
+
 2026-10-03: the integrated implementation at `0bb9c905655d` passed fresh full
 private source staging, production, independent validation, global keys, exact
 retained references, unchanged-input proof and acceptance seal. Native partition
 birth/joined-exit proof, separate noneditable strict consumer, accepted-parent
 joins, aggregate quality denominators and original-clock terminal composition
-passed. Current exact-head CI and installed candidate evidence passed. Public
-review/publication and a distinct authenticated merged installed-package handoff
-remain required. Downstream pinning/publication/study work remain downstream-owned.
+passed. Required publication-head CI passed, PR #24 merged at `9159e59ff7d9`,
+and its implementation bytes matched the accepted candidate. The distinct
+noneditable merged package/reader and installed smoke were authenticated.
+The authorized handoff was delivered once and the completed monitor removed.
+Downstream pinning/publication/study work remain downstream-owned.
 Private receipts and all failed attempts remain external and preserved.
 
 Historical preparation checkpoints below are superseded by this acceptance;
@@ -308,11 +324,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Finish upstream review/publication, verify actual merged implementation bytes
-against the accepted implementation, and authenticate a distinct noneditable
-merged wheel/package/reader with affected installed smoke evidence. Record the
-trusted local handoff before sending the authorized completion to the downstream
-owner task. Preserve existing source, parent, reference and historical attempts.
+Use a fresh work directory and report for any future validation, preserving
+earlier report bytes and receipts. Earlier local validation, coverage and cache
+hardening is already integrated under the maintained contracts; original dirty
+files and external recovery snapshots remain preserved.
+The upstream return acceptance/publication/installed-reader endpoint is complete.
 Downstream dependency pinning, publication and analysis are separate handoff work.
 
 Historical merged-encounter follow-up:
@@ -345,7 +361,7 @@ its encounter population differs from the retained accepted reference.
 The authenticated compatibility companion remains the population authority;
 independent canonical-projection reconciliation is a separate gate. No new
 scientific acceptance is claimed.
-Draft upstream PR #21 proposes a separately accepted GLP-1 population
+Merged upstream PR #21 proposes a separately accepted GLP-1 population
 interface, potentially using the existing versioned read-only cohort-source
 API without duplicating the canonical database. Its acceptance, source scope,
 and any timed export remain UNCONFIRMED.
