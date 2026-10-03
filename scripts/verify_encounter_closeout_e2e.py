@@ -87,6 +87,42 @@ def prepare(path, *, corrupt=None):
     return bundle
 
 
+def check_cli_report_history(root, bundle, *, name, nested, expected_exit):
+    work = root / (name + "-work")
+    report = work / "reports" / "validation.json" if nested else root / (name + ".json")
+    arguments = [
+        "--bundle",
+        str(bundle),
+        "--work-dir",
+        str(work),
+        "--report",
+        str(report),
+    ]
+    assert validate_main(arguments) == expected_exit
+    original_bytes = report.read_bytes()
+    assert json.loads(original_bytes)["pass"] is (expected_exit == 0)
+    original_sha256 = sha256(report)
+    fresh_work = root / (name + "-fresh-work")
+    for requested_work in (work, fresh_work):
+        arguments[arguments.index("--work-dir") + 1] = str(requested_work)
+        try:
+            validate_main(arguments)
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("Existing validation report destination accepted")
+        assert report.read_bytes() == original_bytes
+        assert sha256(report) == original_sha256
+    assert not fresh_work.exists()
+    return {
+        "case": name,
+        "initial_exit": expected_exit,
+        "rerun_exits": [2, 2],
+        "report_sha256": original_sha256,
+        "original_bytes_preserved": True,
+    }
+
+
 def run(root):
     root.mkdir(parents=True, exist_ok=False)
     good = prepare(root / "good")
@@ -99,40 +135,24 @@ def run(root):
             pass
         else:
             raise AssertionError("Incorrect per-encounter count accepted: " + mutation)
-    report = root / "cli-work" / "reports" / "pass.json"
-    assert (
-        validate_main(
-            [
-                "--bundle",
-                str(good),
-                "--work-dir",
-                str(report.parents[1]),
-                "--report",
-                str(report),
-            ]
-        )
-        == 0
-    )
-    assert json.loads(report.read_text())["pass"]
-    failed = root / "failure-work" / "reports" / "fail.json"
-    assert (
-        validate_main(
-            [
-                "--bundle",
-                str(root / "absent_zero" / "bundle"),
-                "--work-dir",
-                str(failed.parents[1]),
-                "--report",
-                str(failed),
-            ]
-        )
-        == 1
-    )
-    assert json.loads(failed.read_text())["pass"] is False
+    report_checks = []
+    for nested in (False, True):
+        for passed in (False, True):
+            report_checks.append(
+                check_cli_report_history(
+                    root,
+                    good if passed else root / "absent_zero" / "bundle",
+                    name=("nested" if nested else "external")
+                    + ("-success" if passed else "-failure"),
+                    nested=nested,
+                    expected_exit=0 if passed else 1,
+                )
+            )
     return {
         "status": "passed",
         "exit_status": 0,
         "mutations_rejected": ["compensating", "absent_zero", "present_null"],
+        "cli_report_history": report_checks,
     }
 
 

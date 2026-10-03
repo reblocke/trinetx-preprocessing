@@ -233,9 +233,10 @@ is retained externally; the new
 producer at `0bb9c905655d` passed fresh full private acceptance, including
 complete production and independent validation, retained references, unchanged
 inputs and seal. A separate installed strict consumer passed accepted-parent
-joins and aggregate quality checks. Publication and authentication of the merged
-installed package remain in progress. No combined downstream release or study
-endpoint selection is claimed.
+joins and aggregate quality checks. PR #24 merged at `9159e59ff7d9`; the merged
+implementation and distinct noneditable installed package/reader were
+authenticated, and the upstream handoff was delivered. No combined downstream
+release or study endpoint selection is claimed.
 
 ## Preprocessing closeout candidate (2026-10-01)
 
@@ -246,6 +247,6 @@ undated/unusable records and distinct unavailable/query-failure states, without
 changing clinical eligibility or the existing strict gas API. Explicit resource
 settings preserve default callers and require matching pilot coverage. Current
 private acceptance passed at `0bb9c905655d`; upstream publication and the merged
-installed-package handoff remain pending. Historical accepted products retain
-their recorded scope; the authorized monitor continues through the upstream
-endpoint.
+installed-package handoff completed at `9159e59ff7d9`. Historical accepted products
+retain their recorded scope. The completed monitor was removed; downstream
+integration and study-specific acceptance remain separately owned.

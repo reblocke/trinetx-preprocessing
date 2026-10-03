@@ -22,6 +22,17 @@ retained E2Es; do not substitute these synthetic checks for private acceptance.
 - Validation initializes scratch before nested report creation. Success and
   actual failure both write a report with the established shape and exit code.
 
+## Validation report history
+
+Record before implementation: a rerun that fails because its work directory
+exists can overwrite a previously successful report and invalidate its receipt
+hash. A fresh work directory can also overwrite that same report on success.
+Preserve both successful and failed report bytes, including when another writer
+creates the destination during validation. Report-parent creation must remain
+after scratch initialization so nested report paths still work. The existing
+encounter closeout E2E uses only fresh report destinations; extend its complete
+synthetic CLI workflows with repeated and fresh-work attempts at existing paths.
+
 ## Parent coverage resource correction
 
 Before implementation, the remaining failure modes are lost or multiplied

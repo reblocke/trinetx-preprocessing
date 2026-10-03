@@ -115,6 +115,12 @@ def validate_main(argv=None):
     require_safe_output_location(
         args.report, artifact_label="encounter validation report"
     )
+    report_exists_message = (
+        f"report already exists: {args.report}; use a new --report path"
+    )
+    if args.report.exists():
+        parser.error(report_exists_message)
+    exit_code = 0
     try:
         result = validate_bundle(bundle=args.bundle, work_dir=args.work_dir)
     except Exception as exc:
@@ -137,10 +143,13 @@ def validate_main(argv=None):
                 }
             ],
         }
-        args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(result, indent=2) + "\n")
-        print(f"Encounter validation failed; see {args.report}", file=sys.stderr)
-        return 1
+        exit_code = 1
     args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(result, indent=2) + "\n")
-    return 0
+    try:
+        with args.report.open("x", encoding="utf-8") as report:
+            report.write(json.dumps(result, indent=2) + "\n")
+    except FileExistsError:
+        parser.error(report_exists_message)
+    if exit_code:
+        print(f"Encounter validation failed; see {args.report}", file=sys.stderr)
+    return exit_code

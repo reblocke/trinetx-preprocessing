@@ -40,4 +40,6 @@ references passed without relaxing resource or scientific gates. The separate
 installed consumer and independent original-clock terminal composition passed.
 All detailed evidence remains external. The underlying native allocation
 mechanism remains unconfirmed; acceptance does not depend on naming that cause.
-Publication and the authenticated merged installed-package handoff remain pending.
+PR #24 merged at `9159e59ff7d9`; the merged implementation and distinct
+noneditable installed package/reader were authenticated, and the upstream
+handoff was delivered. Downstream integration and study gates remain separate.
