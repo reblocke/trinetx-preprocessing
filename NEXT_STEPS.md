@@ -1,11 +1,12 @@
 # Encounter release follow-up
 
 The calendar-day return integration has a separate
-[acceptance record](docs/RETURN_ACCEPTANCE.md). The original readmissions
-revision passed C0–C4; integrating it with current `main` does not transfer
-that private acceptance to the new package identity. Complete public review,
-then schedule the integrated private gates and downstream return reader after
-the task reorganization.
+[acceptance record](docs/RETURN_ACCEPTANCE.md). Fresh full private acceptance of
+the integrated implementation at `0bb9c905655d` and a separate installed consumer
+passed. Finish public review and publication, authenticate the merged
+implementation and distinct noneditable installed package, then deliver the
+upstream handoff. Downstream dependency pinning, publication and study analysis
+remain downstream-owned. Preserve all historical products and failed attempts.
 
 The original encounter split is merged: upstream `main` now includes postmerge
 validator hardening at `cae58a2`, and downstream `master` includes the strict

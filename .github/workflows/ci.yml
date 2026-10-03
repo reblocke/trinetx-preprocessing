@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: astral-sh/setup-uv@v8.3.2
@@ -29,3 +29,36 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run python -m pytest -q
+      - name: Retained return execution E2E
+        run: |
+          uv run python scripts/verify_return_execution_e2e.py "$RUNNER_TEMP/return-execution"
+          uv run python scripts/verify_return_product_e2e.py "$RUNNER_TEMP/return-product"
+          uv run python scripts/verify_return_lock_e2e.py "$RUNNER_TEMP/return-lock"
+          uv run python scripts/verify_return_worker_lifetime_e2e.py "$RUNNER_TEMP/return-worker-lifetime"
+          for name in return-execution return-product return-lock return-worker-lifetime; do
+            digest="$(sha256sum "$RUNNER_TEMP/$name/e2e.json" | cut -d ' ' -f 1)"
+            uv run python scripts/verify_e2e.py --verify "$RUNNER_TEMP/$name" --manifest-sha256 "$digest"
+          done
+      - name: Retained preprocessing closeout E2Es
+        run: |
+          for name in calendar_transport encounter_closeout; do
+            uv run python "scripts/verify_${name}_e2e.py" "$RUNNER_TEMP/$name"
+            digest="$(sha256sum "$RUNNER_TEMP/$name/receipt.json" | cut -d ' ' -f 1)"
+            uv run python "scripts/verify_${name}_e2e.py" "$RUNNER_TEMP/$name" --verify --receipt-sha256 "$digest"
+          done
+      # These drivers use only the reviewed synthetic fixtures. Authentication
+      # keys are local replay state and are never uploaded with public evidence.
+      - name: Retain synthetic return evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-return-e2e
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/return-execution
+            ${{ runner.temp }}/return-product
+            ${{ runner.temp }}/return-lock
+            ${{ runner.temp }}/return-worker-lifetime
+            ${{ runner.temp }}/calendar_transport
+            ${{ runner.temp }}/encounter_closeout
+            !${{ runner.temp }}/return-*/**/*.key

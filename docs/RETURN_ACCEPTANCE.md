@@ -1,8 +1,26 @@
 # Return outcomes acceptance
 
-Updated 2026-09-29. **The original calendar-day v2 revision passed C0–C4;
-private acceptance of the integrated revision is pending.** Public integration
-checks and private product acceptance are separate evidence records.
+Updated 2026-10-03. **The integrated implementation at `0bb9c905655d` passed
+fresh full private acceptance.** Publication and authentication of the merged
+installed package remain in progress. Public integration checks and private
+product acceptance are separate evidence records.
+
+## Current integrated acceptance
+
+The current implementation passed a fresh complete source stage, production and
+independent validation over both original variants, mandatory global keys, exact
+retained-reference comparisons, unchanged-input authentication and a new product
+seal. Native observations verified fresh partition workers and joined exits.
+A separate noneditable installed consumer passed strict reading, exact accepted
+parent joins and aggregate quality denominator checks. Independent terminal
+composition completed within the original authorized clock.
+
+Private artifacts, measurements and receipts remain external. Prior failed
+attempts remain unaccepted and retained. The implementation preserves calendar-day
+definitions, types, NULLs, duplicate multiplicity and routing. Downstream
+pinning, publication and study endpoint selection remain downstream-owned.
+The historical records below describe earlier revisions and do not substitute
+for this current acceptance.
 
 ## Accepted original revision
 

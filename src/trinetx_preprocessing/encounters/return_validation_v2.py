@@ -61,10 +61,13 @@ def _assert_zero(db: duckdb.DuckDBPyConnection, query: str, label: str) -> None:
         raise ValueError(f"Return v2 {label} differs ({count})")
 
 
-def _check_partition_source(db: duckdb.DuckDBPyConnection) -> None:
+def _check_partition_source(
+    db: duckdb.DuckDBPyConnection, *, materialize: bool = False
+) -> None:
     db.execute(
-        """
-        CREATE OR REPLACE TEMP VIEW expected_episode_source AS
+        f"""
+        CREATE OR REPLACE TEMP {"TABLE" if materialize else "VIEW"}
+        expected_episode_source AS
         WITH relevant AS (
           SELECT DISTINCT s.patient_id, s.encounter_id
           FROM preprocessed.source_encounter s
@@ -102,10 +105,13 @@ def _check_partition_source(db: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _check_partition_episodes(db: duckdb.DuckDBPyConnection) -> None:
+def _check_partition_episodes(
+    db: duckdb.DuckDBPyConnection, *, materialize: bool = False
+) -> None:
     db.execute(
-        """
-        CREATE OR REPLACE TEMP VIEW reconstructed_episodes AS
+        f"""
+        CREATE OR REPLACE TEMP {"TABLE" if materialize else "VIEW"}
+        reconstructed_episodes AS
         WITH classified AS (
           SELECT *, upper(trim(coalesce(source_type,''))) AS setting
           FROM episode_source
@@ -339,32 +345,39 @@ def _check_partition_geometry(db: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _check_partition_evidence(db: duckdb.DuckDBPyConnection) -> None:
+def _check_partition_evidence(
+    db: duckdb.DuckDBPyConnection, *, materialize: bool = False
+) -> None:
     db.execute(
-        "CREATE OR REPLACE TEMP VIEW return_keys AS SELECT DISTINCT "
+        f"CREATE OR REPLACE TEMP {'TABLE' if materialize else 'VIEW'} "
+        "return_keys AS SELECT DISTINCT "
         "patient_id,encounter_id,return_episode_id AS episode_id "
         "FROM links"
     )
-    _assert_equal_multiset(
-        db,
-        "SELECT r.episode_id,d.source_record_id FROM "
-        "preprocessed.source_diagnosis d JOIN return_keys r "
-        "USING (patient_id,encounter_id)",
-        "SELECT episode_id,source_record_id FROM diagnosis_evidence",
-        "diagnosis source coverage",
-    )
-    _assert_equal_multiset(
-        db,
-        "SELECT r.episode_id,l.source_record_id,m.element_id FROM "
-        "preprocessed.source_lab_measurement l JOIN return_keys r "
-        "USING (patient_id,encounter_id) "
-        "JOIN preprocessed.element_membership m "
-        "ON m.source_record_id=l.source_record_id WHERE m.include "
-        "AND m.element_id IN ('source.arterial_pco2',"
-        "'source.venous_pco2','source.unspecified_blood_pco2')",
-        "SELECT episode_id,source_record_id,element_id FROM gas_evidence",
-        "gas source and catalog coverage",
-    )
+    # Full raw-row equality below already entails these projected-key
+    # multisets, including duplicate multiplicity. The reference route keeps
+    # its original diagnostics; materialized validation avoids repeated scans.
+    if not materialize:
+        _assert_equal_multiset(
+            db,
+            "SELECT r.episode_id,d.source_record_id FROM "
+            "preprocessed.source_diagnosis d JOIN return_keys r "
+            "USING (patient_id,encounter_id)",
+            "SELECT episode_id,source_record_id FROM diagnosis_evidence",
+            "diagnosis source coverage",
+        )
+        _assert_equal_multiset(
+            db,
+            "SELECT r.episode_id,l.source_record_id,m.element_id FROM "
+            "preprocessed.source_lab_measurement l JOIN return_keys r "
+            "USING (patient_id,encounter_id) "
+            "JOIN preprocessed.element_membership m "
+            "ON m.source_record_id=l.source_record_id WHERE m.include "
+            "AND m.element_id IN ('source.arterial_pco2',"
+            "'source.venous_pco2','source.unspecified_blood_pco2')",
+            "SELECT episode_id,source_record_id,element_id FROM gas_evidence",
+            "gas source and catalog coverage",
+        )
     _assert_equal_multiset(
         db,
         "SELECT r.episode_id,d.patient_id,d.encounter_id,d.source_record_id,"
@@ -468,7 +481,9 @@ def _check_partition_evidence(db: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _check_partition_phenotypes(db: duckdb.DuckDBPyConnection) -> None:
+def _check_partition_phenotypes(
+    db: duckdb.DuckDBPyConnection, *, materialize: bool = False
+) -> None:
     counts = []
     projected = []
     for specimen in ("abg", "vbg"):
@@ -491,7 +506,8 @@ def _check_partition_phenotypes(db: duckdb.DuckDBPyConnection) -> None:
                 f"THEN coalesce(g.{name},0)>0 ELSE NULL END AS {name}"
             )
     db.execute(
-        "CREATE OR REPLACE TEMP VIEW reconstructed_phenotypes AS "
+        f"CREATE OR REPLACE TEMP {'TABLE' if materialize else 'VIEW'} "
+        "reconstructed_phenotypes AS "
         "WITH gas_counts AS (SELECT episode_id, "
         + ", ".join(counts)
         + " FROM gas_evidence GROUP BY episode_id), "
@@ -548,13 +564,16 @@ def _check_partition_phenotypes(db: duckdb.DuckDBPyConnection) -> None:
     )
 
 
-def _check_summary_states(db: duckdb.DuckDBPyConnection) -> None:
+def _check_summary_states(
+    db: duckdb.DuckDBPyConnection, *, materialize: bool = False
+) -> None:
     aggregate = ", ".join(
         f"sum(CASE WHEN temporal_state='{state}' THEN 1 ELSE 0 END) AS {state}_count"
         for state in TEMPORAL_STATES
     )
     db.execute(
-        "CREATE OR REPLACE TEMP VIEW expected_states AS "
+        f"CREATE OR REPLACE TEMP {'TABLE' if materialize else 'VIEW'} "
+        "expected_states AS "
         f"SELECT index_event_id,{aggregate} FROM links GROUP BY index_event_id"
     )
     mismatches = [

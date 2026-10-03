@@ -57,6 +57,52 @@ parent/source validation or private C4 acceptance.
 
 ## Retained E2E artifact
 
+### Return execution redesign
+
+The opt-in redesign has three retained workflows. Each requires a new external
+directory and records its runner, inputs, environment, result and artifact hashes:
+
+```bash
+uv run python scripts/verify_return_execution_e2e.py /external/return-execution
+uv run python scripts/verify_return_product_e2e.py /external/return-product
+uv run python scripts/verify_return_lock_e2e.py /external/return-lock
+uv run python scripts/verify_return_worker_lifetime_e2e.py /external/return-worker-lifetime
+uv run python scripts/verify_e2e.py --verify /external/return-product \
+  --manifest-sha256 <sha256-of-e2e.json>
+```
+
+The execution workflow covers raw-history staging, all 32 source buckets with
+typed empty files and metadata counts, multiple-piece consolidation, durable
+completion events, exact clinical parity and corruptions. It requires a
+completion event for every independently compared canonical bucket and
+it rejects an unchanged row moved into a wrong bucket even after local hashes
+are rebound, along with lost duplicates and type drift. Duplicate NULLs and
+special floating values retain the original independent multiset oracle;
+same-count NaN corruption is rejected by both comparators. The product workflow
+validates a real synthetic canonical source
+and parent, runs direct/staged production and independent validation, exercises
+interruption/reuse and the locked controller, compares all tables, and seals a
+synthetic product. Its labeled pilot/runtime fixtures make no performance claim.
+The lock workflow checks ownership after controller death with an active worker.
+The worker lifetime workflow retains native process observations across complete
+synthetic build/validation job sequences at one, two and four workers. Deliberately
+retained touched pages detect process reuse independently of scheduler state.
+It also checks uneven/empty lists, failure and abrupt-exit propagation, iterator
+closure, and controller-death lock ownership at every supported worker count.
+Partition jobs run in importable spawned workers even at one worker; each result
+is exposed only after its single-job executor has joined. Production and
+validation events additionally retain worker start, job exit and reap records.
+
+For installed-pair verification, build noneditable upstream and downstream wheels
+and install into an isolated environment using downstream's pinned Python and
+locked dependencies. Copy the drivers and their synthetic fixtures outside both
+checkouts, remove `PYTHONPATH`, and run the execution/product drivers with
+`--require-installed`. Add `--consumer` to the product driver to exercise the
+downstream trusted reader, exact joins and report. Also run downstream's
+`verify_return_reader_e2e.py --require-installed` and existing installed encounter
+checks. Retain wheel hashes and read back every E2E manifest. These checks do not
+replace the single final private acceptance and committed-pin release checks.
+
 Use a **new external directory**. The runner rejects existing directories and
 symlinked ancestors; on macOS use `/private/tmp` rather than the `/tmp` symlink.
 
