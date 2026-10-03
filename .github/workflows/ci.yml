@@ -13,6 +13,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installed-readers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.0
+      - uses: astral-sh/setup-uv@v8.3.2
+      - name: Build and install the upstream wheel outside the checkout
+        run: |
+          uv python install 3.11
+          uv export --locked --no-emit-project > "$RUNNER_TEMP/reader-dependencies.txt"
+          uv venv --python 3.11 "$RUNNER_TEMP/reader-env"
+          uv pip sync --python "$RUNNER_TEMP/reader-env/bin/python" "$RUNNER_TEMP/reader-dependencies.txt"
+          uv build --wheel --out-dir "$RUNNER_TEMP/wheels"
+          uv pip install --python "$RUNNER_TEMP/reader-env/bin/python" --no-deps "$RUNNER_TEMP"/wheels/*.whl
+          cp scripts/verify_encounter_reader_e2e.py scripts/verify_return_reader_e2e.py "$RUNNER_TEMP/"
+          mkdir -p "$RUNNER_TEMP/source-fixture/tests/fixtures" "$RUNNER_TEMP/source-fixture/config"
+          cp tests/test_cohort_source.py "$RUNNER_TEMP/source-fixture/tests/"
+          cp -R tests/fixtures/example_data "$RUNNER_TEMP/source-fixture/tests/fixtures/"
+          cp -R config/concept_sets "$RUNNER_TEMP/source-fixture/config/"
+          cd "$RUNNER_TEMP"
+          env -u PYTHONPATH reader-env/bin/python verify_encounter_reader_e2e.py encounter-reader --require-installed
+          env -u PYTHONPATH reader-env/bin/python verify_return_reader_e2e.py return-reader --require-installed
+          env -u PYTHONPATH reader-env/bin/python -m pytest -q source-fixture/tests/test_cohort_source.py::test_trusted_population_receipt_binds_exact_source_and_passed_gates --basetemp source-products --junitxml source-reader.xml
+      - name: Retain synthetic installed-reader evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-installed-readers
+          path: |
+            ${{ runner.temp }}/encounter-reader
+            ${{ runner.temp }}/return-reader
+            ${{ runner.temp }}/wheels
+            ${{ runner.temp }}/reader-dependencies.txt
+            ${{ runner.temp }}/source-fixture
+            ${{ runner.temp }}/source-products
+            ${{ runner.temp }}/source-reader.xml
+          if-no-files-found: error
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30

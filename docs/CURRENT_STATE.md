@@ -250,3 +250,15 @@ private acceptance passed at `0bb9c905655d`; upstream publication and the merged
 installed-package handoff completed at `9159e59ff7d9`. Historical accepted products
 retain their recorded scope. The completed monitor was removed; downstream
 integration and study-specific acceptance remain separately owned.
+
+## Shared installed readers (2026-10-03)
+
+Trusted encounter scans and return-summary access now live in the upstream
+`encounters.reader` and `encounters.return_reader` modules. The generic
+`encounters.return_quality` report retains all alternatives and their original
+denominators. These relocate the retained downstream implementations; schemas,
+signatures, rejection behavior and scientific definitions are preserved.
+See [SHARED_READER_MIGRATION.md](SHARED_READER_MIGRATION.md) for the boundary
+expectations and delivery order. Historical private acceptance remains bound to
+its original scope and runtime; installed synthetic interface qualification does
+not establish downstream study readiness.

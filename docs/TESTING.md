@@ -98,9 +98,13 @@ and install into an isolated environment using downstream's pinned Python and
 locked dependencies. Copy the drivers and their synthetic fixtures outside both
 checkouts, remove `PYTHONPATH`, and run the execution/product drivers with
 `--require-installed`. Add `--consumer` to the product driver to exercise the
-downstream trusted reader, exact joins and report. Also run downstream's
-`verify_return_reader_e2e.py --require-installed` and existing installed encounter
-checks. Retain wheel hashes and read back every E2E manifest. These checks do not
+upstream trusted reader, exact joins and report. Also run upstream's
+`scripts/verify_return_reader_e2e.py --require-installed` and
+`scripts/verify_encounter_reader_e2e.py --require-installed`. These standalone
+reader drivers require only the noneditable upstream wheel. The GLP-1 child's
+`scripts/verify_installed_interfaces_e2e.py` consumes the retained encounter
+fixture and exercises its installed audit, rounding and packaged policy.
+Retain wheel hashes and read back every E2E manifest. These checks do not
 replace the single final private acceptance and committed-pin release checks.
 
 Use a **new external directory**. The runner rejects existing directories and

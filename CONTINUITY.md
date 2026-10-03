@@ -15,6 +15,16 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner approved relocating trusted encounter/return readers and the generic
+return quality report upstream, qualifying the standalone GLP-1 child and
+reconciling issues #22/#6. The relocated implementations retain their original
+AST behavior after import routing and Ruff formatting. Installed synthetic
+readers and the GLP-1 key audit/BMI/policy/CLI checks passed. Original private
+source-access artifacts were independently authenticated without rerunning
+their completed queries. The monolith has a separately owned active
+qualification branch; preserve it and deliver compatibility imports as a patch.
+Clinical study readiness and activation remain downstream gates.
+
 The owner approved worker lifetime recovery through the upstream acceptance,
 publication and installed-reader endpoint, while downstream work proceeds
 independently. Production and independent validation now use bounded single-job

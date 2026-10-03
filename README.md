@@ -143,6 +143,27 @@ calendar-day definition; the command default remains v1. See the
 [acceptance status](docs/RETURN_ACCEPTANCE.md). The earlier sealed revision
 has private acceptance; integration with current `main` requires its own gates.
 
+## Trusted consumer interfaces
+
+Use `trinetx_preprocessing.encounters.reader` for accepted encounter features,
+companions and lazy DuckDB scans. Use
+`trinetx_preprocessing.encounters.return_reader` for verified return summaries
+and complete original-parent joins. Both require caller-supplied receipt trust;
+production never falls back to the separate development encounter reader.
+
+The generic aggregate report is available through:
+
+```bash
+python -m trinetx_preprocessing.encounters.return_quality \
+  --bundle <accepted-return-bundle> --receipt <acceptance-json> \
+  --trusted-acceptance-sha256 <trusted-digest> \
+  --validation-report <validation-json> --output <fresh-external-directory>
+```
+
+See [shared reader migration](docs/SHARED_READER_MIGRATION.md) and
+[testing](docs/TESTING.md) for qualification scope. Study index selection,
+eligibility, weights and clinical reporting belong to the child repositories.
+
 ## Maintenance and contact
 
 Contact the repository maintainer by opening a

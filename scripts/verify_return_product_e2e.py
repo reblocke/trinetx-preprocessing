@@ -557,13 +557,12 @@ def run(root, *, consumer=False):
     assert reuse_runtime["includes_same_run_recovery_downtime"] is True
     assert reuse_runtime["includes_prior_candidate_time"] is False
     if consumer:
-        from trinetx_analysis.return_bundle import (
+        from trinetx_preprocessing.encounters.return_acceptance import KEYS
+        from trinetx_preprocessing.encounters.return_quality import build_quality_report
+        from trinetx_preprocessing.encounters.return_reader import (
             join_return_summary,
             open_return_summary,
         )
-        from trinetx_analysis.return_quality import build_quality_report
-
-        from trinetx_preprocessing.encounters.return_acceptance import KEYS
 
         for variant in VARIANTS:
             with open_return_summary(
