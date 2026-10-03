@@ -74,6 +74,8 @@ jobs:
         run: uv run python -m pytest -q
       - name: Retained return execution E2E
         run: |
+          uv run python scripts/verify_return_v2_partition_e2e.py "$RUNNER_TEMP/return-v2-partition"
+          uv run python scripts/verify_return_v2_partition_e2e.py "$RUNNER_TEMP/return-v2-partition" --verify
           uv run python scripts/verify_return_execution_e2e.py "$RUNNER_TEMP/return-execution"
           uv run python scripts/verify_return_product_e2e.py "$RUNNER_TEMP/return-product"
           uv run python scripts/verify_return_lock_e2e.py "$RUNNER_TEMP/return-lock"
@@ -98,6 +100,7 @@ jobs:
           name: synthetic-return-e2e
           include-hidden-files: true
           path: |
+            ${{ runner.temp }}/return-v2-partition
             ${{ runner.temp }}/return-execution
             ${{ runner.temp }}/return-product
             ${{ runner.temp }}/return-lock

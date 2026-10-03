@@ -26,6 +26,83 @@ from trinetx_preprocessing.encounters.builder import VARIANTS, literal, sha256
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _report_publication_cases(root, *, parent, source):
+    from trinetx_preprocessing.encounters import return_cli
+    from trinetx_preprocessing.encounters.returns import build_returns
+
+    bundle = root / "cli-bundle"
+    build_returns(
+        database=source,
+        parent_bundle=parent,
+        output_dir=bundle,
+        work_dir=root / "cli-build-work",
+        partitions=1,
+        contract_version="2.0",
+    )
+    retained = root / "cli-reports"
+    retained.mkdir()
+    original_validate = return_cli.validate_returns
+    results = {}
+    for name in (
+        "fresh_success",
+        "fresh_failure",
+        "race_success",
+        "race_failure",
+        "existing_success",
+        "existing_failure",
+    ):
+        report = retained / f"{name}.json"
+        sentinel = b'{"owner":"competing writer","pass":true}\n'
+        if name.startswith("existing"):
+            report.write_bytes(
+                sentinel if name.endswith("success") else b'{"pass":false}\n'
+            )
+        before = report.read_bytes() if report.exists() else sentinel
+        failure = name.endswith("failure")
+
+        def validate_with_competing_writer(**kwargs):
+            if name.startswith("existing"):
+                raise AssertionError("Validation ran for an existing report")
+            try:
+                return original_validate(**kwargs)
+            finally:
+                if name.startswith("race"):
+                    report.write_bytes(sentinel)
+
+        return_cli.validate_returns = validate_with_competing_writer
+        try:
+            args = [
+                "--bundle",
+                str(root / "absent-bundle" if failure else bundle),
+                "--parent-bundle",
+                str(parent),
+                "--database",
+                str(source),
+                "--work-dir",
+                str(root / f"cli-work-{name}"),
+                "--report",
+                str(report),
+            ]
+            try:
+                exit_status = return_cli.validate_main(args)
+            except (SystemExit, FileExistsError) as exc:
+                exit_status = exc.code if isinstance(exc, SystemExit) else 2
+        finally:
+            return_cli.validate_returns = original_validate
+        if name.startswith(("race", "existing")):
+            if exit_status == 0 or report.read_bytes() != before:
+                raise AssertionError(
+                    f"Report collision overwrote bytes or succeeded: {name}"
+                )
+        else:
+            receipt = json.loads(report.read_text())
+            if exit_status != int(failure) or receipt["pass"] is not (not failure):
+                raise AssertionError(f"Fresh report result differs: {name}")
+        results[name] = {"exit_status": exit_status, "sha256": sha256(report)}
+    (retained / "results.json").write_text(json.dumps(results, indent=2) + "\n")
+    return results
+
+
 def run(root, *, consumer=False):
     from trinetx_preprocessing.combined_preprocessing.database import (
         COMBINED_MANIFEST_FILENAME,
@@ -290,6 +367,7 @@ def run(root, *, consumer=False):
         events=events,
     )
     assert report == again
+    cli_reports = _report_publication_cases(root, parent=parent, source=source)
     warm.check_unchanged(complete_bytes=True)
     receipt = {
         k: report[k]
@@ -646,6 +724,7 @@ def run(root, *, consumer=False):
     return {
         "status": "passed",
         "real_source_and_parent_validation": True,
+        "cli_report_publication": cli_reports,
         "resumed_build_partitions": 1,
         "reused_validation_partitions": 4,
         "workers_exercised": [1, 2],

@@ -49,6 +49,7 @@ def validate_main(argv: list[str] | None = None) -> int:
     if args.report.exists():
         raise FileExistsError("Return validation report destination already exists")
     args.report.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    exit_code = 0
     try:
         result = validate_returns(
             bundle=args.bundle,
@@ -58,7 +59,10 @@ def validate_main(argv: list[str] | None = None) -> int:
         )
     except Exception as exc:
         result = {"pass": False, "failure": type(exc).__name__}
-        args.report.write_text(json.dumps(result, indent=2) + "\n")
-        return 1
-    args.report.write_text(json.dumps(result, indent=2) + "\n")
-    return 0
+        exit_code = 1
+    try:
+        with args.report.open("x", encoding="utf-8") as report:
+            report.write(json.dumps(result, indent=2) + "\n")
+    except FileExistsError:
+        parser.error("Return validation report destination already exists")
+    return exit_code
