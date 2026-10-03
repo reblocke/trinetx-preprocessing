@@ -24,6 +24,13 @@ _TABLES = {
     "procedure": "source_procedure",
     "medication": "source_medication",
 }
+_INVENTORY_DOMAINS = {
+    "lab": "labs",
+    "vital": "vitals",
+    "diagnosis": "diagnosis",
+    "procedure": "procedure",
+    "medication": "meds",
+}
 
 
 class SourceTransportError(RuntimeError):
@@ -68,7 +75,9 @@ def iter_calendar_source_records(
 
     Repeated patients are supported. Conflicting dates/types and unusable
     records remain raw evidence, independent of the strict gas classifier
-    adapter. Missing tables or selector fields emit explicit states per key.
+    adapter. Captured-domain availability comes from the canonical input
+    inventory, not table existence or row counts. Missing tables or selector
+    fields emit explicit states per key; missing inventory is a query failure.
     Engine failures raise SourceTransportError, even after some rows were yielded.
     """
     relation = _relation(encounter_relation)
@@ -98,11 +107,20 @@ def iter_calendar_source_records(
     _check_keys(connection, relation, one_per_patient=False)
     table = _TABLES[domain]
     try:
+        catalog = connection.execute("SELECT current_database()").fetchone()[0]
+        inventory = '"' + catalog.replace('"', '""') + '".main.source_file_inventory'
+        captured = (
+            connection.execute(
+                f"SELECT count(*) FROM {inventory} WHERE domain=?",
+                [_INVENTORY_DOMAINS[domain]],
+            ).fetchone()[0]
+            > 0
+        )
         tables = {x[0] for x in connection.execute("SHOW TABLES").fetchall()}
         unavailable = None
         missing = ()
         columns = []
-        if table not in tables:
+        if table not in tables or not captured:
             unavailable = "unavailable_domain"
         else:
             columns = [x[0] for x in connection.execute(f"DESCRIBE {table}").fetchall()]
@@ -152,17 +170,27 @@ def iter_calendar_source_records(
         for system, code in code_selectors:
             selectors.append("(v.code_system=? AND v.code=?)")
             parameters.extend((system, code))
+        # CTE names otherwise shadow a caller relation such as "selected",
+        # silently discarding its unmatched keys. DuckDB identifiers ignore case.
+        prefix = "_transport"
+        while encounter_relation.casefold() in {
+            prefix + "_" + name for name in ("keyed", "enriched", "selected")
+        }:
+            prefix = "_" + prefix
+        keyed, enriched, selected = (
+            prefix + "_" + name for name in ("keyed", "enriched", "selected")
+        )
         cursor = connection.execute(
-            f"WITH keyed AS (SELECT v.* FROM {table} v JOIN {relation} k "
+            f"WITH {keyed} AS (SELECT v.* FROM {table} v JOIN {relation} k "
             "USING(patient_id,encounter_id)), "
-            f"enriched AS (SELECT v.*,{membership} AS matched_element_ids "
-            "FROM keyed v), selected AS (SELECT v.*, "
-            "TRUE AS _transport_present FROM enriched v WHERE "
+            f"{enriched} AS (SELECT v.*,{membership} AS matched_element_ids "
+            f"FROM {keyed} v), {selected} AS (SELECT v.*, "
+            f"TRUE AS _transport_present FROM {enriched} v WHERE "
             + " OR ".join(selectors)
             + ") "
             "SELECT k.patient_id,k.encounter_id,v._transport_present,"
             f"v.matched_element_ids,{','.join(quoted)} FROM {relation} k "
-            "LEFT JOIN selected v USING(patient_id,encounter_id) "
+            f"LEFT JOIN {selected} v USING(patient_id,encounter_id) "
             "ORDER BY k.patient_id,k.encounter_id,v.source_record_id",
             parameters,
         )

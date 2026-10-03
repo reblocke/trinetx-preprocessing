@@ -107,6 +107,21 @@ fixture and exercises its installed audit, rounding and packaged policy.
 Retain wheel hashes and read back every E2E manifest. These checks do not
 replace the single final private acceptance and committed-pin release checks.
 
+The retained calendar transport runner also supports `--require-installed`.
+Copy it and `tests/test_cohort_source_calendar_history.py` to matching
+`scripts/` and `tests/` directories outside the checkout, then run it with the
+noneditable wheel's Python and `PYTHONPATH` removed. Its receipt hashes the
+actual imported package modules before and after execution. Retain the wheel
+alongside the fixture, runner and receipt, and use its existing `--verify`
+mode with the trusted receipt digest for independent readback.
+
+The encounter closeout E2E additionally drives all six retained runner CLIs
+against existing passed/failed/file/symlink destinations and concurrent fresh
+claims. A payload-stage fixture forces contention and a post-claim error;
+commands, copied CLI sources, output histories and results are retained.
+Actual SQL/Parquet workflows remain separate required checks. See
+[audit failure scenarios](AUDIT_CORRECTIONS.md).
+
 Use a **new external directory**. The runner rejects existing directories and
 symlinked ancestors; on macOS use `/private/tmp` rather than the `/tmp` symlink.
 

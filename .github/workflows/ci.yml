@@ -28,13 +28,18 @@ jobs:
           uv build --wheel --out-dir "$RUNNER_TEMP/wheels"
           uv pip install --python "$RUNNER_TEMP/reader-env/bin/python" --no-deps "$RUNNER_TEMP"/wheels/*.whl
           cp scripts/verify_encounter_reader_e2e.py scripts/verify_return_reader_e2e.py "$RUNNER_TEMP/"
-          mkdir -p "$RUNNER_TEMP/source-fixture/tests/fixtures" "$RUNNER_TEMP/source-fixture/config"
+          mkdir -p "$RUNNER_TEMP/source-fixture/tests/fixtures" "$RUNNER_TEMP/source-fixture/config" "$RUNNER_TEMP/source-fixture/scripts"
           cp tests/test_cohort_source.py "$RUNNER_TEMP/source-fixture/tests/"
+          cp tests/test_cohort_source_calendar_history.py "$RUNNER_TEMP/source-fixture/tests/"
+          cp scripts/verify_calendar_transport_e2e.py "$RUNNER_TEMP/source-fixture/scripts/"
           cp -R tests/fixtures/example_data "$RUNNER_TEMP/source-fixture/tests/fixtures/"
           cp -R config/concept_sets "$RUNNER_TEMP/source-fixture/config/"
           cd "$RUNNER_TEMP"
           env -u PYTHONPATH reader-env/bin/python verify_encounter_reader_e2e.py encounter-reader --require-installed
           env -u PYTHONPATH reader-env/bin/python verify_return_reader_e2e.py return-reader --require-installed
+          env -u PYTHONPATH reader-env/bin/python source-fixture/scripts/verify_calendar_transport_e2e.py calendar-transport --require-installed
+          digest="$(sha256sum calendar-transport/receipt.json | cut -d ' ' -f 1)"
+          env -u PYTHONPATH reader-env/bin/python source-fixture/scripts/verify_calendar_transport_e2e.py calendar-transport --verify --receipt-sha256 "$digest"
           env -u PYTHONPATH reader-env/bin/python -m pytest -q source-fixture/tests/test_cohort_source.py::test_trusted_population_receipt_binds_exact_source_and_passed_gates --basetemp source-products --junitxml source-reader.xml
       - name: Retain synthetic installed-reader evidence
         if: always()
@@ -44,6 +49,7 @@ jobs:
           path: |
             ${{ runner.temp }}/encounter-reader
             ${{ runner.temp }}/return-reader
+            ${{ runner.temp }}/calendar-transport
             ${{ runner.temp }}/wheels
             ${{ runner.temp }}/reader-dependencies.txt
             ${{ runner.temp }}/source-fixture

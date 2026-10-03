@@ -198,7 +198,6 @@ def run(root):
         scan_accepted_encounter_bundle,
     )
 
-    root.mkdir(parents=True, exist_ok=False)
     bundle, trust = build_fixture(root)
     rejected = []
 
@@ -351,8 +350,10 @@ def main():
     installed = Path(trinetx_preprocessing.__file__).is_relative_to(Path(sys.prefix))
     if args.require_installed and (not installed or "PYTHONPATH" in os.environ):
         parser.error("Require noneditable upstream package with PYTHONPATH removed")
-    if args.artifact_dir.exists():
-        parser.error("Choose a fresh artifact directory")
+    try:
+        args.artifact_dir.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        parser.error(f"Choose a fresh artifact directory: {exc}")
     result = {
         "command": sys.argv,
         "python": sys.version,
@@ -365,7 +366,6 @@ def main():
         result.update(
             status="failed", error=f"{type(exc).__name__}: {exc}", exit_status=1
         )
-    args.artifact_dir.mkdir(parents=True, exist_ok=True)
     (args.artifact_dir / "runner.py").write_bytes(Path(__file__).read_bytes())
     result["inventory"] = {
         str(p.relative_to(args.artifact_dir)): {
