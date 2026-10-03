@@ -1,6 +1,6 @@
 # Current repository state
 
-Updated 2026-09-29. Python encounter preprocessing is implemented here. The
+Updated 2026-10-03. Python encounter preprocessing is implemented here. The
 original split merged at upstream `4bbe8cf` and downstream `d5d2691`;
 postmerge validator hardening is on upstream `main` at `cae58a2` and the strict
 downstream consumer merged as `c2302cb`. This is the current public status
@@ -230,8 +230,12 @@ independently partitions canonical expected rows and compares complete typed
 rows with duplicate multiplicity in each bucket. The original global comparator
 is retained as a synthetic reference route. Synthetic installed-pair evidence
 is retained externally; the new
-producer has not yet passed its required full private acceptance. No combined
-release or study endpoint selection is claimed.
+producer at `0bb9c905655d` passed fresh full private acceptance, including
+complete production and independent validation, retained references, unchanged
+inputs and seal. A separate installed strict consumer passed accepted-parent
+joins and aggregate quality checks. Publication and authentication of the merged
+installed package remain in progress. No combined downstream release or study
+endpoint selection is claimed.
 
 ## Preprocessing closeout candidate (2026-10-01)
 
@@ -241,5 +245,7 @@ candidate adds [raw exact-key transport](CALENDAR_SOURCE_TRANSPORT.md), preservi
 undated/unusable records and distinct unavailable/query-failure states, without
 changing clinical eligibility or the existing strict gas API. Explicit resource
 settings preserve default callers and require matching pilot coverage. Current
-private acceptance and upstream publication remain pending; historical accepted
-products retain their recorded scope. The follow-up automation remains paused.
+private acceptance passed at `0bb9c905655d`; upstream publication and the merged
+installed-package handoff remain pending. Historical accepted products retain
+their recorded scope; the authorized monitor continues through the upstream
+endpoint.

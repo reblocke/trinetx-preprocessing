@@ -25,7 +25,8 @@ defined progress callbacks remain in the controller and are not pickled.
 Conservative component invalidation is preserved: current installed/private
 evidence is required after the shared scheduler change. Historical failed
 attempts remain immutable and unaccepted. The underlying native allocation
-mechanism is UNCONFIRMED. Private acceptance and publication remain pending.
+mechanism is UNCONFIRMED. Fresh full private acceptance at `0bb9c905655d` passed; publication and the
+merged installed-package handoff remain pending.
 
 A read-only selected-patient diagnosis/lab/procedure history projection now preserves
 all catalog-matched raw rows across encounters and an explicit no-match marker.
@@ -187,6 +188,19 @@ review, lint/format and layout checks complete. All 92 extracted legacy
 function/class ASTs match their accepted originals. Reference port untouched.
 
 ## Now
+2026-10-03: the integrated implementation at `0bb9c905655d` passed fresh full
+private source staging, production, independent validation, global keys, exact
+retained references, unchanged-input proof and acceptance seal. Native partition
+birth/joined-exit proof, separate noneditable strict consumer, accepted-parent
+joins, aggregate quality denominators and original-clock terminal composition
+passed. Current exact-head CI and installed candidate evidence passed. Public
+review/publication and a distinct authenticated merged installed-package handoff
+remain required. Downstream pinning/publication/study work remain downstream-owned.
+Private receipts and all failed attempts remain external and preserved.
+
+Historical preparation checkpoints below are superseded by this acceptance;
+their blocked/pending statements apply to their recorded revision and stage.
+
 Local comparator repair on 2026-10-02 replaces repeated bidirectional `EXCEPT ALL`
 work with signed multiplicity aggregation over every declared canonical column.
 The independent original monolithic oracle, schema, routing, source-byte and
@@ -294,11 +308,12 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Review the integration draft and required CI. After reorganization, complete
-fresh private acceptance, the downstream return reader and its retained E2E,
-then merge and update the immutable downstream pin. Preserve the original
-accepted bundle and runtime throughout. The bounded session starts no recurring
-monitor or unattended continuation.
+Finish upstream review/publication, verify actual merged implementation bytes
+against the accepted implementation, and authenticate a distinct noneditable
+merged wheel/package/reader with affected installed smoke evidence. Record the
+trusted local handoff before sending the authorized completion to the downstream
+owner task. Preserve existing source, parent, reference and historical attempts.
+Downstream dependency pinning, publication and analysis are separate handoff work.
 
 Historical merged-encounter follow-up:
 Version-1.0 shared acceptance verification and validator report binding have

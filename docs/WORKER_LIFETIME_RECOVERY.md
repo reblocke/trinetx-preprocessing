@@ -30,3 +30,14 @@ result is exposed. Submitted work is drained on failure or iterator closure;
 no subsequent job is scheduled. Private verification must use the actual
 installed build and validation paths over their complete declared sequence.
 Synthetic process evidence does not establish private resource acceptance.
+
+## Current verification status
+
+The implementation at `0bb9c905655d` passed complete private production and
+independent validation with native observations of fresh worker births and
+joined exits. Both variants, the complete canonical stage and exact retained
+references passed without relaxing resource or scientific gates. The separate
+installed consumer and independent original-clock terminal composition passed.
+All detailed evidence remains external. The underlying native allocation
+mechanism remains unconfirmed; acceptance does not depend on naming that cause.
+Publication and the authenticated merged installed-package handoff remain pending.
