@@ -85,7 +85,7 @@ Style changes move imports to the module boundary, add type annotations and use
 Ruff formatting. Temporary tables keep the existing unique names and cleanup;
 we did not replace the working SQL selection or introduce a general eligibility
 framework. The new retained runner exercises the existing E2E fixture, including
-all 11 original value expectations and 24 adversarial/control scenarios.
+all 11 original value expectations and 27 adversarial/control scenarios.
 
 ## Interpretation and remaining boundaries
 

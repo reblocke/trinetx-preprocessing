@@ -63,7 +63,7 @@ def verify(root: Path, trusted_digest: str) -> dict:
         or receipt["inventory"] != inventory(root)
         or receipt["source_before"] != receipt["source_after"]
         or receipt["cases"] != cases(root / "junit.xml")
-        or len(receipt["cases"]) != 25
+        or len(receipt["cases"]) != 28
         or not all(case["passed"] for case in receipt["cases"])
         or receipt["fixture_sha256"] != sha256(root / "fixture.py")
         or receipt["runner_sha256"] != sha256(root / "runner.py")
@@ -160,7 +160,7 @@ def main() -> int:
         result["cases"] = cases(output / "junit.xml")
         if (
             run.returncode == 0
-            and len(result["cases"]) == 25
+            and len(result["cases"]) == 28
             and all(case["passed"] for case in result["cases"])
         ):
             result["status"] = "passed"

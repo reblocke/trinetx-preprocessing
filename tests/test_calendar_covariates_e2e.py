@@ -174,6 +174,9 @@ def _digest(path):
         "after_end",
         "capture_unavailable",
         "metric_components",
+        "missing_demographics",
+        "conflicting_demographics",
+        "category_precedence",
         "version",
         "missing_column",
         "null_key",
@@ -235,6 +238,17 @@ def test_calendar_covariates_adversarial_roundtrip(tmp_path, scenario):
             )
         if scenario == "query_failure":
             c.execute("ALTER TABLE source_vital_measurement DROP COLUMN numeric_value")
+        if scenario == "missing_demographics":
+            c.execute(
+                "UPDATE source_patient SET sex=NULL,race=NULL,ethnicity=NULL,"
+                "patient_regional_location=NULL"
+            )
+        if scenario == "conflicting_demographics":
+            c.execute(
+                "INSERT INTO source_patient VALUES ('p','M','Black','Hispanic','South')"
+            )
+        if scenario == "category_precedence":
+            c.execute("UPDATE source_patient SET race='Black',ethnicity='Hispanic'")
         sources = (
             kwargs["candidate_relation"],
             "source_vital_measurement",
@@ -266,6 +280,15 @@ def test_calendar_covariates_adversarial_roundtrip(tmp_path, scenario):
             return
 
         result = build_calendar_covariates(c, **kwargs)
+        demographics = ("0", "0", "3")
+        if scenario in ("missing_demographics", "conflicting_demographics"):
+            demographics = (None, None, None)
+        elif scenario == "category_precedence":
+            demographics = ("0", "1", "3")
+        assert (
+            c.execute(f'SELECT sex,race_ethnicity,location FROM "{result}"').fetchone()
+            == demographics
+        )
         expected = (31.2, "current", "valid")
         if scenario in (
             "unknown_start",

@@ -45,7 +45,7 @@ Pre-correction synthetic E2E retained ten failing cases: three case-only input
 shadows, two blank provenance IDs, two malformed candidate-date cases and three
 reader contract omissions. All 25 source-to-product E2E cases pass after focused
 corrections, preserving the original numeric expectations and 18-column schema.
-The retained runner passed all 25 cases in a distinct noneditable wheel,
+The retained runner passed all 28 cases in a distinct noneditable wheel,
 and all five historical pipeline E2Es passed with artifact readback. The original
 policy/codes and 18-column schema are unchanged; wheel bytes match all 122
 package modules. Hosted CI/artifact readback gate publication qualification; no new private or

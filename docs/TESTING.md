@@ -60,7 +60,7 @@ parent/source validation or private C4 acceptance.
 ### Calendar covariate mapping
 
 The separate mapping E2E retains the 11-key source-to-Parquet/reader oracle and
-24 adversarial/control scenarios, including invalid dates/keys, input shadowing,
+27 adversarial/control scenarios, including invalid dates/keys, input shadowing,
 rounding, unknown evidence, destination reuse and product/manifest corruptions.
 It records command, fixture/runner/package identities, versions, JUnit results,
 source stability and a complete artifact inventory. Use a new external directory:
