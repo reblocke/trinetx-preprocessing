@@ -1,6 +1,13 @@
 # Continuity
 
 ## Goal (incl. success criteria)
+Current owner request: harmonize GitHub, Air and Mini source checkouts, verify
+downstream handoffs against the new code and reconcile documentation. Preserve
+dirty/frozen references, consumer pins and qualified clinical runtimes. PR28
+merge approval and Air GitHub reauthentication are pending; neither is inferred
+from source synchronization.
+
+The following audit implementation is qualified on open PR28:
 Audit downstream preprocessing adaptations and the unpublished BMI mapping,
 fix reproduced upstream defects, qualify the additive interface and publish a
 reviewable upstream PR with a human-readable inventory. Downstream changes,
@@ -34,6 +41,24 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+On 2026-10-17 both primary upstream checkouts were synchronized to published
+`787fba6`, preserving the Mini's local ledger edit in a named stash and both
+old branches/recovery refs. Clean GLP-1/equity/model mirrors were fast-forwarded;
+dirty BMI/bicarbonate and frozen monolith references were preserved. The Air's
+GitHub token is invalid and SSH authentication failed. Verified Git bundles from
+the authenticated Mini supplied current refs without transferring credentials.
+
+The exact qualified mapper wheel passed the retained installed E2E on the Air;
+the prior Mini qualification remains valid. The existing GLP-1 installed-interface
+E2E passed against the new wheel on both machines. BMI's four shared-reader
+module hashes remain identical; its historical mapper hash intentionally differs.
+Do not replace the old runtime or change acceptance labels. See
+docs/CROSS_MACHINE_HANDOFF.md for source roles, checks and remaining delivery.
+The three published child launcher E2Es passed all 21 cases on each host.
+Independent readback matched all installed upstream/GLP-1 payload files; only
+host-local installation URL/cache metadata differs. Original dirty Mini and Air
+file hashes remain unchanged. These are engineering checks, not clinical reruns.
+
 The owner approved the downstream audit plan and focused fixes on 2026-10-17.
 The separate audit branch starts at merged `787fba6` and adopts only the
 reusable mapper from local `codex/broader-bmi-mapping` (`45d3fc0`, producer code
@@ -403,6 +428,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
+Current handoff: obtain PR28 merge approval and restore direct Air GitHub
+authentication. The updated source/status documentation stays on that review PR;
+final-head CI and retained artifacts gate its qualification. Consumer adoption
+must preserve existing paired pins, module profiles and data/runtime receipts.
+
 Use a fresh work directory and report for any future validation, preserving
 earlier report bytes and receipts. Earlier local validation, coverage and cache
 hardening is already integrated under the maintained contracts; original dirty

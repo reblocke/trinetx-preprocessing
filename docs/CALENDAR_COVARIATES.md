@@ -1,5 +1,9 @@
 # Calendar encounter covariates
 
+Deployment and historical/runtime pin boundaries are recorded in the
+[cross-machine handoff](CROSS_MACHINE_HANDOFF.md). The corrected mapper must not
+be installed over a runtime bound to the historical mapper hash.
+
 Derived from the owner-authorized 2026-10-15 mapping; audited on 2026-10-17.
 Map caller-supplied original encounter keys without choosing a population.
 The obesity study's 2026-10-16 correction restricts its use to the authenticated

@@ -24,6 +24,9 @@ no new timestamp acquisition is required by this work. See the
 [precision evidence and calendar-date decision](docs/GLP1_TIMESTAMP_SOURCE_GAP.md).
 Engineering source/encounter acceptance, interface qualification, default-branch
 delivery and clinical study readiness remain separate.
+The [Air/Mini handoff checkpoint](docs/CROSS_MACHINE_HANDOFF.md) records current
+source mirrors, retained consumer pins, installed-interface checks and delivery
+gates.
 
 ## Products and handoff
 

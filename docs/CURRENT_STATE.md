@@ -5,6 +5,10 @@
 Updated 2026-10-17. This table is the current summary; the dated narrative below
 retains earlier decisions and qualification scopes rather than reopening them.
 Private product and receipt identities remain in the owner-only handoff.
+The [cross-machine handoff](CROSS_MACHINE_HANDOFF.md) records synchronized source
+mirrors and preserved historical runtimes. Published `main` remains `787fba6`;
+the qualified mapper implementation at `fba6d54` is on open PR28. Air/Mini
+installed checks do not change existing consumer pins or clinical readiness.
 
 The [narrow return audit repair](RETURN_AUDIT_REPAIR.md) corrects v2 timing and
 interval handling with synthetic qualification, merged through PR27 at
@@ -20,7 +24,7 @@ has been regenerated, and downstream study readiness is unchanged.
 | Calendar-day return product | Full private acceptance at `0bb9c905655d`, published through `9159e59ff7d9`; strict reader, parent joins and aggregate quality retain that scope | Upstream generic readers/report and downstream studies; separate return receipt | Historical accepted implementation preserved; reader relocation and engineering-qualified date repairs published through PR26/27 |
 | Raw calendar source transport | Corrected inventory availability and collision-free key relations have retained synthetic and installed-wheel qualification; historical private evidence is not reissued for changed transport code | GLP-1 child; original caller-selected keys and selectors | Transport corrections published through PR26; historical private evidence retains its original scope |
 | GLP-1 child integration | Source migration and installed Python interfaces only; `report_ready=false` / `extraction_ready=false` | [Child dependency declaration](https://github.com/reblocke/glp1-eligibility-hypercapnia/blob/56fcae7b13a7a6df3a792cf908fec95fa2b64737/pyproject.toml) and paired lock are the immutable pin authority | Child PR1 merged; current child default head `56fcae7` retains the paired pin `b744764` and false clinical readiness flags. Later study work and [study completion](https://github.com/reblocke/glp1-eligibility-hypercapnia/issues/2) remain child-owned |
-| Separate caller-key BMI/covariate mapping | Inherited current/prior/calculated BMI, age and demographic mapping; no imputation or study eligibility | Caller-qualified original keys and source metadata; [mapping contract](CALENDAR_COVARIATES.md) | Audited additive interface; [change inventory and corrections](DOWNSTREAM_PREPROCESSING_AUDIT.md). Historical products and downstream pins unchanged; new private/clinical acceptance not supplied |
+| Separate caller-key BMI/covariate mapping | Inherited current/prior/calculated BMI, age and demographic mapping; no imputation or study eligibility | Caller-qualified original keys and source metadata; [mapping contract](CALENDAR_COVARIATES.md) | Qualified implementation on open [PR28](https://github.com/reblocke/trinetx-preprocessing/pull/28), including installed Air/Mini checks; [change inventory](DOWNSTREAM_PREPROCESSING_AUDIT.md). Historical products and downstream pins unchanged; new private/clinical acceptance not supplied |
 
 The approved GLP-1 phenotype uses the first arterial-testing date on D or D+1,
 not an elapsed timestamp window. Missing clinical history remains unknown or
