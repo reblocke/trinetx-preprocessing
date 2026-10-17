@@ -164,6 +164,13 @@ See [shared reader migration](docs/SHARED_READER_MIGRATION.md) and
 [testing](docs/TESTING.md) for qualification scope. Study index selection,
 eligibility, weights and clinical reporting belong to the child repositories.
 
+The separate `encounters.calendar_covariates` interface maps caller-supplied
+encounter keys to available current/prior/calculated BMI and inherited
+demographic fields. It preserves missingness and records measurement dates;
+it does not choose study indexes or rebuild accepted encounter bundles.
+See the [mapping contract](docs/CALENDAR_COVARIATES.md) and the
+[downstream change audit](docs/DOWNSTREAM_PREPROCESSING_AUDIT.md).
+
 ## Maintenance and contact
 
 Contact the repository maintainer by opening a

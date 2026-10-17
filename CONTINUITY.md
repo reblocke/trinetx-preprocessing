@@ -1,6 +1,13 @@
 # Continuity
 
 ## Goal (incl. success criteria)
+Audit downstream preprocessing adaptations and the unpublished BMI mapping,
+fix reproduced upstream defects, qualify the additive interface and publish a
+reviewable upstream PR with a human-readable inventory. Downstream changes,
+private jobs, regenerated products and clinical decisions are excluded.
+Preserve original/dirty worktrees and all historical receipts.
+
+The following earlier return-repair goal is completed historical scope:
 Implement and qualify narrow return audit revision 2 on a separate branch based
 on qualified PR26 head `b744764`. Exclude derived/unknown dates from timing and
 interval decisions, preserve valid-start all-cause events with unusable ends,
@@ -27,6 +34,28 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner approved the downstream audit plan and focused fixes on 2026-10-17.
+The separate audit branch starts at merged `787fba6` and adopts only the
+reusable mapper from local `codex/broader-bmi-mapping` (`45d3fc0`, producer code
+from `72c91a2`). Six downstream code/history snapshots and current remote heads
+were inspected; all originals remain unchanged. The obesity-study original-list
+correction supersedes its prior broader-population qualification for that use.
+
+Pre-correction synthetic E2E retained ten failing cases: three case-only input
+shadows, two blank provenance IDs, two malformed candidate-date cases and three
+reader contract omissions. All 25 source-to-product E2E cases pass after focused
+corrections, preserving the original numeric expectations and 18-column schema.
+The retained runner passed all 25 cases in a distinct noneditable wheel,
+and all five historical pipeline E2Es passed with artifact readback. The original
+policy/codes and 18-column schema are unchanged; wheel bytes match all 122
+package modules. Hosted CI/artifact readback gate publication qualification; no new private or
+clinical acceptance is supplied. See docs/DOWNSTREAM_PREPROCESSING_AUDIT.md.
+
+The owner reviewed and authorized PR26/27 merge on 2026-10-03. PR26 merged at
+`e2c7251`, then PR27 at `787fba6`; the complete merged tree matched qualified
+`dcfc677`. Hosted CI `37161443502` and retained artifact readback passed.
+Source and accepted products were not regenerated.
+
 The owner approved narrow return audit revision 2 on 2026-10-03. Concrete failure
 scenarios were recorded before implementation in docs/RETURN_AUDIT_REPAIR.md.
 Retained before-repair artifacts reproduce incorrect interval qualification,
