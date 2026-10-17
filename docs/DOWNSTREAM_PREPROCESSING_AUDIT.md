@@ -115,3 +115,14 @@ qualification of the corrected mapper; downstream adoption needs its own review.
 
 See [the mapping contract](CALENDAR_COVARIATES.md) and
 [verification commands](TESTING.md#calendar-covariate-mapping).
+
+## Subsequent approved delivery — 2026-10-17
+
+PR28 merged at `751d794e0a277f72ced2e2b5b48246858f4dcf9b`; the merged tree and
+rebuilt installed wheel match the qualified implementation. The owner then
+approved the BMI child's exact revision/hash update, merged through child PR11
+at `dd6b927`. Both machines passed the real child pin gate and retained mapper
+E2E. Existing private products, configurations and qualified runtimes remain
+unchanged. See [source/runtime handoff](CROSS_MACHINE_HANDOFF.md) for the active
+profile and historical reproduction boundary. This later dependency delivery
+does not extend the original audit's clinical acceptance scope.
