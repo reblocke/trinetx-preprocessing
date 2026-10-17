@@ -1,13 +1,13 @@
 # Continuity
 
 ## Goal (incl. success criteria)
-Current owner request: harmonize GitHub, Air and Mini source checkouts, verify
-downstream handoffs against the new code and reconcile documentation. Preserve
-dirty/frozen references, consumer pins and qualified clinical runtimes. PR28
-merge approval and Air GitHub reauthentication are pending; neither is inferred
-from source synchronization.
+Current owner request: complete approved PR28 merge, Air reauthentication and
+reviewed BMI mapper pin adoption. Preserve dirty/frozen references and qualified
+clinical runtimes; update the active dependency profile separately from existing
+private configurations/products. PR28 and child PR11 are merged and their
+installed pair is qualified. Authentication status stays in the private handoff.
 
-The following audit implementation is qualified on open PR28:
+The following audit implementation is qualified and merged through PR28:
 Audit downstream preprocessing adaptations and the unpublished BMI mapping,
 fix reproduced upstream defects, qualify the additive interface and publish a
 reviewable upstream PR with a human-readable inventory. Downstream changes,
@@ -41,6 +41,16 @@ and measurement imputation. No propensity models upstream. Private outputs remai
 external. Execute on the Mac mini without changing drive state.
 
 ## Key decisions
+The owner explicitly approved merge, reauthentication and the reviewed pin
+update on 2026-10-17. PR28 merged at `751d794`; its complete tree equals qualified
+`327c6ac`. The rebuilt wheel matches the hosted wheel and all 122 package modules
+match merged source. The BMI child adopted that immutable revision and mapper
+hash together through PR11 at `dd6b927`; only two configuration fields and docs
+changed. Both machines passed the actual pin gate and all 28 mapper E2E cases.
+The 16 preparation regressions passed after selecting the existing qualified R
+library; the initial missing-jsonlite setup failure is retained. No clinical run,
+private configuration migration or new product acceptance was performed.
+
 On 2026-10-17 both primary upstream checkouts were synchronized to published
 `787fba6`, preserving the Mini's local ledger edit in a named stash and both
 old branches/recovery refs. Clean GLP-1/equity/model mirrors were fast-forwarded;
@@ -428,10 +438,11 @@ Parquet row order is unspecified; consumers explicitly sort by original keys.
 Preserve all failed/superseded artifacts, older branches and dirty instructions.
 
 ## Next
-Current handoff: obtain PR28 merge approval and restore direct Air GitHub
-authentication. The updated source/status documentation stays on that review PR;
-final-head CI and retained artifacts gate its qualification. Consumer adoption
-must preserve existing paired pins, module profiles and data/runtime receipts.
+Current handoff: publish this factual delivery/status reconciliation after
+final-head CI and artifact checks, then synchronize primary upstream source
+mirrors. PR28 and BMI pin adoption are complete. Finish any required interactive
+Air authentication step; its actual result is recorded privately. Historical
+source/configuration/runtime and data receipts remain immutable.
 
 Use a fresh work directory and report for any future validation, preserving
 earlier report bytes and receipts. Earlier local validation, coverage and cache
