@@ -57,6 +57,30 @@ parent/source validation or private C4 acceptance.
 
 ## Retained E2E artifact
 
+### Calendar covariate mapping
+
+The separate mapping E2E retains the 11-key source-to-Parquet/reader oracle and
+27 adversarial/control scenarios, including invalid dates/keys, input shadowing,
+rounding, unknown evidence, destination reuse and product/manifest corruptions.
+It records command, fixture/runner/package identities, versions, JUnit results,
+source stability and a complete artifact inventory. Use a new external directory:
+
+```bash
+uv run --locked python scripts/verify_calendar_covariates_e2e.py /external/new-covariates
+uv run --locked python scripts/verify_calendar_covariates_e2e.py \
+  /external/new-covariates --verify --receipt-sha256 <printed-receipt-digest>
+```
+
+For noneditable qualification, copy that runner and
+`tests/test_calendar_covariates_e2e.py` to matching `scripts/` and `tests/`
+directories outside the checkout. Run the installed wheel's Python with
+`PYTHONPATH` removed and `--require-installed`, then read back with `--verify`.
+Hosted CI performs and retains both routes. The existing
+`scripts/verify_e2e.py` pipeline workflow remains the historical-product
+regression check. Synthetic mapping evidence does not qualify private source
+coverage, a downstream cohort or clinical results; see the
+[audit boundary](DOWNSTREAM_PREPROCESSING_AUDIT.md).
+
 ### Return execution redesign
 
 The opt-in redesign has three retained workflows. Each requires a new external

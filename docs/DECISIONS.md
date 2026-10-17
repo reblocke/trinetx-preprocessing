@@ -1938,3 +1938,24 @@ Package identity changes upon integration, so the original C0–C4 acceptance
 continues to bind only its sealed revision. Private acceptance of the integrated
 package, downstream return reading and merging are deferred until after the
 task reorganization. Public checks cannot replace those gates.
+
+
+## 2026-10-17 downstream preprocessing audit and additive BMI mapping
+
+The owner approved auditing the six known downstream codebases, bringing the
+reusable unpublished BMI mapper upstream, fixing demonstrated implementation
+defects and updating documentation. The 2026-10-16 obesity-study original-list
+correction supersedes its earlier broader-population scope. Caller-key mapping
+remains reusable; population/index selection, gas/ICD rules, CKD/MASLD evidence
+and study reporting remain downstream. No study threshold or scientific
+definition is changed.
+
+Keep the inherited current/prior/calculated hierarchy, recorded 50.1 masking
+exclusion, float16/CSV/float32-before-rounding sequence and demographic codes.
+Reject case-insensitive destination collisions, blank provenance, malformed
+calendar inputs and unsupported/incomplete reader products. Preserve existing
+v1 mapper signatures and valid output columns/types; prior private receipts do
+not qualify this changed code identity. See the
+[human-readable audit](DOWNSTREAM_PREPROCESSING_AUDIT.md) and
+[mapping contract](CALENDAR_COVARIATES.md). No private job or downstream edit is
+authorized by this engineering qualification.
